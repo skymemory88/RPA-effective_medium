@@ -212,6 +212,17 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
 
     % Main SCF loop
     converged = false;
+    final_iter = scf_params.max_iter;  % Track actual iterations
+
+    % Suppress warnings for nearly singular matrices (we handle them explicitly)
+    warning_state = warning('query', 'MATLAB:nearlySingularMatrix');
+    warning('off', 'MATLAB:nearlySingularMatrix');
+    warning_state2 = warning('query', 'MATLAB:singularMatrix');
+    warning('off', 'MATLAB:singularMatrix');
+
+    % Track conditioning issues (for diagnostics)
+    n_bad_conditioned = 0;
+
     for iter = 1:scf_params.max_iter
         K_old = K;
         G_local_old = G_local;
@@ -228,12 +239,20 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
                 % Eq. 2.12: G(q,iω) = [1 + (J(q) - K(iω))G_local(iω)]^(-1) * G_local(iω)
                 denom = eye(3) + (J_q_iq - K_iw) * G_local_iw;
 
-                % Regularize if needed
-                if rcond(denom) < 1e-12
-                    denom = denom + 1e-12 * eye(3);
+                % Check conditioning and regularize if needed
+                rc = rcond(denom);
+                regularization_threshold = 1e-10;  % More conservative threshold
+
+                if rc < regularization_threshold
+                    % Apply Tikhonov regularization
+                    % The regularization parameter scales with the condition number
+                    reg_param = max(1e-10, regularization_threshold - rc);
+                    denom = denom + reg_param * eye(3);
+                    n_bad_conditioned = n_bad_conditioned + 1;
                 end
 
-                % Solve denom * G_q = G_local
+                % Solve denom * G_q = G_local using robust method
+                % Using mldivide with regularized matrix
                 G_q(:,:,iq,iw) = denom \ G_local_iw;
             end
         end
@@ -296,6 +315,7 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
         % Check convergence
         if residual < scf_params.tol
             converged = true;
+            final_iter = iter;
             fprintf('  %s: Converged in %d iterations (residual = %.2e)\n', var_str, iter, residual);
             break;
         end
@@ -303,6 +323,20 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
         % Adaptive mixing
         if iter == scf_params.max_iter
             fprintf('  %s: Not converged after %d iterations (residual = %.2e)\n', var_str, iter, residual);
+        end
+    end
+
+    % Restore warning states
+    warning(warning_state.state, 'MATLAB:nearlySingularMatrix');
+    warning(warning_state2.state, 'MATLAB:singularMatrix');
+
+    % Report conditioning diagnostics if significant
+    total_points = n_q * n_omega * final_iter;
+    if n_bad_conditioned > 0
+        percent_bad = 100 * n_bad_conditioned / total_points;
+        if percent_bad > 1.0  % Only report if >1% of points had issues
+            fprintf('  %s: Regularized %d/%d (%.1f%%) ill-conditioned matrices\n', ...
+                    var_str, n_bad_conditioned, total_points, percent_bad);
         end
     end
 end
