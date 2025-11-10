@@ -1,10 +1,9 @@
 % Effctive_medium.m
 % Corrected implementation of effective medium theory for tensor susceptibility
-% Key fix: Using self-consistent G_local in equation 2.12 instead of G0
 
-clear; close all;
+close all;
 
-%% Step 1: Load your existing RPA results
+%% Step 1: Load existing RPA results
 % Assuming you have these from your RPA calculation:
 % - G0_RPA: [3 x 3 x n_omega] non-interacting Green's function
 % - J_q_RPA: [3 x 3 x n_q] dipole-dipole interaction in q-space  
@@ -13,14 +12,6 @@ clear; close all;
 
 % Example loading (replace with your actual data)
 % load('my_RPA_results.mat', 'G0_RPA', 'J_q_RPA', 'qpoints', 'omega_n');
-
-% For testing, let's create realistic dummy data
-% REPLACE THIS SECTION WITH YOUR ACTUAL DATA
-n_omega = 100;
-n_q = 8^3;
-T = 1.0;  % K
-beta = 1/T;
-omega_n = (2*(0:n_omega-1) + 1) * pi / beta;
 
 % Generate realistic LiHoF4 parameters
 params_lihof4 = struct();
@@ -32,9 +23,13 @@ params_lihof4.a = 5.175;        % Lattice constant (Angstrom)
 params_lihof4.c = 10.75;        % c-axis (tetragonal)
 params_lihof4.beta = beta;
 
-%% Step 2: Generate G0 for LiHoF4 singlet-singlet system
-fprintf('Generating G0 for LiHoF4 singlet-singlet system...\n');
-G0_RPA = generate_G0_singlet(omega_n, params_lihof4);
+G0_RPA = -squeeze(chiq(:,:,1,1));
+J_q_RPA = squeeze(Jq_RPA(:,:,1));
+n_omega = 100;
+n_q = size(chiq,5);
+T = dscrt_var;  % K
+beta = 1/T;
+omega_n = (2*(0:n_omega-1) + 1) * pi / beta;
 
 %% Step 3: Generate dipole-dipole interaction J(q)
 fprintf('Computing dipole-dipole interaction tensor...\n');
@@ -46,9 +41,6 @@ qy = linspace(-pi, pi, 8);
 qz = linspace(-pi, pi, 8);
 [QX, QY, QZ] = meshgrid(qx, qy, qz);
 qpoints = [QX(:)'; QY(:)'; QZ(:)'];
-
-params_lihof4.use_ewald = false;  % Set true for accurate long-range
-J_q_RPA = compute_dipolar_tensor(qpoints, params_lihof4);
 
 %% Step 4: Setup self-consistent calculation parameters
 scf_params = struct();
@@ -68,7 +60,6 @@ scf_params.use_anderson = true;
 scf_params.mixing_depth = 7;
 scf_params.anderson_beta = 0.7;
 
-%% Step 5: Run self-consistent calculation
 fprintf('\n=== Starting self-consistent K(iω_n) calculation ===\n');
 fprintf('System: LiHoF4 at T = %.2f K\n', T);
 fprintf('Mesh: %d q-points, %d Matsubara frequencies\n', n_q, n_omega);
@@ -78,7 +69,8 @@ fprintf('------------------------------------------------\n');
 K = zeros(3, 3, n_omega);
 
 % CRITICAL INITIALIZATION: Start with G_local = G0 for first iteration
-G_local = G0_RPA;  % This is the key initialization!
+G_local = repmat(G0_RPA,1,1,n_omega);  % Initial guess
+% G_local = G0_MF;
 
 % For Anderson mixing history
 if scf_params.use_anderson
@@ -102,7 +94,6 @@ for iter = 1:scf_params.max_iter
     
     for iq = 1:n_q
         for iw = 1:n_omega
-            % CORRECTED: Use G_local, not G0!
             G_local_iw = G_local(:,:,iw);  % Self-consistent local Green's function
             J_q_iq = J_q_RPA(:,:,iq);
             K_iw = K(:,:,iw);
@@ -287,43 +278,6 @@ legend('Total residual', 'G_{local} change');
 grid on;
 
 %% Supporting Functions
-
-%% Function 1: Generate G0 for singlet-singlet system
-function G0 = generate_G0_singlet(omega_n, params)
-    % Generate non-interacting Green's function for singlet-singlet system
-    % Based on equation 2.7-2.8 in the paper
-    
-    n_omega = length(omega_n);
-    G0 = zeros(3, 3, n_omega);
-    
-    % Parameters
-    Delta = params.Delta;  % Singlet splitting
-    M = params.M;          % Dipole matrix element
-    m = params.m;          % Small magnetic moment within singlets
-    beta = params.beta;
-    
-    % Population factors
-    n0 = 1 / (1 + exp(-beta * Delta));
-    n1 = 1 - n0;
-    n01 = n0 - n1;
-    
-    % Response functions (from eq. 2.8)
-    for iw = 1:n_omega
-        g_iw = 2 * n01 * Delta / (omega_n(iw)^2 + Delta^2);
-        h_iw = beta * (1 - n01) * (iw == 1);  % Delta function at ω=0
-        
-        % Build G0 tensor
-        % For singlet-singlet: only x-component has off-diagonal matrix elements
-        % z-component may have diagonal elements
-        G0(1,1,iw) = M^2 * g_iw - m^2 * h_iw;  % xx component
-        G0(2,2,iw) = M^2 * g_iw - m^2 * h_iw;  % yy component (same as xx for tetragonal)
-        G0(3,3,iw) = m^2 * g_iw;                % zz component (smaller)
-        
-        % Off-diagonal elements (if any)
-        % Usually zero for singlet-singlet in simple cases
-    end
-end
-
 %% Function 2: Compute dipole-dipole interaction tensor
 function J_q = compute_dipolar_tensor(qpoints, params)
     % Compute dipole-dipole interaction in momentum space
