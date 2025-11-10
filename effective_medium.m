@@ -23,13 +23,27 @@ params_lihof4.a = 5.175;        % Lattice constant (Angstrom)
 params_lihof4.c = 10.75;        % c-axis (tetragonal)
 params_lihof4.beta = beta;
 
-G0_RPA = -squeeze(chiq(:,:,1,1));
-J_q_RPA = squeeze(Jq_RPA(:,:,1));
-n_omega = 100;
-n_q = size(chiq,5);
+% CORRECTED: Extract frequency-dependent RPA Green's function
+% Note: chiq dimensions are [3, 3, n_freq, n_field, n_q]
+% For susceptibility χ(q,ω), the Green's function relation is: G = -χ (approximate)
+n_omega = size(chiq, 3);  % Use actual number of frequencies from RPA
+n_q = size(chiq, 5);
 T = dscrt_var;  % K
-beta = 1/T;
-omega_n = (2*(0:n_omega-1) + 1) * pi / beta;
+beta = 1/(8.617e-5 * T);  % β = 1/(k_B*T) where k_B in eV/K
+
+% CORRECTED: Use bosonic Matsubara frequencies for spin susceptibilities
+omega_n = 2*(0:n_omega-1) * pi / beta;  % ω_n = 2nπ/β (bosonic)
+
+% CORRECTED: Extract frequency-dependent G0_RPA from chiq
+% Assuming we want q=0 point or average over q
+G0_RPA = zeros(3, 3, n_omega);
+for iw = 1:n_omega
+    % Average over all q points or take q=0
+    G0_RPA(:,:,iw) = -mean(chiq(:,:,iw,1,:), 5);  % Negative for G = -χ convention
+end
+
+% Extract J(q) - frequency independent interaction
+J_q_RPA = squeeze(Jq_RPA(:,:,1,:));  % Dimensions: [3, 3, n_q]
 
 %% Step 3: Generate dipole-dipole interaction J(q)
 fprintf('Computing dipole-dipole interaction tensor...\n');
@@ -97,16 +111,18 @@ for iter = 1:scf_params.max_iter
             G_local_iw = G_local(:,:,iw);  % Self-consistent local Green's function
             J_q_iq = J_q_RPA(:,:,iq);
             K_iw = K(:,:,iw);
-            
-            % Eq. 2.12 in matrix form with correct G_local
+
+            % CORRECTED Eq. 2.12: G(q,iω) = [1 + (J(q) - K(iω))G_local(iω)]^(-1) * G_local(iω)
+            % This is equivalent to solving: [1 + (J(q) - K(iω))G_local] * G(q,iω) = G_local
             denom = eye(3) + (J_q_iq - K_iw) * G_local_iw;
-            
+
             % Regularize if needed
             if rcond(denom) < 1e-12
                 denom = denom + 1e-12 * eye(3);
             end
-            
-            G_q(:,:,iq,iw) = G_local_iw / denom;
+
+            % CORRECTED: Solve denom * G_q = G_local using left division
+            G_q(:,:,iq,iw) = denom \ G_local_iw;
         end
     end
     
@@ -124,8 +140,9 @@ for iter = 1:scf_params.max_iter
     G_local = (1 - G_local_mixing) * G_local + G_local_mixing * G_local_new;
     
     % Step C: New K from self-consistency equation (2.11)
+    % K(iω_n) = [Σ_q J(q)G(q,iω_n)] * [G_local(iω_n)]^(-1)
     K_new = zeros(3, 3, n_omega);
-    
+
     for iw = 1:n_omega
         % Sum: Σ_q J(q) * G(q,iω)
         sum_JG = zeros(3, 3);
@@ -133,15 +150,17 @@ for iter = 1:scf_params.max_iter
             sum_JG = sum_JG + J_q_RPA(:,:,iq) * G_q(:,:,iq,iw);
         end
         sum_JG = sum_JG / n_q;
-        
-        % Divide by G_local (equation 2.11)
+
+        % CORRECTED: K = sum_JG * inv(G_local) using right division
+        % In MATLAB: A/B = A*inv(B), so this computes sum_JG * inv(G_local)
         if rcond(G_local(:,:,iw)) > 1e-12
             K_new(:,:,iw) = sum_JG / G_local(:,:,iw);
         else
+            % If G_local is singular, keep old K
             K_new(:,:,iw) = K(:,:,iw);
         end
-        
-        % Enforce Hermiticity
+
+        % Enforce Hermiticity (K should be Hermitian for physical systems)
         K_new(:,:,iw) = (K_new(:,:,iw) + K_new(:,:,iw)') / 2;
     end
     
