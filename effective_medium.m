@@ -387,23 +387,54 @@ function K_new = AndersonMix(K_history, F_history, iter, params)
     % Get indices of stored history (handling circular buffer correctly)
     % Most recent is at idx_current, go backwards m steps
     idx_current = mod(iter-1, params.mixing_depth) + 1;
+
+    % Build indices going backwards from current iteration
+    % Only access cells that have been filled
     indices = zeros(m, 1);
     for i = 1:m
-        % Go back (m-i) iterations from current
-        indices(i) = mod(iter-1-(m-i), params.mixing_depth) + 1;
+        % Map to actual iteration numbers that were stored
+        actual_iter = iter - (m - i + 1);  % Go back from current
+        indices(i) = mod(actual_iter-1, params.mixing_depth) + 1;
     end
 
     % Flatten tensors for linear algebra
+    % Check that the current cell is filled
+    if isempty(K_history{idx_current})
+        % Fallback to simple mixing
+        alpha_simple = params.mixing_alpha;
+        K_new = (1-alpha_simple) * K_history{idx_current} + alpha_simple * F_history{idx_current};
+        return;
+    end
+
     [n1, n2, n3] = size(K_history{idx_current});
     n_total = n1 * n2 * n3;
 
     % Build residual matrices using correct indices
+    % Filter out any empty cells
     R = zeros(n_total, m);
+    valid_count = 0;
     for i = 1:m
         idx = indices(i);
-        K_flat = reshape(K_history{idx}, [], 1);
-        F_flat = reshape(F_history{idx}, [], 1);
-        R(:,i) = F_flat - K_flat;
+        % Check if this cell is filled
+        if ~isempty(K_history{idx}) && ~isempty(F_history{idx})
+            valid_count = valid_count + 1;
+            K_flat = reshape(K_history{idx}, [], 1);
+            F_flat = reshape(F_history{idx}, [], 1);
+            R(:,valid_count) = F_flat - K_flat;
+        end
+    end
+
+    % Trim R to only valid columns
+    if valid_count < m
+        R = R(:, 1:valid_count);
+        m = valid_count;
+    end
+
+    % If not enough valid history, fall back to simple mixing
+    if m < 2
+        alpha_simple = params.mixing_alpha;
+        K_new = (1-alpha_simple) * K_history{idx_current} + alpha_simple * F_history{idx_current};
+        return;
     end
 
     % Compute optimal linear combination
@@ -430,21 +461,23 @@ function K_new = AndersonMix(K_history, F_history, iter, params)
         return;
     end
 
-    % Construct new K from linear combination using correct indices
+    % Construct new K from linear combination using only valid indices
     K_new = zeros(size(K_history{idx_current}));
-    for i = 1:m
+    F_avg = zeros(size(F_history{idx_current}));
+
+    valid_idx = 0;
+    for i = 1:length(indices)
         idx = indices(i);
-        K_new = K_new + alpha(i) * K_history{idx};
+        % Only use filled cells (same check as before)
+        if ~isempty(K_history{idx}) && ~isempty(F_history{idx})
+            valid_idx = valid_idx + 1;
+            K_new = K_new + alpha(valid_idx) * K_history{idx};
+            F_avg = F_avg + alpha(valid_idx) * F_history{idx};
+        end
     end
 
     % Add relaxation
     beta = params.anderson_beta;  % typically 0.5-1.0
-    F_avg = zeros(size(F_history{idx_current}));
-    for i = 1:m
-        idx = indices(i);
-        F_avg = F_avg + alpha(i) * F_history{idx};
-    end
-
     K_new = (1-beta) * K_new + beta * F_avg;
 end
 
