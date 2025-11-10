@@ -25,15 +25,6 @@ fprintf('Frequencies: %d points from %.2f to %.2f GHz\n', n_omega, min(freq_tota
 fprintf('Q-points: %d\n', n_q);
 fprintf('----------------------------------------------------\n');
 
-% Generate LiHoF4 parameters
-params_lihof4 = struct();
-params_lihof4.Delta = 0.7e-3;  % 0.7 meV singlet splitting (in eV)
-params_lihof4.M = 6.551;        % Dipole matrix element
-params_lihof4.m = 0.1;          % Small compared to M
-params_lihof4.g_factor = 1.25;  % Ho³⁺ g-factor
-params_lihof4.a = 5.175;        % Lattice constant (Angstrom)
-params_lihof4.c = 10.75;        % c-axis (tetragonal)
-
 % Extract J(q) - frequency independent interaction
 J_q_RPA = squeeze(Jq_RPA(:,:,1,:));  % Dimensions: [3, 3, n_q]
 
@@ -47,7 +38,7 @@ converged_flags = false(n_cVar, 1);             % Convergence status
 %% Step 3: Parallel computation over cVar
 % Setup convergence parameters (same for all cVar points)
 scf_params_base = struct();
-scf_params_base.max_iter = 100;
+scf_params_base.max_iter = 1e3;
 scf_params_base.tol = 1e-5;
 scf_params_base.mixing_alpha = 0.2;  % Start conservative
 scf_params_base.use_anderson = true;
