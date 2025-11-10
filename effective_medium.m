@@ -48,9 +48,9 @@ scf_params_base.anderson_beta = 0.7;
 fprintf('\n=== Starting parallel self-consistent calculations ===\n');
 
 % PARFOR loop over continuous variable (temperature/field)
-parfor icVar = 1:n_cVar
+parfor ii = 1:n_cVar
     % Extract data for this specific cVar point
-    cVar_val = cVar(icVar);
+    cVar_val = cVar(ii);
 
     % Determine temperature for this point
     switch scanMode
@@ -73,7 +73,7 @@ parfor icVar = 1:n_cVar
     G0_local = zeros(3, 3, n_omega);
     for iw = 1:n_omega
         % Average over all q points for G0
-        G0_local(:,:,iw) = -mean(chi0(:,:,iw,icVar,:), 5);
+        G0_local(:,:,iw) = -mean(chi0(:,:,iw,ii,:), 5);
     end
 
     % Setup local SCF parameters
@@ -89,13 +89,13 @@ parfor icVar = 1:n_cVar
     [K_local, G_local_local, converged] = compute_effective_medium(scf_params, var_str);
 
     % Store results
-    K_emt(:,:,:,icVar) = K_local;
-    G_local_emt(:,:,:,icVar) = G_local_local;
-    converged_flags(icVar) = converged;
+    K_emt(:,:,:,ii) = K_local;
+    G_local_emt(:,:,:,ii) = G_local_local;
+    converged_flags(ii) = converged;
 
     % Compute susceptibility: χ = -G/β
     for iw = 1:n_omega
-        chi_emt(:,:,iw,icVar) = -G_local_local(:,:,iw) / beta_local;
+        chi_emt(:,:,iw,ii) = -G_local_local(:,:,iw) / beta_local;
     end
 end
 
@@ -189,7 +189,6 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
     n_q = scf_params.n_q;
     G0_RPA = scf_params.G0;
     J_q_RPA = scf_params.J_q;
-    beta = scf_params.beta;
 
     % Initialize K and G_local
     K = zeros(3, 3, n_omega);
