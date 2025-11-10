@@ -83,7 +83,7 @@ fprintf('------------------------------------------------\n');
 K = zeros(3, 3, n_omega);
 
 % CRITICAL INITIALIZATION: Start with G_local = G0 for first iteration
-G_local = repmat(G0_RPA,1,1,n_omega);  % Initial guess
+G_local = G0_RPA;  % Initial guess
 % G_local = G0_MF;
 
 % For Anderson mixing history
