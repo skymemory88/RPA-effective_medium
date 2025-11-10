@@ -25,15 +25,6 @@ fprintf('Frequencies: %d points from %.2f to %.2f GHz\n', n_omega, min(freq_tota
 fprintf('Q-points: %d\n', n_q);
 fprintf('----------------------------------------------------\n');
 
-% Generate LiHoF4 parameters
-params_lihof4 = struct();
-params_lihof4.Delta = 0.7e-3;  % 0.7 meV singlet splitting (in eV)
-params_lihof4.M = 6.551;        % Dipole matrix element
-params_lihof4.m = 0.1;          % Small compared to M
-params_lihof4.g_factor = 1.25;  % Ho³⁺ g-factor
-params_lihof4.a = 5.175;        % Lattice constant (Angstrom)
-params_lihof4.c = 10.75;        % c-axis (tetragonal)
-
 % Extract J(q) - frequency independent interaction
 J_q_RPA = squeeze(Jq_RPA(:,:,1,:));  % Dimensions: [3, 3, n_q]
 
@@ -47,7 +38,7 @@ converged_flags = false(n_cVar, 1);             % Convergence status
 %% Step 3: Parallel computation over cVar
 % Setup convergence parameters (same for all cVar points)
 scf_params_base = struct();
-scf_params_base.max_iter = 100;
+scf_params_base.max_iter = 1e3;
 scf_params_base.tol = 1e-5;
 scf_params_base.mixing_alpha = 0.2;  % Start conservative
 scf_params_base.use_anderson = true;
@@ -57,9 +48,9 @@ scf_params_base.anderson_beta = 0.7;
 fprintf('\n=== Starting parallel self-consistent calculations ===\n');
 
 % PARFOR loop over continuous variable (temperature/field)
-parfor icVar = 1:n_cVar
+parfor ii = 1:n_cVar
     % Extract data for this specific cVar point
-    cVar_val = cVar(icVar);
+    cVar_val = cVar(ii);
 
     % Determine temperature for this point
     switch scanMode
@@ -82,7 +73,7 @@ parfor icVar = 1:n_cVar
     G0_local = zeros(3, 3, n_omega);
     for iw = 1:n_omega
         % Average over all q points for G0
-        G0_local(:,:,iw) = -mean(chi0(:,:,iw,icVar,:), 5);
+        G0_local(:,:,iw) = -mean(chi0(:,:,iw,ii,:), 5);
     end
 
     % Setup local SCF parameters
@@ -98,13 +89,13 @@ parfor icVar = 1:n_cVar
     [K_local, G_local_local, converged] = compute_effective_medium(scf_params, var_str);
 
     % Store results
-    K_emt(:,:,:,icVar) = K_local;
-    G_local_emt(:,:,:,icVar) = G_local_local;
-    converged_flags(icVar) = converged;
+    K_emt(:,:,:,ii) = K_local;
+    G_local_emt(:,:,:,ii) = G_local_local;
+    converged_flags(ii) = converged;
 
     % Compute susceptibility: χ = -G/β
     for iw = 1:n_omega
-        chi_emt(:,:,iw,icVar) = -G_local_local(:,:,iw) / beta_local;
+        chi_emt(:,:,iw,ii) = -G_local_local(:,:,iw) / beta_local;
     end
 end
 
@@ -198,7 +189,6 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
     n_q = scf_params.n_q;
     G0_RPA = scf_params.G0;
     J_q_RPA = scf_params.J_q;
-    beta = scf_params.beta;
 
     % Initialize K and G_local
     K = zeros(3, 3, n_omega);
