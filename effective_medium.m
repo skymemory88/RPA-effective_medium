@@ -229,21 +229,52 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
                 % Eq. 2.12: G(q,iω) = [1 + (J(q) - K(iω))G_local(iω)]^(-1) * G_local(iω)
                 denom = eye(3) + (J_q_iq - K_iw) * G_local_iw;
 
-                % Check conditioning and regularize if needed
-                rc = rcond(denom);
-                regularization_threshold = 1e-10;  % More conservative threshold
+                % Check for NaN/Inf in matrix before computing condition number
+                has_nan_inf = any(isnan(denom(:))) || any(isinf(denom(:)));
 
-                if rc < regularization_threshold
-                    % Apply Tikhonov regularization
-                    % The regularization parameter scales with the condition number
-                    reg_param = max(1e-10, regularization_threshold - rc);
-                    denom = denom + reg_param * eye(3);
+                % Check conditioning and regularize if needed
+                regularization_threshold = 1e-10;  % More conservative threshold
+                needs_regularization = false;
+                reg_param = 1e-9;  % Default regularization parameter
+
+                if has_nan_inf
+                    % Matrix contains NaN or Inf - apply strong regularization
+                    needs_regularization = true;
+                    reg_param = 1e-6;  % Stronger regularization for NaN/Inf
                     n_bad_conditioned = n_bad_conditioned + 1;
+                else
+                    % Check condition number
+                    rc = rcond(denom);
+
+                    % Handle NaN rcond or badly conditioned matrices
+                    if isnan(rc) || isinf(rc) || rc < regularization_threshold
+                        needs_regularization = true;
+                        if isnan(rc) || isinf(rc)
+                            reg_param = 1e-6;  % Strong regularization for NaN rcond
+                        else
+                            % Scale regularization with condition number
+                            reg_param = max(1e-9, regularization_threshold - rc);
+                        end
+                        n_bad_conditioned = n_bad_conditioned + 1;
+                    end
+                end
+
+                % Apply regularization if needed
+                if needs_regularization
+                    % Tikhonov regularization: add small diagonal term
+                    denom = denom + reg_param * eye(3);
                 end
 
                 % Solve denom * G_q = G_local using robust method
                 % Using mldivide with regularized matrix
                 G_q(:,:,iq,iw) = denom \ G_local_iw;
+
+                % Verify result doesn't contain NaN/Inf
+                if any(isnan(G_q(:,:,iq,iw)(:))) || any(isinf(G_q(:,:,iq,iw)(:)))
+                    % If result is still bad, use more aggressive regularization
+                    denom = eye(3) + (J_q_iq - K_iw) * G_local_iw + 1e-4 * eye(3);
+                    G_q(:,:,iq,iw) = denom \ G_local_iw;
+                end
             end
         end
 
@@ -258,7 +289,15 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
 
         % Apply mixing to G_local
         G_local_mixing = 0.5;
-        G_local = (1 - G_local_mixing) * G_local + G_local_mixing * G_local_new;
+        G_local_mixed = (1 - G_local_mixing) * G_local + G_local_mixing * G_local_new;
+
+        % Safety check: if mixed result contains NaN/Inf, keep old G_local
+        if any(isnan(G_local_mixed(:))) || any(isinf(G_local_mixed(:)))
+            % Don't update G_local if result is invalid
+            warning('G_local mixing produced NaN/Inf, keeping previous value');
+        else
+            G_local = G_local_mixed;
+        end
 
         % Step C: New K from self-consistency equation (2.11)
         K_new = zeros(3, 3, n_omega);
@@ -272,14 +311,32 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
             sum_JG = sum_JG / n_q;
 
             % K = sum_JG * inv(G_local)
-            if rcond(G_local(:,:,iw)) > 1e-12
-                K_new(:,:,iw) = sum_JG / G_local(:,:,iw);
+            % Check for NaN/Inf before computing K
+            G_local_iw = G_local(:,:,iw);
+            has_nan_inf_G = any(isnan(G_local_iw(:))) || any(isinf(G_local_iw(:)));
+            has_nan_inf_sum = any(isnan(sum_JG(:))) || any(isinf(sum_JG(:)));
+
+            if ~has_nan_inf_G && ~has_nan_inf_sum
+                rc_G = rcond(G_local_iw);
+                % Check if matrix is well-conditioned and rcond is valid
+                if ~isnan(rc_G) && ~isinf(rc_G) && rc_G > 1e-12
+                    K_new(:,:,iw) = sum_JG / G_local_iw;
+                else
+                    % Keep old value if G_local is ill-conditioned
+                    K_new(:,:,iw) = K(:,:,iw);
+                end
             else
+                % If we have NaN/Inf, keep previous K value
                 K_new(:,:,iw) = K(:,:,iw);
             end
 
             % Enforce Hermiticity
             K_new(:,:,iw) = (K_new(:,:,iw) + K_new(:,:,iw)') / 2;
+
+            % Final safety check: if K_new contains NaN/Inf, revert to old K
+            if any(isnan(K_new(:,:,iw)(:))) || any(isinf(K_new(:,:,iw)(:)))
+                K_new(:,:,iw) = K(:,:,iw);
+            end
         end
 
         % Step D: Apply mixing to K
