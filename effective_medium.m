@@ -170,9 +170,9 @@ for iter = 1:scf_params.max_iter
         idx = mod(iter-1, scf_params.mixing_depth) + 1;
         K_history{idx} = K;
         F_history{idx} = K_new;
-        
+
         % Anderson mixing
-        K = tensor_anderson_mixing(K_history, F_history, iter, scf_params);
+        K = AndersonMix(K_history, F_history, iter, scf_params);
     else
         % Simple linear mixing
         K = (1 - scf_params.mixing_alpha) * K + ...
@@ -367,41 +367,54 @@ function J_q = compute_dipolar_tensor(qpoints, params)
 end
 
 %% Function 3: Improved mixing for tensor case
-function K_new = tensor_anderson_mixing(K_history, F_history, iter, params)
+function K_new = AndersonMix(K_history, F_history, iter, params)
     % Anderson acceleration adapted for 3x3 tensor mixing
-    % K_history: cell array of previous K tensors
+    % K_history: cell array of previous K tensors (circular buffer)
     % F_history: cell array of F(K) = K_new from self-consistency
-    
+    % iter: current iteration number
+
     m = min(params.mixing_depth, iter-1);  % Depth of history to use
-    
+
     if m < 2
         % Not enough history: simple mixing
+        % Get current index in circular buffer
+        idx = mod(iter-1, params.mixing_depth) + 1;
         alpha = params.mixing_alpha;
-        K_new = (1-alpha) * K_history{end} + alpha * F_history{end};
+        K_new = (1-alpha) * K_history{idx} + alpha * F_history{idx};
         return;
     end
-    
+
+    % Get indices of stored history (handling circular buffer correctly)
+    % Most recent is at idx_current, go backwards m steps
+    idx_current = mod(iter-1, params.mixing_depth) + 1;
+    indices = zeros(m, 1);
+    for i = 1:m
+        % Go back (m-i) iterations from current
+        indices(i) = mod(iter-1-(m-i), params.mixing_depth) + 1;
+    end
+
     % Flatten tensors for linear algebra
-    [n1, n2, n3] = size(K_history{end});
+    [n1, n2, n3] = size(K_history{idx_current});
     n_total = n1 * n2 * n3;
-    
-    % Build residual matrices
+
+    % Build residual matrices using correct indices
     R = zeros(n_total, m);
     for i = 1:m
-        K_flat = reshape(K_history{end-m+i}, [], 1);
-        F_flat = reshape(F_history{end-m+i}, [], 1);
+        idx = indices(i);
+        K_flat = reshape(K_history{idx}, [], 1);
+        F_flat = reshape(F_history{idx}, [], 1);
         R(:,i) = F_flat - K_flat;
     end
-    
+
     % Compute optimal linear combination
     % Minimize ||R * alpha||² subject to sum(alpha) = 1
-    
+
     % Gram matrix
     G = R' * R;
-    
+
     % Add regularization for stability
     G = G + 1e-10 * eye(m);
-    
+
     % Solve for coefficients
     ones_vec = ones(m, 1);
     try
@@ -413,23 +426,25 @@ function K_new = tensor_anderson_mixing(K_history, F_history, iter, params)
     catch
         % Fallback to simple mixing if singular
         alpha_simple = params.mixing_alpha;
-        K_new = (1-alpha_simple) * K_history{end} + alpha_simple * F_history{end};
+        K_new = (1-alpha_simple) * K_history{idx_current} + alpha_simple * F_history{idx_current};
         return;
     end
-    
-    % Construct new K from linear combination
-    K_new = zeros(size(K_history{end}));
+
+    % Construct new K from linear combination using correct indices
+    K_new = zeros(size(K_history{idx_current}));
     for i = 1:m
-        K_new = K_new + alpha(i) * K_history{end-m+i};
+        idx = indices(i);
+        K_new = K_new + alpha(i) * K_history{idx};
     end
-    
+
     % Add relaxation
     beta = params.anderson_beta;  % typically 0.5-1.0
-    F_avg = zeros(size(F_history{end}));
+    F_avg = zeros(size(F_history{idx_current}));
     for i = 1:m
-        F_avg = F_avg + alpha(i) * F_history{end-m+i};
+        idx = indices(i);
+        F_avg = F_avg + alpha(i) * F_history{idx};
     end
-    
+
     K_new = (1-beta) * K_new + beta * F_avg;
 end
 
