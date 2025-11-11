@@ -1,4 +1,4 @@
-function  [cVar, freq_total, chi0, chiq, qvec, Jq_RPA, dscrt_var] = MF_RPA_Yikai(mion, scanMode, dscrt_var, freq_total, theta, phi, gama, hyp, RPA_mode)
+function [cVar, freq_total, chi0, chiq, qvec, Jq_RPA, dscrt_var] = MF_RPA_Yikai(mion, scanMode, dscrt_var, freq_total, theta, phi, gama, hyp, RPA_mode)
 % Current version assumes complete symmetrical equivalence among the four spin moments per unit cell
 % mion: Magnetic ion type: 'Er', 'Ho'
 % scanMode: 'field' or 'temp' scan
@@ -12,7 +12,7 @@ function  [cVar, freq_total, chi0, chiq, qvec, Jq_RPA, dscrt_var] = MF_RPA_Yikai
 
 Options.plotting = true; % Decide whether or not to plot the data at thes end
 Options.unit = 'GHz'; % Energy unit choice: J, GHz, meV (default)
-Options.saving = false; % Options to save the susceptibility tensors
+Options.saving = true; % Options to save the susceptibility tensors
 Options.scanMode = scanMode; % 1. Field plot with RPA; 2. Temp plot with RPA; 3. wavevector plot with RPA
 Options.nZee = true;
 Options.RPA = RPA_mode; % Apply random phase approximation (RPA) correction
@@ -65,7 +65,7 @@ for ii = 1:length(dscrt_var)
         nZee_path = 'Hz_I=0';
     end
     if ispc
-        Options.location = ['C:\Users\engs2553\OneDrive - Nexus365\Postdoc\Research projects\Li',mion,...
+        Options.location = ['C:\Users\skyme\OneDrive - Nexus365\Postdoc\Research projects\Li',mion,...
             'F4 project\Data\Simulations\mean field\eigen-states\', nZee_path, '\'];
     else
         Options.location = ['/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Postdoc/Research projects/',...
