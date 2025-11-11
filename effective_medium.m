@@ -15,8 +15,8 @@ close all;
 % - dscrt_var: discrete variable (single value)
 
 % Extract dimensions
-% chi_ini = chiq; % use RPA suscpetibility as the initial guess
-chi_ini = chi0; % use single-ion susceptibility as the initial guess
+chi_ini = chiq; % use RPA suscpetibility as the initial guess
+% chi_ini = chi0; % use single-ion susceptibility as the initial guess
 n_omega = size(chi_ini, 3);  % Number of frequencies
 n_cVar = size(chi_ini, 4);   % Number of continuous variable points
 n_q = size(chi_ini, 5);      % Number of q-points
@@ -198,9 +198,9 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
     % Each strategy uses different mixing parameters and iteration limits
     strategies = {
         struct('name', 'Standard', 'mixing_alpha', 0.2, 'G_damp', 0.5, 'use_anderson', true, 'anderson_beta', 0.7, 'max_iter', 1000), ...
-        struct('name', 'Conservative', 'mixing_alpha', 0.1, 'G_damp', 0.3, 'use_anderson', true, 'anderson_beta', 0.5, 'max_iter', 1500), ...
-        struct('name', 'Very Conservative', 'mixing_alpha', 0.05, 'G_damp', 0.2, 'use_anderson', false, 'anderson_beta', 0, 'max_iter', 2000), ...
-        struct('name', 'Ultra Conservative', 'mixing_alpha', 0.02, 'G_damp', 0.15, 'use_anderson', false, 'anderson_beta', 0, 'max_iter', 2500)
+        struct('name', 'Conservative', 'mixing_alpha', 0.1, 'G_damp', 0.3, 'use_anderson', true, 'anderson_beta', 0.5, 'max_iter', 2000), ...
+        struct('name', 'Conservative+', 'mixing_alpha', 0.05, 'G_damp', 0.2, 'use_anderson', false, 'anderson_beta', 0, 'max_iter', 3000), ...
+        struct('name', 'Conservative++', 'mixing_alpha', 0.02, 'G_damp', 0.15, 'use_anderson', false, 'anderson_beta', 0, 'max_iter', 5000)
     };
 
     % Try each strategy sequentially until convergence
