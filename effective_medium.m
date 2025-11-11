@@ -9,15 +9,17 @@ close all;
 % - cVar: continuous variable (temperature or field) [1 x n_cVar]
 % - freq_total: frequency range [GHz] [1 x n_freq]
 % - chi0: non-interacting susceptibility [3 x 3 x n_freq x n_cVar x n_q]
-% - chiq: RPA susceptibility [3 x 3 x n_freq x n_cVar x n_q]
+% - chi_ini: initial susceptibility [3 x 3 x n_freq x n_cVar x n_q]
 % - qvec: q-points [n_q x 3]
 % - Jq_RPA: RPA interaction [3 x 3 x n_cVar x n_q]
 % - dscrt_var: discrete variable (single value)
 
 % Extract dimensions
-n_omega = size(chiq, 3);  % Number of frequencies
-n_cVar = size(chiq, 4);   % Number of continuous variable points
-n_q = size(chiq, 5);      % Number of q-points
+% chi_ini = chiq; % use RPA suscpetibility as the initial guess
+chi_ini = chi0; % use single-ion susceptibility as the initial guess
+n_omega = size(chi_ini, 3);  % Number of frequencies
+n_cVar = size(chi_ini, 4);   % Number of continuous variable points
+n_q = size(chi_ini, 5);      % Number of q-points
 
 fprintf('\n=== Effective Medium Theory with cVar dependence ===\n');
 fprintf('Computing for %d %s points concurrently...\n', n_cVar, scanMode);
@@ -47,8 +49,9 @@ scf_params_base.anderson_beta = 0.7;
 
 fprintf('\n=== Starting parallel self-consistent calculations ===\n');
 
-% PARFOR loop over continuous variable (temperature/field)
+% Loop over continuous variable (temperature/field)
 parfor ii = 1:n_cVar
+% for ii = 1:n_cVar
     % Extract data for this specific cVar point
     cVar_val = cVar(ii);
 
@@ -84,6 +87,7 @@ parfor ii = 1:n_cVar
     scf_params.omega_n = omega_n_local;
     scf_params.G0 = G0_local;
     scf_params.J_q = J_q_RPA;
+    scf_params.G_damp = 0.2; % damping factor for self-consistent update
 
     % Run self-consistent calculation for this cVar point
     [K_local, G_local_local, converged] = compute_effective_medium(scf_params, var_str);
@@ -144,7 +148,7 @@ for ii = 1:3
     subplot(2, 3, ii);
 
     % Extract diagonal component and average over q-points
-    chi_rpa_comp = squeeze(chiq(comp_idx, comp_idx, :, :, :));  % [n_freq x n_cVar x n_q]
+    chi_rpa_comp = squeeze(chi_ini(comp_idx, comp_idx, :, :, :));  % [n_freq x n_cVar x n_q]
     chi_rpa_avg = mean(chi_rpa_comp, 3);  % Average over q: [n_freq x n_cVar]
 
     % Plot as color map (log scale of absolute value)
@@ -189,6 +193,7 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
     n_q = scf_params.n_q;
     G0_RPA = scf_params.G0;
     J_q_RPA = scf_params.J_q;
+    G_damp = scf_params.G_damp; % damping factor for the iterative update
 
     % Initialize K and G_local
     K = zeros(3, 3, n_omega);
@@ -270,7 +275,7 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
                 G_q(:,:,iq,iw) = denom \ G_local_iw;
 
                 % Verify result doesn't contain NaN/Inf
-                if any(isnan(G_q(:,:,iq,iw)(:))) || any(isinf(G_q(:,:,iq,iw)(:)))
+                if any(isnan(G_q(:,:,iq,iw)))
                     % If result is still bad, use more aggressive regularization
                     denom = eye(3) + (J_q_iq - K_iw) * G_local_iw + 1e-4 * eye(3);
                     G_q(:,:,iq,iw) = denom \ G_local_iw;
@@ -288,8 +293,7 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
         end
 
         % Apply mixing to G_local
-        G_local_mixing = 0.5;
-        G_local_mixed = (1 - G_local_mixing) * G_local + G_local_mixing * G_local_new;
+        G_local_mixed = (1 - G_damp) * G_local_new + G_damp * G_local;
 
         % Safety check: if mixed result contains NaN/Inf, keep old G_local
         if any(isnan(G_local_mixed(:))) || any(isinf(G_local_mixed(:)))
@@ -334,7 +338,7 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
             K_new(:,:,iw) = (K_new(:,:,iw) + K_new(:,:,iw)') / 2;
 
             % Final safety check: if K_new contains NaN/Inf, revert to old K
-            if any(isnan(K_new(:,:,iw)(:))) || any(isinf(K_new(:,:,iw)(:)))
+            if any(isnan(K_new(:,:,iw)))
                 K_new(:,:,iw) = K(:,:,iw);
             end
         end
