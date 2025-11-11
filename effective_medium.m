@@ -316,7 +316,8 @@ function [K, G_local, converged, final_iter, final_residual] = ...
                 G_q(:,:,iq,iw) = denom \ G_local_iw;
 
                 % Verify result doesn't contain NaN/Inf
-                if any(isnan(G_q(:,:,iq,iw)(:))) || any(isinf(G_q(:,:,iq,iw)(:)))
+                G_temp = G_q(:,:,iq,iw);
+                if any(isnan(G_temp(:))) || any(isinf(G_temp(:)))
                     denom = eye(3) + (J_q_iq - K_iw) * G_local_iw + 1e-4 * eye(3);
                     G_q(:,:,iq,iw) = denom \ G_local_iw;
                     has_divergence = true;
@@ -386,7 +387,8 @@ function [K, G_local, converged, final_iter, final_residual] = ...
             K_new(:,:,iw) = (K_new(:,:,iw) + K_new(:,:,iw)') / 2;
 
             % Final safety check: if K_new contains NaN/Inf, revert to old K
-            if any(isnan(K_new(:,:,iw)(:))) || any(isinf(K_new(:,:,iw)(:)))
+            K_temp = K_new(:,:,iw);
+            if any(isnan(K_temp(:))) || any(isinf(K_temp(:)))
                 K_new(:,:,iw) = K(:,:,iw);
             end
         end
