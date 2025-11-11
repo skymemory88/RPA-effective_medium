@@ -139,7 +139,7 @@ for ii = 1:length(dscrt_var)
     if Options.saving == true % Save the susceptibilities
         if Options.RPA == true
             savefile1 = fullfile(Options.location,save_name);
-            save_vars = {dscrt_var, cVar, freq_total, ion, chi0, gama, qvec, chiq, Jq_RPA};
+            save_vars = {dscrt_var, cVar, freq_total, ion, chi0, gama, chiq, qvec, Jq_RPA};
             save_file(save_vars, savefile1, Options); % save the data w. RPA corrections
         else
             savefile2 = fullfile(Options.location,save_name);
@@ -402,10 +402,12 @@ ion = save_vars{4};
 chi = save_vars{5};
 gama = save_vars{6};
 unit = opt.unit;
-if length(save_vars) == 8
-    qvec = save_vars{7};
-    chiq = save_vars{8};
-    save(savefile,'temp','fields','freq_total','ion','chi','gama','qvec','chiq','unit','-v7.3');
+if length(save_vars) > 8
+    chiq = save_vars{7};
+    qvec = save_vars{8};
+    Jq = save_vars{9};
+    save(savefile,'temp','fields','freq_total','ion','chi','gama',...
+        'qvec','chiq','unit','Jq','-v7.3');
 else
     save(savefile,'temp','fields','freq_total','ion','chi','gama','unit','-v7.3');
 end
@@ -676,14 +678,14 @@ end
 
 Jq_RPA = zeros(3, 3, size(cVar,2), size(qvec,1));
 RPA_deno = zeros(3, 3, size(freq_total,1), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
-for nb = 1:size(cVar,2) % continuous variable (field/temperature) iterator
-    for nq = 1:size(qvec,1) % q vector iterator
+for nq = 1:size(qvec,1) % q vector iterator
+    Jq_RPA(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
+    for nb = 1:size(cVar,2) % continuous variable (field/temperature) iterator
         Jav = squeeze( sum(sum(D(:,:,:,:,nq),4),3)/unitN ); % [meV] average over the unit cell
-        Jq_RPA(:,:,nb,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
         parfor nf = 1:length(freq_total(1,:))
 %         for nf = 1:length(freq_total(1,:)) % for debugging
             chi_mf = squeeze(chi0(:,:,nf,nb));
-            MM = chi_mf * squeeze(Jq_RPA(:,:,nb,nq)); % [meV^-1 * meV], non-commuting operation for matrices
+            MM = chi_mf * squeeze(Jq_RPA(:,:,nq)); % [meV^-1 * meV], non-commuting operation for matrices
             deno = squeeze(eye(size(MM))- MM);
             chiq(:,:,nf,nb,nq) = deno\chi_mf;
             RPA_deno(:,:,nf,nb,nq) = det(deno); % RPA denominator, save for pole analysis
