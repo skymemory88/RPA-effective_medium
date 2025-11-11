@@ -193,21 +193,67 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
     n_q = scf_params.n_q;
     G0_RPA = scf_params.G0;
     J_q_RPA = scf_params.J_q;
-    G_damp = scf_params.G_damp; % damping factor for the iterative update
+
+    % Multi-strategy approach: try different convergence strategies
+    % Each strategy uses different mixing parameters and iteration limits
+    strategies = {
+        struct('name', 'Standard', 'mixing_alpha', 0.2, 'G_damp', 0.5, 'use_anderson', true, 'anderson_beta', 0.7, 'max_iter', 1000), ...
+        struct('name', 'Conservative', 'mixing_alpha', 0.1, 'G_damp', 0.3, 'use_anderson', true, 'anderson_beta', 0.5, 'max_iter', 1500), ...
+        struct('name', 'Very Conservative', 'mixing_alpha', 0.05, 'G_damp', 0.2, 'use_anderson', false, 'anderson_beta', 0, 'max_iter', 2000), ...
+        struct('name', 'Ultra Conservative', 'mixing_alpha', 0.02, 'G_damp', 0.15, 'use_anderson', false, 'anderson_beta', 0, 'max_iter', 2500)
+    };
+
+    % Try each strategy sequentially until convergence
+    for strategy_idx = 1:length(strategies)
+        strategy = strategies{strategy_idx};
+
+        % Call convergence attempt with this strategy
+        [K, G_local, converged, final_iter, residual] = ...
+            attempt_convergence(scf_params, G0_RPA, J_q_RPA, n_omega, n_q, strategy);
+
+        if converged
+            fprintf('  %s: Converged in %d iterations (residual = %.2e)\n', var_str, final_iter, residual);
+            return;
+        end
+
+        % If this strategy failed and it's the last one, report failure
+        if strategy_idx == length(strategies)
+            fprintf('  %s: Not converged after %d iterations (residual = %.2e)\n', var_str, final_iter, residual);
+        end
+    end
+end
+
+%% Attempt convergence with specific strategy
+function [K, G_local, converged, final_iter, final_residual] = ...
+    attempt_convergence(scf_params, G0_RPA, J_q_RPA, n_omega, n_q, strategy)
 
     % Initialize K and G_local
     K = zeros(3, 3, n_omega);
     G_local = G0_RPA;  % Initial guess
 
     % For Anderson mixing history
-    if scf_params.use_anderson
+    if strategy.use_anderson
         K_history = cell(scf_params.mixing_depth, 1);
         F_history = cell(scf_params.mixing_depth, 1);
     end
 
+    % Adaptive mixing parameters (start with strategy defaults)
+    mixing_alpha = strategy.mixing_alpha;
+    G_damp = strategy.G_damp;
+
+    % Track residual history for adaptive adjustment
+    residual_history = zeros(strategy.max_iter, 1);
+    stagnation_counter = 0;
+    best_residual = inf;
+
+    % Momentum for oscillation damping
+    K_momentum = zeros(3, 3, n_omega);
+    momentum_coeff = 0.1;
+
     % Main SCF loop
     converged = false;
-    final_iter = scf_params.max_iter;  % Track actual iterations
+    final_iter = strategy.max_iter;
+    final_residual = inf;
 
     % Suppress warnings for nearly singular matrices (we handle them explicitly)
     warning_state = warning('query', 'MATLAB:nearlySingularMatrix');
@@ -218,12 +264,13 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
     % Track conditioning issues (for diagnostics)
     n_bad_conditioned = 0;
 
-    for iter = 1:scf_params.max_iter
+    for iter = 1:strategy.max_iter
         K_old = K;
         G_local_old = G_local;
 
         % Step A: Compute G(q,iω) for all q using CURRENT G_local
         G_q = zeros(3, 3, n_q, n_omega);
+        has_divergence = false;
 
         for iq = 1:n_q
             for iw = 1:n_omega
@@ -238,26 +285,22 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
                 has_nan_inf = any(isnan(denom(:))) || any(isinf(denom(:)));
 
                 % Check conditioning and regularize if needed
-                regularization_threshold = 1e-10;  % More conservative threshold
+                regularization_threshold = 1e-10;
                 needs_regularization = false;
-                reg_param = 1e-9;  % Default regularization parameter
+                reg_param = 1e-9;
 
                 if has_nan_inf
-                    % Matrix contains NaN or Inf - apply strong regularization
                     needs_regularization = true;
-                    reg_param = 1e-6;  % Stronger regularization for NaN/Inf
+                    reg_param = 1e-6;
                     n_bad_conditioned = n_bad_conditioned + 1;
+                    has_divergence = true;
                 else
-                    % Check condition number
                     rc = rcond(denom);
-
-                    % Handle NaN rcond or badly conditioned matrices
                     if isnan(rc) || isinf(rc) || rc < regularization_threshold
                         needs_regularization = true;
                         if isnan(rc) || isinf(rc)
-                            reg_param = 1e-6;  % Strong regularization for NaN rcond
+                            reg_param = 1e-6;
                         else
-                            % Scale regularization with condition number
                             reg_param = max(1e-9, regularization_threshold - rc);
                         end
                         n_bad_conditioned = n_bad_conditioned + 1;
@@ -266,19 +309,17 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
 
                 % Apply regularization if needed
                 if needs_regularization
-                    % Tikhonov regularization: add small diagonal term
                     denom = denom + reg_param * eye(3);
                 end
 
                 % Solve denom * G_q = G_local using robust method
-                % Using mldivide with regularized matrix
                 G_q(:,:,iq,iw) = denom \ G_local_iw;
 
                 % Verify result doesn't contain NaN/Inf
-                if any(isnan(G_q(:,:,iq,iw)))
-                    % If result is still bad, use more aggressive regularization
+                if any(isnan(G_q(:,:,iq,iw)(:))) || any(isinf(G_q(:,:,iq,iw)(:)))
                     denom = eye(3) + (J_q_iq - K_iw) * G_local_iw + 1e-4 * eye(3);
                     G_q(:,:,iq,iw) = denom \ G_local_iw;
+                    has_divergence = true;
                 end
             end
         end
@@ -292,13 +333,20 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
             G_local_new(:,:,iw) = G_local_new(:,:,iw) / n_q;
         end
 
-        % Apply mixing to G_local
-        G_local_mixed = (1 - G_damp) * G_local_new + G_damp * G_local;
+        % Apply adaptive damped mixing to G_local
+        % Note: G_damp acts as (1-alpha) where larger G_damp means more old value
+        G_local_mixed = G_damp * G_local + (1 - G_damp) * G_local_new;
 
-        % Safety check: if mixed result contains NaN/Inf, keep old G_local
+        % Safety check: if mixed result contains NaN/Inf, reduce mixing and retry
         if any(isnan(G_local_mixed(:))) || any(isinf(G_local_mixed(:)))
-            % Don't update G_local if result is invalid
-            warning('G_local mixing produced NaN/Inf, keeping previous value');
+            % Try with much smaller mixing (keep 95% old value)
+            G_local_mixed = 0.95 * G_local + 0.05 * G_local_new;
+            if any(isnan(G_local_mixed(:))) || any(isinf(G_local_mixed(:)))
+                % If still bad, keep old value and mark as diverging
+                has_divergence = true;
+            else
+                G_local = G_local_mixed;
+            end
         else
             G_local = G_local_mixed;
         end
@@ -338,19 +386,34 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
             K_new(:,:,iw) = (K_new(:,:,iw) + K_new(:,:,iw)') / 2;
 
             % Final safety check: if K_new contains NaN/Inf, revert to old K
-            if any(isnan(K_new(:,:,iw)))
+            if any(isnan(K_new(:,:,iw)(:))) || any(isinf(K_new(:,:,iw)(:)))
                 K_new(:,:,iw) = K(:,:,iw);
             end
         end
 
-        % Step D: Apply mixing to K
-        if scf_params.use_anderson && iter > 2
+        % Step D: Apply mixing to K with momentum
+        K_update = K_new - K;  % Compute update direction
+
+        % Add momentum term to damp oscillations
+        K_update_with_momentum = K_update + momentum_coeff * K_momentum;
+        K_momentum = K_update_with_momentum;  % Store for next iteration
+
+        if strategy.use_anderson && iter > 2
             idx = mod(iter-1, scf_params.mixing_depth) + 1;
             K_history{idx} = K;
             F_history{idx} = K_new;
-            K = AndersonMix(K_history, F_history, iter, scf_params);
+            scf_params_local = scf_params;
+            scf_params_local.mixing_alpha = mixing_alpha;
+            scf_params_local.anderson_beta = strategy.anderson_beta;
+            K = AndersonMix(K_history, F_history, iter, scf_params_local);
         else
-            K = (1 - scf_params.mixing_alpha) * K + scf_params.mixing_alpha * K_new;
+            K = K + mixing_alpha * K_update_with_momentum;
+        end
+
+        % Safety check: if K contains NaN/Inf, revert
+        if any(isnan(K(:))) || any(isinf(K(:)))
+            K = K_old;
+            has_divergence = true;
         end
 
         % Step E: Compute residuals
@@ -362,34 +425,42 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
         end
 
         residual = max(residual_K, residual_G);
+        residual_history(iter) = residual;
+        final_residual = residual;
+
+        % Track best residual seen
+        if residual < best_residual
+            best_residual = residual;
+            stagnation_counter = 0;
+        else
+            stagnation_counter = stagnation_counter + 1;
+        end
+
+        % Adaptive mixing: if stagnating, reduce mixing parameters
+        if stagnation_counter > 20 && iter > 50
+            mixing_alpha = max(mixing_alpha * 0.8, 0.01);
+            G_damp = min(G_damp * 1.1, 0.95);  % Increase damping (keep more old value)
+            stagnation_counter = 0;  % Reset counter
+        end
+
+        % Early termination if residual is exploding
+        if residual > 1e6 || has_divergence
+            % This strategy is failing, exit early
+            final_iter = iter;
+            break;
+        end
 
         % Check convergence
         if residual < scf_params.tol
             converged = true;
             final_iter = iter;
-            fprintf('  %s: Converged in %d iterations (residual = %.2e)\n', var_str, iter, residual);
             break;
-        end
-
-        % Adaptive mixing
-        if iter == scf_params.max_iter
-            fprintf('  %s: Not converged after %d iterations (residual = %.2e)\n', var_str, iter, residual);
         end
     end
 
     % Restore warning states
     warning(warning_state.state, 'MATLAB:nearlySingularMatrix');
     warning(warning_state2.state, 'MATLAB:singularMatrix');
-
-    % Report conditioning diagnostics if significant
-    total_points = n_q * n_omega * final_iter;
-    if n_bad_conditioned > 0
-        percent_bad = 100 * n_bad_conditioned / total_points;
-        if percent_bad > 1.0  % Only report if >1% of points had issues
-            fprintf('  %s: Regularized %d/%d (%.1f%%) ill-conditioned matrices\n', ...
-                    var_str, n_bad_conditioned, total_points, percent_bad);
-        end
-    end
 end
 
 %% Function 2: Improved mixing for tensor case
