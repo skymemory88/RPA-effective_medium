@@ -139,12 +139,6 @@ if n_converged < n_cVar && n_converged > 0
             continue;
         end
 
-        % Find closest converged neighbor by index distance
-        [~, closest_idx] = min(abs(converged_indices - ii));
-        neighbor_idx = converged_indices(closest_idx);
-
-        fprintf('  Retry %s using seed from index %d...\n', var_str, neighbor_idx);
-
         % Generate Matsubara frequencies for this temperature
         omega_n_local = 2*(0:n_omega-1) * pi / beta_local;
 
@@ -165,16 +159,66 @@ if n_converged < n_cVar && n_converged > 0
         scf_params.G_damp = 0.2;
         scf_params.cVar_index = ii;
 
-        % Use converged neighbor as initial guess
-        K_init_neighbor = K_emt(:,:,:,neighbor_idx);
-        G_init_neighbor = G_local_emt(:,:,:,neighbor_idx);
+        % Try multiple neighbor strategies
+        converged_this_point = false;
 
-        % Run self-consistent calculation with neighbor seed
+        % Strategy 1: Single nearest neighbor
+        [distances, sort_idx] = sort(abs(converged_indices - ii));
+        neighbor_idx = converged_indices(sort_idx(1));
+
+        fprintf('  Retry %s using nearest neighbor (idx=%d)...\n', var_str, neighbor_idx);
+        K_init = K_emt(:,:,:,neighbor_idx);
+        G_init = G_local_emt(:,:,:,neighbor_idx);
+
         [K_local, G_local_local, converged] = compute_effective_medium_seeded(...
-            scf_params, var_str, K_init_neighbor, G_init_neighbor);
+            scf_params, var_str, K_init, G_init);
 
         if converged
-            % Update results
+            converged_this_point = true;
+        else
+            % Strategy 2: Try second-nearest neighbor if available
+            if length(converged_indices) >= 2
+                neighbor_idx2 = converged_indices(sort_idx(2));
+                fprintf('  Retry %s using 2nd-nearest neighbor (idx=%d)...\n', var_str, neighbor_idx2);
+                K_init = K_emt(:,:,:,neighbor_idx2);
+                G_init = G_local_emt(:,:,:,neighbor_idx2);
+
+                [K_local, G_local_local, converged] = compute_effective_medium_seeded(...
+                    scf_params, var_str, K_init, G_init);
+
+                if converged
+                    converged_this_point = true;
+                end
+            end
+
+            % Strategy 3: Interpolate between two nearest neighbors
+            if ~converged_this_point && length(converged_indices) >= 2
+                neighbor_idx1 = converged_indices(sort_idx(1));
+                neighbor_idx2 = converged_indices(sort_idx(2));
+
+                % Weighted interpolation based on distance
+                d1 = abs(neighbor_idx1 - ii);
+                d2 = abs(neighbor_idx2 - ii);
+                w1 = d2 / (d1 + d2);  % Closer neighbor gets more weight
+                w2 = d1 / (d1 + d2);
+
+                fprintf('  Retry %s using interpolation (idx=%d,%.2f + idx=%d,%.2f)...\n', ...
+                    var_str, neighbor_idx1, w1, neighbor_idx2, w2);
+
+                K_init = w1 * K_emt(:,:,:,neighbor_idx1) + w2 * K_emt(:,:,:,neighbor_idx2);
+                G_init = w1 * G_local_emt(:,:,:,neighbor_idx1) + w2 * G_local_emt(:,:,:,neighbor_idx2);
+
+                [K_local, G_local_local, converged] = compute_effective_medium_seeded(...
+                    scf_params, var_str, K_init, G_init);
+
+                if converged
+                    converged_this_point = true;
+                end
+            end
+        end
+
+        % Update results if any strategy succeeded
+        if converged_this_point
             K_emt(:,:,:,ii) = K_local;
             G_local_emt(:,:,:,ii) = G_local_local;
             converged_flags(ii) = true;
@@ -303,7 +347,11 @@ function [K, G_local, converged] = compute_effective_medium_seeded(scf_params, v
         struct('name', 'Conservative+++', 'mixing_alpha', 0.01, 'G_damp', 0.10, 'use_anderson', false, 'anderson_beta', 0,...
         'max_iter', round(4.0*base_iter), 'allow_restart', true), ...
         struct('name', 'Minimal Step', 'mixing_alpha', 0.005, 'G_damp', 0.05, 'use_anderson', false, 'anderson_beta', 0,...
-        'max_iter', round(5.0*base_iter), 'allow_restart', true)
+        'max_iter', round(5.0*base_iter), 'allow_restart', true), ...
+        struct('name', 'Ultra-Conservative', 'mixing_alpha', 0.002, 'G_damp', 0.03, 'use_anderson', false, 'anderson_beta', 0,...
+        'max_iter', round(6.0*base_iter), 'allow_restart', true), ...
+        struct('name', 'Glacial', 'mixing_alpha', 0.001, 'G_damp', 0.02, 'use_anderson', false, 'anderson_beta', 0,...
+        'max_iter', round(8.0*base_iter), 'allow_restart', true)
     };
 
     % Try each strategy sequentially until convergence
