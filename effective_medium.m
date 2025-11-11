@@ -196,25 +196,37 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
 
     % Multi-strategy approach: try different convergence strategies
     % Each strategy uses different mixing parameters and iteration limits
+    % Progressively more conservative strategies with larger iteration budgets
     strategies = {
-        struct('name', 'Standard', 'mixing_alpha', 0.2, 'G_damp', 0.5, 'use_anderson', true, 'anderson_beta', 0.7, 'max_iter', 1000), ...
-        struct('name', 'Conservative', 'mixing_alpha', 0.1, 'G_damp', 0.3, 'use_anderson', true, 'anderson_beta', 0.5, 'max_iter', 2000), ...
-        struct('name', 'Conservative+', 'mixing_alpha', 0.05, 'G_damp', 0.2, 'use_anderson', false, 'anderson_beta', 0, 'max_iter', 3000), ...
-        struct('name', 'Conservative++', 'mixing_alpha', 0.02, 'G_damp', 0.15, 'use_anderson', false, 'anderson_beta', 0, 'max_iter', 5000)
+        struct('name', 'Standard', 'mixing_alpha', 0.2, 'G_damp', 0.5, 'use_anderson', true, 'anderson_beta', 0.7, 'max_iter', 800, 'allow_restart', false), ...
+        struct('name', 'Conservative', 'mixing_alpha', 0.1, 'G_damp', 0.35, 'use_anderson', true, 'anderson_beta', 0.5, 'max_iter', 1200, 'allow_restart', false), ...
+        struct('name', 'Very Conservative', 'mixing_alpha', 0.05, 'G_damp', 0.25, 'use_anderson', false, 'anderson_beta', 0, 'max_iter', 2000, 'allow_restart', false), ...
+        struct('name', 'Ultra Conservative', 'mixing_alpha', 0.02, 'G_damp', 0.15, 'use_anderson', false, 'anderson_beta', 0, 'max_iter', 3000, 'allow_restart', true), ...
+        struct('name', 'Extreme Conservative', 'mixing_alpha', 0.01, 'G_damp', 0.10, 'use_anderson', false, 'anderson_beta', 0, 'max_iter', 4000, 'allow_restart', true), ...
+        struct('name', 'Minimal Step', 'mixing_alpha', 0.005, 'G_damp', 0.05, 'use_anderson', false, 'anderson_beta', 0, 'max_iter', 5000, 'allow_restart', true)
     };
 
     % Try each strategy sequentially until convergence
+    % Initialize with default starting point
+    K_init = [];
+    G_local_init = [];
+
     for strategy_idx = 1:length(strategies)
         strategy = strategies{strategy_idx};
 
         % Call convergence attempt with this strategy
         [K, G_local, converged, final_iter, residual] = ...
-            attempt_convergence(scf_params, G0_RPA, J_q_RPA, n_omega, n_q, strategy);
+            attempt_convergence(scf_params, G0_RPA, J_q_RPA, n_omega, n_q, strategy, K_init, G_local_init);
 
         if converged
             fprintf('  %s: Converged in %d iterations (residual = %.2e)\n', var_str, final_iter, residual);
             return;
         end
+
+        % Even if not converged, use the result as starting point for next strategy
+        % This allows strategies to build on each other's progress
+        K_init = K;
+        G_local_init = G_local;
 
         % If this strategy failed and it's the last one, report failure
         if strategy_idx == length(strategies)
@@ -225,11 +237,16 @@ end
 
 %% Attempt convergence with specific strategy
 function [K, G_local, converged, final_iter, final_residual] = ...
-    attempt_convergence(scf_params, G0_RPA, J_q_RPA, n_omega, n_q, strategy)
+    attempt_convergence(scf_params, G0_RPA, J_q_RPA, n_omega, n_q, strategy, K_init, G_local_init)
 
-    % Initialize K and G_local
-    K = zeros(3, 3, n_omega);
-    G_local = G0_RPA;  % Initial guess
+    % Initialize K and G_local (use provided initial guess if available)
+    if isempty(K_init) || isempty(G_local_init)
+        K = zeros(3, 3, n_omega);
+        G_local = G0_RPA;  % Default initial guess
+    else
+        K = K_init;  % Continue from previous strategy's result
+        G_local = G_local_init;
+    end
 
     % For Anderson mixing history
     if strategy.use_anderson
@@ -245,6 +262,9 @@ function [K, G_local, converged, final_iter, final_residual] = ...
     residual_history = zeros(strategy.max_iter, 1);
     stagnation_counter = 0;
     best_residual = inf;
+    best_K = K;
+    best_G_local = G_local;
+    consecutive_divergence = 0;
 
     % Momentum for oscillation damping
     K_momentum = zeros(3, 3, n_omega);
@@ -284,14 +304,14 @@ function [K, G_local, converged, final_iter, final_residual] = ...
                 % Check for NaN/Inf in matrix before computing condition number
                 has_nan_inf = any(isnan(denom(:))) || any(isinf(denom(:)));
 
-                % Check conditioning and regularize if needed
+                % Adaptive regularization based on condition number
                 regularization_threshold = 1e-10;
                 needs_regularization = false;
-                reg_param = 1e-9;
+                reg_param = 0;
 
                 if has_nan_inf
                     needs_regularization = true;
-                    reg_param = 1e-6;
+                    reg_param = 1e-5;  % Stronger regularization for NaN/Inf
                     n_bad_conditioned = n_bad_conditioned + 1;
                     has_divergence = true;
                 else
@@ -299,9 +319,10 @@ function [K, G_local, converged, final_iter, final_residual] = ...
                     if isnan(rc) || isinf(rc) || rc < regularization_threshold
                         needs_regularization = true;
                         if isnan(rc) || isinf(rc)
-                            reg_param = 1e-6;
+                            reg_param = 1e-5;
                         else
-                            reg_param = max(1e-9, regularization_threshold - rc);
+                            % Adaptive regularization: scale with how bad the conditioning is
+                            reg_param = max(1e-8, 10 * (regularization_threshold - rc));
                         end
                         n_bad_conditioned = n_bad_conditioned + 1;
                     end
@@ -340,13 +361,18 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 
         % Safety check: if mixed result contains NaN/Inf, reduce mixing and retry
         if any(isnan(G_local_mixed(:))) || any(isinf(G_local_mixed(:)))
-            % Try with much smaller mixing (keep 95% old value)
-            G_local_mixed = 0.95 * G_local + 0.05 * G_local_new;
+            % Try with progressively smaller mixing ratios
+            for safety_damp = [0.98, 0.99, 0.995]
+                G_local_mixed = safety_damp * G_local + (1 - safety_damp) * G_local_new;
+                if ~any(isnan(G_local_mixed(:))) && ~any(isinf(G_local_mixed(:)))
+                    G_local = G_local_mixed;
+                    break;
+                end
+            end
+            % If all attempts failed, keep old value and mark as diverging
             if any(isnan(G_local_mixed(:))) || any(isinf(G_local_mixed(:)))
-                % If still bad, keep old value and mark as diverging
                 has_divergence = true;
-            else
-                G_local = G_local_mixed;
+                G_local = G_local_old;  % Revert to old value
             end
         else
             G_local = G_local_mixed;
@@ -430,24 +456,46 @@ function [K, G_local, converged, final_iter, final_residual] = ...
         residual_history(iter) = residual;
         final_residual = residual;
 
-        % Track best residual seen
+        % Track best residual seen and save best solution
         if residual < best_residual
             best_residual = residual;
+            best_K = K;
+            best_G_local = G_local;
             stagnation_counter = 0;
+            consecutive_divergence = 0;
         else
             stagnation_counter = stagnation_counter + 1;
         end
 
-        % Adaptive mixing: if stagnating, reduce mixing parameters
-        if stagnation_counter > 20 && iter > 50
-            mixing_alpha = max(mixing_alpha * 0.8, 0.01);
-            G_damp = min(G_damp * 1.1, 0.95);  % Increase damping (keep more old value)
+        % Track consecutive divergences
+        if has_divergence
+            consecutive_divergence = consecutive_divergence + 1;
+        else
+            consecutive_divergence = 0;
+        end
+
+        % Adaptive mixing: if stagnating, reduce mixing parameters more aggressively
+        if stagnation_counter > 15 && iter > 50
+            mixing_alpha = max(mixing_alpha * 0.7, 0.001);  % More aggressive reduction, lower floor
+            G_damp = min(G_damp * 1.15, 0.98);  % More aggressive increase in damping
+            momentum_coeff = max(momentum_coeff * 0.8, 0.01);  % Reduce momentum
             stagnation_counter = 0;  % Reset counter
         end
 
-        % Early termination if residual is exploding
-        if residual > 1e6 || has_divergence
-            % This strategy is failing, exit early
+        % Restart mechanism: if too many consecutive divergences and restart is allowed
+        if consecutive_divergence > 50 && strategy.allow_restart && iter > 100
+            % Restart from best solution found so far with very conservative parameters
+            K = best_K;
+            G_local = best_G_local;
+            mixing_alpha = max(mixing_alpha * 0.5, 0.0005);
+            G_damp = min(0.99, G_damp * 1.2);
+            K_momentum = zeros(3, 3, n_omega);  % Reset momentum
+            consecutive_divergence = 0;
+        end
+
+        % Only exit early if residual is catastrophically large AND we've tried enough iterations
+        if residual > 1e8 && iter > 100
+            % This strategy is truly failing, exit early
             final_iter = iter;
             break;
         end
