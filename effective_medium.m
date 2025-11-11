@@ -88,6 +88,7 @@ parfor ii = 1:n_cVar
     scf_params.G0 = G0_local;
     scf_params.J_q = J_q_RPA;
     scf_params.G_damp = 0.2; % damping factor for self-consistent update
+    scf_params.cVar_index = ii;  % Track index for neighbor-seeding
 
     % Run self-consistent calculation for this cVar point
     [K_local, G_local_local, converged] = compute_effective_medium(scf_params, var_str);
@@ -105,7 +106,92 @@ end
 
 % Check convergence status
 n_converged = sum(converged_flags);
-fprintf('\n=== Convergence Summary ===\n');
+fprintf('\n=== Convergence Summary (Initial) ===\n');
+fprintf('Converged: %d / %d points (%.1f%%)\n', n_converged, n_cVar, 100*n_converged/n_cVar);
+
+% Neighbor-seeding retry for non-converged points
+if n_converged < n_cVar && n_converged > 0
+    fprintf('\n=== Retrying non-converged points with neighbor seeding ===\n');
+    non_converged_indices = find(~converged_flags);
+    retry_success = 0;
+
+    for jj = 1:length(non_converged_indices)
+        ii = non_converged_indices(jj);
+        cVar_val = cVar(ii);
+
+        % Determine temperature for this point
+        switch scanMode
+            case 'field'
+                T_local = dscrt_var;
+                beta_local = 1/(8.617e-5 * T_local);
+                var_str = sprintf('B = %.3f T, T = %.3f K', cVar_val, T_local);
+            case 'temp'
+                T_local = cVar_val;
+                beta_local = 1/(8.617e-5 * T_local);
+                var_str = sprintf('T = %.3f K, B = %.3f T', T_local, dscrt_var);
+            otherwise
+                error('Unknown scan mode: %s', scanMode);
+        end
+
+        % Find nearest converged neighbor(s)
+        converged_indices = find(converged_flags);
+        if isempty(converged_indices)
+            continue;
+        end
+
+        % Find closest converged neighbor by index distance
+        [~, closest_idx] = min(abs(converged_indices - ii));
+        neighbor_idx = converged_indices(closest_idx);
+
+        fprintf('  Retry %s using seed from index %d...\n', var_str, neighbor_idx);
+
+        % Generate Matsubara frequencies for this temperature
+        omega_n_local = 2*(0:n_omega-1) * pi / beta_local;
+
+        % Extract G0 from chi0
+        G0_local = zeros(3, 3, n_omega);
+        for iw = 1:n_omega
+            G0_local(:,:,iw) = -mean(chi0(:,:,iw,ii,:), 5);
+        end
+
+        % Setup local SCF parameters
+        scf_params = scf_params_base;
+        scf_params.beta = beta_local;
+        scf_params.n_omega = n_omega;
+        scf_params.n_q = n_q;
+        scf_params.omega_n = omega_n_local;
+        scf_params.G0 = G0_local;
+        scf_params.J_q = J_q_RPA;
+        scf_params.G_damp = 0.2;
+        scf_params.cVar_index = ii;
+
+        % Use converged neighbor as initial guess
+        K_init_neighbor = K_emt(:,:,:,neighbor_idx);
+        G_init_neighbor = G_local_emt(:,:,:,neighbor_idx);
+
+        % Run self-consistent calculation with neighbor seed
+        [K_local, G_local_local, converged] = compute_effective_medium_seeded(...
+            scf_params, var_str, K_init_neighbor, G_init_neighbor);
+
+        if converged
+            % Update results
+            K_emt(:,:,:,ii) = K_local;
+            G_local_emt(:,:,:,ii) = G_local_local;
+            converged_flags(ii) = true;
+            retry_success = retry_success + 1;
+
+            % Compute susceptibility
+            for iw = 1:n_omega
+                chi_emt(:,:,iw,ii) = -G_local_local(:,:,iw) / beta_local;
+            end
+        end
+    end
+
+    n_converged = sum(converged_flags);
+    fprintf('  Neighbor seeding: %d additional points converged\n', retry_success);
+end
+
+fprintf('\n=== Final Convergence Summary ===\n');
 fprintf('Converged: %d / %d points (%.1f%%)\n', n_converged, n_cVar, 100*n_converged/n_cVar);
 if n_converged < n_cVar
     warning('%d points did not converge!', n_cVar - n_converged);
@@ -186,8 +272,14 @@ sgtitle('Comparison: RPA vs Effective Medium Theory', 'FontSize', 14, 'FontWeigh
 
 %% Supporting Functions
 
-%% Function 1: Self-consistent effective medium calculation for single cVar point
+%% Function 1: Self-consistent effective medium calculation (entry point)
 function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
+    % Entry point - calls internal function with no initial seed
+    [K, G_local, converged] = compute_effective_medium_seeded(scf_params, var_str, [], []);
+end
+
+%% Function 2: Self-consistent effective medium calculation with optional seeding
+function [K, G_local, converged] = compute_effective_medium_seeded(scf_params, var_str, K_seed, G_seed)
     % Extract parameters
     n_omega = scf_params.n_omega;
     n_q = scf_params.n_q;
@@ -197,25 +289,32 @@ function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
     % Multi-strategy approach: try different convergence strategies
     % Each strategy uses different mixing parameters and iteration limits
     % Progressively more conservative strategies with larger iteration budgets
+    % All max_iter values are now multiples of scf_params.max_iter for easy control
+    base_iter = scf_params.max_iter;
     strategies = {
         struct('name', 'Standard', 'mixing_alpha', 0.2, 'G_damp', 0.5, 'use_anderson', true, 'anderson_beta', 0.7,...
-        'max_iter', 800, 'allow_restart', false), ...
+        'max_iter', round(1.0*base_iter), 'allow_restart', false), ...
         struct('name', 'Conservative', 'mixing_alpha', 0.1, 'G_damp', 0.35, 'use_anderson', true, 'anderson_beta', 0.5,...
-        'max_iter', 1200, 'allow_restart', false), ...
+        'max_iter', round(1.5*base_iter), 'allow_restart', false), ...
         struct('name', 'Conservative+', 'mixing_alpha', 0.05, 'G_damp', 0.25, 'use_anderson', false, 'anderson_beta', 0,...
-        'max_iter', 2000, 'allow_restart', false), ...
+        'max_iter', round(2.0*base_iter), 'allow_restart', false), ...
         struct('name', 'Conservative++', 'mixing_alpha', 0.02, 'G_damp', 0.15, 'use_anderson', false, 'anderson_beta', 0,...
-        'max_iter', 3000, 'allow_restart', true), ...
+        'max_iter', round(3.0*base_iter), 'allow_restart', true), ...
         struct('name', 'Conservative+++', 'mixing_alpha', 0.01, 'G_damp', 0.10, 'use_anderson', false, 'anderson_beta', 0,...
-        'max_iter', 4000, 'allow_restart', true), ...
+        'max_iter', round(4.0*base_iter), 'allow_restart', true), ...
         struct('name', 'Minimal Step', 'mixing_alpha', 0.005, 'G_damp', 0.05, 'use_anderson', false, 'anderson_beta', 0,...
-        'max_iter', 5000, 'allow_restart', true)
+        'max_iter', round(5.0*base_iter), 'allow_restart', true)
     };
 
     % Try each strategy sequentially until convergence
-    % Initialize with default starting point
-    K_init = [];
-    G_local_init = [];
+    % Initialize with provided seed if available, otherwise use default
+    if ~isempty(K_seed) && ~isempty(G_seed)
+        K_init = K_seed;
+        G_local_init = G_seed;
+    else
+        K_init = [];
+        G_local_init = [];
+    end
 
     for strategy_idx = 1:length(strategies)
         strategy = strategies{strategy_idx};
