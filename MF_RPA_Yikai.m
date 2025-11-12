@@ -679,9 +679,13 @@ end
 Jq_RPA = zeros(3, 3, size(cVar,2), size(qvec,1));
 RPA_deno = zeros(3, 3, size(freq_total,1), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
 for nq = 1:size(qvec,1) % q vector iterator
+    % Compute Jav for this q-point (independent of cVar)
+    Jav = squeeze( sum(sum(D(:,:,:,:,nq),4),3)/unitN ); % [meV] average over the unit cell
+
     for nb = 1:size(cVar,2) % continuous variable (field/temperature) iterator
-        Jav = squeeze( sum(sum(D(:,:,:,:,nq),4),3)/unitN ); % [meV] average over the unit cell
+        % Store Jq_RPA for each (nb, nq) pair (note: Jav is same for all nb at fixed nq)
         Jq_RPA(:,:,nb,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
+
         parfor nf = 1:length(freq_total(1,:))
 %         for nf = 1:length(freq_total(1,:)) % for debugging
             chi_mf = squeeze(chi0(:,:,nf,nb));
