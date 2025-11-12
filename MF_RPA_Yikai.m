@@ -10,7 +10,7 @@ function [cVar, freq_total, chi0, chiq, qvec, Jq_RPA, dscrt_var] = MF_RPA_Yikai(
 % hyp: Hyperfine isotope proportion (0~1)
 % RPA_Mode: RPA option (true/false)
 
-Options.plotting = true; % Decide whether or not to plot the data at thes end
+Options.plotting = false; % Decide whether or not to plot the data at thes end
 Options.unit = 'GHz'; % Energy unit choice: J, GHz, meV (default)
 Options.saving = true; % Options to save the susceptibility tensors
 Options.scanMode = scanMode; % 1. Field plot with RPA; 2. Temp plot with RPA; 3. wavevector plot with RPA
@@ -679,13 +679,13 @@ end
 Jq_RPA = zeros(3, 3, size(cVar,2), size(qvec,1));
 RPA_deno = zeros(3, 3, size(freq_total,1), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
 for nq = 1:size(qvec,1) % q vector iterator
-    Jq_RPA(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
     for nb = 1:size(cVar,2) % continuous variable (field/temperature) iterator
         Jav = squeeze( sum(sum(D(:,:,:,:,nq),4),3)/unitN ); % [meV] average over the unit cell
+        Jq_RPA(:,:,nb,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
         parfor nf = 1:length(freq_total(1,:))
 %         for nf = 1:length(freq_total(1,:)) % for debugging
             chi_mf = squeeze(chi0(:,:,nf,nb));
-            MM = chi_mf * squeeze(Jq_RPA(:,:,nq)); % [meV^-1 * meV], non-commuting operation for matrices
+            MM = chi_mf * squeeze(Jq_RPA(:,:,nb,nq)); % [meV^-1 * meV], non-commuting operation for matrices
             deno = squeeze(eye(size(MM))- MM);
             chiq(:,:,nf,nb,nq) = deno\chi_mf;
             RPA_deno(:,:,nf,nb,nq) = det(deno); % RPA denominator, save for pole analysis
