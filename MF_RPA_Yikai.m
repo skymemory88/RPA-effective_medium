@@ -676,16 +676,16 @@ parfor jj = 1:size(qvec,1)
          + exchange(qvec(jj,:), abs(ion.ex(const.elem)), lattice, ion.tau); % [meV]
 end
 
-Jq_RPA = zeros(3, 3, size(cVar,2), size(qvec,1));
+Jq_RPA = zeros(3, 3, size(qvec,1));
 RPA_deno = zeros(3, 3, size(freq_total,1), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
 for nq = 1:size(qvec,1) % q vector iterator
+    Jav = squeeze( sum(sum(D(:,:,:,:,nq),4),3)/unitN ); % [meV] average over the unit cell
+    Jq_RPA(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
     for nb = 1:size(cVar,2) % continuous variable (field/temperature) iterator
-        Jav = squeeze( sum(sum(D(:,:,:,:,nq),4),3)/unitN ); % [meV] average over the unit cell
-        Jq_RPA(:,:,nb,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
         parfor nf = 1:length(freq_total(1,:))
 %         for nf = 1:length(freq_total(1,:)) % for debugging
             chi_mf = squeeze(chi0(:,:,nf,nb));
-            MM = chi_mf * squeeze(Jq_RPA(:,:,nb,nq)); % [meV^-1 * meV], non-commuting operation for matrices
+            MM = chi_mf * squeeze(Jq_RPA(:,:,nq)); % [meV^-1 * meV], non-commuting operation for matrices
             deno = squeeze(eye(size(MM))- MM);
             chiq(:,:,nf,nb,nq) = deno\chi_mf;
             RPA_deno(:,:,nf,nb,nq) = det(deno); % RPA denominator, save for pole analysis
