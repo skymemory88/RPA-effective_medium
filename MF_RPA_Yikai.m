@@ -679,8 +679,8 @@ end
 Jq_RPA = zeros(3, 3, size(qvec,1));
 RPA_deno = zeros(3, 3, size(freq_total,1), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
 for nq = 1:size(qvec,1) % q vector iterator
-    Jav = squeeze( sum(sum(D(:,:,:,:,nq),4),3)/unitN ); % [meV] average over the unit cell
-    Jq_RPA(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
+Jav = squeeze( sum(sum(D(:,:,:,:,nq),4),3)/unitN ); % [meV] average over the unit cell
+Jq_RPA(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
     for nb = 1:size(cVar,2) % continuous variable (field/temperature) iterator
         parfor nf = 1:length(freq_total(1,:))
 %         for nf = 1:length(freq_total(1,:)) % for debugging
