@@ -56,18 +56,19 @@ fprintf('\n=== Starting parallel self-consistent calculations ===\n');
 parfor ii = 1:n_cVar
     cVar_val = cVar(ii);
     [beta_local, var_str] = describe_state(scanMode, cVar_val, dscrt_var);
-    scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi_ini, ii, Jq, use_rpa_seed);
+    chi_seed_slice = chi_ini(:,:,:,ii,:);
+    scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi_seed_slice, Jq, use_rpa_seed);
 
-    [K_local, G_local_local, converged] = compute_effective_medium(scf_params, var_str);
+    [K_sol, G_sol, converged] = compute_effective_medium(scf_params, var_str);
 
     % Store results
-    K_emt(:,:,:,ii) = K_local;
-    G_local_emt(:,:,:,ii) = G_local_local;
+    K_emt(:,:,:,ii) = K_sol;
+    G_local_emt(:,:,:,ii) = G_sol;
     converged_flags(ii) = converged;
 
     % Compute susceptibility: χ = -G/β
     for iw = 1:n_omega
-        chi_emt(:,:,iw,ii) = -G_local_local(:,:,iw) / beta_local;
+        chi_emt(:,:,iw,ii) = -G_sol(:,:,iw) / beta_local;
     end
 end
 
@@ -94,7 +95,8 @@ if n_converged < n_cVar && n_converged > 0
             continue;
         end
 
-        scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi_ini, ii, Jq, use_rpa_seed);
+        chi_seed_slice = chi_ini(:,:,:,ii,:);
+        scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi_seed_slice, Jq, use_rpa_seed);
 
         % Try multiple neighbor strategies
         converged_this_point = false;
@@ -107,11 +109,11 @@ if n_converged < n_cVar && n_converged > 0
         K_init = K_emt(:,:,:,neighbor_idx);
         G_init = G_local_emt(:,:,:,neighbor_idx);
 
-        [K_local, G_local_local, converged] = compute_effective_medium_seeded(...
+        [K_sol, G_sol, converged] = compute_effective_medium_seeded(...
             scf_params, var_str, K_init, G_init);
 
         if converged
-            [converged_this_point, closure_val] = seed_acceptable(K_local, G_local_local, scf_params.J_q, ...
+            [converged_this_point, closure_val] = seed_acceptable(K_sol, G_sol, scf_params.J_q, ...
                 'Seeded solution');
             if converged_this_point
                 fprintf('    Accepted (closure %.2e)\n', closure_val);
@@ -124,11 +126,11 @@ if n_converged < n_cVar && n_converged > 0
                 K_init = K_emt(:,:,:,neighbor_idx2);
                 G_init = G_local_emt(:,:,:,neighbor_idx2);
 
-                [K_local, G_local_local, converged] = compute_effective_medium_seeded(...
+                [K_sol, G_sol, converged] = compute_effective_medium_seeded(...
                     scf_params, var_str, K_init, G_init);
 
                 if converged
-                    [converged_this_point, closure_val] = seed_acceptable(K_local, G_local_local, scf_params.J_q, ...
+                    [converged_this_point, closure_val] = seed_acceptable(K_sol, G_sol, scf_params.J_q, ...
                         'Seeded solution (2nd)');
                     if converged_this_point
                         fprintf('    2nd neighbor accepted (closure %.2e)\n', closure_val);
@@ -153,11 +155,11 @@ if n_converged < n_cVar && n_converged > 0
                 K_init = w1 * K_emt(:,:,:,neighbor_idx1) + w2 * K_emt(:,:,:,neighbor_idx2);
                 G_init = w1 * G_local_emt(:,:,:,neighbor_idx1) + w2 * G_local_emt(:,:,:,neighbor_idx2);
 
-                [K_local, G_local_local, converged] = compute_effective_medium_seeded(...
+                [K_sol, G_sol, converged] = compute_effective_medium_seeded(...
                     scf_params, var_str, K_init, G_init);
 
                 if converged
-                    [converged_this_point, closure_val] = seed_acceptable(K_local, G_local_local, scf_params.J_q, ...
+                    [converged_this_point, closure_val] = seed_acceptable(K_sol, G_sol, scf_params.J_q, ...
                         'Seeded solution (interp)');
                     if converged_this_point
                         fprintf('    Interpolation accepted (closure %.2e)\n', closure_val);
@@ -168,14 +170,14 @@ if n_converged < n_cVar && n_converged > 0
 
         % Update results if any retry path succeeded
         if converged_this_point
-            K_emt(:,:,:,ii) = K_local;
-            G_local_emt(:,:,:,ii) = G_local_local;
+            K_emt(:,:,:,ii) = K_sol;
+            G_local_emt(:,:,:,ii) = G_sol;
             converged_flags(ii) = true;
             retry_success = retry_success + 1;
 
             % Compute susceptibility
             for iw = 1:n_omega
-                chi_emt(:,:,iw,ii) = -G_local_local(:,:,iw) / beta_local;
+                chi_emt(:,:,iw,ii) = -G_sol(:,:,iw) / beta_local;
             end
         end
     end
@@ -426,25 +428,20 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 end
 
 %% Helper: build SCF parameter struct for a given cVar index
-function scf_params = prepare_scf_params(base_params, beta_local, n_omega, n_q, chi_seed, idx, J_slice, use_rpa)
+function scf_params = prepare_scf_params(base_params, beta_local, n_omega, n_q, chi_seed, J_slice, use_rpa)
     scf_params = base_params;
     scf_params.beta = beta_local;
     scf_params.n_omega = n_omega;
     scf_params.n_q = n_q;
-    scf_params.omega_n = bosonic_frequencies(n_omega, beta_local);
-    scf_params.G0 = extract_G0(chi_seed, idx, beta_local, use_rpa);
+    scf_params.G0 = extract_G0(chi_seed, beta_local, use_rpa);
     scf_params.J_q = J_slice;
     scf_params.verbose = false;
 end
 
-function omega = bosonic_frequencies(n_omega, beta_local)
-    omega = 2*(0:n_omega-1) * pi / beta_local;
-end
-
-function G0 = extract_G0(chi_seed, idx, beta_local, use_rpa)
-    slice = squeeze(chi_seed(:,:, :, idx, :));
-    if ndims(slice) == 4 && size(slice,4) == 1
-        slice = slice(:,:,:,1); % collapse redundant q dimension
+function G0 = extract_G0(chi_seed, beta_local, use_rpa)
+    slice = squeeze(chi_seed);
+    if ndims(slice) == 4
+        slice = mean(slice, 4); % average over q for local seed
     end
     if use_rpa
         G0 = -slice;
