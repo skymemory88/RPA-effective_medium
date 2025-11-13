@@ -15,8 +15,13 @@ close all;
 % - dscrt_var: discrete variable (single value)
 
 % Extract dimensions
-% chi_ini = chiq; % use RPA suscpetibility as the initial guess
-chi_ini = chi0; % use single-ion susceptibility as the initial guess
+use_rpa_seed = true;
+if exist('USE_SINGLE_ION_SEED','var') && USE_SINGLE_ION_SEED
+    chi_ini = chi0;
+    use_rpa_seed = false;
+else
+    chi_ini = chiq; % default to RPA susceptibility
+end
 n_omega = size(chi_ini, 3);  % Number of frequencies
 n_cVar = size(chi_ini, 4);   % Number of continuous variable points
 n_q = size(qvec,1);      % Number of q-points
@@ -41,8 +46,9 @@ converged_flags = false(n_cVar, 1);             % Convergence status
 scf_params_base = struct();
 scf_params_base.max_iter = 1e3;
 scf_params_base.tol = 1e-5;
-scf_params_base.mixing_alpha = 0.2;
-scf_params_base.G_damp = 0.2;
+scf_params_base.mixing_alpha = 0.05;
+scf_params_base.G_damp = 0.7;
+scf_params_base.verbose = false;
 
 fprintf('\n=== Starting parallel self-consistent calculations ===\n');
 
@@ -50,7 +56,7 @@ fprintf('\n=== Starting parallel self-consistent calculations ===\n');
 parfor ii = 1:n_cVar
     cVar_val = cVar(ii);
     [beta_local, var_str] = describe_state(scanMode, cVar_val, dscrt_var);
-    scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi0, ii, Jq);
+    scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi_ini, ii, Jq, use_rpa_seed);
 
     [K_local, G_local_local, converged] = compute_effective_medium(scf_params, var_str);
 
@@ -88,7 +94,7 @@ if n_converged < n_cVar && n_converged > 0
             continue;
         end
 
-        scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi0, ii, Jq);
+        scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi_ini, ii, Jq, use_rpa_seed);
 
         % Try multiple neighbor strategies
         converged_this_point = false;
@@ -392,11 +398,18 @@ function [K, G_local, converged, final_iter, final_residual] = ...
         residual = max(residual_K, residual_G);
         residual_history(iter) = residual;
         final_residual = residual;
+        if scf_params.verbose
+            fprintf('    it=%d residual=%.2e\n', iter, residual);
+        end
 
         % Option B: residual-based backoff to prevent overshoot
         if iter > 1 && residual > 1.05 * residual_history(iter-1)
             mixing_alpha = max(mixing_alpha * 0.5, 1e-3);
             G_damp = min(G_damp * 1.1, 0.98);
+            if isfield(scf_params, 'verbose') && scf_params.verbose
+                fprintf('    Residual increased (%.2e -> %.2e); new mixing_alpha=%.3f, G_damp=%.3f\n', ...
+                    residual_history(iter-1), residual, mixing_alpha, G_damp);
+            end
         end
 
         % Check convergence
@@ -413,22 +426,31 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 end
 
 %% Helper: build SCF parameter struct for a given cVar index
-function scf_params = prepare_scf_params(base_params, beta_local, n_omega, n_q, chi0, idx, Jq)
+function scf_params = prepare_scf_params(base_params, beta_local, n_omega, n_q, chi_seed, idx, J_slice, use_rpa)
     scf_params = base_params;
     scf_params.beta = beta_local;
     scf_params.n_omega = n_omega;
     scf_params.n_q = n_q;
     scf_params.omega_n = bosonic_frequencies(n_omega, beta_local);
-    scf_params.G0 = extract_G0(chi0, idx);
-    scf_params.J_q = Jq;
+    scf_params.G0 = extract_G0(chi_seed, idx, beta_local, use_rpa);
+    scf_params.J_q = J_slice;
+    scf_params.verbose = false;
 end
 
 function omega = bosonic_frequencies(n_omega, beta_local)
     omega = 2*(0:n_omega-1) * pi / beta_local;
 end
 
-function G0 = extract_G0(chi0, idx)
-    G0 = squeeze(-mean(chi0(:,:, :, idx, :), 5));
+function G0 = extract_G0(chi_seed, idx, beta_local, use_rpa)
+    slice = squeeze(chi_seed(:,:, :, idx, :));
+    if ndims(slice) == 4 && size(slice,4) == 1
+        slice = slice(:,:,:,1); % collapse redundant q dimension
+    end
+    if use_rpa
+        G0 = -slice;
+    else
+        G0 = -beta_local * slice;
+    end
 end
 
 function [beta_local, descriptor] = describe_state(scanMode, cVar_val, dscrt_var)
@@ -453,6 +475,12 @@ function [ok, max_closure] = seed_acceptable(K_candidate, G_candidate, J_q_slice
     if ~ok
         fprintf('    %s rejected: closure residual %.2e > 1e-3\n', label, max_closure);
     end
+end
+
+function log_residual_history(residual_history, iter)
+    nsamp = min(iter, 10);
+    vals = residual_history(1:nsamp);
+    fprintf('    Residual history (first %d): %s\n', nsamp, sprintf('%.2e ', vals));
 end
 
 function plot_comparison(cVar, freq_total, chi_ini, chi_emt, scanMode, dscrt_var)
