@@ -1,4 +1,4 @@
-function [cVar, freq_total, chi0, chiq, qvec, Jq_RPA, dscrt_var] = MF_RPA_Yikai(mion, scanMode, dscrt_var, freq_total, theta, phi, gama, hyp, RPA_mode)
+function [cVar, freq_total, chi0, chiq, qvec, Jq, dscrt_var] = MF_RPA_Yikai(mion, scanMode, dscrt_var, freq_total, theta, phi, gama, hyp, RPA_mode)
 % Current version assumes complete symmetrical equivalence among the four spin moments per unit cell
 % mion: Magnetic ion type: 'Er', 'Ho'
 % scanMode: 'field' or 'temp' scan
@@ -30,11 +30,10 @@ if Options.Kplot == true
     qvec = [qx qy qz];
     cVar0 = [0.44]; % selected points of the continuous variable for k-plot
 else
-    qx = 0.0;
-    % qx = [0.01 0.1 0.3 0.6 1]';
-    qy = zeros(size(qx,1),1);
-    qz = zeros(size(qx,1),1);
-    qvec = [qx qy qz];
+    a = 5.175;  % Angstrom
+    c = 10.75;  % Angstrom
+    LHF_lattc = [a, 0, 0; 0, a, 0; 0, 0, c];
+    [qvec, ~] = qVec_generator(LHF_lattc, 'mode', 'grid', 'grid', [5 5 5], 'range', [-0.5, 0.5]);
 end
 
 % Declare physical constants as global for consistency
@@ -65,7 +64,7 @@ for ii = 1:length(dscrt_var)
         nZee_path = 'Hz_I=0';
     end
     if ispc
-        Options.location = ['C:\Users\skyme\OneDrive - Nexus365\Postdoc\Research projects\Li',mion,...
+        Options.location = ['C:\Users\engs2553\OneDrive - Nexus365\Postdoc\Research projects\Li',mion,...
             'F4 project\Data\Simulations\mean field\eigen-states\', nZee_path, '\'];
     else
         Options.location = ['/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Postdoc/Research projects/',...
@@ -127,7 +126,7 @@ for ii = 1:length(dscrt_var)
             cVar = cVar(bidx); % magnetic field or temperature
         end
         [cVar, freq_total, chi0, ~, ~] = linear_response(ion, eigenE, cVar, freq_total, ttt, eigenW, gama, const, Options);
-        [~, ~, ~, chiq, ~, Jq_RPA] = RPA(qvec, cVar, freq_total, ion, chi0, const); % Electronic susceptibilitie
+        [~, ~, ~, chiq, ~, Jq] = RPA(qvec, cVar, freq_total, ion, chi0, const); % Electronic susceptibilitie
 %         chiq = const.ELEf^2 * chiq .* ConvUnit; % [J/T^2 or GHz/T^2 or meV/T^2]
         chiq = chiq .* ConvUnit; % [J/T^2 or GHz/T^2 or meV/T^2]
     else
@@ -139,7 +138,7 @@ for ii = 1:length(dscrt_var)
     if Options.saving == true % Save the susceptibilities
         if Options.RPA == true
             savefile1 = fullfile(Options.location,save_name);
-            save_vars = {dscrt_var, cVar, freq_total, ion, chi0, gama, chiq, qvec, Jq_RPA};
+            save_vars = {dscrt_var, cVar, freq_total, ion, chi0, gama, chiq, qvec, Jq};
             save_file(save_vars, savefile1, Options); % save the data w. RPA corrections
         else
             savefile2 = fullfile(Options.location,save_name);
@@ -653,7 +652,7 @@ elseif nargin == 5 % Compute the complex matrix element
 end
 end
 
-function [qvec, cVar, freq_total, chiq, RPA_deno, Jq_RPA] = RPA(qvec, cVar, freq_total, ion, chi0, const)
+function [qvec, cVar, freq_total, chiq, RPA_deno, Jq] = RPA(qvec, cVar, freq_total, ion, chi0, const)
 unitN = 4; % Number of magnetic atoms in unit cell
 lattice = ion.abc{const.elem};
 Vc = sum( lattice(1,:) .* cross(lattice(2,:), lattice(3,:)) ); % Volume of unit cell [Ang^-3]
@@ -676,16 +675,16 @@ parfor jj = 1:size(qvec,1)
          + exchange(qvec(jj,:), abs(ion.ex(const.elem)), lattice, ion.tau); % [meV]
 end
 
-Jq_RPA = zeros(3, 3, size(qvec,1));
+Jq = zeros(3, 3, size(qvec,1));
 RPA_deno = zeros(3, 3, size(freq_total,1), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
 for nq = 1:size(qvec,1) % q vector iterator
 Jav = squeeze( sum(sum(D(:,:,:,:,nq),4),3)/unitN ); % [meV] average over the unit cell
-Jq_RPA(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
+Jq(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
     for nb = 1:size(cVar,2) % continuous variable (field/temperature) iterator
         parfor nf = 1:length(freq_total(1,:))
 %         for nf = 1:length(freq_total(1,:)) % for debugging
             chi_mf = squeeze(chi0(:,:,nf,nb));
-            MM = chi_mf * squeeze(Jq_RPA(:,:,nq)); % [meV^-1 * meV], non-commuting operation for matrices
+            MM = chi_mf * squeeze(Jq(:,:,nq)); % [meV^-1 * meV], non-commuting operation for matrices
             deno = squeeze(eye(size(MM))- MM);
             chiq(:,:,nf,nb,nq) = deno\chi_mf;
             RPA_deno(:,:,nf,nb,nq) = det(deno); % RPA denominator, save for pole analysis
