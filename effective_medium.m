@@ -11,15 +11,15 @@ close all;
 % - chi0: non-interacting susceptibility [3 x 3 x n_freq x n_cVar x n_q]
 % - chi_ini: initial susceptibility [3 x 3 x n_freq x n_cVar x n_q]
 % - qvec: q-points [n_q x 3]
-% - Jq_RPA: RPA interaction [3 x 3 x n_cVar x n_q]
+% - Jq: RPA interaction [3 x 3 x n_cVar x n_q]
 % - dscrt_var: discrete variable (single value)
 
 % Extract dimensions
-chi_ini = chiq; % use RPA suscpetibility as the initial guess
-% chi_ini = chi0; % use single-ion susceptibility as the initial guess
+% chi_ini = chiq; % use RPA suscpetibility as the initial guess
+chi_ini = chi0; % use single-ion susceptibility as the initial guess
 n_omega = size(chi_ini, 3);  % Number of frequencies
 n_cVar = size(chi_ini, 4);   % Number of continuous variable points
-n_q = size(chi_ini, 5);      % Number of q-points
+n_q = size(qvec,1);      % Number of q-points
 
 fprintf('\n=== Effective Medium Theory with cVar dependence ===\n');
 fprintf('Computing for %d %s points concurrently...\n', n_cVar, scanMode);
@@ -27,7 +27,7 @@ fprintf('Frequencies: %d points from %.2f to %.2f GHz\n', n_omega, min(freq_tota
 fprintf('Q-points: %d\n', n_q);
 fprintf('----------------------------------------------------\n');
 
-% Jq_RPA carries J(q) for each cVar: [3 x 3 x n_cVar x n_q]
+% Jq carries J(q) for each cVar: [3 x 3 x n_cVar x n_q]
 
 %% Step 2: Initialize storage for effective medium results
 % Pre-allocate arrays for all cVar points
@@ -50,7 +50,7 @@ fprintf('\n=== Starting parallel self-consistent calculations ===\n');
 parfor ii = 1:n_cVar
     cVar_val = cVar(ii);
     [beta_local, var_str] = describe_state(scanMode, cVar_val, dscrt_var);
-    scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi0, ii, Jq_RPA);
+    scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi0, ii, Jq);
 
     [K_local, G_local_local, converged] = compute_effective_medium(scf_params, var_str);
 
@@ -88,7 +88,7 @@ if n_converged < n_cVar && n_converged > 0
             continue;
         end
 
-        scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi0, ii, Jq_RPA);
+        scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi0, ii, Jq);
 
         % Try multiple neighbor strategies
         converged_this_point = false;
@@ -397,7 +397,6 @@ function [K, G_local, converged, final_iter, final_residual] = ...
         if iter > 1 && residual > 1.05 * residual_history(iter-1)
             mixing_alpha = max(mixing_alpha * 0.5, 1e-3);
             G_damp = min(G_damp * 1.1, 0.98);
-            momentum_coeff = max(momentum_coeff * 0.5, 0.01);
         end
 
         % Check convergence
@@ -414,14 +413,14 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 end
 
 %% Helper: build SCF parameter struct for a given cVar index
-function scf_params = prepare_scf_params(base_params, beta_local, n_omega, n_q, chi0, idx, Jq_RPA)
+function scf_params = prepare_scf_params(base_params, beta_local, n_omega, n_q, chi0, idx, Jq)
     scf_params = base_params;
     scf_params.beta = beta_local;
     scf_params.n_omega = n_omega;
     scf_params.n_q = n_q;
     scf_params.omega_n = bosonic_frequencies(n_omega, beta_local);
     scf_params.G0 = extract_G0(chi0, idx);
-    scf_params.J_q = squeeze(Jq_RPA(:,:,idx,:));
+    scf_params.J_q = Jq;
 end
 
 function omega = bosonic_frequencies(n_omega, beta_local)
