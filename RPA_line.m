@@ -1,46 +1,72 @@
-function [field, poles, sigma_map, modes] = RPA_lineplot(mion, dscrt_var, omega_grid, theta, phi, gama, hyp)
-% RPA_LINEPLOT Find RPA poles via SVD and plot modes vs field.
+function [field, poles, sigma_map, modes] = RPA_line(mion, dscrt_var, omega_grid, theta, phi, gama, hyp, qvec, Options)
+% RPA_LINE Find RPA poles via SVD for q-dependent susceptibility.
 %
 % Usage
-%   [field, poles, sigma_map] = RPA_lineplot(mion, T, omega_grid, theta, phi, gamma, hyp)
-%   Example:
-%     [B, modes, sig] = RPA_lineplot('Er', 0.300, linspace(0,35,3001), 0, 0, 1e-3, 1.0);
+%   [field, poles, sigma_map, modes] = RPA_line(mion, T, omega, theta, phi, gamma, hyp, qvec)
+%   [field, poles, sigma_map, modes] = RPA_line(mion, T, omega, theta, phi, gamma, hyp, qvec, Options)
 %
-% Inputs
+% Examples:
+%   % Single q-point at q=[0,0,0], no plotting
+%   [B, p, s, m] = RPA_line('Er', 0.300, linspace(0,35,3001), 0, 0, 1e-3, 1.0, [0 0 0]);
+%
+%   % Single q-point with plotting enabled
+%   Options.plotting = true;
+%   [B, p, s, m] = RPA_line('Er', 0.3, omega, 0, 0, 1e-3, 1.0, [0 0 0], Options);
+%
+% Required Inputs:
 %   mion        Element symbol, e.g. 'Er', 'Ho'.
-%   dscrt_var   Temperature (K) used in LiReF4_MF_Yikai field scan file name.
+%   dscrt_var   Temperature (K) for field scan file name.
 %   omega_grid  Frequency grid (GHz) to scan for poles.
 %   theta       Angle from c-axis in ac-plane (deg).
 %   phi         Rotation around c-axis (deg).
 %   gama        Homogeneous linewidth γ (GHz).
-%   hyp         Hyperfine isotope proportion; 1 -> use 'Hz_I=1' data, else 'Hz_I=0'.
+%   hyp         Hyperfine isotope proportion; 1 -> 'Hz_I=1', else 'Hz_I=0'.
+%   qvec        [1 x 3] q-vector in reciprocal lattice units.
 %
-% Outputs
-%   field       Field magnitudes (T) from the loaded eigen-state file.
-%   poles       [n_modes x num_fields] numeric; each column lists poles at a field (NaN padded).
-%   sigma_map   [num_omega x num_fields] σ_min(I − χ0·Jq) amplitudes across ω and field.
-%   modes       struct with axis-resolved mode positions (GHz):
-%               modes.xx, modes.yy, modes.zz are [n_modes x num_fields] numeric (NaN padded),
-%               giving peak positions of Im χ^RPA_{aa}(ω) per field.
+% Optional Input:
+%   Options     Struct with optional fields:
+%               .plotting - true | false (default: false)
+%                           Enable automatic plotting
+%               .min_prom - Peak prominence threshold (default: 1e-2)
+%               .min_sep  - Minimum peak separation in grid points (default: 5)
 %
-% Notes
-% - Requires eigen-state MAT produced by LiReF4_MF_Yikai with matching (mion,T,theta,phi,hyp).
-% - J(q=0) uses sublattice-averaged dipole+Lorentz minus exchange, scaled by diag(ion.renorm).
-% - Poles are local minima of σ_min(I − χ0·Jq) along ω found via findpeaks on −σ_min.
+% Outputs:
+%   field       Field magnitudes (T) [1 x num_fields]
+%   poles       [n_modes x num_fields] RPA pole frequencies (NaN padded)
+%   sigma_map   [num_omega x num_fields] σ_min(I − χ0·Jq) amplitudes
+%   modes       Struct with axis-resolved mode positions (GHz):
+%               .xx, .yy, .zz - [n_modes x num_fields] (NaN padded)
 %
-% Physics (Jensen & Mackintosh, ch. 3)
-% - χ0_{αβ}(ω) = Σ_nm (ρ_n−ρ_m)⟨n|J_α|m⟩⟨m|J_β|n⟩/(E_m−E_n−ℏω−iγ)
-% - χ^RPA = (I − χ0·Jq)\χ0; poles where det(I − χ0·Jq) = 0
-% - Numerically track σ_min(I − χ0·Jq) instead of determinant for stability.
+% Notes:
+% - Requires eigen-state MAT from LiReF4_MF_Yikai matching (mion,T,theta,phi,hyp)
+% - Poles found as local minima of σ_min(I − χ0·Jq) via findpeaks on −σ_min
+% - Plotting disabled by default to avoid unwanted figures in batch processing
+
+% Handle optional Options argument
+if nargin < 9
+    Options = struct();
+end
+
+% Set default options
+if ~isfield(Options, 'plotting')
+    Options.plotting = false;  % Disabled by default
+end
+if ~isfield(Options, 'min_prom')
+    Options.min_prom = 1e-2;
+end
+if ~isfield(Options, 'min_sep')
+    Options.min_sep = 5;
+end
 
 fprintf('\n========================================\n');
 fprintf('RPA SUSCEPTIBILITY POLE FINDER\n');
+fprintf('Q = [%.3f %.3f %.3f]\n', qvec(1), qvec(2), qvec(3));
 fprintf('Using σ_min(I - χ0·Jq) pole criterion\n');
 fprintf('========================================\n\n');
 
-% Options
-options.min_prom = 1e-2; % peak prominence on σ_min for robustness
-options.min_sep = 5;     % min peak distance [grid points]
+% Set up internal options
+options.min_prom = Options.min_prom;
+options.min_sep = Options.min_sep;
 
 % Locate eigen-state data produced by LiReF4_MF_Yikai
 if hyp > 0
@@ -73,9 +99,9 @@ field = vecnorm(fields, 2, 1);
 
 % Setup constants and exchange
 const = setup_constants(ion);
-Jq = interac_q(ion, const);
+Jq = interac_q(qvec, ion, const);
 
-fprintf('\nExchange matrix Jq [meV]:\n');
+fprintf('\nInteraction matrix Jq [meV]:\n');
 disp(Jq);
 fprintf('\nField: %.3f - %.3f T (%d points)\n', min(field), max(field), length(field));
 fprintf('Frequency grid: %.3f - %.3f GHz (%d pts)\n', min(omega_grid), max(omega_grid), numel(omega_grid));
@@ -101,23 +127,26 @@ for j = 1:numel(field)
 end
 fprintf('Per-field pole counts: min=%d, median=%d, max=%d\n', min(counts), median(counts), max(counts));
 
-% Plot
-plot_opts.field_label = 'Magnetic Field';
-plot_opts.field_units = 'T';
-plot_opts.omega_label = 'Excitation Energy';
-plot_opts.omega_units = 'GHz';
-plot_opts.title = sprintf('RPA Modes: Li%sF4 at %.2f K', mion, dscrt_var);
+% Plot (only if enabled)
+if Options.plotting
+    plot_opts.field_label = 'Magnetic Field';
+    plot_opts.field_units = 'T';
+    plot_opts.omega_label = 'Excitation Energy';
+    plot_opts.omega_units = 'GHz';
+    plot_opts.title = sprintf('RPA Modes: Li%sF4 at %.2f K, Q=[%.3f %.3f %.3f]', ...
+        mion, dscrt_var, qvec(1), qvec(2), qvec(3));
 
-plot_rpa_modes(field, poles, plot_opts);
+    plot_rpa_modes(field, poles, plot_opts);
 
-% Optional diagnostic: σ_min color map
-try
-    figure('Name','SigmaMin Map','Position',[120,120,900,650]);
-    imagesc(field, omega_grid, sigma_map);
-    set(gca, 'YDir','normal'); colorbar;
-    xlabel('Magnetic Field (T)'); ylabel('Frequency (GHz)');
-    title('σ_{min}(I - χ0·Jq)');
-catch
+    % Optional diagnostic: σ_min color map
+    try
+        figure('Name','SigmaMin Map','Position',[120,120,900,650]);
+        imagesc(field, omega_grid, sigma_map);
+        set(gca, 'YDir','normal'); colorbar;
+        xlabel('Magnetic Field (T)'); ylabel('Frequency (GHz)');
+        title(sprintf('σ_{min}(I - χ0·Jq), Q=[%.3f %.3f %.3f]', qvec(1), qvec(2), qvec(3)));
+    catch
+    end
 end
 end
 
@@ -138,7 +167,8 @@ const.kB = 8.61733e-2; % [meV/K]
 end
 
 
-function Jq = interac_q(ion, const)
+function Jq = interac_q(qvec, ion, const)
+% Compute interaction matrix Jq for given q-vector
 unitN = 4;
 lattice = ion.abc{const.elem};
 Vc = sum(lattice(1,:) .* cross(lattice(2,:), lattice(3,:)));
@@ -148,11 +178,18 @@ eins = repmat(eins,1,1,4,4);
 demagn_t = ellipsoid_demagn(ion.alpha);
 demagn = repmat(demagn_t,1,1,4,4);
 
-% J(q=0) from dipole - Lorentz (demag) + exchange; sublattice-averaged and renormalized
+% Lorentz term applies only for q including all sublattices coherently
 lorz_on = 1;
-D = const.gfac * (MF_dipole([0 0 0], const.dpRng, lattice, ion.tau) - ...
+if abs(real(sum(exp(1i*2*pi*qvec*ion.tau'))/size(ion.tau,1))-1) > 1e-10
+    lorz_on = 0;
+end
+
+% Dipole + exchange interaction at q
+D = const.gfac * (MF_dipole(qvec, const.dpRng, lattice, ion.tau) - ...
     lorz_on*4*pi/Vc*(eins/3 - ion.demag*demagn)) + ...
-    exchange([0 0 0], ion.ex(const.elem), lattice, ion.tau);
+    exchange(qvec, ion.ex(const.elem), lattice, ion.tau);
+
+% Sublattice average and renormalization
 Jav = squeeze(sum(sum(D(:,:,:,:),4),3)/unitN);
 Jq = -diag(ion.renorm(const.elem,:)) .* Jav;
 end
