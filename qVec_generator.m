@@ -1,10 +1,10 @@
-function [qvec, qvec_cart, recip_lattice] = compute_qvectors(lattice, varargin)
-% COMPUTE_QVECTORS Computes q-vectors in reciprocal space based on lattice structure
+function [qvec, qvec_cart, recip_lattice] = qVec_generator(lattice, varargin)
+% qVec_generator Computes q-vectors in reciprocal space based on lattice structure
 %
 % USAGE:
-%   [qvec, qvec_cart, recip_lattice] = compute_qvectors(lattice)
-%   [qvec, qvec_cart, recip_lattice] = compute_qvectors(lattice, 'grid', [n1, n2, n3])
-%   [qvec, qvec_cart, recip_lattice] = compute_qvectors(lattice, 'path', path_points, n_points)
+%   [qvec, qvec_cart, recip_lattice] = qVec_generator(lattice)
+%   [qvec, qvec_cart, recip_lattice] = qVec_generator(lattice, 'grid', [n1, n2, n3])
+%   [qvec, qvec_cart, recip_lattice] = qVec_generator(lattice, 'path', path_points, n_points)
 %
 % INPUTS:
 %   lattice       - Real space lattice vectors [3x3] matrix where each ROW is a lattice vector
@@ -44,13 +44,13 @@ function [qvec, qvec_cart, recip_lattice] = compute_qvectors(lattice, varargin)
 %   lattice = [a, 0, 0; 0, a, 0; 0, 0, c];
 %
 %   % Get high-symmetry points
-%   [qvec, qvec_cart, recip] = compute_qvectors(lattice);
+%   [qvec, qvec_cart, recip] = qVec_generator(lattice);
 %
 %   % Get a uniform grid
-%   [qvec, qvec_cart] = compute_qvectors(lattice, 'mode', 'grid', 'grid', [21, 21, 21]);
+%   [qvec, qvec_cart] = qVec_generator(lattice, 'grid', [15, 15, 15]);
 %
 %   % Get a path through reciprocal space
-%   [qvec, qvec_cart] = compute_qvectors(lattice, 'mode', 'path', ...
+%   [qvec, qvec_cart] = qVec_generator(lattice, 'mode', 'path', ...
 %                                        'path', {'Gamma', 'X', 'M', 'Gamma', 'Z', 'R'}, ...
 %                                        'npoints', 100);
 %
@@ -74,12 +74,6 @@ function [qvec, qvec_cart, recip_lattice] = compute_qvectors(lattice, varargin)
 %     q_cart = h*a* + k*b* + l*c* with a* = 2π * (b×c)/(a·(b×c)), etc.
 %   - For RPA calculations, these q-vectors can be directly used in MF_RPA_Yikai.m
 %   - The function handles both primitive and conventional cells
-%
-% SEE ALSO: MF_RPA_Yikai, effective_medium
-
-% Author: Claude (Anthropic)
-% Date: 2025-11-12
-% For: LiHoF4 RPA effective medium calculations
 
 %% Parse inputs
 p = inputParser;
@@ -148,7 +142,7 @@ end
 fprintf('Generated %d q-vectors\n\n', size(qvec, 1));
 
 %% Display q-vectors
-display_qvectors(qvec, qvec_cart);
+% display_qvectors(qvec, qvec_cart);
 
 end
 
