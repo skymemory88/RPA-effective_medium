@@ -1,10 +1,10 @@
-function [field, poles, sigma_map, modes] = RPA_lineplot(mion, dscrt_var, omega_grid, theta, phi, gama, hyp)
+function [field, poles, sigma_map, modes] = RPA_line(mion, dscrt_var, omega_grid, theta, phi, gama, hyp)
 % RPA_LINEPLOT Find RPA poles via SVD and plot modes vs field.
 %
 % Usage
-%   [field, poles, sigma_map] = RPA_lineplot(mion, T, omega_grid, theta, phi, gamma, hyp)
+%   [field, poles, sigma_map] = RPA_line(mion, T, omega_grid, theta, phi, gamma, hyp)
 %   Example:
-%     [B, modes, sig] = RPA_lineplot('Er', 0.300, linspace(0,35,3001), 0, 0, 1e-3, 1.0);
+%     [B, modes, sig] = RPA_line('Er', 0.300, linspace(0,35,3001), 0, 0, 1e-3, 1.0);
 %
 % Inputs
 %   mion        Element symbol, e.g. 'Er', 'Ho'.
