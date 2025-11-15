@@ -1,48 +1,68 @@
-function [field, poles, sigma_map, modes] = RPA_lineplot(mion, dscrt_var, omega_grid, theta, phi, gama, hyp)
-% RPA_LINEPLOT Find RPA poles via SVD and plot modes vs field.
+function [field, poles, sigma_map, modes, qvec] = RPA_lineplot(mion, dscrt_var, omega_grid, theta, phi, gama, hyp, varargin)
+% RPA_LINEPLOT Find RPA poles via SVD with optional q-vector scan.
 %
 % Usage
-%   [field, poles, sigma_map] = RPA_lineplot(mion, T, omega_grid, theta, phi, gamma, hyp)
-%   Example:
-%     [B, modes, sig] = RPA_lineplot('Er', 0.300, linspace(0,35,3001), 0, 0, 1e-3, 1.0);
+%   [field, poles, sigma_map, modes] = RPA_lineplot(mion, T, omega_grid, theta, phi, gamma, hyp)
+%   [field, poles, sigma_map, modes, qvec] = RPA_lineplot(..., 'qvec', qpts, 'method', 'page')
 %
-% Inputs
+% Examples:
+%   % Single q-point (default q=0)
+%   [B, p, s, m] = RPA_lineplot('Er', 0.300, linspace(0,35,3001), 0, 0, 1e-3, 1.0);
+%
+%   % Multiple q-points with page-wise optimization
+%   qpts = [[0 0 0]; [0.1 0 0]; [0.2 0 0]; [0.3 0 0]];
+%   [B, p, s, m, q] = RPA_lineplot('Er', 0.3, omega, 0, 0, 1e-3, 1.0, 'qvec', qpts, 'method', 'page');
+%
+% Required Inputs:
 %   mion        Element symbol, e.g. 'Er', 'Ho'.
-%   dscrt_var   Temperature (K) used in LiReF4_MF_Yikai field scan file name.
+%   dscrt_var   Temperature (K) for field scan file name.
 %   omega_grid  Frequency grid (GHz) to scan for poles.
 %   theta       Angle from c-axis in ac-plane (deg).
 %   phi         Rotation around c-axis (deg).
 %   gama        Homogeneous linewidth γ (GHz).
-%   hyp         Hyperfine isotope proportion; 1 -> use 'Hz_I=1' data, else 'Hz_I=0'.
+%   hyp         Hyperfine isotope proportion; 1 -> 'Hz_I=1', else 'Hz_I=0'.
 %
-% Outputs
-%   field       Field magnitudes (T) from the loaded eigen-state file.
-%   poles       [n_modes x num_fields] numeric; each column lists poles at a field (NaN padded).
-%   sigma_map   [num_omega x num_fields] σ_min(I − χ0·Jq) amplitudes across ω and field.
-%   modes       struct with axis-resolved mode positions (GHz):
-%               modes.xx, modes.yy, modes.zz are [n_modes x num_fields] numeric (NaN padded),
-%               giving peak positions of Im χ^RPA_{aa}(ω) per field.
+% Optional Name-Value Pairs:
+%   'qvec'      [N x 3] array of q-vectors in r.l.u. (default: [0 0 0])
+%   'method'    Computation method: 'vec' | 'page' | 'sequential' (default: 'vec')
+%               'vec'        - Vectorized, compatible with all MATLAB versions
+%               'page'       - Page-wise operations, requires MATLAB R2020b+
+%               'sequential' - No parallelization, for debugging
 %
-% Notes
-% - Requires eigen-state MAT produced by LiReF4_MF_Yikai with matching (mion,T,theta,phi,hyp).
-% - J(q=0) uses sublattice-averaged dipole+Lorentz minus exchange, scaled by diag(ion.renorm).
-% - Poles are local minima of σ_min(I − χ0·Jq) along ω found via findpeaks on −σ_min.
+% Outputs:
+%   field       Field magnitudes (T) from loaded file [1 x num_fields]
+%   poles       [n_modes x num_fields x num_q] RPA pole frequencies (NaN padded)
+%   sigma_map   [num_omega x num_fields x num_q] σ_min(I − χ0·Jq) amplitudes
+%   modes       Struct with axis-resolved modes [n_modes x num_fields x num_q]:
+%               .xx, .yy, .zz - peak positions of Im χ^RPA_{aa}(ω)
+%   qvec        [num_q x 3] - q-vectors used
 %
-% Physics (Jensen & Mackintosh, ch. 3)
-% - χ0_{αβ}(ω) = Σ_nm (ρ_n−ρ_m)⟨n|J_α|m⟩⟨m|J_β|n⟩/(E_m−E_n−ℏω−iγ)
-% - χ^RPA = (I − χ0·Jq)\χ0; poles where det(I − χ0·Jq) = 0
-% - Numerically track σ_min(I − χ0·Jq) instead of determinant for stability.
+% Notes:
+% - Requires eigen-state MAT from LiReF4_MF_Yikai matching (mion,T,theta,phi,hyp)
+% - Poles found as local minima of σ_min(I − χ0·Jq) via findpeaks on −σ_min
+% - For multi-q scans, 'vec' or 'page' methods provide 10-100x speedup
+
+% Parse optional inputs
+p = inputParser;
+addParameter(p, 'qvec', [0 0 0], @(x) isnumeric(x) && size(x,2)==3);
+addParameter(p, 'method', 'vec', @(x) ismember(x, {'vec', 'page', 'sequential'}));
+parse(p, varargin{:});
+
+qvec = p.Results.qvec;
+method = p.Results.method;
 
 fprintf('\n========================================\n');
 fprintf('RPA SUSCEPTIBILITY POLE FINDER\n');
+fprintf('Method: %s | Q-points: %d\n', upper(method), size(qvec,1));
 fprintf('Using σ_min(I - χ0·Jq) pole criterion\n');
 fprintf('========================================\n\n');
 
 % Options
-options.min_prom = 1e-2; % peak prominence on σ_min for robustness
-options.min_sep = 5;     % min peak distance [grid points]
+options.min_prom = 1e-2;
+options.min_sep = 5;
+options.method = method;
 
-% Locate eigen-state data produced by LiReF4_MF_Yikai
+% Locate eigen-state data
 if hyp > 0
     nZee_path = 'Hz_I=1';
 else
@@ -50,35 +70,38 @@ else
 end
 
 if ispc
-    eigen_dir = ['C:\Users\skyme\OneDrive - Nexus365\Postdoc\Research projects\Li', mion, 'F4 project\Data\Simulations\mean field\eigen-states\', nZee_path, '\'];
+    eigen_dir = ['C:\Users\skyme\OneDrive - Nexus365\Postdoc\Research projects\Li', mion, ...
+        'F4 project\Data\Simulations\mean field\eigen-states\', nZee_path, '\'];
 else
-    eigen_dir = ['/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Postdoc/Research projects/Li', mion, 'F4 project/Data/Simulations/mean field/eigen-states/', nZee_path, '/'];
+    eigen_dir = ['/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Postdoc/Research projects/Li', ...
+        mion, 'F4 project/Data/Simulations/mean field/eigen-states/', nZee_path, '/'];
 end
 
 filename = strcat(['Hscan_Li',mion,'F4_'],...
     sprintf('%1$3.3fK_%2$.2fDg_%3$.1fDg_hp=%4$.2f', dscrt_var, theta, phi, hyp),'.mat');
 file_load = fullfile(eigen_dir, filename);
 
-% Try to load eigenstate data for on-demand chi0 computation
-fprintf('Loading data from: %s\n', filename);
-
-% Load eigenstate data
+fprintf('Loading: %s\n', filename);
 load(file_load, '-mat', 'eee', 'vvv', 'fff', 'ttt', 'ion');
 fprintf('Eigen-state data loaded\n');
+
 eigenE = eee;
 eigenW = vvv;
 fields = fff;
 temperatures = ttt;
 field = vecnorm(fields, 2, 1);
 
-% Setup constants and exchange
+% Setup constants and compute Jq for all q-vectors
 const = setup_constants(ion);
-Jq = interac_q(ion, const);
+Jq_all = compute_Jq_array(qvec, ion, const);
 
-fprintf('\nExchange matrix Jq [meV]:\n');
-disp(Jq);
-fprintf('\nField: %.3f - %.3f T (%d points)\n', min(field), max(field), length(field));
-fprintf('Frequency grid: %.3f - %.3f GHz (%d pts)\n', min(omega_grid), max(omega_grid), numel(omega_grid));
+fprintf('\nNumber of q-points: %d\n', size(qvec, 1));
+if size(qvec, 1) == 1
+    fprintf('Jq(q=[%.2f %.2f %.2f]) [meV]:\n', qvec(1), qvec(2), qvec(3));
+    disp(Jq_all(:,:,1));
+end
+fprintf('Field: %.3f - %.3f T (%d points)\n', min(field), max(field), length(field));
+fprintf('Frequency: %.3f - %.3f GHz (%d pts)\n', min(omega_grid), max(omega_grid), numel(omega_grid));
 tempK_print = temperatures; if numel(tempK_print) > 1, tempK_print = tempK_print(1); end
 fprintf('Temperature: %.3f mK\n\n', tempK_print*1000);
 
@@ -88,36 +111,46 @@ options.eigenW = eigenW;
 options.temperatures = temperatures;
 options.ion = ion;
 options.const = const;
-options.gamma = gama; % [GHz]
+options.gamma = gama;
 
-% Find poles via σ_min
-fprintf('Searching for RPA poles\n');
+% Find poles using selected method
+fprintf('Searching for RPA poles...\n');
+[poles, sigma_map, modes] = RPA_poles_unified(Jq_all, qvec, omega_grid, field, options);
 
-[poles, sigma_map, modes] = RPA_poles(Jq, omega_grid, field, options);
-
-counts = zeros(1, numel(field));
-for j = 1:numel(field)
-    counts(j) = sum(~isnan(poles(:, j))); 
+% Print statistics
+num_q = size(qvec, 1);
+for nq = 1:min(num_q, 10)  % Limit output for many q-points
+    counts = zeros(1, numel(field));
+    for j = 1:numel(field)
+        counts(j) = sum(~isnan(poles(:, j, nq)));
+    end
+    fprintf('Q=[%.2f %.2f %.2f]: pole counts min=%d, median=%d, max=%d\n', ...
+        qvec(nq,1), qvec(nq,2), qvec(nq,3), min(counts), median(counts), max(counts));
 end
-fprintf('Per-field pole counts: min=%d, median=%d, max=%d\n', min(counts), median(counts), max(counts));
+if num_q > 10
+    fprintf('... (%d more q-points)\n', num_q - 10);
+end
 
-% Plot
-plot_opts.field_label = 'Magnetic Field';
-plot_opts.field_units = 'T';
-plot_opts.omega_label = 'Excitation Energy';
-plot_opts.omega_units = 'GHz';
-plot_opts.title = sprintf('RPA Modes: Li%sF4 at %.2f K', mion, dscrt_var);
+% Plot (only for single q-point or first q-point)
+if size(qvec, 1) == 1
+    plot_opts.field_label = 'Magnetic Field';
+    plot_opts.field_units = 'T';
+    plot_opts.omega_label = 'Excitation Energy';
+    plot_opts.omega_units = 'GHz';
+    plot_opts.title = sprintf('RPA Modes: Li%sF4 at %.2f K, Q=[%.2f %.2f %.2f]', ...
+        mion, dscrt_var, qvec(1), qvec(2), qvec(3));
 
-plot_rpa_modes(field, poles, plot_opts);
+    plot_rpa_modes(field, poles(:,:,1), plot_opts);
 
-% Optional diagnostic: σ_min color map
-try
-    figure('Name','SigmaMin Map','Position',[120,120,900,650]);
-    imagesc(field, omega_grid, sigma_map);
-    set(gca, 'YDir','normal'); colorbar;
-    xlabel('Magnetic Field (T)'); ylabel('Frequency (GHz)');
-    title('σ_{min}(I - χ0·Jq)');
-catch
+    % σ_min color map
+    try
+        figure('Name','SigmaMin Map','Position',[120,120,900,650]);
+        imagesc(field, omega_grid, sigma_map(:,:,1));
+        set(gca, 'YDir','normal'); colorbar;
+        xlabel('Magnetic Field (T)'); ylabel('Frequency (GHz)');
+        title(sprintf('σ_{min}(I - χ0·Jq), Q=[%.2f %.2f %.2f]', qvec(1), qvec(2), qvec(3)));
+    catch
+    end
 end
 end
 
@@ -138,260 +171,8 @@ const.kB = 8.61733e-2; % [meV/K]
 end
 
 
-function Jq = interac_q(ion, const)
-unitN = 4;
-lattice = ion.abc{const.elem};
-Vc = sum(lattice(1,:) .* cross(lattice(2,:), lattice(3,:)));
-
-eins = diag([1 1 1]);
-eins = repmat(eins,1,1,4,4);
-demagn_t = ellipsoid_demagn(ion.alpha);
-demagn = repmat(demagn_t,1,1,4,4);
-
-% J(q=0) from dipole - Lorentz (demag) + exchange; sublattice-averaged and renormalized
-lorz_on = 1;
-D = const.gfac * (MF_dipole([0 0 0], const.dpRng, lattice, ion.tau) - ...
-    lorz_on*4*pi/Vc*(eins/3 - ion.demag*demagn)) + ...
-    exchange([0 0 0], ion.ex(const.elem), lattice, ion.tau);
-Jav = squeeze(sum(sum(D(:,:,:,:),4),3)/unitN);
-Jq = -diag(ion.renorm(const.elem,:)) .* Jav;
-end
-
-function [poles, sigma_map, modes] = RPA_poles(Jq, omega_scan, field, options)
-% Compute σ_min(I - χ0·Jq) across ω for each field; pick minima as poles
-tempK = options.temperatures; % [K]
-if numel(tempK) > 1, tempK = tempK(1); end
-beta = 1 / max(options.const.kB * max(tempK, 0), eps); % [meV^-1]; T=0 -> β→∞ handled below
-
-JhT = spin_ops(options.ion, options.const); % electron+nuclear spin operators (renormalized)
-
-num_fields = size(field, 2);
-num_omega = numel(omega_scan);
-sigma_map = zeros(num_omega, num_fields);
-p_list = cell(1, num_fields);
-im_diag = zeros(num_omega, num_fields, 3); % store Im diag(χ^RPA)
-
-gamma_meV = options.gamma * options.const.Gh2mV; % linewidth in meV
-
-for ii = 1:num_fields
-    % Eigen-system for this field
-    en = squeeze(options.eigenE(ii, :))'; % [meV]
-    v = squeeze(options.eigenW(ii, :, :)); % [N x N]
-    if isempty(en) || isempty(v)
-        continue
-    end
-    % Thermal populations ρ_n
-    if tempK > 0
-        zn = exp(-beta * (en - min(en)));
-        zn = zn / max(sum(zn), eps);
-    else
-        zn = zeros(size(en)); zn(1) = 1;
-    end
-    [n, np] = meshgrid(zn, zn);
-    NN = n - np; % ρ_n - ρ_m
-
-    % Transition energies and matrix elements
-    [ee, eep] = meshgrid(en, en);
-    omega_nm = eep - ee; % [meV]
-
-    % Precompute J_nm matrices once (3 costly ops instead of 18)
-    Jnm = cell(3,1);
-    J_ops = {JhT.x, JhT.y, JhT.z};
-    for a = 1:3
-        Jnm{a} = v' * J_ops{a} * v; % [N x N]
-    end
-
-    % Build stacked M rows for all αβ pairs: row k = vec(Jnm{α} .* conj(Jnm{β}) .* NN)
-    % Row order chosen so reshape(vec,[3,3]) reconstructs χ0 by column-major (β fastest)
-    % k = (β-1)*3 + α
-    N = size(omega_nm,1);
-    Mstack = zeros(9, N*N);
-    row = 1;
-    for b = 1:3
-        for a = 1:3
-            M_ab = Jnm{a} .* conj(Jnm{b}) .* NN;
-            Mstack(row, :) = reshape(M_ab, 1, []);
-            row = row + 1;
-        end
-    end
-
-    % Process ω in chunks to limit memory: [N^2 x n_chunk]
-    W_all = omega_scan(:).' * options.const.Gh2mV; % [1 x num_omega] meV
-    max_elems = 5e6; % ~80 MB for complex doubles
-    chunk = max(1, floor(max_elems / (N*N)));
-    for s = 1:chunk:num_omega
-        e = min(s + chunk - 1, num_omega);
-        W = W_all(s:e);
-        DenInv = 1 ./ ((omega_nm(:) - 1i*gamma_meV) - W); % [N^2 x n_chunk]
-        chi0_flat = Mstack * DenInv; % [9 x n_chunk]
-
-        % Small 3x3 ops per ω in chunk
-        for jj = 1:(e - s + 1)
-            idx = s + jj - 1;
-            chi0 = reshape(chi0_flat(:, jj), [3, 3]);
-            A = eye(3) - chi0 * Jq; % RPA denominator
-            svals = svd(A);
-            sigma_map(idx, ii) = min(svals);
-            chi_rpa = A \ chi0;
-            d = imag(diag(chi_rpa));
-            im_diag(idx, ii, :) = d(:);
-        end
-    end
-
-    % Identify local minima of σ_min along ω
-    [~, locs] = findpeaks(-sigma_map(:, ii), ...
-        'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-    if ~isempty(locs)
-        locs = sort(locs, 'ascend');
-        p_list{ii} = omega_scan(locs(:));
-    else
-        p_list{ii} = [];
-    end
-end
-
-% Convert cell list to numeric matrix with NaN padding
-max_modes = 0;
-for j = 1:num_fields
-    max_modes = max(max_modes, numel(p_list{j}));
-end
-poles = nan(max_modes, num_fields);
-for j = 1:num_fields
-    pj = p_list{j};
-    if ~isempty(pj)
-        poles(1:numel(pj), j) = pj(:);
-    end
-end
-
-% Axis-resolved modes from Im χ^RPA_{aa} peaks
-mx = cell(1, num_fields); my = cell(1, num_fields); mz = cell(1, num_fields);
-for ii = 1:num_fields
-    sigx = im_diag(:, ii, 1);
-    sigy = im_diag(:, ii, 2);
-    sigz = im_diag(:, ii, 3);
-    [~, lx] = findpeaks(sigx, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-    [~, ly] = findpeaks(sigy, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-    [~, lz] = findpeaks(sigz, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-    mx{ii} = omega_scan(lx(:));
-    my{ii} = omega_scan(ly(:));
-    mz{ii} = omega_scan(lz(:));
-end
-
-% helper: convert cell vector of varying-length vectors to NaN-padded matrix
-function M = pad_cell_vectors(C)
-    n = numel(C);
-    k = 0; for j = 1:n, k = max(k, numel(C{j})); end
-    M = nan(k, n);
-    for j = 1:n
-        v = C{j};
-        if ~isempty(v)
-            M(1:numel(v), j) = v(:);
-        end
-    end
-end
-
-modes.xx = pad_cell_vectors(mx);
-modes.yy = pad_cell_vectors(my);
-modes.zz = pad_cell_vectors(mz);
-end
-
-
-function [field, poles, sigma_map, modes, qvec] = RPA_lineplot_qscan(mion, dscrt_var, omega_grid, theta, phi, gama, hyp, qvec)
-% Extended RPA_LINEPLOT with q-vector scan support
-% Same as RPA_lineplot but adds support for multiple q-vectors, enabling 3D optimization
-%
-% Additional Input:
-%   qvec        [N x 3] array of q-vectors in reciprocal lattice units (r.l.u.)
-%               If not provided or empty, defaults to q=[0,0,0]
-%
-% Modified Outputs:
-%   poles       [n_modes x num_fields x num_q] - poles for each q-point
-%   sigma_map   [num_omega x num_fields x num_q] - sigma maps for each q-point
-%   modes       struct with .xx, .yy, .zz [n_modes x num_fields x num_q]
-%   qvec        [N x 3] - the q-vectors used
-
-fprintf('\n========================================\n');
-fprintf('RPA SUSCEPTIBILITY POLE FINDER (Q-SCAN)\n');
-fprintf('Using σ_min(I - χ0·Jq) pole criterion\n');
-fprintf('========================================\n\n');
-
-% Default to q=0 if not provided
-if nargin < 8 || isempty(qvec)
-    qvec = [0, 0, 0];
-end
-
-% Options
-options.min_prom = 1e-2;
-options.min_sep = 5;
-
-% Locate and load eigen-state data
-if hyp > 0
-    nZee_path = 'Hz_I=1';
-else
-    nZee_path = 'Hz_I=0';
-end
-
-if ispc
-    eigen_dir = ['C:\Users\skyme\OneDrive - Nexus365\Postdoc\Research projects\Li', mion, 'F4 project\Data\Simulations\mean field\eigen-states\', nZee_path, '\'];
-else
-    eigen_dir = ['/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Postdoc/Research projects/Li', mion, 'F4 project/Data/Simulations/mean field/eigen-states/', nZee_path, '/'];
-end
-
-filename = strcat(['Hscan_Li',mion,'F4_'],...
-    sprintf('%1$3.3fK_%2$.2fDg_%3$.1fDg_hp=%4$.2f', dscrt_var, theta, phi, hyp),'.mat');
-file_load = fullfile(eigen_dir, filename);
-
-fprintf('Loading data from: %s\n', filename);
-load(file_load, '-mat', 'eee', 'vvv', 'fff', 'ttt', 'ion');
-fprintf('Eigen-state data loaded\n');
-
-eigenE = eee;
-eigenW = vvv;
-fields = fff;
-temperatures = ttt;
-field = vecnorm(fields, 2, 1);
-
-% Setup constants and compute Jq for all q-vectors
-const = setup_constants(ion);
-Jq_all = interac_q_array(qvec, ion, const);
-
-fprintf('\nNumber of q-points: %d\n', size(qvec, 1));
-fprintf('Field: %.3f - %.3f T (%d points)\n', min(field), max(field), length(field));
-fprintf('Frequency grid: %.3f - %.3f GHz (%d pts)\n', min(omega_grid), max(omega_grid), numel(omega_grid));
-tempK_print = temperatures; if numel(tempK_print) > 1, tempK_print = tempK_print(1); end
-fprintf('Temperature: %.3f mK\n\n', tempK_print*1000);
-
-% Store in options
-options.eigenE = eigenE;
-options.eigenW = eigenW;
-options.temperatures = temperatures;
-options.ion = ion;
-options.const = const;
-options.gamma = gama;
-
-% Find poles for all q-vectors
-fprintf('Searching for RPA poles across q-space...\n');
-[poles, sigma_map, modes] = RPA_poles_qscan(Jq_all, qvec, omega_grid, field, options);
-
-% Print statistics
-num_q = size(qvec, 1);
-for nq = 1:num_q
-    counts = zeros(1, numel(field));
-    for j = 1:numel(field)
-        counts(j) = sum(~isnan(poles(:, j, nq)));
-    end
-    fprintf('Q=[%.2f %.2f %.2f]: pole counts min=%d, median=%d, max=%d\n', ...
-        qvec(nq,1), qvec(nq,2), qvec(nq,3), min(counts), median(counts), max(counts));
-end
-end
-
-
-function Jq_all = interac_q_array(qvec, ion, const)
+function Jq_all = compute_Jq_array(qvec, ion, const)
 % Compute interaction matrix Jq for multiple q-vectors
-% Input:
-%   qvec   [N x 3] - array of q-vectors in r.l.u.
-% Output:
-%   Jq_all [3 x 3 x N] - interaction matrices for each q
-
 unitN = 4;
 lattice = ion.abc{const.elem};
 Vc = sum(lattice(1,:) .* cross(lattice(2,:), lattice(3,:)));
@@ -407,13 +188,13 @@ Jq_all = zeros(3, 3, num_q);
 for nq = 1:num_q
     q = qvec(nq, :);
 
-    % Determine if Lorentz term applies (only for q that includes all sublattices coherently)
+    % Lorentz term applies only for q including all sublattices coherently
     lorz_on = 1;
     if abs(real(sum(exp(1i*2*pi*q*ion.tau'))/size(ion.tau,1))-1) > 1e-10
         lorz_on = 0;
     end
 
-    % Compute dipole + exchange interaction at this q
+    % Dipole + exchange interaction
     D = const.gfac * (MF_dipole(q, const.dpRng, lattice, ion.tau) - ...
         lorz_on*4*pi/Vc*(eins/3 - ion.demag*demagn)) + ...
         exchange(q, ion.ex(const.elem), lattice, ion.tau);
@@ -425,24 +206,29 @@ end
 end
 
 
-function [poles, sigma_map, modes] = RPA_poles_qscan(Jq_all, qvec, omega_scan, field, options)
-% RPA pole finder for multiple q-vectors (sequential version)
-% Loops over q-vectors, then fields, then frequency chunks
-%
-% Input:
-%   Jq_all  [3 x 3 x num_q] - interaction matrices
-%   qvec    [num_q x 3] - q-vectors
-%
-% Output:
-%   poles      [n_modes x num_fields x num_q]
-%   sigma_map  [num_omega x num_fields x num_q]
-%   modes      struct with .xx, .yy, .zz [n_modes x num_fields x num_q]
+function [poles, sigma_map, modes] = RPA_poles_unified(Jq_all, qvec, omega_scan, field, options)
+% Unified RPA pole finder - dispatches to appropriate method
+
+switch options.method
+    case 'vec'
+        [poles, sigma_map, modes] = RPA_poles_vec(Jq_all, qvec, omega_scan, field, options);
+    case 'page'
+        [poles, sigma_map, modes] = RPA_poles_page(Jq_all, qvec, omega_scan, field, options);
+    case 'sequential'
+        [poles, sigma_map, modes] = RPA_poles_sequential(Jq_all, qvec, omega_scan, field, options);
+    otherwise
+        error('Unknown method: %s. Use ''vec'', ''page'', or ''sequential''.', options.method);
+end
+end
+
+
+function [poles, sigma_map, modes] = RPA_poles_vec(Jq_all, qvec, omega_scan, field, options)
+% Vectorized RPA pole finder - parallelizes over q-vectors
 
 num_q = size(qvec, 1);
 num_fields = size(field, 2);
 num_omega = numel(omega_scan);
 
-% Pre-allocate outputs
 poles = [];
 sigma_map = zeros(num_omega, num_fields, num_q);
 mx_all = cell(num_fields, num_q);
@@ -457,19 +243,321 @@ JhT = spin_ops(options.ion, options.const);
 gamma_meV = options.gamma * options.const.Gh2mV;
 I3 = eye(3);
 
-% Loop over q-vectors (will parallelize in optimized version)
+% Parallelize over q-vectors
+parfor nq = 1:num_q
+    Jq = Jq_all(:,:,nq);
+    p_list = cell(1, num_fields);
+    im_diag_local = zeros(num_omega, num_fields, 3);
+    sigma_local_q = zeros(num_omega, num_fields);
+
+    for ii = 1:num_fields
+        en = squeeze(options.eigenE(ii, :))';
+        v = squeeze(options.eigenW(ii, :, :));
+        if isempty(en) || isempty(v), continue; end
+
+        % Thermal populations
+        if tempK > 0
+            zn = exp(-beta * (en - min(en)));
+            zn = zn / max(sum(zn), eps);
+        else
+            zn = zeros(size(en)); zn(1) = 1;
+        end
+        [n, np] = meshgrid(zn, zn);
+        NN = n - np;
+
+        % Transition energies
+        [ee, eep] = meshgrid(en, en);
+        omega_nm = eep - ee;
+
+        % Precompute J_nm matrices
+        Jnm = cell(3,1);
+        J_ops = {JhT.x, JhT.y, JhT.z};
+        for a = 1:3
+            Jnm{a} = v' * J_ops{a} * v;
+        end
+
+        % Build stacked matrix
+        N = size(omega_nm, 1);
+        Mstack = zeros(9, N*N);
+        row = 1;
+        for b = 1:3
+            for a = 1:3
+                M_ab = Jnm{a} .* conj(Jnm{b}) .* NN;
+                Mstack(row, :) = reshape(M_ab, 1, []);
+                row = row + 1;
+            end
+        end
+
+        sigma_local = zeros(num_omega, 1);
+        im_diag_field = zeros(num_omega, 3);
+
+        % Process frequency in chunks
+        W_all = omega_scan(:).' * options.const.Gh2mV;
+        max_elems = 5e6;
+        chunk = max(1, floor(max_elems / (N*N)));
+
+        for s = 1:chunk:num_omega
+            e = min(s + chunk - 1, num_omega);
+            W = W_all(s:e);
+            DenInv = 1 ./ ((omega_nm(:) - 1i*gamma_meV) - W);
+            chi0_flat = Mstack * DenInv;
+
+            for jj = 1:(e - s + 1)
+                idx = s + jj - 1;
+                chi0 = reshape(chi0_flat(:, jj), [3, 3]);
+                A = I3 - chi0 * Jq;
+                svals = svd(A);
+                sigma_local(idx) = min(svals);
+                chi_rpa = A \ chi0;
+                d = imag(diag(chi_rpa));
+                im_diag_field(idx, :) = d(:);
+            end
+        end
+
+        sigma_local_q(:, ii) = sigma_local;
+        im_diag_local(:, ii, :) = im_diag_field;
+
+        % Find poles
+        [~, locs] = findpeaks(-sigma_local, ...
+            'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
+        if ~isempty(locs)
+            locs = sort(locs, 'ascend');
+            p_list{ii} = omega_scan(locs(:));
+        else
+            p_list{ii} = [];
+        end
+    end
+
+    sigma_map(:, :, nq) = sigma_local_q;
+
+    % Convert poles to matrix
+    max_modes = 0;
+    for j = 1:num_fields
+        max_modes = max(max_modes, numel(p_list{j}));
+    end
+    poles_q = nan(max_modes, num_fields);
+    for j = 1:num_fields
+        pj = p_list{j};
+        if ~isempty(pj)
+            poles_q(1:numel(pj), j) = pj(:);
+        end
+    end
+
+    if nq == 1
+        poles = nan(max_modes, num_fields, num_q);
+    end
+    poles(:, :, nq) = poles_q;
+
+    % Extract axis-resolved modes
+    for ii = 1:num_fields
+        sigx = im_diag_local(:, ii, 1);
+        sigy = im_diag_local(:, ii, 2);
+        sigz = im_diag_local(:, ii, 3);
+        [~, lx] = findpeaks(sigx, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
+        [~, ly] = findpeaks(sigy, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
+        [~, lz] = findpeaks(sigz, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
+        mx_all{ii, nq} = omega_scan(lx(:));
+        my_all{ii, nq} = omega_scan(ly(:));
+        mz_all{ii, nq} = omega_scan(lz(:));
+    end
+end
+
+modes.xx = pad_cell_3d(mx_all);
+modes.yy = pad_cell_3d(my_all);
+modes.zz = pad_cell_3d(mz_all);
+end
+
+
+function [poles, sigma_map, modes] = RPA_poles_page(Jq_all, qvec, omega_scan, field, options)
+% Page-wise RPA pole finder - requires MATLAB R2020b+
+
+num_q = size(qvec, 1);
+num_fields = size(field, 2);
+num_omega = numel(omega_scan);
+
+poles = [];
+sigma_map = zeros(num_omega, num_fields, num_q);
+mx_all = cell(num_fields, num_q);
+my_all = cell(num_fields, num_q);
+mz_all = cell(num_fields, num_q);
+
+tempK = options.temperatures;
+if numel(tempK) > 1, tempK = tempK(1); end
+beta = 1 / max(options.const.kB * max(tempK, 0), eps);
+
+JhT = spin_ops(options.ion, options.const);
+gamma_meV = options.gamma * options.const.Gh2mV;
+
+% Parallelize over q-vectors
+parfor nq = 1:num_q
+    Jq = Jq_all(:,:,nq);
+    p_list = cell(1, num_fields);
+    im_diag_local = zeros(num_omega, num_fields, 3);
+    sigma_local_q = zeros(num_omega, num_fields);
+
+    for ii = 1:num_fields
+        en = squeeze(options.eigenE(ii, :))';
+        v = squeeze(options.eigenW(ii, :, :));
+        if isempty(en) || isempty(v), continue; end
+
+        % Thermal populations
+        if tempK > 0
+            zn = exp(-beta * (en - min(en)));
+            zn = zn / max(sum(zn), eps);
+        else
+            zn = zeros(size(en)); zn(1) = 1;
+        end
+        [n, np] = meshgrid(zn, zn);
+        NN = n - np;
+
+        % Transition energies
+        [ee, eep] = meshgrid(en, en);
+        omega_nm = eep - ee;
+
+        % Precompute J_nm matrices
+        Jnm = cell(3,1);
+        J_ops = {JhT.x, JhT.y, JhT.z};
+        for a = 1:3
+            Jnm{a} = v' * J_ops{a} * v;
+        end
+
+        % Build stacked matrix
+        N = size(omega_nm, 1);
+        Mstack = zeros(9, N*N);
+        row = 1;
+        for b = 1:3
+            for a = 1:3
+                M_ab = Jnm{a} .* conj(Jnm{b}) .* NN;
+                Mstack(row, :) = reshape(M_ab, 1, []);
+                row = row + 1;
+            end
+        end
+
+        sigma_local = zeros(num_omega, 1);
+        im_diag_field = zeros(num_omega, 3);
+
+        % Process frequency in chunks with page-wise operations
+        W_all = omega_scan(:).' * options.const.Gh2mV;
+        max_elems = 5e6;
+        chunk = max(1, floor(max_elems / (N*N)));
+
+        for s = 1:chunk:num_omega
+            e = min(s + chunk - 1, num_omega);
+            W = W_all(s:e);
+            n_chunk = e - s + 1;
+
+            DenInv = 1 ./ ((omega_nm(:) - 1i*gamma_meV) - W);
+            chi0_flat = Mstack * DenInv;
+
+            % Reshape to pages: [3, 3, n_chunk]
+            chi0_pages = reshape(chi0_flat, 3, 3, n_chunk);
+
+            % Page-wise operations
+            Jq_expanded = repmat(Jq, 1, 1, n_chunk);
+            MM_pages = pagemtimes(chi0_pages, Jq_expanded);
+            I_pages = repmat(eye(3), 1, 1, n_chunk);
+            A_pages = I_pages - MM_pages;
+            chi_rpa_pages = pagemldivide(A_pages, chi0_pages);
+
+            % Extract diagonal imaginary parts (vectorized)
+            for a = 1:3
+                im_diag_field(s:e, a) = squeeze(imag(chi_rpa_pages(a, a, :)));
+            end
+
+            % Compute singular values
+            for jj = 1:n_chunk
+                idx = s + jj - 1;
+                A = A_pages(:, :, jj);
+                svals = svd(A);
+                sigma_local(idx) = min(svals);
+            end
+        end
+
+        sigma_local_q(:, ii) = sigma_local;
+        im_diag_local(:, ii, :) = im_diag_field;
+
+        % Find poles
+        [~, locs] = findpeaks(-sigma_local, ...
+            'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
+        if ~isempty(locs)
+            locs = sort(locs, 'ascend');
+            p_list{ii} = omega_scan(locs(:));
+        else
+            p_list{ii} = [];
+        end
+    end
+
+    sigma_map(:, :, nq) = sigma_local_q;
+
+    % Convert poles to matrix
+    max_modes = 0;
+    for j = 1:num_fields
+        max_modes = max(max_modes, numel(p_list{j}));
+    end
+    poles_q = nan(max_modes, num_fields);
+    for j = 1:num_fields
+        pj = p_list{j};
+        if ~isempty(pj)
+            poles_q(1:numel(pj), j) = pj(:);
+        end
+    end
+
+    if nq == 1
+        poles = nan(max_modes, num_fields, num_q);
+    end
+    poles(:, :, nq) = poles_q;
+
+    % Extract axis-resolved modes
+    for ii = 1:num_fields
+        sigx = im_diag_local(:, ii, 1);
+        sigy = im_diag_local(:, ii, 2);
+        sigz = im_diag_local(:, ii, 3);
+        [~, lx] = findpeaks(sigx, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
+        [~, ly] = findpeaks(sigy, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
+        [~, lz] = findpeaks(sigz, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
+        mx_all{ii, nq} = omega_scan(lx(:));
+        my_all{ii, nq} = omega_scan(ly(:));
+        mz_all{ii, nq} = omega_scan(lz(:));
+    end
+end
+
+modes.xx = pad_cell_3d(mx_all);
+modes.yy = pad_cell_3d(my_all);
+modes.zz = pad_cell_3d(mz_all);
+end
+
+
+function [poles, sigma_map, modes] = RPA_poles_sequential(Jq_all, qvec, omega_scan, field, options)
+% Sequential RPA pole finder - no parallelization (for debugging/comparison)
+
+num_q = size(qvec, 1);
+num_fields = size(field, 2);
+num_omega = numel(omega_scan);
+
+poles = [];
+sigma_map = zeros(num_omega, num_fields, num_q);
+mx_all = cell(num_fields, num_q);
+my_all = cell(num_fields, num_q);
+mz_all = cell(num_fields, num_q);
+
+tempK = options.temperatures;
+if numel(tempK) > 1, tempK = tempK(1); end
+beta = 1 / max(options.const.kB * max(tempK, 0), eps);
+
+JhT = spin_ops(options.ion, options.const);
+gamma_meV = options.gamma * options.const.Gh2mV;
+I3 = eye(3);
+
+% Sequential loops
 for nq = 1:num_q
     Jq = Jq_all(:,:,nq);
     p_list = cell(1, num_fields);
     im_diag = zeros(num_omega, num_fields, 3);
 
-    % Loop over field points
     for ii = 1:num_fields
         en = squeeze(options.eigenE(ii, :))';
         v = squeeze(options.eigenW(ii, :, :));
-        if isempty(en) || isempty(v)
-            continue
-        end
+        if isempty(en) || isempty(v), continue; end
 
         % Thermal populations
         if tempK > 0
@@ -557,7 +645,6 @@ for nq = 1:num_q
         end
     end
 
-    % Store poles with proper dimensions
     if nq == 1
         poles = nan(max_modes, num_fields, num_q);
     end
@@ -577,29 +664,9 @@ for nq = 1:num_q
     end
 end
 
-% Convert mode cells to 3D arrays
 modes.xx = pad_cell_3d(mx_all);
 modes.yy = pad_cell_3d(my_all);
 modes.zz = pad_cell_3d(mz_all);
-
-    function M = pad_cell_3d(C)
-        [nf, nq] = size(C);
-        k = 0;
-        for jj = 1:nf
-            for qq = 1:nq
-                k = max(k, numel(C{jj, qq}));
-            end
-        end
-        M = nan(k, nf, nq);
-        for jj = 1:nf
-            for qq = 1:nq
-                v = C{jj, qq};
-                if ~isempty(v)
-                    M(1:numel(v), jj, qq) = v(:);
-                end
-            end
-        end
-    end
 end
 
 
@@ -638,11 +705,28 @@ JhT.z = JhT.z + ion.hyp(const.elem) * const.NUCf/const.ELEf * IhT.z;
 end
 
 
-% (removed) compute_transition_matrices: superseded by vectorized build in RPA_poles
+function M = pad_cell_3d(C)
+[nf, nq] = size(C);
+k = 0;
+for jj = 1:nf
+    for qq = 1:nq
+        k = max(k, numel(C{jj, qq}));
+    end
+end
+M = nan(k, nf, nq);
+for jj = 1:nf
+    for qq = 1:nq
+        v = C{jj, qq};
+        if ~isempty(v)
+            M(1:numel(v), jj, qq) = v(:);
+        end
+    end
+end
+end
 
 
 function fig = plot_rpa_modes(field, pole_frequencies, plot_options)
-if nargin < 4, plot_options = struct(); end
+if nargin < 3, plot_options = struct(); end
 if ~isfield(plot_options, 'field_label'), plot_options.field_label = 'Magnetic Field'; end
 if ~isfield(plot_options, 'field_units'), plot_options.field_units = 'T'; end
 if ~isfield(plot_options, 'omega_label'), plot_options.omega_label = 'Mode Frequency'; end
@@ -720,6 +804,7 @@ box on;
 hold off;
 end
 
+
 function cmap = viridis(n)
 base_colors = [
     0.267004, 0.004874, 0.329415; 0.282623, 0.140926, 0.457517;
@@ -735,1320 +820,4 @@ cmap = zeros(n, 3);
 for i = 1:3
     cmap(:, i) = interp1(x_base, base_colors(:, i), x_new);
 end
-end
-
-
-function [poles, sigma_map, modes] = RPA_poles_vec(Jq, omega_scan, field, options)
-% Optimized RPA pole finder using vectorization (Strategy 2)
-% Same interface as RPA_poles() but with improved performance through:
-% - Parallelization of outer loop over field points
-% - Maintains chunked frequency processing for memory efficiency
-
-tempK = options.temperatures; % [K]
-if numel(tempK) > 1, tempK = tempK(1); end
-beta = 1 / max(options.const.kB * max(tempK, 0), eps); % [meV^-1]
-
-JhT = spin_ops(options.ion, options.const); % electron+nuclear spin operators
-
-num_fields = size(field, 2);
-num_omega = numel(omega_scan);
-sigma_map = zeros(num_omega, num_fields);
-p_list = cell(1, num_fields);
-im_diag = zeros(num_omega, num_fields, 3); % store Im diag(χ^RPA)
-
-gamma_meV = options.gamma * options.const.Gh2mV; % linewidth in meV
-
-% Pre-allocate identity matrix
-I3 = eye(3);
-
-% Parallelize over field points (outer loop)
-parfor ii = 1:num_fields
-    % Eigen-system for this field
-    en = squeeze(options.eigenE(ii, :))'; % [meV]
-    v = squeeze(options.eigenW(ii, :, :)); % [N x N]
-    if isempty(en) || isempty(v)
-        continue
-    end
-
-    % Thermal populations ρ_n
-    if tempK > 0
-        zn = exp(-beta * (en - min(en)));
-        zn = zn / max(sum(zn), eps);
-    else
-        zn = zeros(size(en)); zn(1) = 1;
-    end
-    [n, np] = meshgrid(zn, zn);
-    NN = n - np; % ρ_n - ρ_m
-
-    % Transition energies and matrix elements
-    [ee, eep] = meshgrid(en, en);
-    omega_nm = eep - ee; % [meV]
-
-    % Precompute J_nm matrices once
-    Jnm = cell(3,1);
-    J_ops = {JhT.x, JhT.y, JhT.z};
-    for a = 1:3
-        Jnm{a} = v' * J_ops{a} * v; % [N x N]
-    end
-
-    % Build stacked M rows for all αβ pairs
-    N = size(omega_nm,1);
-    Mstack = zeros(9, N*N);
-    row = 1;
-    for b = 1:3
-        for a = 1:3
-            M_ab = Jnm{a} .* conj(Jnm{b}) .* NN;
-            Mstack(row, :) = reshape(M_ab, 1, []);
-            row = row + 1;
-        end
-    end
-
-    % Local arrays for this field
-    sigma_local = zeros(num_omega, 1);
-    im_diag_local = zeros(num_omega, 3);
-
-    % Process ω in chunks to limit memory
-    W_all = omega_scan(:).' * options.const.Gh2mV; % [1 x num_omega] meV
-    max_elems = 5e6; % ~80 MB for complex doubles
-    chunk = max(1, floor(max_elems / (N*N)));
-
-    for s = 1:chunk:num_omega
-        e = min(s + chunk - 1, num_omega);
-        W = W_all(s:e);
-        DenInv = 1 ./ ((omega_nm(:) - 1i*gamma_meV) - W); % [N^2 x n_chunk]
-        chi0_flat = Mstack * DenInv; % [9 x n_chunk]
-
-        % Small 3x3 ops per ω in chunk
-        for jj = 1:(e - s + 1)
-            idx = s + jj - 1;
-            chi0 = reshape(chi0_flat(:, jj), [3, 3]);
-            A = I3 - chi0 * Jq; % RPA denominator
-            svals = svd(A);
-            sigma_local(idx) = min(svals);
-            chi_rpa = A \ chi0;
-            d = imag(diag(chi_rpa));
-            im_diag_local(idx, :) = d(:);
-        end
-    end
-
-    % Store results (sliced assignment for parfor)
-    sigma_map(:, ii) = sigma_local;
-    im_diag(:, ii, :) = im_diag_local;
-
-    % Identify local minima of σ_min along ω
-    [~, locs] = findpeaks(-sigma_local, ...
-        'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-    if ~isempty(locs)
-        locs = sort(locs, 'ascend');
-        p_list{ii} = omega_scan(locs(:));
-    else
-        p_list{ii} = [];
-    end
-end
-
-% Convert cell list to numeric matrix with NaN padding
-max_modes = 0;
-for j = 1:num_fields
-    max_modes = max(max_modes, numel(p_list{j}));
-end
-poles = nan(max_modes, num_fields);
-for j = 1:num_fields
-    pj = p_list{j};
-    if ~isempty(pj)
-        poles(1:numel(pj), j) = pj(:);
-    end
-end
-
-% Axis-resolved modes from Im χ^RPA_{aa} peaks
-mx = cell(1, num_fields); my = cell(1, num_fields); mz = cell(1, num_fields);
-for ii = 1:num_fields
-    sigx = im_diag(:, ii, 1);
-    sigy = im_diag(:, ii, 2);
-    sigz = im_diag(:, ii, 3);
-    [~, lx] = findpeaks(sigx, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-    [~, ly] = findpeaks(sigy, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-    [~, lz] = findpeaks(sigz, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-    mx{ii} = omega_scan(lx(:));
-    my{ii} = omega_scan(ly(:));
-    mz{ii} = omega_scan(lz(:));
-end
-
-% helper: convert cell vector of varying-length vectors to NaN-padded matrix
-function M = pad_cell_vectors(C)
-    n = numel(C);
-    k = 0; for j = 1:n, k = max(k, numel(C{j})); end
-    M = nan(k, n);
-    for j = 1:n
-        v = C{j};
-        if ~isempty(v)
-            M(1:numel(v), j) = v(:);
-        end
-    end
-end
-
-modes.xx = pad_cell_vectors(mx);
-modes.yy = pad_cell_vectors(my);
-modes.zz = pad_cell_vectors(mz);
-end
-
-
-function [field, poles, sigma_map, modes, qvec] = RPA_lineplot_qscan(mion, dscrt_var, omega_grid, theta, phi, gama, hyp, qvec)
-% Extended RPA_LINEPLOT with q-vector scan support
-% Same as RPA_lineplot but adds support for multiple q-vectors, enabling 3D optimization
-%
-% Additional Input:
-%   qvec        [N x 3] array of q-vectors in reciprocal lattice units (r.l.u.)
-%               If not provided or empty, defaults to q=[0,0,0]
-%
-% Modified Outputs:
-%   poles       [n_modes x num_fields x num_q] - poles for each q-point
-%   sigma_map   [num_omega x num_fields x num_q] - sigma maps for each q-point
-%   modes       struct with .xx, .yy, .zz [n_modes x num_fields x num_q]
-%   qvec        [N x 3] - the q-vectors used
-
-fprintf('\n========================================\n');
-fprintf('RPA SUSCEPTIBILITY POLE FINDER (Q-SCAN)\n');
-fprintf('Using σ_min(I - χ0·Jq) pole criterion\n');
-fprintf('========================================\n\n');
-
-% Default to q=0 if not provided
-if nargin < 8 || isempty(qvec)
-    qvec = [0, 0, 0];
-end
-
-% Options
-options.min_prom = 1e-2;
-options.min_sep = 5;
-
-% Locate and load eigen-state data
-if hyp > 0
-    nZee_path = 'Hz_I=1';
-else
-    nZee_path = 'Hz_I=0';
-end
-
-if ispc
-    eigen_dir = ['C:\Users\skyme\OneDrive - Nexus365\Postdoc\Research projects\Li', mion, 'F4 project\Data\Simulations\mean field\eigen-states\', nZee_path, '\'];
-else
-    eigen_dir = ['/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Postdoc/Research projects/Li', mion, 'F4 project/Data/Simulations/mean field/eigen-states/', nZee_path, '/'];
-end
-
-filename = strcat(['Hscan_Li',mion,'F4_'],...
-    sprintf('%1$3.3fK_%2$.2fDg_%3$.1fDg_hp=%4$.2f', dscrt_var, theta, phi, hyp),'.mat');
-file_load = fullfile(eigen_dir, filename);
-
-fprintf('Loading data from: %s\n', filename);
-load(file_load, '-mat', 'eee', 'vvv', 'fff', 'ttt', 'ion');
-fprintf('Eigen-state data loaded\n');
-
-eigenE = eee;
-eigenW = vvv;
-fields = fff;
-temperatures = ttt;
-field = vecnorm(fields, 2, 1);
-
-% Setup constants and compute Jq for all q-vectors
-const = setup_constants(ion);
-Jq_all = interac_q_array(qvec, ion, const);
-
-fprintf('\nNumber of q-points: %d\n', size(qvec, 1));
-fprintf('Field: %.3f - %.3f T (%d points)\n', min(field), max(field), length(field));
-fprintf('Frequency grid: %.3f - %.3f GHz (%d pts)\n', min(omega_grid), max(omega_grid), numel(omega_grid));
-tempK_print = temperatures; if numel(tempK_print) > 1, tempK_print = tempK_print(1); end
-fprintf('Temperature: %.3f mK\n\n', tempK_print*1000);
-
-% Store in options
-options.eigenE = eigenE;
-options.eigenW = eigenW;
-options.temperatures = temperatures;
-options.ion = ion;
-options.const = const;
-options.gamma = gama;
-
-% Find poles for all q-vectors
-fprintf('Searching for RPA poles across q-space...\n');
-[poles, sigma_map, modes] = RPA_poles_qscan(Jq_all, qvec, omega_grid, field, options);
-
-% Print statistics
-num_q = size(qvec, 1);
-for nq = 1:num_q
-    counts = zeros(1, numel(field));
-    for j = 1:numel(field)
-        counts(j) = sum(~isnan(poles(:, j, nq)));
-    end
-    fprintf('Q=[%.2f %.2f %.2f]: pole counts min=%d, median=%d, max=%d\n', ...
-        qvec(nq,1), qvec(nq,2), qvec(nq,3), min(counts), median(counts), max(counts));
-end
-end
-
-
-function Jq_all = interac_q_array(qvec, ion, const)
-% Compute interaction matrix Jq for multiple q-vectors
-% Input:
-%   qvec   [N x 3] - array of q-vectors in r.l.u.
-% Output:
-%   Jq_all [3 x 3 x N] - interaction matrices for each q
-
-unitN = 4;
-lattice = ion.abc{const.elem};
-Vc = sum(lattice(1,:) .* cross(lattice(2,:), lattice(3,:)));
-
-eins = diag([1 1 1]);
-eins = repmat(eins, 1, 1, 4, 4);
-demagn_t = ellipsoid_demagn(ion.alpha);
-demagn = repmat(demagn_t, 1, 1, 4, 4);
-
-num_q = size(qvec, 1);
-Jq_all = zeros(3, 3, num_q);
-
-for nq = 1:num_q
-    q = qvec(nq, :);
-
-    % Determine if Lorentz term applies (only for q that includes all sublattices coherently)
-    lorz_on = 1;
-    if abs(real(sum(exp(1i*2*pi*q*ion.tau'))/size(ion.tau,1))-1) > 1e-10
-        lorz_on = 0;
-    end
-
-    % Compute dipole + exchange interaction at this q
-    D = const.gfac * (MF_dipole(q, const.dpRng, lattice, ion.tau) - ...
-        lorz_on*4*pi/Vc*(eins/3 - ion.demag*demagn)) + ...
-        exchange(q, ion.ex(const.elem), lattice, ion.tau);
-
-    % Sublattice average and renormalization
-    Jav = squeeze(sum(sum(D(:,:,:,:), 4), 3) / unitN);
-    Jq_all(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav;
-end
-end
-
-
-function [poles, sigma_map, modes] = RPA_poles_qscan(Jq_all, qvec, omega_scan, field, options)
-% RPA pole finder for multiple q-vectors (sequential version)
-% Loops over q-vectors, then fields, then frequency chunks
-%
-% Input:
-%   Jq_all  [3 x 3 x num_q] - interaction matrices
-%   qvec    [num_q x 3] - q-vectors
-%
-% Output:
-%   poles      [n_modes x num_fields x num_q]
-%   sigma_map  [num_omega x num_fields x num_q]
-%   modes      struct with .xx, .yy, .zz [n_modes x num_fields x num_q]
-
-num_q = size(qvec, 1);
-num_fields = size(field, 2);
-num_omega = numel(omega_scan);
-
-% Pre-allocate outputs
-poles = [];
-sigma_map = zeros(num_omega, num_fields, num_q);
-mx_all = cell(num_fields, num_q);
-my_all = cell(num_fields, num_q);
-mz_all = cell(num_fields, num_q);
-
-tempK = options.temperatures;
-if numel(tempK) > 1, tempK = tempK(1); end
-beta = 1 / max(options.const.kB * max(tempK, 0), eps);
-
-JhT = spin_ops(options.ion, options.const);
-gamma_meV = options.gamma * options.const.Gh2mV;
-I3 = eye(3);
-
-% Loop over q-vectors (will parallelize in optimized version)
-for nq = 1:num_q
-    Jq = Jq_all(:,:,nq);
-    p_list = cell(1, num_fields);
-    im_diag = zeros(num_omega, num_fields, 3);
-
-    % Loop over field points
-    for ii = 1:num_fields
-        en = squeeze(options.eigenE(ii, :))';
-        v = squeeze(options.eigenW(ii, :, :));
-        if isempty(en) || isempty(v)
-            continue
-        end
-
-        % Thermal populations
-        if tempK > 0
-            zn = exp(-beta * (en - min(en)));
-            zn = zn / max(sum(zn), eps);
-        else
-            zn = zeros(size(en)); zn(1) = 1;
-        end
-        [n, np] = meshgrid(zn, zn);
-        NN = n - np;
-
-        % Transition energies
-        [ee, eep] = meshgrid(en, en);
-        omega_nm = eep - ee;
-
-        % Precompute J_nm matrices
-        Jnm = cell(3,1);
-        J_ops = {JhT.x, JhT.y, JhT.z};
-        for a = 1:3
-            Jnm{a} = v' * J_ops{a} * v;
-        end
-
-        % Build stacked matrix
-        N = size(omega_nm, 1);
-        Mstack = zeros(9, N*N);
-        row = 1;
-        for b = 1:3
-            for a = 1:3
-                M_ab = Jnm{a} .* conj(Jnm{b}) .* NN;
-                Mstack(row, :) = reshape(M_ab, 1, []);
-                row = row + 1;
-            end
-        end
-
-        sigma_local = zeros(num_omega, 1);
-        im_diag_local = zeros(num_omega, 3);
-
-        % Process frequency in chunks
-        W_all = omega_scan(:).' * options.const.Gh2mV;
-        max_elems = 5e6;
-        chunk = max(1, floor(max_elems / (N*N)));
-
-        for s = 1:chunk:num_omega
-            e = min(s + chunk - 1, num_omega);
-            W = W_all(s:e);
-            DenInv = 1 ./ ((omega_nm(:) - 1i*gamma_meV) - W);
-            chi0_flat = Mstack * DenInv;
-
-            for jj = 1:(e - s + 1)
-                idx = s + jj - 1;
-                chi0 = reshape(chi0_flat(:, jj), [3, 3]);
-                A = I3 - chi0 * Jq;
-                svals = svd(A);
-                sigma_local(idx) = min(svals);
-                chi_rpa = A \ chi0;
-                d = imag(diag(chi_rpa));
-                im_diag_local(idx, :) = d(:);
-            end
-        end
-
-        sigma_map(:, ii, nq) = sigma_local;
-        im_diag(:, ii, :) = im_diag_local;
-
-        % Find poles
-        [~, locs] = findpeaks(-sigma_local, ...
-            'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        if ~isempty(locs)
-            locs = sort(locs, 'ascend');
-            p_list{ii} = omega_scan(locs(:));
-        else
-            p_list{ii} = [];
-        end
-    end
-
-    % Convert to matrix for this q
-    max_modes = 0;
-    for j = 1:num_fields
-        max_modes = max(max_modes, numel(p_list{j}));
-    end
-    poles_q = nan(max_modes, num_fields);
-    for j = 1:num_fields
-        pj = p_list{j};
-        if ~isempty(pj)
-            poles_q(1:numel(pj), j) = pj(:);
-        end
-    end
-
-    % Store poles with proper dimensions
-    if nq == 1
-        poles = nan(max_modes, num_fields, num_q);
-    end
-    poles(:, :, nq) = poles_q;
-
-    % Extract axis-resolved modes
-    for ii = 1:num_fields
-        sigx = im_diag(:, ii, 1);
-        sigy = im_diag(:, ii, 2);
-        sigz = im_diag(:, ii, 3);
-        [~, lx] = findpeaks(sigx, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        [~, ly] = findpeaks(sigy, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        [~, lz] = findpeaks(sigz, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        mx_all{ii, nq} = omega_scan(lx(:));
-        my_all{ii, nq} = omega_scan(ly(:));
-        mz_all{ii, nq} = omega_scan(lz(:));
-    end
-end
-
-% Convert mode cells to 3D arrays
-modes.xx = pad_cell_3d(mx_all);
-modes.yy = pad_cell_3d(my_all);
-modes.zz = pad_cell_3d(mz_all);
-
-    function M = pad_cell_3d(C)
-        [nf, nq] = size(C);
-        k = 0;
-        for jj = 1:nf
-            for qq = 1:nq
-                k = max(k, numel(C{jj, qq}));
-            end
-        end
-        M = nan(k, nf, nq);
-        for jj = 1:nf
-            for qq = 1:nq
-                v = C{jj, qq};
-                if ~isempty(v)
-                    M(1:numel(v), jj, qq) = v(:);
-                end
-            end
-        end
-    end
-end
-
-
-function [poles, sigma_map, modes] = RPA_poles_page(Jq, omega_scan, field, options)
-% Optimized RPA pole finder using page-wise operations (Strategy 3)
-% Requires MATLAB R2020b or later for pagemtimes and pagemldivide
-% Same interface as RPA_poles() but with maximum performance through:
-% - Parallelization of outer loop over field points
-% - Page-wise matrix operations for chi0*Jq and linear solves
-
-tempK = options.temperatures; % [K]
-if numel(tempK) > 1, tempK = tempK(1); end
-beta = 1 / max(options.const.kB * max(tempK, 0), eps); % [meV^-1]
-
-JhT = spin_ops(options.ion, options.const); % electron+nuclear spin operators
-
-num_fields = size(field, 2);
-num_omega = numel(omega_scan);
-sigma_map = zeros(num_omega, num_fields);
-p_list = cell(1, num_fields);
-im_diag = zeros(num_omega, num_fields, 3); % store Im diag(χ^RPA)
-
-gamma_meV = options.gamma * options.const.Gh2mV; % linewidth in meV
-
-% Parallelize over field points (outer loop)
-parfor ii = 1:num_fields
-    % Eigen-system for this field
-    en = squeeze(options.eigenE(ii, :))'; % [meV]
-    v = squeeze(options.eigenW(ii, :, :)); % [N x N]
-    if isempty(en) || isempty(v)
-        continue
-    end
-
-    % Thermal populations ρ_n
-    if tempK > 0
-        zn = exp(-beta * (en - min(en)));
-        zn = zn / max(sum(zn), eps);
-    else
-        zn = zeros(size(en)); zn(1) = 1;
-    end
-    [n, np] = meshgrid(zn, zn);
-    NN = n - np; % ρ_n - ρ_m
-
-    % Transition energies and matrix elements
-    [ee, eep] = meshgrid(en, en);
-    omega_nm = eep - ee; % [meV]
-
-    % Precompute J_nm matrices once
-    Jnm = cell(3,1);
-    J_ops = {JhT.x, JhT.y, JhT.z};
-    for a = 1:3
-        Jnm{a} = v' * J_ops{a} * v; % [N x N]
-    end
-
-    % Build stacked M rows for all αβ pairs
-    N = size(omega_nm,1);
-    Mstack = zeros(9, N*N);
-    row = 1;
-    for b = 1:3
-        for a = 1:3
-            M_ab = Jnm{a} .* conj(Jnm{b}) .* NN;
-            Mstack(row, :) = reshape(M_ab, 1, []);
-            row = row + 1;
-        end
-    end
-
-    % Local arrays for this field
-    sigma_local = zeros(num_omega, 1);
-    im_diag_local = zeros(num_omega, 3);
-
-    % Process ω in chunks to limit memory
-    W_all = omega_scan(:).' * options.const.Gh2mV; % [1 x num_omega] meV
-    max_elems = 5e6; % ~80 MB for complex doubles
-    chunk = max(1, floor(max_elems / (N*N)));
-
-    for s = 1:chunk:num_omega
-        e = min(s + chunk - 1, num_omega);
-        W = W_all(s:e);
-        n_chunk = e - s + 1;
-
-        DenInv = 1 ./ ((omega_nm(:) - 1i*gamma_meV) - W); % [N^2 x n_chunk]
-        chi0_flat = Mstack * DenInv; % [9 x n_chunk]
-
-        % Reshape to pages: [3, 3, n_chunk]
-        chi0_pages = reshape(chi0_flat, 3, 3, n_chunk);
-
-        % Page-wise operations
-        % Expand Jq to match page dimensions
-        Jq_expanded = repmat(Jq, 1, 1, n_chunk);
-
-        % Page-wise multiplication: MM = chi0 * Jq
-        MM_pages = pagemtimes(chi0_pages, Jq_expanded);
-
-        % Page-wise computation: A = I - chi0*Jq
-        I_pages = repmat(eye(3), 1, 1, n_chunk);
-        A_pages = I_pages - MM_pages;
-
-        % Page-wise linear solve: chi_rpa = A \ chi0
-        chi_rpa_pages = pagemldivide(A_pages, chi0_pages);
-
-        % Extract diagonal imaginary parts (vectorized)
-        for a = 1:3
-            im_diag_local(s:e, a) = squeeze(imag(chi_rpa_pages(a, a, :)));
-        end
-
-        % Compute singular values for each page (SVD not vectorized)
-        for jj = 1:n_chunk
-            idx = s + jj - 1;
-            A = A_pages(:, :, jj);
-            svals = svd(A);
-            sigma_local(idx) = min(svals);
-        end
-    end
-
-    % Store results (sliced assignment for parfor)
-    sigma_map(:, ii) = sigma_local;
-    im_diag(:, ii, :) = im_diag_local;
-
-    % Identify local minima of σ_min along ω
-    [~, locs] = findpeaks(-sigma_local, ...
-        'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-    if ~isempty(locs)
-        locs = sort(locs, 'ascend');
-        p_list{ii} = omega_scan(locs(:));
-    else
-        p_list{ii} = [];
-    end
-end
-
-% Convert cell list to numeric matrix with NaN padding
-max_modes = 0;
-for j = 1:num_fields
-    max_modes = max(max_modes, numel(p_list{j}));
-end
-poles = nan(max_modes, num_fields);
-for j = 1:num_fields
-    pj = p_list{j};
-    if ~isempty(pj)
-        poles(1:numel(pj), j) = pj(:);
-    end
-end
-
-% Axis-resolved modes from Im χ^RPA_{aa} peaks
-mx = cell(1, num_fields); my = cell(1, num_fields); mz = cell(1, num_fields);
-for ii = 1:num_fields
-    sigx = im_diag(:, ii, 1);
-    sigy = im_diag(:, ii, 2);
-    sigz = im_diag(:, ii, 3);
-    [~, lx] = findpeaks(sigx, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-    [~, ly] = findpeaks(sigy, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-    [~, lz] = findpeaks(sigz, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-    mx{ii} = omega_scan(lx(:));
-    my{ii} = omega_scan(ly(:));
-    mz{ii} = omega_scan(lz(:));
-end
-
-% helper: convert cell vector of varying-length vectors to NaN-padded matrix
-function M = pad_cell_vectors(C)
-    n = numel(C);
-    k = 0; for j = 1:n, k = max(k, numel(C{j})); end
-    M = nan(k, n);
-    for j = 1:n
-        v = C{j};
-        if ~isempty(v)
-            M(1:numel(v), j) = v(:);
-        end
-    end
-end
-
-modes.xx = pad_cell_vectors(mx);
-modes.yy = pad_cell_vectors(my);
-modes.zz = pad_cell_vectors(mz);
-end
-
-
-function [field, poles, sigma_map, modes, qvec] = RPA_lineplot_qscan(mion, dscrt_var, omega_grid, theta, phi, gama, hyp, qvec)
-% Extended RPA_LINEPLOT with q-vector scan support
-% Same as RPA_lineplot but adds support for multiple q-vectors, enabling 3D optimization
-%
-% Additional Input:
-%   qvec        [N x 3] array of q-vectors in reciprocal lattice units (r.l.u.)
-%               If not provided or empty, defaults to q=[0,0,0]
-%
-% Modified Outputs:
-%   poles       [n_modes x num_fields x num_q] - poles for each q-point
-%   sigma_map   [num_omega x num_fields x num_q] - sigma maps for each q-point
-%   modes       struct with .xx, .yy, .zz [n_modes x num_fields x num_q]
-%   qvec        [N x 3] - the q-vectors used
-
-fprintf('\n========================================\n');
-fprintf('RPA SUSCEPTIBILITY POLE FINDER (Q-SCAN)\n');
-fprintf('Using σ_min(I - χ0·Jq) pole criterion\n');
-fprintf('========================================\n\n');
-
-% Default to q=0 if not provided
-if nargin < 8 || isempty(qvec)
-    qvec = [0, 0, 0];
-end
-
-% Options
-options.min_prom = 1e-2;
-options.min_sep = 5;
-
-% Locate and load eigen-state data
-if hyp > 0
-    nZee_path = 'Hz_I=1';
-else
-    nZee_path = 'Hz_I=0';
-end
-
-if ispc
-    eigen_dir = ['C:\Users\skyme\OneDrive - Nexus365\Postdoc\Research projects\Li', mion, 'F4 project\Data\Simulations\mean field\eigen-states\', nZee_path, '\'];
-else
-    eigen_dir = ['/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Postdoc/Research projects/Li', mion, 'F4 project/Data/Simulations/mean field/eigen-states/', nZee_path, '/'];
-end
-
-filename = strcat(['Hscan_Li',mion,'F4_'],...
-    sprintf('%1$3.3fK_%2$.2fDg_%3$.1fDg_hp=%4$.2f', dscrt_var, theta, phi, hyp),'.mat');
-file_load = fullfile(eigen_dir, filename);
-
-fprintf('Loading data from: %s\n', filename);
-load(file_load, '-mat', 'eee', 'vvv', 'fff', 'ttt', 'ion');
-fprintf('Eigen-state data loaded\n');
-
-eigenE = eee;
-eigenW = vvv;
-fields = fff;
-temperatures = ttt;
-field = vecnorm(fields, 2, 1);
-
-% Setup constants and compute Jq for all q-vectors
-const = setup_constants(ion);
-Jq_all = interac_q_array(qvec, ion, const);
-
-fprintf('\nNumber of q-points: %d\n', size(qvec, 1));
-fprintf('Field: %.3f - %.3f T (%d points)\n', min(field), max(field), length(field));
-fprintf('Frequency grid: %.3f - %.3f GHz (%d pts)\n', min(omega_grid), max(omega_grid), numel(omega_grid));
-tempK_print = temperatures; if numel(tempK_print) > 1, tempK_print = tempK_print(1); end
-fprintf('Temperature: %.3f mK\n\n', tempK_print*1000);
-
-% Store in options
-options.eigenE = eigenE;
-options.eigenW = eigenW;
-options.temperatures = temperatures;
-options.ion = ion;
-options.const = const;
-options.gamma = gama;
-
-% Find poles for all q-vectors
-fprintf('Searching for RPA poles across q-space...\n');
-[poles, sigma_map, modes] = RPA_poles_qscan(Jq_all, qvec, omega_grid, field, options);
-
-% Print statistics
-num_q = size(qvec, 1);
-for nq = 1:num_q
-    counts = zeros(1, numel(field));
-    for j = 1:numel(field)
-        counts(j) = sum(~isnan(poles(:, j, nq)));
-    end
-    fprintf('Q=[%.2f %.2f %.2f]: pole counts min=%d, median=%d, max=%d\n', ...
-        qvec(nq,1), qvec(nq,2), qvec(nq,3), min(counts), median(counts), max(counts));
-end
-end
-
-
-function Jq_all = interac_q_array(qvec, ion, const)
-% Compute interaction matrix Jq for multiple q-vectors
-% Input:
-%   qvec   [N x 3] - array of q-vectors in r.l.u.
-% Output:
-%   Jq_all [3 x 3 x N] - interaction matrices for each q
-
-unitN = 4;
-lattice = ion.abc{const.elem};
-Vc = sum(lattice(1,:) .* cross(lattice(2,:), lattice(3,:)));
-
-eins = diag([1 1 1]);
-eins = repmat(eins, 1, 1, 4, 4);
-demagn_t = ellipsoid_demagn(ion.alpha);
-demagn = repmat(demagn_t, 1, 1, 4, 4);
-
-num_q = size(qvec, 1);
-Jq_all = zeros(3, 3, num_q);
-
-for nq = 1:num_q
-    q = qvec(nq, :);
-
-    % Determine if Lorentz term applies (only for q that includes all sublattices coherently)
-    lorz_on = 1;
-    if abs(real(sum(exp(1i*2*pi*q*ion.tau'))/size(ion.tau,1))-1) > 1e-10
-        lorz_on = 0;
-    end
-
-    % Compute dipole + exchange interaction at this q
-    D = const.gfac * (MF_dipole(q, const.dpRng, lattice, ion.tau) - ...
-        lorz_on*4*pi/Vc*(eins/3 - ion.demag*demagn)) + ...
-        exchange(q, ion.ex(const.elem), lattice, ion.tau);
-
-    % Sublattice average and renormalization
-    Jav = squeeze(sum(sum(D(:,:,:,:), 4), 3) / unitN);
-    Jq_all(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav;
-end
-end
-
-
-function [poles, sigma_map, modes] = RPA_poles_qscan(Jq_all, qvec, omega_scan, field, options)
-% RPA pole finder for multiple q-vectors (sequential version)
-% Loops over q-vectors, then fields, then frequency chunks
-%
-% Input:
-%   Jq_all  [3 x 3 x num_q] - interaction matrices
-%   qvec    [num_q x 3] - q-vectors
-%
-% Output:
-%   poles      [n_modes x num_fields x num_q]
-%   sigma_map  [num_omega x num_fields x num_q]
-%   modes      struct with .xx, .yy, .zz [n_modes x num_fields x num_q]
-
-num_q = size(qvec, 1);
-num_fields = size(field, 2);
-num_omega = numel(omega_scan);
-
-% Pre-allocate outputs
-poles = [];
-sigma_map = zeros(num_omega, num_fields, num_q);
-mx_all = cell(num_fields, num_q);
-my_all = cell(num_fields, num_q);
-mz_all = cell(num_fields, num_q);
-
-tempK = options.temperatures;
-if numel(tempK) > 1, tempK = tempK(1); end
-beta = 1 / max(options.const.kB * max(tempK, 0), eps);
-
-JhT = spin_ops(options.ion, options.const);
-gamma_meV = options.gamma * options.const.Gh2mV;
-I3 = eye(3);
-
-% Loop over q-vectors (will parallelize in optimized version)
-for nq = 1:num_q
-    Jq = Jq_all(:,:,nq);
-    p_list = cell(1, num_fields);
-    im_diag = zeros(num_omega, num_fields, 3);
-
-    % Loop over field points
-    for ii = 1:num_fields
-        en = squeeze(options.eigenE(ii, :))';
-        v = squeeze(options.eigenW(ii, :, :));
-        if isempty(en) || isempty(v)
-            continue
-        end
-
-        % Thermal populations
-        if tempK > 0
-            zn = exp(-beta * (en - min(en)));
-            zn = zn / max(sum(zn), eps);
-        else
-            zn = zeros(size(en)); zn(1) = 1;
-        end
-        [n, np] = meshgrid(zn, zn);
-        NN = n - np;
-
-        % Transition energies
-        [ee, eep] = meshgrid(en, en);
-        omega_nm = eep - ee;
-
-        % Precompute J_nm matrices
-        Jnm = cell(3,1);
-        J_ops = {JhT.x, JhT.y, JhT.z};
-        for a = 1:3
-            Jnm{a} = v' * J_ops{a} * v;
-        end
-
-        % Build stacked matrix
-        N = size(omega_nm, 1);
-        Mstack = zeros(9, N*N);
-        row = 1;
-        for b = 1:3
-            for a = 1:3
-                M_ab = Jnm{a} .* conj(Jnm{b}) .* NN;
-                Mstack(row, :) = reshape(M_ab, 1, []);
-                row = row + 1;
-            end
-        end
-
-        sigma_local = zeros(num_omega, 1);
-        im_diag_local = zeros(num_omega, 3);
-
-        % Process frequency in chunks
-        W_all = omega_scan(:).' * options.const.Gh2mV;
-        max_elems = 5e6;
-        chunk = max(1, floor(max_elems / (N*N)));
-
-        for s = 1:chunk:num_omega
-            e = min(s + chunk - 1, num_omega);
-            W = W_all(s:e);
-            DenInv = 1 ./ ((omega_nm(:) - 1i*gamma_meV) - W);
-            chi0_flat = Mstack * DenInv;
-
-            for jj = 1:(e - s + 1)
-                idx = s + jj - 1;
-                chi0 = reshape(chi0_flat(:, jj), [3, 3]);
-                A = I3 - chi0 * Jq;
-                svals = svd(A);
-                sigma_local(idx) = min(svals);
-                chi_rpa = A \ chi0;
-                d = imag(diag(chi_rpa));
-                im_diag_local(idx, :) = d(:);
-            end
-        end
-
-        sigma_map(:, ii, nq) = sigma_local;
-        im_diag(:, ii, :) = im_diag_local;
-
-        % Find poles
-        [~, locs] = findpeaks(-sigma_local, ...
-            'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        if ~isempty(locs)
-            locs = sort(locs, 'ascend');
-            p_list{ii} = omega_scan(locs(:));
-        else
-            p_list{ii} = [];
-        end
-    end
-
-    % Convert to matrix for this q
-    max_modes = 0;
-    for j = 1:num_fields
-        max_modes = max(max_modes, numel(p_list{j}));
-    end
-    poles_q = nan(max_modes, num_fields);
-    for j = 1:num_fields
-        pj = p_list{j};
-        if ~isempty(pj)
-            poles_q(1:numel(pj), j) = pj(:);
-        end
-    end
-
-    % Store poles with proper dimensions
-    if nq == 1
-        poles = nan(max_modes, num_fields, num_q);
-    end
-    poles(:, :, nq) = poles_q;
-
-    % Extract axis-resolved modes
-    for ii = 1:num_fields
-        sigx = im_diag(:, ii, 1);
-        sigy = im_diag(:, ii, 2);
-        sigz = im_diag(:, ii, 3);
-        [~, lx] = findpeaks(sigx, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        [~, ly] = findpeaks(sigy, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        [~, lz] = findpeaks(sigz, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        mx_all{ii, nq} = omega_scan(lx(:));
-        my_all{ii, nq} = omega_scan(ly(:));
-        mz_all{ii, nq} = omega_scan(lz(:));
-    end
-end
-
-% Convert mode cells to 3D arrays
-modes.xx = pad_cell_3d(mx_all);
-modes.yy = pad_cell_3d(my_all);
-modes.zz = pad_cell_3d(mz_all);
-
-    function M = pad_cell_3d(C)
-        [nf, nq] = size(C);
-        k = 0;
-        for jj = 1:nf
-            for qq = 1:nq
-                k = max(k, numel(C{jj, qq}));
-            end
-        end
-        M = nan(k, nf, nq);
-        for jj = 1:nf
-            for qq = 1:nq
-                v = C{jj, qq};
-                if ~isempty(v)
-                    M(1:numel(v), jj, qq) = v(:);
-                end
-            end
-        end
-    end
-end
-
-
-function [poles, sigma_map, modes] = RPA_poles_qscan_vec(Jq_all, qvec, omega_scan, field, options)
-% Optimized RPA pole finder for multiple q-vectors using vectorization (Strategy 2)
-% Parallelizes outer loop over q-vectors for maximum efficiency
-%
-% Same interface as RPA_poles_qscan but with:
-% - Parallelization of outer loop over q-points
-% - Compatible with all MATLAB versions
-% - Expected 10-50x speedup for multi-q scans
-
-num_q = size(qvec, 1);
-num_fields = size(field, 2);
-num_omega = numel(omega_scan);
-
-% Pre-allocate outputs
-poles = [];
-sigma_map = zeros(num_omega, num_fields, num_q);
-mx_all = cell(num_fields, num_q);
-my_all = cell(num_fields, num_q);
-mz_all = cell(num_fields, num_q);
-
-tempK = options.temperatures;
-if numel(tempK) > 1, tempK = tempK(1); end
-beta = 1 / max(options.const.kB * max(tempK, 0), eps);
-
-JhT = spin_ops(options.ion, options.const);
-gamma_meV = options.gamma * options.const.Gh2mV;
-I3 = eye(3);
-
-% Parallelize over q-vectors (outermost loop)
-parfor nq = 1:num_q
-    Jq = Jq_all(:,:,nq);
-    p_list = cell(1, num_fields);
-    im_diag_local = zeros(num_omega, num_fields, 3);
-    sigma_local_q = zeros(num_omega, num_fields);
-
-    % Loop over field points
-    for ii = 1:num_fields
-        en = squeeze(options.eigenE(ii, :))';
-        v = squeeze(options.eigenW(ii, :, :));
-        if isempty(en) || isempty(v)
-            continue
-        end
-
-        % Thermal populations
-        if tempK > 0
-            zn = exp(-beta * (en - min(en)));
-            zn = zn / max(sum(zn), eps);
-        else
-            zn = zeros(size(en)); zn(1) = 1;
-        end
-        [n, np] = meshgrid(zn, zn);
-        NN = n - np;
-
-        % Transition energies
-        [ee, eep] = meshgrid(en, en);
-        omega_nm = eep - ee;
-
-        % Precompute J_nm matrices
-        Jnm = cell(3,1);
-        J_ops = {JhT.x, JhT.y, JhT.z};
-        for a = 1:3
-            Jnm{a} = v' * J_ops{a} * v;
-        end
-
-        % Build stacked matrix
-        N = size(omega_nm, 1);
-        Mstack = zeros(9, N*N);
-        row = 1;
-        for b = 1:3
-            for a = 1:3
-                M_ab = Jnm{a} .* conj(Jnm{b}) .* NN;
-                Mstack(row, :) = reshape(M_ab, 1, []);
-                row = row + 1;
-            end
-        end
-
-        sigma_local = zeros(num_omega, 1);
-        im_diag_field = zeros(num_omega, 3);
-
-        % Process frequency in chunks
-        W_all = omega_scan(:).' * options.const.Gh2mV;
-        max_elems = 5e6;
-        chunk = max(1, floor(max_elems / (N*N)));
-
-        for s = 1:chunk:num_omega
-            e = min(s + chunk - 1, num_omega);
-            W = W_all(s:e);
-            DenInv = 1 ./ ((omega_nm(:) - 1i*gamma_meV) - W);
-            chi0_flat = Mstack * DenInv;
-
-            for jj = 1:(e - s + 1)
-                idx = s + jj - 1;
-                chi0 = reshape(chi0_flat(:, jj), [3, 3]);
-                A = I3 - chi0 * Jq;
-                svals = svd(A);
-                sigma_local(idx) = min(svals);
-                chi_rpa = A \ chi0;
-                d = imag(diag(chi_rpa));
-                im_diag_field(idx, :) = d(:);
-            end
-        end
-
-        sigma_local_q(:, ii) = sigma_local;
-        im_diag_local(:, ii, :) = im_diag_field;
-
-        % Find poles
-        [~, locs] = findpeaks(-sigma_local, ...
-            'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        if ~isempty(locs)
-            locs = sort(locs, 'ascend');
-            p_list{ii} = omega_scan(locs(:));
-        else
-            p_list{ii} = [];
-        end
-    end
-
-    % Store results for this q (sliced assignment for parfor)
-    sigma_map(:, :, nq) = sigma_local_q;
-
-    % Convert poles to matrix for this q
-    max_modes = 0;
-    for j = 1:num_fields
-        max_modes = max(max_modes, numel(p_list{j}));
-    end
-    poles_q = nan(max_modes, num_fields);
-    for j = 1:num_fields
-        pj = p_list{j};
-        if ~isempty(pj)
-            poles_q(1:numel(pj), j) = pj(:);
-        end
-    end
-
-    % Store poles and modes (need to handle after parfor)
-    if nq == 1
-        poles = nan(max_modes, num_fields, num_q);
-    end
-    poles(:, :, nq) = poles_q;
-
-    % Extract axis-resolved modes for this q
-    for ii = 1:num_fields
-        sigx = im_diag_local(:, ii, 1);
-        sigy = im_diag_local(:, ii, 2);
-        sigz = im_diag_local(:, ii, 3);
-        [~, lx] = findpeaks(sigx, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        [~, ly] = findpeaks(sigy, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        [~, lz] = findpeaks(sigz, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        mx_all{ii, nq} = omega_scan(lx(:));
-        my_all{ii, nq} = omega_scan(ly(:));
-        mz_all{ii, nq} = omega_scan(lz(:));
-    end
-end
-
-% Convert mode cells to 3D arrays
-modes.xx = pad_cell_3d(mx_all);
-modes.yy = pad_cell_3d(my_all);
-modes.zz = pad_cell_3d(mz_all);
-
-    function M = pad_cell_3d(C)
-        [nf, nq_dim] = size(C);
-        k = 0;
-        for jj = 1:nf
-            for qq = 1:nq_dim
-                k = max(k, numel(C{jj, qq}));
-            end
-        end
-        M = nan(k, nf, nq_dim);
-        for jj = 1:nf
-            for qq = 1:nq_dim
-                v = C{jj, qq};
-                if ~isempty(v)
-                    M(1:numel(v), jj, qq) = v(:);
-                end
-            end
-        end
-    end
-end
-
-
-function [poles, sigma_map, modes] = RPA_poles_qscan_page(Jq_all, qvec, omega_scan, field, options)
-% Optimized RPA pole finder for multiple q-vectors using page-wise operations (Strategy 3)
-% Requires MATLAB R2020b or later for pagemtimes and pagemldivide
-%
-% Same interface as RPA_poles_qscan but with:
-% - Parallelization of outer loop over q-points
-% - Page-wise matrix operations within frequency chunks
-% - Expected 20-100x speedup for multi-q scans
-
-num_q = size(qvec, 1);
-num_fields = size(field, 2);
-num_omega = numel(omega_scan);
-
-% Pre-allocate outputs
-poles = [];
-sigma_map = zeros(num_omega, num_fields, num_q);
-mx_all = cell(num_fields, num_q);
-my_all = cell(num_fields, num_q);
-mz_all = cell(num_fields, num_q);
-
-tempK = options.temperatures;
-if numel(tempK) > 1, tempK = tempK(1); end
-beta = 1 / max(options.const.kB * max(tempK, 0), eps);
-
-JhT = spin_ops(options.ion, options.const);
-gamma_meV = options.gamma * options.const.Gh2mV;
-
-% Parallelize over q-vectors (outermost loop)
-parfor nq = 1:num_q
-    Jq = Jq_all(:,:,nq);
-    p_list = cell(1, num_fields);
-    im_diag_local = zeros(num_omega, num_fields, 3);
-    sigma_local_q = zeros(num_omega, num_fields);
-
-    % Loop over field points
-    for ii = 1:num_fields
-        en = squeeze(options.eigenE(ii, :))';
-        v = squeeze(options.eigenW(ii, :, :));
-        if isempty(en) || isempty(v)
-            continue
-        end
-
-        % Thermal populations
-        if tempK > 0
-            zn = exp(-beta * (en - min(en)));
-            zn = zn / max(sum(zn), eps);
-        else
-            zn = zeros(size(en)); zn(1) = 1;
-        end
-        [n, np] = meshgrid(zn, zn);
-        NN = n - np;
-
-        % Transition energies
-        [ee, eep] = meshgrid(en, en);
-        omega_nm = eep - ee;
-
-        % Precompute J_nm matrices
-        Jnm = cell(3,1);
-        J_ops = {JhT.x, JhT.y, JhT.z};
-        for a = 1:3
-            Jnm{a} = v' * J_ops{a} * v;
-        end
-
-        % Build stacked matrix
-        N = size(omega_nm, 1);
-        Mstack = zeros(9, N*N);
-        row = 1;
-        for b = 1:3
-            for a = 1:3
-                M_ab = Jnm{a} .* conj(Jnm{b}) .* NN;
-                Mstack(row, :) = reshape(M_ab, 1, []);
-                row = row + 1;
-            end
-        end
-
-        sigma_local = zeros(num_omega, 1);
-        im_diag_field = zeros(num_omega, 3);
-
-        % Process frequency in chunks with page-wise operations
-        W_all = omega_scan(:).' * options.const.Gh2mV;
-        max_elems = 5e6;
-        chunk = max(1, floor(max_elems / (N*N)));
-
-        for s = 1:chunk:num_omega
-            e = min(s + chunk - 1, num_omega);
-            W = W_all(s:e);
-            n_chunk = e - s + 1;
-
-            DenInv = 1 ./ ((omega_nm(:) - 1i*gamma_meV) - W);
-            chi0_flat = Mstack * DenInv;
-
-            % Reshape to pages: [3, 3, n_chunk]
-            chi0_pages = reshape(chi0_flat, 3, 3, n_chunk);
-
-            % Page-wise operations
-            Jq_expanded = repmat(Jq, 1, 1, n_chunk);
-
-            % Page-wise multiplication: MM = chi0 * Jq
-            MM_pages = pagemtimes(chi0_pages, Jq_expanded);
-
-            % Page-wise computation: A = I - chi0*Jq
-            I_pages = repmat(eye(3), 1, 1, n_chunk);
-            A_pages = I_pages - MM_pages;
-
-            % Page-wise linear solve: chi_rpa = A \ chi0
-            chi_rpa_pages = pagemldivide(A_pages, chi0_pages);
-
-            % Extract diagonal imaginary parts (vectorized)
-            for a = 1:3
-                im_diag_field(s:e, a) = squeeze(imag(chi_rpa_pages(a, a, :)));
-            end
-
-            % Compute singular values for each page
-            for jj = 1:n_chunk
-                idx = s + jj - 1;
-                A = A_pages(:, :, jj);
-                svals = svd(A);
-                sigma_local(idx) = min(svals);
-            end
-        end
-
-        sigma_local_q(:, ii) = sigma_local;
-        im_diag_local(:, ii, :) = im_diag_field;
-
-        % Find poles
-        [~, locs] = findpeaks(-sigma_local, ...
-            'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        if ~isempty(locs)
-            locs = sort(locs, 'ascend');
-            p_list{ii} = omega_scan(locs(:));
-        else
-            p_list{ii} = [];
-        end
-    end
-
-    % Store results for this q
-    sigma_map(:, :, nq) = sigma_local_q;
-
-    % Convert poles to matrix for this q
-    max_modes = 0;
-    for j = 1:num_fields
-        max_modes = max(max_modes, numel(p_list{j}));
-    end
-    poles_q = nan(max_modes, num_fields);
-    for j = 1:num_fields
-        pj = p_list{j};
-        if ~isempty(pj)
-            poles_q(1:numel(pj), j) = pj(:);
-        end
-    end
-
-    if nq == 1
-        poles = nan(max_modes, num_fields, num_q);
-    end
-    poles(:, :, nq) = poles_q;
-
-    % Extract axis-resolved modes
-    for ii = 1:num_fields
-        sigx = im_diag_local(:, ii, 1);
-        sigy = im_diag_local(:, ii, 2);
-        sigz = im_diag_local(:, ii, 3);
-        [~, lx] = findpeaks(sigx, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        [~, ly] = findpeaks(sigy, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        [~, lz] = findpeaks(sigz, 'MinPeakProminence', options.min_prom, 'MinPeakDistance', options.min_sep);
-        mx_all{ii, nq} = omega_scan(lx(:));
-        my_all{ii, nq} = omega_scan(ly(:));
-        mz_all{ii, nq} = omega_scan(lz(:));
-    end
-end
-
-% Convert mode cells to 3D arrays
-modes.xx = pad_cell_3d(mx_all);
-modes.yy = pad_cell_3d(my_all);
-modes.zz = pad_cell_3d(mz_all);
-
-    function M = pad_cell_3d(C)
-        [nf, nq_dim] = size(C);
-        k = 0;
-        for jj = 1:nf
-            for qq = 1:nq_dim
-                k = max(k, numel(C{jj, qq}));
-            end
-        end
-        M = nan(k, nf, nq_dim);
-        for jj = 1:nf
-            for qq = 1:nq_dim
-                v = C{jj, qq};
-                if ~isempty(v)
-                    M(1:numel(v), jj, qq) = v(:);
-                end
-            end
-        end
-    end
 end
