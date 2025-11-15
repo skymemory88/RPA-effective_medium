@@ -722,3 +722,145 @@ end
 %     end
 % end
 end
+
+function [qvec, cVar, freq_total, chiq, RPA_deno, Jq] = RPA_vec(qvec, cVar, freq_total, ion, chi0, const)
+% Optimized RPA calculation using vectorization (Strategy 2)
+% Same interface as RPA() but with improved performance through:
+% - Parallelization of outer loop over q-points
+% - Vectorization of inner loops using reshape
+unitN = 4; % Number of magnetic atoms in unit cell
+lattice = ion.abc{const.elem};
+Vc = sum( lattice(1,:) .* cross(lattice(2,:), lattice(3,:)) ); % Volume of unit cell [Ang^-3]
+eins = diag([1 1 1]);
+eins = repmat(eins,1,1,4,4);
+demagn_t = ellipsoid_demagn(ion.alpha);
+demagn = repmat(demagn_t,1,1,4,4);
+
+chiq = zeros(3, 3, length(freq_total(1,:)), size(cVar,2), size(qvec,1));
+D = zeros(3, 3, unitN, unitN, size(qvec,1));
+
+% k-space calculation
+parfor jj = 1:size(qvec,1)
+    lorz_on = 1; % keep on the Lorentz term
+    % Optional: turn off Lorentz term at finite q = [h k l]
+    if abs(real(sum(exp(1i*2*pi*qvec(jj,:)*ion.tau'))/size(ion.tau,1))-1) > 1e-10
+        lorz_on = 0;
+    end
+    D(:,:,:,:,jj) = const.gfac * (MF_dipole(qvec(jj,:), const.dpRng, lattice, ion.tau) - lorz_on*4*pi/Vc*(eins/3 - ion.demag*demagn))...
+         + exchange(qvec(jj,:), abs(ion.ex(const.elem)), lattice, ion.tau); % [meV]
+end
+
+Jq = zeros(3, 3, size(qvec,1));
+RPA_deno = zeros(3, 3, size(freq_total,1), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
+
+% Pre-compute Jq for all q-points first
+for nq = 1:size(qvec,1)
+    Jav = squeeze(sum(sum(D(:,:,:,:,nq),4),3)/unitN); % [meV] average over the unit cell
+    Jq(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
+end
+
+% Pre-allocate identity matrix
+I3 = eye(3);
+nFreq = size(chi0, 3);
+nVar = size(cVar, 2);
+
+% Parallelize over q-points (outermost loop)
+parfor nq = 1:size(qvec,1)
+    Jq_local = Jq(:,:,nq);
+
+    % Reshape chi0 for vectorized processing: [3, 3, nFreq*nVar]
+    chi0_reshaped = reshape(chi0, 3, 3, []);
+
+    % Pre-allocate local arrays
+    chiq_local = zeros(3, 3, nFreq * nVar);
+    RPA_deno_local = zeros(3, 3, nFreq * nVar);
+
+    % Vectorized computation over all frequency and field/temperature points
+    for idx = 1:size(chi0_reshaped, 3)
+        chi_mf = chi0_reshaped(:,:,idx);
+        MM = chi_mf * Jq_local;
+        deno = I3 - MM;
+        chiq_local(:,:,idx) = deno \ chi_mf;
+        RPA_deno_local(:,:,idx) = det(deno);
+    end
+
+    % Reshape back to original dimensions
+    chiq(:,:,:,:,nq) = reshape(chiq_local, 3, 3, nFreq, nVar);
+    RPA_deno(:,:,:,:,nq) = reshape(RPA_deno_local, 3, 3, nFreq, nVar);
+end
+end
+
+function [qvec, cVar, freq_total, chiq, RPA_deno, Jq] = RPA_page(qvec, cVar, freq_total, ion, chi0, const)
+% Optimized RPA calculation using page-wise matrix operations (Strategy 3)
+% Requires MATLAB R2020b or later for pagemtimes and pagemldivide
+% Same interface as RPA() but with maximum performance through:
+% - Parallelization of outer loop over q-points
+% - Page-wise matrix operations for all freq/field points simultaneously
+unitN = 4; % Number of magnetic atoms in unit cell
+lattice = ion.abc{const.elem};
+Vc = sum( lattice(1,:) .* cross(lattice(2,:), lattice(3,:)) ); % Volume of unit cell [Ang^-3]
+eins = diag([1 1 1]);
+eins = repmat(eins,1,1,4,4);
+demagn_t = ellipsoid_demagn(ion.alpha);
+demagn = repmat(demagn_t,1,1,4,4);
+
+chiq = zeros(3, 3, length(freq_total(1,:)), size(cVar,2), size(qvec,1));
+D = zeros(3, 3, unitN, unitN, size(qvec,1));
+
+% k-space calculation
+parfor jj = 1:size(qvec,1)
+    lorz_on = 1; % keep on the Lorentz term
+    % Optional: turn off Lorentz term at finite q = [h k l]
+    if abs(real(sum(exp(1i*2*pi*qvec(jj,:)*ion.tau'))/size(ion.tau,1))-1) > 1e-10
+        lorz_on = 0;
+    end
+    D(:,:,:,:,jj) = const.gfac * (MF_dipole(qvec(jj,:), const.dpRng, lattice, ion.tau) - lorz_on*4*pi/Vc*(eins/3 - ion.demag*demagn))...
+         + exchange(qvec(jj,:), abs(ion.ex(const.elem)), lattice, ion.tau); % [meV]
+end
+
+Jq = zeros(3, 3, size(qvec,1));
+RPA_deno = zeros(3, 3, size(freq_total,1), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
+
+% Pre-compute Jq for all q-points first
+for nq = 1:size(qvec,1)
+    Jav = squeeze(sum(sum(D(:,:,:,:,nq),4),3)/unitN); % [meV] average over the unit cell
+    Jq(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
+end
+
+% Pre-allocate identity matrix
+nFreq = size(chi0, 3);
+nVar = size(cVar, 2);
+nPages = nFreq * nVar;
+
+% Parallelize over q-points (outermost loop)
+parfor nq = 1:size(qvec,1)
+    Jq_local = Jq(:,:,nq);
+
+    % Reshape chi0: [3, 3, nFreq, nVar] -> [3, 3, nPages]
+    chi0_pages = reshape(chi0, 3, 3, nPages);
+
+    % Expand Jq_local to match page dimensions for page-wise operations
+    Jq_expanded = repmat(Jq_local, 1, 1, nPages);
+
+    % Page-wise matrix multiplication: MM = chi0 * Jq
+    MM_pages = pagemtimes(chi0_pages, Jq_expanded);
+
+    % Page-wise computation: deno = I - MM
+    I_pages = repmat(eye(3), 1, 1, nPages);
+    deno_pages = I_pages - MM_pages;
+
+    % Page-wise linear solve: chiq = deno \ chi0
+    chiq_pages = pagemldivide(deno_pages, chi0_pages);
+
+    % Compute determinants for each page
+    % Note: det() is not vectorized, so we still need a loop for this
+    RPA_deno_pages = zeros(3, 3, nPages);
+    for idx = 1:nPages
+        RPA_deno_pages(:,:,idx) = det(deno_pages(:,:,idx));
+    end
+
+    % Reshape back to original dimensions
+    chiq(:,:,:,:,nq) = reshape(chiq_pages, 3, 3, nFreq, nVar);
+    RPA_deno(:,:,:,:,nq) = reshape(RPA_deno_pages, 3, 3, nFreq, nVar);
+end
+end
