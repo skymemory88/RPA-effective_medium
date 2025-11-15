@@ -1,17 +1,21 @@
-function [field, poles, sigma_map, modes, qvec] = RPA_lineplot(mion, dscrt_var, omega_grid, theta, phi, gama, hyp, varargin)
-% RPA_LINEPLOT Find RPA poles via SVD with optional q-vector scan.
+function [field, poles, sigma_map, modes, qvec] = RPA_lineplot(mion, dscrt_var, omega_grid, theta, phi, gama, hyp, qvec, Options)
+% RPA_LINEPLOT Find RPA poles via SVD with q-vector scan.
 %
 % Usage
-%   [field, poles, sigma_map, modes] = RPA_lineplot(mion, T, omega_grid, theta, phi, gamma, hyp)
-%   [field, poles, sigma_map, modes, qvec] = RPA_lineplot(..., 'qvec', qpts, 'method', 'page')
+%   [field, poles, sigma_map, modes, qvec] = RPA_lineplot(mion, T, omega, theta, phi, gamma, hyp, qvec)
+%   [field, poles, sigma_map, modes, qvec] = RPA_lineplot(mion, T, omega, theta, phi, gamma, hyp, qvec, Options)
 %
 % Examples:
-%   % Single q-point (default q=0)
-%   [B, p, s, m] = RPA_lineplot('Er', 0.300, linspace(0,35,3001), 0, 0, 1e-3, 1.0);
+%   % Single q-point at q=[0,0,0]
+%   [B, p, s, m, q] = RPA_lineplot('Er', 0.300, linspace(0,35,3001), 0, 0, 1e-3, 1.0, [0 0 0]);
 %
-%   % Multiple q-points with page-wise optimization
+%   % Multiple q-points with default vectorized method
 %   qpts = [[0 0 0]; [0.1 0 0]; [0.2 0 0]; [0.3 0 0]];
-%   [B, p, s, m, q] = RPA_lineplot('Er', 0.3, omega, 0, 0, 1e-3, 1.0, 'qvec', qpts, 'method', 'page');
+%   [B, p, s, m, q] = RPA_lineplot('Er', 0.3, omega, 0, 0, 1e-3, 1.0, qpts);
+%
+%   % Multiple q-points with page-wise method
+%   Options.method = 'page';
+%   [B, p, s, m, q] = RPA_lineplot('Er', 0.3, omega, 0, 0, 1e-3, 1.0, qpts, Options);
 %
 % Required Inputs:
 %   mion        Element symbol, e.g. 'Er', 'Ho'.
@@ -21,13 +25,14 @@ function [field, poles, sigma_map, modes, qvec] = RPA_lineplot(mion, dscrt_var, 
 %   phi         Rotation around c-axis (deg).
 %   gama        Homogeneous linewidth γ (GHz).
 %   hyp         Hyperfine isotope proportion; 1 -> 'Hz_I=1', else 'Hz_I=0'.
+%   qvec        [N x 3] array of q-vectors in r.l.u.
 %
-% Optional Name-Value Pairs:
-%   'qvec'      [N x 3] array of q-vectors in r.l.u. (default: [0 0 0])
-%   'method'    Computation method: 'vec' | 'page' | 'sequential' (default: 'vec')
-%               'vec'        - Vectorized, compatible with all MATLAB versions
-%               'page'       - Page-wise operations, requires MATLAB R2020b+
-%               'sequential' - No parallelization, for debugging
+% Optional Input:
+%   Options     Struct with optional fields:
+%               .method - 'vec' (default) | 'page' | 'sequential'
+%                         'vec'        - Vectorized, compatible with all MATLAB
+%                         'page'       - Page-wise ops, requires MATLAB R2020b+
+%                         'sequential' - No parallelization, for debugging
 %
 % Outputs:
 %   field       Field magnitudes (T) from loaded file [1 x num_fields]
@@ -42,14 +47,21 @@ function [field, poles, sigma_map, modes, qvec] = RPA_lineplot(mion, dscrt_var, 
 % - Poles found as local minima of σ_min(I − χ0·Jq) via findpeaks on −σ_min
 % - For multi-q scans, 'vec' or 'page' methods provide 10-100x speedup
 
-% Parse optional inputs
-p = inputParser;
-addParameter(p, 'qvec', [0 0 0], @(x) isnumeric(x) && size(x,2)==3);
-addParameter(p, 'method', 'vec', @(x) ismember(x, {'vec', 'page', 'sequential'}));
-parse(p, varargin{:});
+% Handle optional Options argument
+if nargin < 9
+    Options = struct();
+end
 
-qvec = p.Results.qvec;
-method = p.Results.method;
+% Set default method if not specified
+if ~isfield(Options, 'method')
+    method = 'vec';
+else
+    method = Options.method;
+    % Validate method
+    if ~ismember(method, {'vec', 'page', 'sequential'})
+        error('Options.method must be ''vec'', ''page'', or ''sequential''');
+    end
+end
 
 fprintf('\n========================================\n');
 fprintf('RPA SUSCEPTIBILITY POLE FINDER\n');
@@ -57,10 +69,19 @@ fprintf('Method: %s | Q-points: %d\n', upper(method), size(qvec,1));
 fprintf('Using σ_min(I - χ0·Jq) pole criterion\n');
 fprintf('========================================\n\n');
 
-% Options
-options.min_prom = 1e-2;
-options.min_sep = 5;
-options.method = method;
+% Set default options if not provided
+if ~isfield(Options, 'min_prom')
+    Options.min_prom = 1e-2;
+end
+if ~isfield(Options, 'min_sep')
+    Options.min_sep = 5;
+end
+Options.method = method;
+
+% Create internal options struct
+options.min_prom = Options.min_prom;
+options.min_sep = Options.min_sep;
+options.method = Options.method;
 
 % Locate eigen-state data
 if hyp > 0
