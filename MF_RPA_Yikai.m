@@ -12,7 +12,7 @@ function [cVar, freq_total, chi0, chiq, qvec, Jq, dscrt_var] = MF_RPA_Yikai(mion
 
 Options.plotting = false; % Decide whether or not to plot the data at thes end
 Options.unit = 'GHz'; % Energy unit choice: J, GHz, meV (default)
-Options.saving = true; % Options to save the susceptibility tensors
+Options.saving = false; % Options to save the susceptibility tensors
 Options.scanMode = scanMode; % 1. Field plot with RPA; 2. Temp plot with RPA; 3. wavevector plot with RPA
 Options.nZee = true;
 Options.RPA = RPA_mode; % Apply random phase approximation (RPA) correction
@@ -30,10 +30,15 @@ if Options.Kplot == true
     qvec = [qx qy qz];
     cVar0 = [0.44]; % selected points of the continuous variable for k-plot
 else
-    a = 5.175;  % Angstrom
-    c = 10.75;  % Angstrom
-    LHF_lattc = [a, 0, 0; 0, a, 0; 0, 0, c];
-    [qvec, ~] = qVec_generator(LHF_lattc, 'mode', 'grid', 'grid', [5 5 5], 'range', [-0.5, 0.5]);
+    % Ions' lattice parameters
+    abc = [{[5.162 0 0; 0 5.162 0; 0 0 10.70]}      % Er
+        {[5.175 0 0; 0 5.175 0; 0 0 10.75]}      % Ho
+        {[5.132 0 0; 0 5.132 0; 0 0 10.59]}      % Yb
+        {[5.150 0 0; 0 5.150 0; 0 0 10.64]}      % Tm
+        {[5.162 0 0; 0 5.162 0; 0 0 10.70]}      % Gd
+        % {[5.132 0 0; 0 5.132 0; 0 0 10.59]}     % Gd
+        {[5.132 0 0; 0 5.132 0; 0 0 10.59]}];    % Y
+    [qvec, ~] = qVec_generator(abc{2}, 'mode', 'grid', 'grid', [7 7 7], 'range', [-0.5, 0.5]);
 end
 
 % Declare physical constants as global for consistency
@@ -64,7 +69,7 @@ for ii = 1:length(dscrt_var)
         nZee_path = 'Hz_I=0';
     end
     if ispc
-        Options.location = ['C:\Users\engs2553\OneDrive - Nexus365\Postdoc\Research projects\Li',mion,...
+        Options.location = ['C:\Users\skyme\OneDrive - Nexus365\Postdoc\Research projects\Li',mion,...
             'F4 project\Data\Simulations\mean field\eigen-states\', nZee_path, '\'];
     else
         Options.location = ['/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Postdoc/Research projects/',...
@@ -126,7 +131,7 @@ for ii = 1:length(dscrt_var)
             cVar = cVar(bidx); % magnetic field or temperature
         end
         [cVar, freq_total, chi0, ~, ~] = linear_response(ion, eigenE, cVar, freq_total, ttt, eigenW, gama, const, Options);
-        [~, ~, ~, chiq, ~, Jq] = RPA(qvec, cVar, freq_total, ion, chi0, const); % Electronic susceptibilitie
+        [~, ~, ~, chiq, ~, Jq] = RPA_page(qvec, cVar, freq_total, ion, chi0, const); % Electronic susceptibilitie
 %         chiq = const.ELEf^2 * chiq .* ConvUnit; % [J/T^2 or GHz/T^2 or meV/T^2]
         chiq = chiq .* ConvUnit; % [J/T^2 or GHz/T^2 or meV/T^2]
     else
@@ -245,7 +250,7 @@ if Qplot == true
         if isvector(freq_total)
             freq_axis = freq_total(:);
         else
-            freq_axis = squeeze(freq_total(min(nb,size(freq_total,1)),:));
+            freq_axis = squeeze(freq_total(min(nb,size(freq_total,2)),:));
         end
         freq_axis = freq_axis(:);
         if isempty(freq_axis)
@@ -676,7 +681,7 @@ parfor jj = 1:size(qvec,1)
 end
 
 Jq = zeros(3, 3, size(qvec,1));
-RPA_deno = zeros(3, 3, size(freq_total,1), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
+RPA_deno = zeros(3, 3, size(freq_total,2), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
 for nq = 1:size(qvec,1) % q vector iterator
 Jav = squeeze( sum(sum(D(:,:,:,:,nq),4),3)/unitN ); % [meV] average over the unit cell
 Jq(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
@@ -751,10 +756,10 @@ parfor jj = 1:size(qvec,1)
 end
 
 Jq = zeros(3, 3, size(qvec,1));
-RPA_deno = zeros(3, 3, size(freq_total,1), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
+RPA_deno = zeros(3, 3, size(freq_total,2), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
 
 % Pre-compute Jq for all q-points first
-for nq = 1:size(qvec,1)
+parfor nq = 1:size(qvec,1)
     Jav = squeeze(sum(sum(D(:,:,:,:,nq),4),3)/unitN); % [meV] average over the unit cell
     Jq(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
 end
@@ -766,6 +771,7 @@ nVar = size(cVar, 2);
 
 % Parallelize over q-points (outermost loop)
 parfor nq = 1:size(qvec,1)
+% for nq = 1:size(qvec,1)
     Jq_local = Jq(:,:,nq);
 
     % Reshape chi0 for vectorized processing: [3, 3, nFreq*nVar]
@@ -804,27 +810,21 @@ eins = repmat(eins,1,1,4,4);
 demagn_t = ellipsoid_demagn(ion.alpha);
 demagn = repmat(demagn_t,1,1,4,4);
 
-chiq = zeros(3, 3, length(freq_total(1,:)), size(cVar,2), size(qvec,1));
-D = zeros(3, 3, unitN, unitN, size(qvec,1));
-
 % k-space calculation
-parfor jj = 1:size(qvec,1)
+chiq = zeros(3, 3, length(freq_total(1,:)), size(cVar,2), size(qvec,1));
+Jq = zeros(3, 3, size(qvec,1));
+RPA_deno = zeros(3, 3, size(freq_total,2), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
+parfor nq = 1:size(qvec,1)
     lorz_on = 1; % keep on the Lorentz term
     % Optional: turn off Lorentz term at finite q = [h k l]
-    if abs(real(sum(exp(1i*2*pi*qvec(jj,:)*ion.tau'))/size(ion.tau,1))-1) > 1e-10
+    if abs(real(sum(exp(1i*2*pi*qvec(nq,:)*ion.tau'))/size(ion.tau,1))-1) > 1e-10
         lorz_on = 0;
     end
-    D(:,:,:,:,jj) = const.gfac * (MF_dipole(qvec(jj,:), const.dpRng, lattice, ion.tau) - lorz_on*4*pi/Vc*(eins/3 - ion.demag*demagn))...
-         + exchange(qvec(jj,:), abs(ion.ex(const.elem)), lattice, ion.tau); % [meV]
-end
+    J_int = const.gfac * (MF_dipole(qvec(nq,:), const.dpRng, lattice, ion.tau) - lorz_on*4*pi/Vc*(eins/3 - ion.demag*demagn))...
+         + exchange(qvec(nq,:), abs(ion.ex(const.elem)), lattice, ion.tau); % [meV]
 
-Jq = zeros(3, 3, size(qvec,1));
-RPA_deno = zeros(3, 3, size(freq_total,1), size(cVar,2), size(qvec,1)); % RPA correction factor (denominator)
-
-% Pre-compute Jq for all q-points first
-for nq = 1:size(qvec,1)
-    Jav = squeeze(sum(sum(D(:,:,:,:,nq),4),3)/unitN); % [meV] average over the unit cell
-    Jq(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* Jav; % [meV]
+    J_avg = squeeze(sum(sum(J_int,4),3)/unitN); % [meV] average over the unit cell
+    Jq(:,:,nq) = -diag(ion.renorm(const.elem,:)) .* J_avg; % [meV]
 end
 
 % Pre-allocate identity matrix
