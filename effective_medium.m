@@ -17,7 +17,7 @@ close all;
 % Extract dimensions
 use_rpa_seed = true;
 if exist('USE_SINGLE_ION_SEED','var') && USE_SINGLE_ION_SEED
-    chi_ini = chi0;
+    chi_ini = repmat(chi0,1,1,1,1,length(qvec));
     use_rpa_seed = false;
 else
     chi_ini = chiq; % default to RPA susceptibility
@@ -342,12 +342,12 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 
     % Sum rule validation setup
     % Extract M² (dipole matrix element squared) from scf_params if available
-    use_sum_rule = false;
+    use_sum_rule = true;
     if isfield(scf_params, 'M_squared') && isfield(scf_params, 'omega_grid')
         use_sum_rule = true;
         M_squared = scf_params.M_squared;
         omega_grid = scf_params.omega_grid;
-        sum_rule_check_interval = 100; % Check every 100 iterations
+        sum_rule_check_interval = 10; % Check every 100 iterations
         sum_rule_history = zeros(opts.max_iter, 1);
     end
 
@@ -508,7 +508,7 @@ function [K, G_local, converged, final_iter, final_residual] = ...
                     fprintf('\n--- Final Sum Rule Validation ---\n');
                 end
 
-                [sum_ok, sum_val, exp_val, sum_err] = sum_rule_check(...
+                [sum_ok, ~, ~, ~] = sum_rule_check(...
                     G_local, scf_params.beta, M_squared, omega_grid, scf_params.verbose);
 
                 if ~sum_ok && scf_params.verbose
@@ -576,10 +576,4 @@ function [ok, max_closure] = seed_acceptable(K_candidate, G_candidate, J_q_slice
     if ~ok
         fprintf('    %s rejected: closure residual %.2e > 1e-3\n', label, max_closure);
     end
-end
-
-function log_residual_history(residual_history, iter)
-    nsamp = min(iter, 10);
-    vals = residual_history(1:nsamp);
-    fprintf('    Residual history (first %d): %s\n', nsamp, sprintf('%.2e ', vals));
 end
