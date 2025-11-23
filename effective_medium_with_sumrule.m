@@ -39,7 +39,7 @@ sum_rule_history = zeros(opts.max_iter, 1); % Store sum rule error history
 % ===== SUM RULE CHECK (Eq. 2.23) =====
 % Check sum rule periodically during iteration
 if mod(iter, sum_rule_check_interval) == 0 || iter == 1
-    [sum_ok, sum_val, exp_val, sum_err] = check_sum_rule_eq223(...
+    [sum_ok, sum_val, exp_val, sum_err] = sum_rule_check(...
         G_local, scf_params.beta, M_squared, omega_grid, false);
 
     sum_rule_history(iter) = sum_err;
@@ -65,7 +65,7 @@ if scf_params.verbose
     fprintf('\n--- Final Sum Rule Validation ---\n');
 end
 
-[sum_ok, sum_val, exp_val, sum_err] = check_sum_rule_eq223(...
+[sum_ok, sum_val, exp_val, sum_err] = sum_rule_check(...
     G_local, scf_params.beta, M_squared, omega_grid, scf_params.verbose);
 
 if ~sum_ok && scf_params.verbose
