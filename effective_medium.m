@@ -342,7 +342,7 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 
     % Sum rule validation setup
     % Extract M² (dipole matrix element squared) from scf_params if available
-    use_sum_rule = true;
+    use_sum_rule = false;
     if isfield(scf_params, 'M_squared') && isfield(scf_params, 'omega_grid')
         use_sum_rule = true;
         M_squared = scf_params.M_squared;
