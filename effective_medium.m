@@ -23,7 +23,16 @@ else
     chi_ini = chiq; % default to RPA susceptibility
 end
 n_omega = size(chi_ini, 3);  % Number of frequencies
-n_cVar = size(chi_ini, 4);   % Number of continuous variable points
+switch scanMode
+    case 'field'
+        n_cVar = length(fields);   % Number of continuous variable points
+        cVar = fields;
+        dscrt_var = temp;
+    case 'temperature'
+        n_cVar = length(temp);
+        cVar = temp;
+        dscrt_var = fields;
+end
 n_q = size(qvec,1);      % Number of q-points
 
 fprintf('\n=== Effective Medium Theory with cVar dependence ===\n');
@@ -196,6 +205,53 @@ plot_comparison(cVar, freq_total, chi_ini, chi_emt, scanMode, dscrt_var);
 
 %% Supporting Functions
 
+%% Utility: compute initial K from G_RPA using one iteration
+function K_init = compute_K_from_G(G_RPA, J_q, n_omega, n_q)
+    % Compute a consistent initial guess for K given G_RPA
+    % Uses K_temp = 0 to compute G(q,ω), then derives K from self-consistency
+
+    I3 = eye(3);
+    K_init = zeros(3, 3, n_omega);
+
+    for iw = 1:n_omega
+        G_local_iw = G_RPA(:,:,iw);
+        sum_JG = zeros(3, 3);
+
+        for iq = 1:n_q
+            J_q_iq = J_q(:,:,iq);
+
+            % Compute G(q,ω) with K = 0 assumption
+            % G(q,ω) = [I + J(q)*G_RPA]^(-1) * G_RPA
+            denom = I3 + J_q_iq * G_local_iw;
+
+            % Regularize if needed
+            rc = rcond(denom);
+            if isnan(rc) || isinf(rc) || rc < 1e-10
+                denom = denom + 1e-8 * I3;
+            end
+
+            G_q_iw = denom \ G_local_iw;
+
+            % Accumulate J(q) * G(q,ω)
+            sum_JG = sum_JG + J_q_iq * G_q_iw;
+        end
+
+        % Average over q
+        sum_JG = sum_JG / n_q;
+
+        % Compute K = sum_JG / G_RPA
+        rc_G = rcond(G_local_iw);
+        if ~isnan(rc_G) && ~isinf(rc_G) && rc_G > 1e-12
+            K_tmp = sum_JG / G_local_iw;
+            % Symmetrize
+            K_tmp = (K_tmp + K_tmp') / 2;
+            if ~any(isnan(K_tmp(:))) && ~any(isinf(K_tmp(:)))
+                K_init(:,:,iw) = K_tmp;
+            end
+        end
+    end
+end
+
 %% Utility: compute max closure residual across frequencies for a candidate solution
 function max_res = closure_residual_max(K_in, G_local_in, J_q_in)
     I3 = eye(3);
@@ -268,8 +324,11 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 
     % Initialize K and G_local (use provided initial guess if available)
     if isempty(K_init) || isempty(G_local_init)
-        K = zeros(3, 3, n_omega);
-        G_local = G0_RPA;  % Default initial guess
+        G_local = G0_RPA;  % Start with RPA Green's function
+
+        % Compute consistent K_init from G_RPA using one iteration
+        % This gives a much better starting point than K = 0
+        K = compute_K_from_G(G0_RPA, J_q_RPA, n_omega, n_q);
     else
         K = K_init;
         G_local = G_local_init;
