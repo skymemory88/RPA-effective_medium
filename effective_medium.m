@@ -1,6 +1,28 @@
 % Effctive_medium.m
 % Corrected implementation of effective medium theory for tensor susceptibility
 % Now supports concurrent computation over cVar (temperature/field)
+%
+% ============================================================================
+% CRITICAL CORRECTIONS APPLIED (based on Jensen 1994, PRB 49, 11833):
+% ============================================================================
+%
+% 1. GREEN'S FUNCTION EXTRACTION (Line 554):
+%    FIXED: Always use G = -β*χ relationship, regardless of RPA/single-ion seed
+%    Previous bug: Missing β factor when use_rpa=true
+%    Theoretical basis: Eq. 2.23 and fluctuation-dissipation theorem
+%
+% 2. SUM RULE CALCULATION (sum_rule_check.m):
+%    FIXED: Use discrete Matsubara sum (1/β)Σ_n G(iω_n) = -M²
+%    Previous bug: Mixed discrete sum with continuous integration weights
+%    Theoretical basis: Eq. 2.23 is a discrete sum, NOT a continuous integral
+%
+% 3. SUM RULE CONSTRAINT (Lines 437-478):
+%    ADDED: Optional enforcement of sum rule during SCF iterations
+%    Purpose: Constrain iterations to satisfy physical sum rule
+%    Usage: Set scf_params.enforce_sum_rule = true (see line 66)
+%    Caution: Start with moderate strength (0.3-0.5) to avoid instability
+%
+% ============================================================================
 
 close all;
 
@@ -58,6 +80,17 @@ scf_params_base.tol = 1e-5;
 scf_params_base.mixing_alpha = 0.05;
 scf_params_base.G_damp = 0.1;
 scf_params_base.verbose = false;
+
+% Sum rule constraint parameters (optional - requires M_squared and omega_grid)
+% To enable sum rule enforcement, add these fields:
+%   scf_params_base.M_squared = <value>;        % Dipole matrix element squared
+%   scf_params_base.omega_grid = freq_total;    % Frequency grid
+%   scf_params_base.enforce_sum_rule = true;    % Enable constraint enforcement
+%   scf_params_base.sum_rule_strength = 0.5;    % Correction strength (0-1, default: 0.5)
+%   scf_params_base.sum_rule_interval = 50;     % Apply every N iterations (default: 50)
+%
+% Note: Sum rule enforcement can improve convergence but may cause instability
+% if strength is too high. Start with 0.3-0.5 and adjust as needed.
 
 fprintf('\n=== Starting parallel self-consistent calculations ===\n');
 
@@ -340,15 +373,30 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 
     residual_history = zeros(opts.max_iter, 1);
 
-    % Sum rule validation setup
+    % Sum rule validation and constraint setup
     % Extract M² (dipole matrix element squared) from scf_params if available
     use_sum_rule = false;
+    enforce_sum_rule = false;  % Flag to enforce (project) vs just monitor
+    sum_rule_enforcement_interval = 50;  % Apply constraint every N iterations
+    sum_rule_enforcement_strength = 0.5;  % Fraction of violation to correct (0-1)
+
     if isfield(scf_params, 'M_squared') && isfield(scf_params, 'omega_grid')
         use_sum_rule = true;
         M_squared = scf_params.M_squared;
         omega_grid = scf_params.omega_grid;
         sum_rule_check_interval = 100; % Check every 100 iterations
         sum_rule_history = zeros(opts.max_iter, 1);
+
+        % Enable enforcement if requested in scf_params
+        if isfield(scf_params, 'enforce_sum_rule') && scf_params.enforce_sum_rule
+            enforce_sum_rule = true;
+            if isfield(scf_params, 'sum_rule_strength')
+                sum_rule_enforcement_strength = scf_params.sum_rule_strength;
+            end
+            if isfield(scf_params, 'sum_rule_interval')
+                sum_rule_enforcement_interval = scf_params.sum_rule_interval;
+            end
+        end
     end
 
     % Main SCF loop
@@ -417,6 +465,49 @@ function [K, G_local, converged, final_iter, final_residual] = ...
             G_local = G_local_old;
         else
             G_local = G_local_mixed;
+        end
+
+        % Step B2: Sum rule constraint enforcement (optional)
+        % Apply projection to enforce sum rule: (1/β) Σ_n G(iω_n) = -M²
+        if enforce_sum_rule && iter > 10 && mod(iter, sum_rule_enforcement_interval) == 0
+            % Compute current sum rule value
+            G_sum_current = zeros(3, 3);
+            for iw_sr = 1:n_omega
+                G_sum_current = G_sum_current + G_local(:,:,iw_sr);
+            end
+            sum_current = (1/scf_params.beta) * G_sum_current;
+
+            % Compute target value
+            if isscalar(M_squared)
+                target_value = -M_squared * eye(3);
+            else
+                target_value = -M_squared;
+            end
+
+            % Compute violation
+            violation = sum_current - target_value;
+            sum_rule_error_before = norm(violation, 'fro');
+
+            % Apply partial correction to avoid instability
+            % Distribute correction evenly across all frequencies
+            correction_per_freq = (sum_rule_enforcement_strength * scf_params.beta / n_omega) * violation;
+
+            for iw_sr = 1:n_omega
+                G_local(:,:,iw_sr) = G_local(:,:,iw_sr) - correction_per_freq;
+            end
+
+            % Verify correction
+            if scf_params.verbose && mod(iter, sum_rule_enforcement_interval*2) == 0
+                G_sum_after = zeros(3, 3);
+                for iw_sr = 1:n_omega
+                    G_sum_after = G_sum_after + G_local(:,:,iw_sr);
+                end
+                sum_after = (1/scf_params.beta) * G_sum_after;
+                violation_after = sum_after - target_value;
+                sum_rule_error_after = norm(violation_after, 'fro');
+                fprintf('    [Iter %d] Sum rule enforcement: error %.3e -> %.3e (%.1f%% correction)\n', ...
+                    iter, sum_rule_error_before, sum_rule_error_after, sum_rule_enforcement_strength*100);
+            end
         end
 
         % Step C: New K from self-consistency equation (2.11)
@@ -543,15 +634,15 @@ function scf_params = prepare_scf_params(base_params, beta_local, n_omega, n_q, 
 end
 
 function G0 = extract_G0(chi_seed, beta_local, use_rpa)
+    % Extract Green's function from susceptibility using G = -β*χ
+    % This relationship holds regardless of whether chi is from RPA or single-ion
     slice = squeeze(chi_seed);
     if ndims(slice) == 4
         slice = mean(slice, 4); % average over q for local seed
     end
-    if use_rpa
-        G0 = -slice;
-    else
-        G0 = -beta_local * slice;
-    end
+    % CORRECTED: Always use G = -β*χ relationship (from Eq. 2.23 and theory)
+    % The susceptibility χ should already be in physical units [meV^-1]
+    G0 = -beta_local * slice;
 end
 
 function [beta_local, descriptor] = describe_state(scanMode, cVar_val, dscrt_var)
