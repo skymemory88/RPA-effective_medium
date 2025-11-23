@@ -340,6 +340,17 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 
     residual_history = zeros(opts.max_iter, 1);
 
+    % Sum rule validation setup
+    % Extract M² (dipole matrix element squared) from scf_params if available
+    use_sum_rule = false;
+    if isfield(scf_params, 'M_squared') && isfield(scf_params, 'omega_grid')
+        use_sum_rule = true;
+        M_squared = scf_params.M_squared;
+        omega_grid = scf_params.omega_grid;
+        sum_rule_check_interval = 100; % Check every 100 iterations
+        sum_rule_history = zeros(opts.max_iter, 1);
+    end
+
     % Main SCF loop
     converged = false;
     final_iter = opts.max_iter;
@@ -463,6 +474,22 @@ function [K, G_local, converged, final_iter, final_residual] = ...
             fprintf('    it=%d residual=%.2e\n', iter, residual);
         end
 
+        % Periodic sum rule check (Eq. 2.23)
+        if use_sum_rule && (mod(iter, sum_rule_check_interval) == 0 || iter == 1)
+            [sum_ok, ~, ~, sum_err] = sum_rule_check(...
+                G_local, scf_params.beta, M_squared, omega_grid, false);
+            sum_rule_history(iter) = sum_err;
+
+            if scf_params.verbose && mod(iter, sum_rule_check_interval*2) == 0
+                fprintf('    [Iter %d] Sum rule error: %.3e ', iter, sum_err);
+                if sum_ok
+                    fprintf('✓\n');
+                else
+                    fprintf('(not satisfied)\n');
+                end
+            end
+        end
+
         % Option B: residual-based backoff to prevent overshoot
         if iter > 1 && residual > 1.05 * residual_history(iter-1)
             mixing_alpha = max(mixing_alpha * 0.5, 1e-3);
@@ -475,6 +502,24 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 
         % Check convergence
         if residual < scf_params.tol
+            % Final sum rule validation on converged solution
+            if use_sum_rule
+                if scf_params.verbose
+                    fprintf('\n--- Final Sum Rule Validation ---\n');
+                end
+
+                [sum_ok, sum_val, exp_val, sum_err] = sum_rule_check(...
+                    G_local, scf_params.beta, M_squared, omega_grid, scf_params.verbose);
+
+                if ~sum_ok && scf_params.verbose
+                    warning('Converged solution does not satisfy sum rule (Eq. 2.23) within tolerance!');
+                    fprintf('This may indicate:\n');
+                    fprintf('  1. Insufficient frequency resolution\n');
+                    fprintf('  2. Incorrect M² value\n');
+                    fprintf('  3. Numerical instability in Green''s function\n');
+                end
+            end
+
             converged = true;
             final_iter = iter;
             break;
