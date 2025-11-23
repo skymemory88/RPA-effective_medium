@@ -171,7 +171,7 @@ for ii = 1:n_cVar
     end
 
     % Final sum rule check
-    [sum_ok, ~, ~, sum_err] = check_sum_rule_eq223(...
+    [sum_ok, ~, ~, sum_err] = sum_rule_check(...
         G_sol, beta_local, M_squared_all(ii), freq_total, true);
 
     sum_rule_errors(ii) = sum_err;
