@@ -53,10 +53,10 @@ converged_flags = false(n_cVar, 1);             % Convergence status
 %% Step 3: Parallel computation over cVar
 % Setup convergence parameters (same for all cVar points)
 scf_params_base = struct();
-scf_params_base.max_iter = 1e3;
+scf_params_base.max_iter = 5e3;
 scf_params_base.tol = 1e-5;
 scf_params_base.mixing_alpha = 0.05;
-scf_params_base.G_damp = 0.7;
+scf_params_base.G_damp = 0.1;
 scf_params_base.verbose = false;
 
 fprintf('\n=== Starting parallel self-consistent calculations ===\n');
@@ -510,7 +510,7 @@ function G0 = extract_G0(chi_seed, beta_local, use_rpa)
 end
 
 function [beta_local, descriptor] = describe_state(scanMode, cVar_val, dscrt_var)
-    kB = 8.617e-5; % eV/K
+    kB = 8.61733e-2; % meV/K
     switch scanMode
         case 'field'
             T_local = dscrt_var;
