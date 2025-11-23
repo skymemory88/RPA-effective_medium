@@ -21,12 +21,12 @@ Jensen, J. (1994). *1/z renormalization of the mean-field behavior of the dipole
 
 ## Files Created
 
-### 1. `check_sum_rule_eq223.m`
+### 1. `sum_rule_check.m`
 Main validation function that checks if the sum rule is satisfied.
 
 **Usage:**
 ```matlab
-[ok, sum_val, exp_val, error] = check_sum_rule_eq223(G_local, beta, M_squared, omega_grid, verbose);
+[ok, sum_val, exp_val, error] = sum_rule_check(G_local, beta, M_squared, omega_grid, verbose);
 ```
 
 **Inputs:**
@@ -68,7 +68,7 @@ beta = 1/(kB * T); % T in Kelvin
 M_squared = compute_M_squared_from_eigenstates(eigenE, eigenW, ion, const);
 
 % Check sum rule
-[ok, sum_val, exp_val, err] = check_sum_rule_eq223(...
+[ok, sum_val, exp_val, err] = sum_rule_check(...
     G_local, beta, M_squared, freq_total, true);
 
 if ~ok
@@ -102,7 +102,7 @@ end
    ```matlab
    % Check sum rule periodically
    if mod(iter, sum_rule_check_interval) == 0 || iter == 1
-       [sum_ok, ~, ~, sum_err] = check_sum_rule_eq223(...
+       [sum_ok, ~, ~, sum_err] = sum_rule_check(...
            G_local, scf_params.beta, M_squared, omega_grid, false);
        sum_rule_history(iter) = sum_err;
 
@@ -115,7 +115,7 @@ end
 3. **At convergence** (after line 477, inside convergence check):
    ```matlab
    % Final validation
-   [sum_ok, ~, ~, sum_err] = check_sum_rule_eq223(...
+   [sum_ok, ~, ~, sum_err] = sum_rule_check(...
        G_local, scf_params.beta, M_squared, omega_grid, scf_params.verbose);
 
    if ~sum_ok && scf_params.verbose
@@ -235,7 +235,7 @@ for iw = 1:n_omega
 end
 
 % Check
-[ok, sum_val, exp_val, err] = check_sum_rule_eq223(...
+[ok, sum_val, exp_val, err] = sum_rule_check(...
     G_test, beta, M_squared_test, omega, true);
 ```
 

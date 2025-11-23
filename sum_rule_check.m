@@ -1,5 +1,5 @@
-function [sum_rule_satisfied, sum_value, expected_value, relative_error] = check_sum_rule_eq223(G_local, beta, M_squared, omega_grid, verbose)
-% CHECK_SUM_RULE_EQ223 Validate the sum rule from equation 2.23
+function [sum_rule_satisfied, sum_value, expected_value, relative_error] = sum_rule_check(G_local, beta, M_squared, omega_grid, verbose)
+% SUM_RULE_CHECK Validate the sum rule from equation 2.23
 %
 % Equation 2.23 from Jensen (1994): (1/β) Σ_n G(iω_n) = -M²
 %
@@ -22,7 +22,7 @@ function [sum_rule_satisfied, sum_value, expected_value, relative_error] = check
 %   Equation 2.23, page 11835.
 %
 % Example:
-%   [ok, val, exp, err] = check_sum_rule_eq223(G_local, beta, M^2, freq, true);
+%   [ok, val, exp, err] = sum_rule_check(G_local, beta, M^2, freq, true);
 
 if nargin < 5
     verbose = false;
