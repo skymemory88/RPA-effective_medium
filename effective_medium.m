@@ -23,7 +23,16 @@ else
     chi_ini = chiq; % default to RPA susceptibility
 end
 n_omega = size(chi_ini, 3);  % Number of frequencies
-n_cVar = size(chi_ini, 4);   % Number of continuous variable points
+switch scanMode
+    case 'field'
+        n_cVar = length(fields);   % Number of continuous variable points
+        cVar = fields;
+        dscrt_var = temp;
+    case 'temperature'
+        n_cVar = length(temp);
+        cVar = temp;
+        dscrt_var = fields;
+end
 n_q = size(qvec,1);      % Number of q-points
 
 fprintf('\n=== Effective Medium Theory with cVar dependence ===\n');
