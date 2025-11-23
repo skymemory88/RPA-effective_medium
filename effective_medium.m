@@ -342,12 +342,12 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 
     % Sum rule validation setup
     % Extract M² (dipole matrix element squared) from scf_params if available
-    use_sum_rule = true;
+    use_sum_rule = false;
     if isfield(scf_params, 'M_squared') && isfield(scf_params, 'omega_grid')
         use_sum_rule = true;
         M_squared = scf_params.M_squared;
         omega_grid = scf_params.omega_grid;
-        sum_rule_check_interval = 10; % Check every 100 iterations
+        sum_rule_check_interval = 100; % Check every 100 iterations
         sum_rule_history = zeros(opts.max_iter, 1);
     end
 
