@@ -32,30 +32,23 @@ end
 [n_comp1, n_comp2, n_omega] = size(G_local);
 assert(n_comp1 == 3 && n_comp2 == 3, 'G_local must be 3x3xN');
 
-% Convert frequency grid to meV if needed (assuming input in GHz)
-const_Gh2mV = 1.05457E-34 * 2*pi * 1e9 * 6.24151e+21; % GHz to meV conversion
-omega_meV = omega_grid * const_Gh2mV; % [meV]
+% CORRECTED: Use discrete Matsubara sum (Eq. 2.23)
+% Equation 2.23: (1/β) Σ_n G(iω_n) = -M²
+%
+% This is a DISCRETE sum over Matsubara frequencies, NOT a continuous integral
+% The Matsubara frequencies are: ω_n = 2πn/β where n is an integer
+%
+% In practice, we're evaluating G at a discrete set of frequencies,
+% so we perform a simple discrete sum WITHOUT integration weights:
 
-% Compute frequency spacing for integration (trapezoidal rule)
-if length(omega_meV) > 1
-    domega = diff(omega_meV);
-    domega = [domega(1), domega]; % Extend to same length
-else
-    domega = 1; % Single point case
-end
-
-% Sum over Matsubara frequencies
-% In the continuous limit: (1/β) Σ_n → ∫ dω/(2π)
-% In discrete case: (1/β) Σ_n G(iω_n) ≈ (1/β) Σ_i G(ω_i) * Δω_i
 G_sum = zeros(3, 3);
 
 for iw = 1:n_omega
-    G_sum = G_sum + G_local(:,:,iw) * domega(iw);
+    G_sum = G_sum + G_local(:,:,iw);  % Simple sum, NO domega weights
 end
 
-% Apply the 1/β factor
-% Note: The sum includes the frequency integration weight
-% For Matsubara sum: (1/β) Σ_n = (T/ℏ) Σ_n where β = 1/(k_B T)
+% Apply the 1/β factor to get the sum rule value
+% This should equal -M² according to Eq. 2.23
 sum_value = (1/beta) * G_sum;
 
 % Expected value: -M²
@@ -79,8 +72,8 @@ sum_rule_satisfied = relative_error < tolerance;
 if verbose
     fprintf('\n=== Sum Rule Check (Eq. 2.23) ===\n');
     fprintf('Temperature: T = %.3f K (β = %.3e meV⁻¹)\n', 1/(8.61733e-2 * beta), beta);
-    fprintf('Frequency range: %.2f - %.2f GHz (%d points)\n', ...
-        min(omega_grid), max(omega_grid), n_omega);
+    fprintf('Number of frequency points in discrete sum: %d\n', n_omega);
+    fprintf('NOTE: Using discrete Matsubara sum (1/β)Σ_n G(iω_n), not continuous integral\n');
 
     if isscalar(M_squared)
         fprintf('M² = %.4e\n', M_squared);
