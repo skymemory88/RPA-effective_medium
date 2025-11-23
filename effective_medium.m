@@ -347,7 +347,7 @@ function [K, G_local, converged, final_iter, final_residual] = ...
         use_sum_rule = true;
         M_squared = scf_params.M_squared;
         omega_grid = scf_params.omega_grid;
-        sum_rule_check_interval = 10; % Check every 100 iterations
+        sum_rule_check_interval = 100; % Check every 100 iterations
         sum_rule_history = zeros(opts.max_iter, 1);
     end
 
