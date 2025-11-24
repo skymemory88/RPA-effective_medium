@@ -374,12 +374,15 @@ function [K, G_local, converged, final_iter, final_residual] = ...
     enforce_sum_rule = false;  % Flag to enforce (project) vs just monitor
     sum_rule_intv = 50;  % Apply constraint every N iterations
     sum_rule_frac = 0.5;  % Fraction of violation to correct (0-1)
+    sum_rule_frac_min = 0.1;  % Minimum enforcement strength
+    sum_rule_frac_max = 0.9;  % Maximum enforcement strength
     if isfield(scf_params, 'M2') && isfield(scf_params, 'omega_grid')
         use_sum_rule = true;
         M2 = scf_params.M2;
         omega_grid = scf_params.omega_grid;
-        sum_rule_check_interval = 100; % Check every 100 iterations
+        sum_rule_check_interval = 50; % Check every 50 iterations (aligned with enforcement)
         sum_rule_history = zeros(opts.max_iter, 1);
+        sum_rule_enforcement_history = zeros(opts.max_iter, 1);  % Track enforcement events
 
         % Enable enforcement if requested in scf_params
         if isfield(scf_params, 'enforce_sum_rule') && scf_params.enforce_sum_rule
@@ -389,6 +392,7 @@ function [K, G_local, converged, final_iter, final_residual] = ...
             end
             if isfield(scf_params, 'sum_rule_interval')
                 sum_rule_intv = scf_params.sum_rule_interval;
+                sum_rule_check_interval = sum_rule_intv;  % Align validation with enforcement
             end
         end
     end
@@ -461,9 +465,13 @@ function [K, G_local, converged, final_iter, final_residual] = ...
             G_local = G_local_mixed;
         end
 
-        % Step B2: Sum rule constraint enforcement (optional)
+        % Step B2: Sum rule constraint enforcement with immediate validation
         % Apply projection to enforce sum rule: (1/β) Σ_n G(iω_n) = -M²
         if enforce_sum_rule && iter > 10 && mod(iter, sum_rule_intv) == 0
+            % Validate BEFORE enforcement
+            [~, ~, ~, sum_rule_error_before] = sum_rule_check(...
+                G_local, scf_params.beta, M2, omega_grid, false);
+
             % Compute current sum rule value
             G_sum_current = zeros(3, 3);
             for iw_sr = 1:n_omega
@@ -480,7 +488,6 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 
             % Compute violation
             violation = sum_current - target_value;
-            sum_rule_error_before = norm(violation, 'fro');
 
             % Apply partial correction to avoid instability
             % Distribute correction evenly across all frequencies
@@ -490,17 +497,42 @@ function [K, G_local, converged, final_iter, final_residual] = ...
                 G_local(:,:,iw_sr) = G_local(:,:,iw_sr) - correction_per_freq;
             end
 
-            % Verify correction
-            if scf_params.verbose && mod(iter, sum_rule_intv*2) == 0
-                G_sum_after = zeros(3, 3);
-                for iw_sr = 1:n_omega
-                    G_sum_after = G_sum_after + G_local(:,:,iw_sr);
+            % IMMEDIATE validation AFTER enforcement
+            [sum_ok_after, ~, ~, sum_rule_error_after] = sum_rule_check(...
+                G_local, scf_params.beta, M2, omega_grid, false);
+
+            % Record enforcement event
+            sum_rule_enforcement_history(iter) = sum_rule_error_before;
+
+            % Adaptive adjustment of enforcement strength
+            error_reduction = sum_rule_error_before - sum_rule_error_after;
+            if error_reduction > 0
+                % Enforcement helped - check if we should increase strength
+                if sum_rule_error_after > 0.05 && sum_rule_frac < sum_rule_frac_max
+                    sum_rule_frac = min(sum_rule_frac * 1.2, sum_rule_frac_max);
+                    if scf_params.verbose
+                        fprintf('    [Iter %d] Sum rule: error still high, increasing strength to %.2f\n', ...
+                            iter, sum_rule_frac);
+                    end
                 end
-                sum_after = (1/scf_params.beta) * G_sum_after;
-                violation_after = sum_after - target_value;
-                sum_rule_error_after = norm(violation_after, 'fro');
-                fprintf('    [Iter %d] Sum rule enforcement: error %.3e -> %.3e (%.1f%% correction)\n', ...
-                    iter, sum_rule_error_before, sum_rule_error_after, sum_rule_frac*100);
+            else
+                % Enforcement made things worse (overshooting) - decrease strength
+                sum_rule_frac = max(sum_rule_frac * 0.5, sum_rule_frac_min);
+                if scf_params.verbose
+                    fprintf('    [Iter %d] Sum rule: enforcement overshooting, reducing strength to %.2f\n', ...
+                        iter, sum_rule_frac);
+                end
+            end
+
+            % Report enforcement results
+            if scf_params.verbose
+                fprintf('    [Iter %d] Sum rule enforcement: error %.3e -> %.3e ', ...
+                    iter, sum_rule_error_before, sum_rule_error_after);
+                if sum_ok_after
+                    fprintf('✓ (satisfied)\n');
+                else
+                    fprintf('(strength: %.1f%%)\n', sum_rule_frac*100);
+                end
             end
         end
 
@@ -559,18 +591,24 @@ function [K, G_local, converged, final_iter, final_residual] = ...
             fprintf('    it=%d residual=%.2e\n', iter, residual);
         end
 
-        % Periodic sum rule check (Eq. 2.23)
+        % Periodic sum rule validation (Eq. 2.23)
+        % Note: This runs independently of enforcement to track overall progress
         if use_sum_rule && (mod(iter, sum_rule_check_interval) == 0 || iter == 1)
             [sum_ok, ~, ~, sum_err] = sum_rule_check(...
                 G_local, scf_params.beta, M2, omega_grid, false);
             sum_rule_history(iter) = sum_err;
 
             if scf_params.verbose && mod(iter, sum_rule_check_interval*2) == 0
-                fprintf('    [Iter %d] Sum rule error: %.3e ', iter, sum_err);
+                fprintf('    [Iter %d] Sum rule validation: error %.3e ', iter, sum_err);
                 if sum_ok
                     fprintf('✓\n');
                 else
-                    fprintf('(not satisfied)\n');
+                    fprintf('✗ (not satisfied)\n');
+                    % Warn if enforcement is disabled but sum rule is violated
+                    if ~enforce_sum_rule && iter > 50
+                        fprintf('    WARNING: Sum rule violated but enforcement is disabled!\n');
+                        fprintf('             Consider setting scf_params.enforce_sum_rule = true\n');
+                    end
                 end
             end
         end
@@ -596,12 +634,19 @@ function [K, G_local, converged, final_iter, final_residual] = ...
                 [sum_ok, ~, ~, ~] = sum_rule_check(...
                     G_local, scf_params.beta, M2, omega_grid, scf_params.verbose);
 
-                if ~sum_ok && scf_params.verbose
-                    warning('Converged solution does not satisfy sum rule (Eq. 2.23) within tolerance!');
-                    fprintf('This may indicate:\n');
-                    fprintf('  1. Insufficient frequency resolution\n');
-                    fprintf('  2. Incorrect M² value\n');
-                    fprintf('  3. Numerical instability in Green''s function\n');
+                if ~sum_ok
+                    if scf_params.verbose
+                        warning('Converged solution does not satisfy sum rule (Eq. 2.23) within tolerance!');
+                        fprintf('This may indicate:\n');
+                        fprintf('  1. Insufficient frequency resolution\n');
+                        fprintf('  2. Incorrect M² value\n');
+                        fprintf('  3. Numerical instability in Green''s function\n');
+                        if ~enforce_sum_rule
+                            fprintf('  4. Sum rule enforcement was disabled - try setting scf_params.enforce_sum_rule = true\n');
+                        else
+                            fprintf('  4. Sum rule enforcement may need stronger settings (increase sum_rule_strength)\n');
+                        end
+                    end
                 end
             end
 
