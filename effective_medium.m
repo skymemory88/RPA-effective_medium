@@ -1,6 +1,26 @@
 % Effctive_medium.m
 % Corrected implementation of effective medium theory for tensor susceptibility
 % Now supports concurrent computation over cVar (temperature/field)
+%
+% ============================================================================
+% CRITICAL CORRECTIONS APPLIED (based on Jensen 1994, PRB 49, 11833):
+% ============================================================================
+%
+% 1. GREEN'S FUNCTION EXTRACTION (Line 554):
+%    FIXED: Always use G = -β*χ relationship, regardless of RPA/single-ion seed
+%    Theoretical basis: Eq. 2.23 and fluctuation-dissipation theorem
+%
+% 2. SUM RULE CALCULATION (sum_rule_check.m):
+%    FIXED: Use discrete Matsubara sum (1/β)Σ_n G(iω_n) = -M²
+%    Theoretical basis: Eq. 2.23 is a discrete sum, NOT a continuous integral
+%
+% 3. SUM RULE CONSTRAINT (Lines 437-478):
+%    ADDED: Optional enforcement of sum rule during SCF iterations
+%    Purpose: Constrain iterations to satisfy physical sum rule
+%    Usage: Set scf_params.enforce_sum_rule = true (see line 66)
+%    Caution: Start with moderate strength (0.3-0.5) to avoid instability
+%
+% ============================================================================
 
 close all;
 
@@ -55,9 +75,18 @@ converged_flags = false(n_cVar, 1);             % Convergence status
 scf_params_base = struct();
 scf_params_base.max_iter = 5e3;
 scf_params_base.tol = 1e-5;
-scf_params_base.mixing_alpha = 0.05;
-scf_params_base.G_damp = 0.1;
+scf_params_base.mixing_alpha = 0.1;
+scf_params_base.G_damp = 0.5;
 scf_params_base.verbose = false;
+
+% Sum rule constraint parameters (optional - requires M2 and omega_grid)
+% To enable sum rule enforcement, add these fields:
+scf_params_base.omega_grid = freq_total;    % Frequency grid
+scf_params_base.enforce_sum_rule = true;    % Enable constraint enforcement
+scf_params_base.sum_rule_strength = 0.3;    % Correction strength (0-1, default: 0.5)
+scf_params_base.sum_rule_interval = 50;     % Apply every N iterations (default: 50)
+% Note: Sum rule enforcement can improve convergence but may cause instability
+% if strength is too high. Start with 0.3-0.5 and adjust as needed.
 
 fprintf('\n=== Starting parallel self-consistent calculations ===\n');
 
@@ -66,7 +95,7 @@ parfor ii = 1:n_cVar
     cVar_val = cVar(ii);
     [beta_local, var_str] = describe_state(scanMode, cVar_val, dscrt_var);
     chi_seed_slice = chi_ini(:,:,:,ii,:);
-    scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi_seed_slice, Jq, use_rpa_seed);
+    scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi_seed_slice, Jq);
 
     [K_sol, G_sol, converged] = compute_effective_medium(scf_params, var_str);
 
@@ -105,7 +134,7 @@ if n_converged < n_cVar && n_converged > 0
         end
 
         chi_seed_slice = chi_ini(:,:,:,ii,:);
-        scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi_seed_slice, Jq, use_rpa_seed);
+        scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi_seed_slice, Jq);
 
         % Try multiple neighbor strategies
         converged_this_point = false;
@@ -340,15 +369,28 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 
     residual_history = zeros(opts.max_iter, 1);
 
-    % Sum rule validation setup
-    % Extract M² (dipole matrix element squared) from scf_params if available
+    % Sum rule validation and constraint setup
     use_sum_rule = false;
-    if isfield(scf_params, 'M_squared') && isfield(scf_params, 'omega_grid')
+    enforce_sum_rule = false;  % Flag to enforce (project) vs just monitor
+    sum_rule_intv = 50;  % Apply constraint every N iterations
+    sum_rule_frac = 0.5;  % Fraction of violation to correct (0-1)
+    if isfield(scf_params, 'M2') && isfield(scf_params, 'omega_grid')
         use_sum_rule = true;
-        M_squared = scf_params.M_squared;
+        M2 = scf_params.M2;
         omega_grid = scf_params.omega_grid;
         sum_rule_check_interval = 100; % Check every 100 iterations
         sum_rule_history = zeros(opts.max_iter, 1);
+
+        % Enable enforcement if requested in scf_params
+        if isfield(scf_params, 'enforce_sum_rule') && scf_params.enforce_sum_rule
+            enforce_sum_rule = true;
+            if isfield(scf_params, 'sum_rule_strength')
+                sum_rule_frac = scf_params.sum_rule_strength;
+            end
+            if isfield(scf_params, 'sum_rule_interval')
+                sum_rule_intv = scf_params.sum_rule_interval;
+            end
+        end
     end
 
     % Main SCF loop
@@ -419,6 +461,49 @@ function [K, G_local, converged, final_iter, final_residual] = ...
             G_local = G_local_mixed;
         end
 
+        % Step B2: Sum rule constraint enforcement (optional)
+        % Apply projection to enforce sum rule: (1/β) Σ_n G(iω_n) = -M²
+        if enforce_sum_rule && iter > 10 && mod(iter, sum_rule_intv) == 0
+            % Compute current sum rule value
+            G_sum_current = zeros(3, 3);
+            for iw_sr = 1:n_omega
+                G_sum_current = G_sum_current + G_local(:,:,iw_sr);
+            end
+            sum_current = (1/scf_params.beta) * G_sum_current;
+
+            % Compute target value
+            if isscalar(M2)
+                target_value = -M2 * eye(3);
+            else
+                target_value = -M2;
+            end
+
+            % Compute violation
+            violation = sum_current - target_value;
+            sum_rule_error_before = norm(violation, 'fro');
+
+            % Apply partial correction to avoid instability
+            % Distribute correction evenly across all frequencies
+            correction_per_freq = (sum_rule_frac * scf_params.beta / n_omega) * violation;
+
+            for iw_sr = 1:n_omega
+                G_local(:,:,iw_sr) = G_local(:,:,iw_sr) - correction_per_freq;
+            end
+
+            % Verify correction
+            if scf_params.verbose && mod(iter, sum_rule_intv*2) == 0
+                G_sum_after = zeros(3, 3);
+                for iw_sr = 1:n_omega
+                    G_sum_after = G_sum_after + G_local(:,:,iw_sr);
+                end
+                sum_after = (1/scf_params.beta) * G_sum_after;
+                violation_after = sum_after - target_value;
+                sum_rule_error_after = norm(violation_after, 'fro');
+                fprintf('    [Iter %d] Sum rule enforcement: error %.3e -> %.3e (%.1f%% correction)\n', ...
+                    iter, sum_rule_error_before, sum_rule_error_after, sum_rule_frac*100);
+            end
+        end
+
         % Step C: New K from self-consistency equation (2.11)
         K_new = zeros(3, 3, n_omega);
 
@@ -477,7 +562,7 @@ function [K, G_local, converged, final_iter, final_residual] = ...
         % Periodic sum rule check (Eq. 2.23)
         if use_sum_rule && (mod(iter, sum_rule_check_interval) == 0 || iter == 1)
             [sum_ok, ~, ~, sum_err] = sum_rule_check(...
-                G_local, scf_params.beta, M_squared, omega_grid, false);
+                G_local, scf_params.beta, M2, omega_grid, false);
             sum_rule_history(iter) = sum_err;
 
             if scf_params.verbose && mod(iter, sum_rule_check_interval*2) == 0
@@ -509,7 +594,7 @@ function [K, G_local, converged, final_iter, final_residual] = ...
                 end
 
                 [sum_ok, ~, ~, ~] = sum_rule_check(...
-                    G_local, scf_params.beta, M_squared, omega_grid, scf_params.verbose);
+                    G_local, scf_params.beta, M2, omega_grid, scf_params.verbose);
 
                 if ~sum_ok && scf_params.verbose
                     warning('Converged solution does not satisfy sum rule (Eq. 2.23) within tolerance!');
@@ -532,26 +617,58 @@ function [K, G_local, converged, final_iter, final_residual] = ...
 end
 
 %% Helper: build SCF parameter struct for a given cVar index
-function scf_params = prepare_scf_params(base_params, beta_local, n_omega, n_q, chi_seed, J_slice, use_rpa)
+function scf_params = prepare_scf_params(base_params, beta_local, n_omega, n_q, chi_seed, J_slice)
     scf_params = base_params;
     scf_params.beta = beta_local;
     scf_params.n_omega = n_omega;
     scf_params.n_q = n_q;
-    scf_params.G0 = extract_G0(chi_seed, beta_local, use_rpa);
+    scf_params.G0 = extract_G0(chi_seed, beta_local);
     scf_params.J_q = J_slice;
     scf_params.verbose = false;
+
+    % Compute M2 (second moment) from initial Green's function
+    % Using sum rule: (1/β) Σ_n G(iω_n) = -M²
+    % Therefore: M² = -(1/β) Σ_n G(iω_n)
+    scf_params.M2 = compute_M2_from_G(scf_params.G0, beta_local);
 end
 
-function G0 = extract_G0(chi_seed, beta_local, use_rpa)
+function G0 = extract_G0(chi_seed, beta_local)
+    % Extract Green's function from susceptibility using G = -β*χ
+    % This relationship holds regardless of whether chi is from RPA or single-ion
     slice = squeeze(chi_seed);
     if ndims(slice) == 4
         slice = mean(slice, 4); % average over q for local seed
     end
-    if use_rpa
-        G0 = -slice;
-    else
-        G0 = -beta_local * slice;
+    % CORRECTED: Always use G = -β*χ relationship (from Eq. 2.23 and theory)
+    % The susceptibility χ should already be in physical units [meV^-1]
+    G0 = -beta_local * slice;
+end
+
+function M2 = compute_M2_from_G(G0, beta_local)
+    % Compute second moment M² from Green's function using sum rule
+    % Sum rule (Eq. 2.23): (1/β) Σ_n G(iω_n) = -M²
+    % Therefore: M² = -(1/β) Σ_n G(iω_n)
+    %
+    % Input:
+    %   G0: Initial Green's function [3 x 3 x n_omega]
+    %   beta_local: Inverse temperature [meV^-1]
+    % Output:
+    %   M2: Second moment (3x3 matrix or scalar)
+
+    n_omega = size(G0, 3);
+    G_sum = zeros(3, 3);
+
+    % Sum over all frequencies
+    for iw = 1:n_omega
+        G_sum = G_sum + G0(:,:,iw);
     end
+
+    % Apply sum rule: M² = -(1/β) Σ_n G(iω_n)
+    M2 = -(1/beta_local) * G_sum;
+
+    % For diagonal systems, we can return the trace as a scalar
+    % Otherwise return the full 3x3 matrix
+    % Here we return the full matrix to preserve all information
 end
 
 function [beta_local, descriptor] = describe_state(scanMode, cVar_val, dscrt_var)
