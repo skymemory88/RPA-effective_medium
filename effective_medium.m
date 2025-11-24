@@ -625,6 +625,11 @@ function scf_params = prepare_scf_params(base_params, beta_local, n_omega, n_q, 
     scf_params.G0 = extract_G0(chi_seed, beta_local);
     scf_params.J_q = J_slice;
     scf_params.verbose = false;
+
+    % Compute M2 (second moment) from initial Green's function
+    % Using sum rule: (1/β) Σ_n G(iω_n) = -M²
+    % Therefore: M² = -(1/β) Σ_n G(iω_n)
+    scf_params.M2 = compute_M2_from_G(scf_params.G0, beta_local);
 end
 
 function G0 = extract_G0(chi_seed, beta_local)
@@ -637,6 +642,33 @@ function G0 = extract_G0(chi_seed, beta_local)
     % CORRECTED: Always use G = -β*χ relationship (from Eq. 2.23 and theory)
     % The susceptibility χ should already be in physical units [meV^-1]
     G0 = -beta_local * slice;
+end
+
+function M2 = compute_M2_from_G(G0, beta_local)
+    % Compute second moment M² from Green's function using sum rule
+    % Sum rule (Eq. 2.23): (1/β) Σ_n G(iω_n) = -M²
+    % Therefore: M² = -(1/β) Σ_n G(iω_n)
+    %
+    % Input:
+    %   G0: Initial Green's function [3 x 3 x n_omega]
+    %   beta_local: Inverse temperature [meV^-1]
+    % Output:
+    %   M2: Second moment (3x3 matrix or scalar)
+
+    n_omega = size(G0, 3);
+    G_sum = zeros(3, 3);
+
+    % Sum over all frequencies
+    for iw = 1:n_omega
+        G_sum = G_sum + G0(:,:,iw);
+    end
+
+    % Apply sum rule: M² = -(1/β) Σ_n G(iω_n)
+    M2 = -(1/beta_local) * G_sum;
+
+    % For diagonal systems, we can return the trace as a scalar
+    % Otherwise return the full 3x3 matrix
+    % Here we return the full matrix to preserve all information
 end
 
 function [beta_local, descriptor] = describe_state(scanMode, cVar_val, dscrt_var)
