@@ -46,3 +46,16 @@ verifyGreaterThan(testCase, d(3), 0.1);   verifyLessThan(testCase, d(3), 1.0);
 si = invz_single_ion(ion, 0.31, [4 0 0], struct('hyp', false));
 verifyGreaterThan(testCase, abs(si.hx), 1e-6);
 end
+
+function test_hyp_operators_are_electronic(testCase)
+% Tasks 3-4 depend on Mx/My/Mz being kron(J_electronic, eye(nuclear)) in the
+% eigenbasis, i.e. the response operators act as electronic-J tensor
+% nuclear-identity in the product (uncoupled) basis.
+ion = invz_ion();
+si = invz_single_ion(ion, 0.5, [2 0 0], struct('hyp', true));
+oJ = stevens_ops(8);
+Mz_prod = si.V * si.Mz * si.V';
+verifyLessThan(testCase, max(abs(Mz_prod - kron(oJ.Jz, eye(8))), [], 'all'), 1e-10);
+Mx_prod = si.V * si.Mx * si.V';
+verifyLessThan(testCase, max(abs(Mx_prod - kron(oJ.Jx, eye(8))), [], 'all'), 1e-10);
+end

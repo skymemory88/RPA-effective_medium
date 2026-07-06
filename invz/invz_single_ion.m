@@ -11,7 +11,7 @@ Hcf = ion.B20*oJ.O20 + ion.B40*oJ.O40 + ion.B44*oJ.O44 ...
     + ion.B60*oJ.O60 + ion.B64c*oJ.O64c + ion.B64s*oJ.O64s;
 if hyp
     oI = stevens_ops(ion.I);
-    nI = size(oI.Jz,1);  nJ = size(oJ.Jz,1);
+    nI = size(oI.Jz,1);
     kJ = @(M) kron(M, eye(nI));
     Hhf = ion.A*(kron(oJ.Jx,oI.Jx) + kron(oJ.Jy,oI.Jy) + kron(oJ.Jz,oI.Jz));
 else
@@ -21,6 +21,7 @@ Jx = kJ(oJ.Jx);  Jy = kJ(oJ.Jy);  Jz = kJ(oJ.Jz);
 H0 = kJ(Hcf) + Hhf - ion.gL*C.muB*(B(1)*Jx + B(2)*Jy + B(3)*Jz);
 beta = 1/(C.kB*T);
 hx = 0;
+converged = false;
 for it = 1:200                                   % transverse mean-field fixed point
     H = H0 - hx*Jx;
     H = (H + H')/2;
@@ -29,9 +30,23 @@ for it = 1:200                                   % transverse mean-field fixed p
     p = exp(-beta*(E - E(1)));  p = p/sum(p);
     jx = real(diag(V'*Jx*V)).'*p;
     hx_new = Jxx0*jx;
-    if abs(hx_new - hx) < 1e-12, hx = hx_new; break; end
+    if abs(hx_new - hx) < 1e-12
+        hx = hx_new;
+        converged = true;
+        break;
+    end
     hx = hx_new;
 end
+if ~converged
+    warning('invz:mfNotConverged', 'Transverse mean field not converged after %d iterations: |dhx| = %.3g meV', it, abs(hx_new-hx));
+end
+% Recompute H, eig, populations, and all output fields ONCE from the final
+% converged hx, so the returned struct is exactly self-consistent with si.hx.
+H = H0 - hx*Jx;
+H = (H + H')/2;
+[V, D] = eig(H, 'vector');
+[E, ix] = sort(real(D));  V = V(:, ix);
+p = exp(-beta*(E - E(1)));  p = p/sum(p);
 si.E  = E - E(1);
 si.V  = V;
 si.P  = p;

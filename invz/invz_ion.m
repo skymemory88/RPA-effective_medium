@@ -8,7 +8,7 @@ ion.a   = [5.175 0 0; 0 5.175 0; 0 0 10.75];       % Å (rows = lattice vectors)
 ion.tau = [0 0 0; 0 0.5 0.25; 0.5 0.5 0.5; 0.5 0 0.75];  % Ho sites, fractional
 ion.Vc  = abs(det(ion.a));                          % 287.9 Å^3
 ion.J12 = -0.1e-3;                                  % meV, nn exchange (4 neighbours)
-% Uniform-mode couplings (validated in Task 5): J_D*D_cc(0)=6.821e-3? NO: 6.821 μeV = 6.821e-3 meV
+% Uniform-mode couplings in meV (validated in Task 5): J0eff = J_D*D_cc(0) + 4*J12 = 6.821e-3 + 4*(-0.1e-3) = 6.421e-3 meV; Jxx0 = J_D*D_aa(0) + 4*J12 = 3.912e-3 + 4*(-0.1e-3) = 3.512e-3 meV.
 ion.J0eff = 6.421e-3;   % meV: J_D*D_cc(0) + 4*J12  (R 2007, after eq 11)
 ion.Jxx0  = 3.512e-3;   % meV: J_D*D_aa(0) + 4*J12, transverse MF channel
 end
