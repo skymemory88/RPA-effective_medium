@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The 1/z Effective-Medium Expansion for Singlet–Singlet Systems — Derivations</title>
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\\(', '\\)']],
+    displayMath: [['$$', '$$']],
+    tags: 'none',
+    macros: {
+      Jc: "{\\mathcal J}",
+      Tr: "{\\rm Tr}\\,",
+      wn: "{i\\omega_n}",
+      wm: "{i\\omega_{n'}}"
+    }
+  }
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js"></script>
+<style>
+  :root{
+    --ink:#1c1a17;
+    --paper:#fdfcf9;
+    --rule:#d8d3c8;
+    --derived:#1e6b45;
+    --derived-bg:#f0f7f2;
+    --quoted:#9a5b00;
+    --quoted-bg:#fbf4e8;
+    --caution:#8a1f1f;
+    --accent:#26456b;
+  }
+  html{font-size:17px;}
+  body{
+    font-family: Charter, "Bitstream Charter", "Palatino Linotype", Palatino, Georgia, serif;
+    color:var(--ink); background:var(--paper);
+    margin:0; line-height:1.55;
+  }
+  .wrap{max-width:880px; margin:0 auto; padding:2.5rem 1.4rem 5rem;}
+  header.title{border-bottom:3px double var(--rule); padding-bottom:1.2rem; margin-bottom:1.6rem;}
+  header.title h1{font-size:1.75rem; line-height:1.25; margin:0 0 .5rem; font-weight:700; letter-spacing:.01em;}
+  header.title .sub{font-size:1.02rem; color:#4b463e; font-style:italic;}
+  h2{font-size:1.3rem; margin:2.6rem 0 .8rem; color:var(--accent);
+     border-bottom:1px solid var(--rule); padding-bottom:.25rem;}
+  h3{font-size:1.08rem; margin:1.8rem 0 .5rem; color:#2c2a26;}
+  p{margin:.7rem 0; text-align:justify; hyphens:auto;}
+  .jref{
+    font-family:"SF Mono", Consolas, monospace; font-size:.72em;
+    background:#eee9df; color:#5a5344; border:1px solid var(--rule);
+    border-radius:3px; padding:.05em .35em; white-space:nowrap; vertical-align:middle;
+  }
+  .box{border-left:4px solid; border-radius:0 4px 4px 0; padding:.7rem 1rem .7rem 1.1rem; margin:1rem 0;}
+  .box .tag{display:block; font-family:"Gill Sans","Segoe UI",system-ui,sans-serif;
+    font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; font-weight:600; margin-bottom:.3rem;}
+  .derived{border-color:var(--derived); background:var(--derived-bg);}
+  .derived .tag{color:var(--derived);}
+  .quoted{border-color:var(--quoted); background:var(--quoted-bg);}
+  .quoted .tag{color:var(--quoted);}
+  .caution{border-left:4px solid var(--caution); background:#faf0f0; border-radius:0 4px 4px 0;
+    padding:.6rem 1rem; margin:1rem 0; font-size:.95rem;}
+  .caution .tag{color:var(--caution); font-family:"Gill Sans","Segoe UI",system-ui,sans-serif;
+    font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; font-weight:600; display:block; margin-bottom:.25rem;}
+  nav.toc{background:#f5f2ea; border:1px solid var(--rule); border-radius:4px; padding: .9rem 1.3rem; margin:1.4rem 0 2rem;}
+  nav.toc .tag{font-family:"Gill Sans","Segoe UI",system-ui,sans-serif; font-size:.72rem; letter-spacing:.14em;
+    text-transform:uppercase; font-weight:600; color:#6b6455;}
+  nav.toc ol{margin:.5rem 0 0 1.1rem; padding:0; columns:2; column-gap:2.5rem;}
+  nav.toc li{margin:.18rem 0; break-inside:avoid; font-size:.95rem;}
+  nav.toc a{color:var(--accent); text-decoration:none;}
+  nav.toc a:hover{text-decoration:underline;}
+  .legend{display:flex; gap:1.2rem; flex-wrap:wrap; margin:.8rem 0 0; font-size:.88rem;
+    font-family:"Gill Sans","Segoe UI",system-ui,sans-serif;}
+  .legend span{display:inline-flex; align-items:center; gap:.4rem;}
+  .swatch{width:.85em; height:.85em; border-radius:2px; display:inline-block;}
+  table.notation{border-collapse:collapse; margin:1rem 0; font-size:.95rem; width:100%;}
+  table.notation td{border-bottom:1px solid var(--rule); padding:.35rem .6rem; vertical-align:top;}
+  table.notation td:first-child{white-space:nowrap;}
+  mjx-container[jax="CHTML"][display="true"]{margin:1rem 0 !important; overflow-x:auto; overflow-y:hidden; padding:2px 0;}
+  ol.steps li{margin:.45rem 0;}
+  footer{margin-top:3.5rem; border-top:1px solid var(--rule); padding-top:1rem; font-size:.88rem; color:#6b6455;}
+  @media (max-width:640px){ nav.toc ol{columns:1;} html{font-size:16px;} }
+  @media print{ .box, .caution, nav.toc{break-inside:avoid;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="title">
+  <h1>The High-Density 1/z Effective-Medium Expansion for Dipole-Coupled Singlet&ndash;Singlet Systems</h1>
+  <div class="sub">Complete derivations of the analytical framework of J. Jensen, Phys. Rev. B <b>49</b>, 11833 (1994), Secs. I&ndash;II, with the gaps filled &mdash; material-independent form, suitable for application to other dipolar magnets (e.g. LiHoF<sub>4</sub>).</div>
+  <div class="legend">
+    <span><span class="swatch" style="background:var(--derived)"></span> Derived here in full</span>
+    <span><span class="swatch" style="background:var(--quoted)"></span> Jensen&rsquo;s result; method outlined, coefficients quoted</span>
+    <span><span class="swatch" style="background:var(--caution)"></span> Erratum in the published source</span>
+    <span><span class="jref">J&nbsp;2.x</span>&nbsp; equation number in Jensen&rsquo;s paper</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <span class="tag">Contents</span>
+  <ol>
+    <li><a href="#s1">The singlet&ndash;singlet model</a></li>
+    <li><a href="#s2">Green functions and the linked-cluster expansion</a></li>
+    <li><a href="#s3">The bare single-site propagator</a></li>
+    <li><a href="#s4">1/z power counting and the RPA</a></li>
+    <li><a href="#s5">The effective medium</a></li>
+    <li><a href="#s6">The single-site series to first order in 1/z</a></li>
+    <li><a href="#s7">The sum rule</a></li>
+    <li><a href="#s8">Internal energy and heat capacity</a></li>
+    <li><a href="#s9">Ordered phase and finite field (m &ne; 0)</a></li>
+    <li><a href="#s10">Computational recipe and generalization</a></li>
+  </ol>
+</nav>
+
+<h2 id="s0">0 &nbsp;Scope and conventions</h2>
+<p>
+This document reconstructs the theoretical framework of Jensen&rsquo;s 1/z (high-density) expansion for a lattice of singlet&ndash;singlet ions coupled by an Ising-like two-ion (dipolar) interaction, keeping only what is material-independent. Steps that Jensen states without proof are derived explicitly where a rigorous derivation is feasible; the few places where the full bookkeeping is prohibitively long are marked, with the method outlined and the final coefficients quoted. Units: \( \hbar = 1 \), \( \beta = 1/k_B T \). Matsubara frequencies are bosonic, \( \omega_n = 2\pi n/\beta \) (the operators \(J_x\) commute at equal times, so all correlation functions are \(\beta\)-periodic).
+</p>
+<table class="notation">
+  <tr><td>\( \Delta \)</td><td>splitting between the two lowest singlets \( |0\rangle, |1\rangle \) of the mean-field (MF) single-ion Hamiltonian.</td></tr>
+  <tr><td>\( M,\; \pm m \)</td><td>\( \langle 0|J_x|1\rangle = M \); diagonal elements \( \langle 0|J_x|0\rangle = m \), \( \langle 1|J_x|1\rangle = -m \). \( M_0^2 = M^2+m^2 \) is invariant under rotations in the two-dimensional level space; \( m=0 \) in the zero-field paramagnet.</td></tr>
+  <tr><td>\( a_{\nu\mu} \)</td><td>standard-basis operators \( |\nu\rangle\langle\mu| \) built on the MF eigenstates. Shorthand \( b\equiv a_{01} \), \( b^\dagger \equiv a_{10} \), \( X \equiv b+b^\dagger \).</td></tr>
+  <tr><td>\( n_0, n_1, n_{01} \)</td><td>MF populations \( n_0 = [1+e^{-\beta\Delta}]^{-1} \), \( n_0+n_1=1 \), \( n_{01}=n_0-n_1=\tanh(\beta\Delta/2) \).</td></tr>
+  <tr><td>\( \Jc(ij),\ \Jc(\mathbf q) \)</td><td>two-ion coupling (for a dipolar magnet: the Ewald-summed dipole coupling plus any exchange), \( \Jc(\mathbf q) = \sum_j \Jc(ij)\,e^{-i\mathbf q\cdot(\mathbf R_i-\mathbf R_j)} \), \( \Jc(ii)=0 \).</td></tr>
+  <tr><td>\( z \)</td><td>effective coordination number. For dipolar coupling the interaction is long-ranged, so the effective \(z\) is large and the expansion is well controlled.</td></tr>
+</table>
+
+<h2 id="s1">1 &nbsp;The singlet&ndash;singlet model</h2>
+<p>
+Each magnetic ion is reduced to its two lowest crystal-field singlets (all higher levels assumed energetically remote), and the two-ion coupling acts through a single angular-momentum component \( J_x \) (the strongly anisotropic, Ising-like limit). In the basis of the MF eigenstates,
+</p>
+$$ J_x \;=\; m\,(a_{00}-a_{11}) \;+\; M\,(a_{01}+a_{10}) \;=\; m\,(a_{00}-a_{11}) + M X . \tag{1} $$
+<p>
+In the zero-field paramagnetic phase the MF eigenstates are the bare crystal-field singlets and \( m=0 \); in a field or in the ordered phase the MF Hamiltonian mixes them, the splitting \( \Delta \) grows, and weight is rotated from \(M\) into \(m\) with \( M^2+m^2 = M_0^2 \) fixed. A useful exact operator identity follows from (1) (the cross terms cancel because \( (a_{00}-a_{11})X + X(a_{00}-a_{11}) = 0 \)):
+</p>
+$$ J_x^2 \;=\; m^2 + M^2 \;=\; M_0^2\,\hat 1 . \tag{2} $$
+<p>
+The lattice Hamiltonian is split as \( \mathcal H = \mathcal H_0 + \mathcal H_1 \), where \( \mathcal H_0 \) is the sum of single-ion MF Hamiltonians (crystal field plus mean field; per ion \( \mathcal H_0^{(i)} = \Delta\, a_{11,i} \) up to a constant) and
+</p>
+$$ \mathcal H_1 \;=\; -\tfrac12 \sum_{ij} \Jc(ij)\, \tilde J_{ix}\tilde J_{jx},
+\qquad \tilde J_{ix} \equiv J_{ix} - \langle J_x\rangle . \tag{3} $$
+<p><span class="jref">J 2.2, 2.4</span>&ensp; Because every term of \( \mathcal H_1 \) (and the mean-field Zeeman term) is built from \(J_x\) operators only, and \( [J_{ix}, J_{jx}] = 0 \) for all \( i,j \),</p>
+$$ [\mathcal H_1,\, J_{ix}] = 0 \quad\text{exactly}, \tag{4} $$
+<p>a fact used repeatedly below (equations of motion, sum rule, energy formula).</p>
+
+<h2 id="s2">2 &nbsp;Green functions and the linked-cluster expansion</h2>
+<p>The imaginary-time Green function and its transforms are <span class="jref">J 2.1&ndash;2.3</span></p>
+$$ G(ij,\tau_1-\tau_2) \;=\; -\,\big\langle T_\tau\, \tilde J_{ix}(\tau_1)\, \tilde J_{jx}(\tau_2) \big\rangle, \qquad
+\tilde J_{ix}(\tau) = e^{\tau\mathcal H}\, \tilde J_{ix}\, e^{-\tau\mathcal H}, \tag{5} $$
+$$ G(\mathbf q, \wn) = \sum_j e^{-i\mathbf q\cdot(\mathbf R_i - \mathbf R_j)} \int_0^\beta \! d\tau\; e^{\wn \tau}\, G(ij,\tau),
+\qquad G(ij,\tau) = \frac{1}{N\beta}\sum_{\mathbf q, n} e^{i\mathbf q\cdot \mathbf R_{ij}} e^{-\wn\tau} G(\mathbf q,\wn). \tag{6} $$
+<p>
+Standard perturbation theory in \( \mathcal H_1 \) gives the linked-cluster series <span class="jref">J 2.5, 2.6</span>: expanding
+\( e^{-\beta\mathcal H} = e^{-\beta\mathcal H_0}\, T_\tau \exp[-\int_0^\beta \mathcal H_1(\tau)d\tau] \)
+in both numerator and denominator of (5), the denominator \( \langle U(\beta,0)\rangle_0 \) cancels exactly the disconnected (vacuum) parts, leaving the sum of <em>connected</em> terms in which the unperturbed averages \( \langle\cdots\rangle_0 \) factorize over sites (the \( \mathcal H_0 \) ensemble is a product state). Because \(J_x\) operators commute, no fermionic sign bookkeeping arises. The building blocks are therefore the single-site <em>cumulants</em> (semi-invariants) of \( \tilde J_x \) connected by interaction lines \( \Jc \).
+</p>
+
+<h2 id="s3">3 &nbsp;The bare single-site propagator</h2>
+<div class="box derived"><span class="tag">Derived in full &rarr; J 2.7, 2.8</span>
+<p>
+In the MF single-ion ensemble, \( b(\tau) = e^{\tau \Delta a_{11}} b\, e^{-\tau \Delta a_{11}} = e^{-\Delta\tau} b \) and \( b^\dagger(\tau) = e^{\Delta\tau} b^\dagger \). Define
+</p>
+$$ f(\tau) \;\equiv\; n_0\, e^{-\Delta\tau} + n_1\, e^{\Delta\tau}. \tag{7} $$
+<p>For \( 0<\tau<\beta \), using \( \langle b b^\dagger\rangle_0 = n_0 \), \( \langle b^\dagger b\rangle_0 = n_1 \), \( \langle bb\rangle_0 = \langle b^\dagger b^\dagger \rangle_0 = 0 \):</p>
+$$ \big\langle X(\tau) X(0)\big\rangle_0 = e^{-\Delta\tau}\langle bb^\dagger\rangle_0 + e^{\Delta\tau}\langle b^\dagger b\rangle_0 = f(\tau). \tag{8} $$
+<p>
+The diagonal part \( m(a_{00}-a_{11}) \) commutes with \( \mathcal H_0 \) (it is a constant of motion), so its fluctuation is \(\tau\)-independent:
+\( \langle [m(a_{00}-a_{11})]^2 \rangle_0 - \langle m(a_{00}-a_{11})\rangle_0^2 = m^2(1-n_{01}^2) \).
+Cross terms between diagonal and off-diagonal parts carry a single \(b\) or \(b^\dagger\) and vanish in the trace. Hence
+</p>
+$$ G_0(\tau) = -\,M^2 f(\tau) - m^2\,(1-n_{01}^2), \qquad 0<\tau<\beta. \tag{9} $$
+<p>Fourier transform, using \( e^{\wn\beta}=1 \):
+\( \int_0^\beta e^{(\wn \mp \Delta)\tau} d\tau = \dfrac{e^{\mp\beta\Delta}-1}{\wn \mp \Delta} \),
+together with the two population identities</p>
+$$ n_0\,(e^{-\beta\Delta}-1) = \frac{e^{-\beta\Delta}-1}{1+e^{-\beta\Delta}} = -\,n_{01},
+\qquad n_1\,(e^{\beta\Delta}-1) = \frac{1-e^{-\beta\Delta}}{1+e^{-\beta\Delta}} = +\,n_{01}, \tag{10} $$
+<p>gives</p>
+$$ -M^2\!\int_0^\beta\! e^{\wn\tau} f(\tau)\, d\tau
+= -M^2 n_{01}\left[ \frac{1}{\wn+\Delta} - \frac{1}{\wn-\Delta} \right]
+= -M^2\, \frac{2 n_{01}\Delta}{\Delta^2 - (\wn)^2}, $$
+<p>and \( \int_0^\beta e^{\wn\tau} d\tau = \beta\,\delta_{n,0} \) for the elastic part. Therefore <span class="jref">J 2.7, 2.8</span></p>
+$$ \boxed{\; G_0(\wn) = -M^2 g(\wn) - m^2 h(\wn), \qquad
+g(\wn) = \frac{2 n_{01}\Delta}{\Delta^2-(\wn)^2}, \qquad
+h(\wn) = \beta\,(1-n_{01}^2)\,\delta_{n,0}. \;} \tag{11} $$
+<p>
+\( g \) carries the inelastic (Van Vleck) response with poles at \( \pm\Delta \); \( h \) is the elastic (Curie-like) response of the diagonal moment, present only when \( m\neq0 \). Both are even in \( \omega_n \). Static single-site susceptibility: \( \chi_0(0) = -G_0(0) = M^2 g(0) + m^2\beta(1-n_{01}^2) \) with \( g(0) = 2n_{01}/\Delta \).
+</p>
+</div>
+
+<h2 id="s4">4 &nbsp;1/z power counting and the RPA</h2>
+<div class="box derived"><span class="tag">Derived in full &rarr; J 2.9</span>
+<p><b>First order.</b> With sites decoupled at zeroth order, the connected first-order term of (5) requires the two interaction indices to coincide with the external sites \( (i,j) \); the two assignments cancel the factor \( \tfrac12 \):</p>
+$$ \delta G(ij,\tau) = \Big\langle T_\tau\, \tilde J_{ix}(\tau)\, \tilde J_{jx}(0) \int_0^\beta\! d\tau_1\, \mathcal H_1(\tau_1) \Big\rangle_0^{\rm conn}
+= -\,\Jc(ij) \int_0^\beta\! d\tau_1\, G_0(\tau-\tau_1)\, G_0(\tau_1), $$
+<p>i.e. \( \delta G(\mathbf q,\wn) = -\Jc(\mathbf q)\, G_0^2(\wn) \). Iterating the same contraction pattern (chains of single-site pairs joined by \( \Jc \) lines) produces a geometric series,</p>
+$$ G(\mathbf q,\wn)\big|_{\rm RPA} = G_0 - \Jc(\mathbf q) G_0^2 + \Jc^2(\mathbf q) G_0^3 - \cdots
+= \boxed{\;\frac{G_0(\wn)}{1+\Jc(\mathbf q)\, G_0(\wn)}\;} \tag{12} $$
+<p><span class="jref">J 2.9</span>. (With \( \chi = -G \) this is the familiar \( \chi = \chi_0/[1-\Jc(\mathbf q)\chi_0] \).)</p>
+<p><b>Power counting.</b> Let \( \Jc \) denote the typical coupling to each of \( z \) neighbours, so the coherent scale is \( \Jc(\mathbf q) \sim z\Jc \). Site-diagonal loops cost powers of \( 1/z \):</p>
+$$ \frac1N \sum_{\mathbf q} \Jc(\mathbf q)^p \;=\; \big(\Jc^{\,p}\big)(ii)
+= \sum_{j_1,\dots,j_{p-1}} \Jc(ij_1)\Jc(j_1 j_2)\cdots \Jc(j_{p-1} i)
+\;\sim\; z^{\,p-1}\Jc^p \;=\; \frac{(z\Jc)^p}{z} , \tag{13} $$
+<p>
+Every independent Brillouin-zone average of a \( \Jc \)-dependent quantity therefore carries a relative factor \( 1/z \). The RPA (12) is exact at order \( (1/z)^0 \) beyond MF; the diagrams neglected by it (self-energy insertions in which an interaction line begins and ends on paths through the <em>same</em> site) first enter at order \( 1/z \). For dipolar coupling the interaction is long ranged, the effective \( z \) is large, and &mdash; since \( d=3 \) is the marginal dimensionality for a dipolar Ising system &mdash; the neglected critical fluctuations produce only logarithmic corrections to the MF/RPA critical behaviour. This is what makes the scheme quantitatively reliable for LiHoF<sub>4</sub>-type magnets.
+</p>
+</div>
+
+<h2 id="s5">5 &nbsp;The effective medium</h2>
+<div class="box derived"><span class="tag">Derived in full &rarr; J 2.10&ndash;2.12, 2.14</span>
+<p>Define the site-diagonal Green function and the effective-medium coupling <span class="jref">J 2.10, 2.11</span>:</p>
+$$ G(\wn) = \frac1N\sum_{\mathbf q} G(\mathbf q,\wn), \qquad
+K(\wn) = \frac{1}{N\, G(\wn)}\sum_{\mathbf q} \Jc(\mathbf q)\, G(\mathbf q,\wn). \tag{14} $$
+<p>
+\( K(\wn) \) is the (frequency-dependent) amplitude for leaving a site, propagating through the lattice, and returning &mdash; it plays the role of a dynamical cavity/Weiss field, and is \( O(1/z) \) relative to \( \Jc(\mathbf q=\mathbf 0) \) by (13), because its leading term \( \frac1N\sum_q \Jc(q) = \Jc(ii) = 0 \) vanishes and the first nonzero term involves \( \frac1N\sum_q \Jc^2(q) \).
+Jensen&rsquo;s ansatz for restoring the \( \mathbf q \) dependence around the site-diagonal function is <span class="jref">J 2.12</span>
+</p>
+$$ G(\mathbf q, \wn) = \frac{G(\wn)}{1 + \big[\Jc(\mathbf q) - K(\wn)\big]\, G(\wn)} . \tag{15} $$
+<p><b>Self-consistency.</b> Rewrite (15) as \( G(\mathbf q) = G - G(\mathbf q)\,[\Jc(\mathbf q)-K]\,G \) and average over \( \mathbf q \):</p>
+$$ \frac1N\sum_{\mathbf q} G(\mathbf q) = G - \Big[\tfrac1N\sum_{\mathbf q}\Jc(\mathbf q)G(\mathbf q)\Big] G + K\,G\cdot G
+= G - (KG)\,G + (KG)\,G = G \quad\checkmark $$
+<p>so (15) is automatically consistent with both definitions (14), whatever \( K(\wn) \) is. The content of the theory is the computation of \( G(\wn) \) itself: it is the Green function of a <em>single</em> site embedded in a medium that acts on it through the retarded field \( K(\tau_1-\tau_2) \). Its perturbation series is the single-site cumulant series of Sec. 2 with \( \Jc(ij) \) lines replaced by \( K \) lines (an interaction line must leave the site and return; \( K \) is precisely that amplitude, and using it removes the double counting of the chain diagrams already resummed by (15)).</p>
+<p><b>RPA check.</b> Decoupling all single-site cumulants into products of two-point functions gives the geometric series <span class="jref">J 2.14</span></p>
+$$ G(\wn)\big|_{\rm RPA} = \frac{G_0(\wn)}{1 + K(\wn)\, G_0(\wn)}, \tag{16} $$
+<p>and inserting (16) into (15) makes \( K \) cancel identically:</p>
+$$ G(\mathbf q,\wn) = \frac{G_0/(1+KG_0)}{1+(\Jc(\mathbf q)-K)\,G_0/(1+KG_0)}
+= \frac{G_0}{1 + K G_0 + (\Jc(\mathbf q)-K)G_0} = \frac{G_0}{1+\Jc(\mathbf q) G_0}, $$
+<p>recovering (12). The effective-medium construction therefore reproduces the RPA exactly at leading order, and organizes the \( 1/z \) corrections as corrections to the <em>single-site</em> function.</p>
+</div>
+<h2 id="s6">6 &nbsp;The single-site series to first order in 1/z</h2>
+<p>Throughout this section \( m = 0 \) (zero-field paramagnet), so \( J_x = MX \) and \( G_0 = -M^2 g \). The elastic modifications for \( m\neq0 \) are in Sec. 9.</p>
+
+<h3>6.1 &nbsp;The first 1/z term and its pairing part</h3>
+<div class="box derived"><span class="tag">Derived in full &rarr; J 2.13 and the &minus;G&#8320;KG&#8320; term of J 2.15</span>
+<p>The single-site cumulant series with one \( K \) line is <span class="jref">J 2.13</span></p>
+$$ \delta G(\wn) = -\tfrac12 \int_0^\beta\!\!\!\int_0^\beta\!\!\!\int_0^\beta d\tau\, d\tau_1\, d\tau_2\;
+e^{\wn\tau}\, \frac1\beta \sum_{n'} K(\wm)\, e^{\wm(\tau_1-\tau_2)}
+\Big[ \big\langle T\tilde J_x(\tau_2)\tilde J_x(\tau_1)\tilde J_x(\tau)\tilde J_x(0)\big\rangle_0
+- \big\langle T\tilde J_x(\tau_2)\tilde J_x(\tau_1)\big\rangle_0 \big\langle T\tilde J_x(\tau)\tilde J_x(0)\big\rangle_0 \Big], \tag{17} $$
+<p>
+where the subtracted product is the disconnected (vacuum-loop \( \times G_0 \)) part removed by the linked-cluster theorem. Decompose the four-point average into the three pair products plus the fourth-order semi-invariant \( S_4 \). The two remaining pairings are RPA-like and evaluate exactly. For the pairing \( (\tau_2,\tau)(\tau_1,0) \): \( \langle T\rangle\langle T\rangle = G_0(\tau_2-\tau)\,G_0(\tau_1) \), and
+</p>
+$$ \int_0^\beta \! d\tau_2\, e^{-\wm\tau_2} G_0(\tau_2-\tau) = e^{-\wm\tau} G_0(\wm), \quad
+\int_0^\beta \! d\tau_1\, e^{\wm\tau_1} G_0(\tau_1) = G_0(\wm), \quad
+\int_0^\beta \! d\tau\, e^{i(\omega_n-\omega_{n'})\tau} = \beta\,\delta_{nn'} , $$
+<p>
+(using periodicity and \( G_0(\wn) = G_0(-\wn) \)), giving \( -\tfrac12 K(\wn) G_0^2(\wn) \). The pairing \( (\tau_2,0)(\tau_1,\tau) \) gives the same with \( n'\to -n \), hence an equal contribution. Together:
+</p>
+$$ \delta G(\wn)\Big|_{\rm pairings} = -\,G_0(\wn)\, K(\wn)\, G_0(\wn), \tag{18} $$
+<p>which is the first term inside the braces of \( G = G_0 - G_0\{K G_0 + \Sigma\} + \cdots \) <span class="jref">J 2.15</span>. The genuinely new physics at order \(1/z\) is the semi-invariant part, which defines \( \Sigma \): \( \;\delta G|_{S_4} \equiv -G_0(\wn)\,\Sigma(\wn) \).</p>
+</div>
+
+<h3>6.2 &nbsp;The fourth-order semi-invariant of the two-level ion (exact)</h3>
+<div class="box derived"><span class="tag">Derived in full &mdash; not given in the paper</span>
+<p>
+Since \( b^2 = (b^\dagger)^2 = 0 \), only the alternating operator strings \( bb^\dagger bb^\dagger \) (through \( |0\rangle \), weight \( n_0 \)) and \( b^\dagger b b^\dagger b \) (through \( |1\rangle \), weight \( n_1 \)) survive in an ordered four-point product of \( X = b+b^\dagger \). For \( \tau_a \ge \tau_b \ge \tau_c \ge \tau_d \), collecting the phases \( e^{\mp\Delta\tau} \):
+</p>
+$$ \big\langle X(\tau_a) X(\tau_b) X(\tau_c) X(\tau_d) \big\rangle_0 \;=\; f(\tau_a - \tau_b + \tau_c - \tau_d) \;\equiv\; f(u), \tag{19} $$
+<p>with \( f \) from (7) &mdash; the same function as the two-point correlator, evaluated on the alternating time combination. Introduce the three linear combinations</p>
+$$ u = \tau_a-\tau_b+\tau_c-\tau_d, \qquad v = \tau_a+\tau_b-\tau_c-\tau_d \;(\ge 0), \qquad w = \tau_a-\tau_b-\tau_c+\tau_d, $$
+<p>and note the pair-argument identities
+\( \tau_{ac}+\tau_{bd} = \tau_{ad}+\tau_{bc} = v \), \( \tau_{ac}-\tau_{bd} = \tau_{ab}-\tau_{cd} = w \), \( \tau_{ad}-\tau_{bc} = \tau_{ab}+\tau_{cd} = u \) (with \( \tau_{ab} \equiv \tau_a-\tau_b \), etc.). Using
+\( f(x)f(y) = n_0^2 e^{-\Delta(x+y)} + n_1^2 e^{\Delta(x+y)} + 2 n_0 n_1 \cosh[\Delta(x-y)] \) and \( n_0-n_0^2 = n_1 - n_1^2 = n_0 n_1 \), the semi-invariant
+\( S_4 = \langle XXXX\rangle_0 - f(\tau_{ab})f(\tau_{cd}) - f(\tau_{ac})f(\tau_{bd}) - f(\tau_{ad})f(\tau_{bc}) \) collapses: the \( e^{\pm\Delta u} \) terms cancel between \( f(u) - f(\tau_{ab})f(\tau_{cd}) \) and \( -f(\tau_{ad})f(\tau_{bc}) \), leaving
+</p>
+$$ \boxed{\; S_4(\tau_a,\tau_b,\tau_c,\tau_d) \;=\; -\,2\Big[\, 2 n_0 n_1 \cosh(\Delta w) \;+\; n_0^2\, e^{-\Delta v} \;+\; n_1^2\, e^{\Delta v} \,\Big], \qquad \tau_a\ge\tau_b\ge\tau_c\ge\tau_d. \;} \tag{20} $$
+<p>
+<b>Checks.</b> \( T=0 \) (\( n_0=1, n_1=0 \)): direct evaluation gives \( S_4 = e^{-\Delta u} - e^{-\Delta u} - 2e^{-\Delta v} = -2e^{-\Delta v} \) &nbsp;&#10003;.
+\( T\to\infty \) (\( n_0=n_1=\tfrac12 \), \( f=\cosh\Delta\tau \)): product-to-sum identities give \( S_4 = -\cosh(\Delta v) - \cosh(\Delta w) \), matching (20) &nbsp;&#10003;.
+Note \( S_4 \le 0 \) always: the two-level constraint \( b^2=0 \) suppresses fluctuations relative to Gaussian (Wick) statistics &mdash; this hard-core kinematic correction is exactly what the 1/z self-energy transmits to the lattice problem.
+</p>
+</div>
+
+<h3>6.3 &nbsp;Structure of &Sigma;</h3>
+<div class="box quoted"><span class="tag">Method derived; coefficient of the frequency-dependent part quoted &rarr; J 2.15, 2.16, 2.18, 2.19</span>
+<p>
+Insert \( S_4 \) (with \( J_x = MX \): a factor \( M^4 \)) for the semi-invariant part of (17). Since \( S_4 \) is a sum of pure exponentials in the four times, each of the six orderings of \( (\tau_2,\tau_1,\tau) \) relative to each other (all \( >0 \)) gives elementary nested integrals: the internal legs carry \( e^{\pm\wm\tau_{1,2}} \) and produce resolvent factors \( (\Delta\mp\wm)^{-1} \) that recombine pairwise into \( g(\wm) \) and \( g^2(\wm) \); the external legs produce the overall factor \( g(\wn) \) or frequency-independent (equal-time) weights \( g(0) \) and \( \beta(1-n_{01}^2) \). The \( n' \) sums then appear only through
+</p>
+$$ \lambda_p \;=\; \frac1\beta \sum_{n'} K(\wm)\, \big[g(\wm)\big]^p , \tag{21} $$
+<p><span class="jref">J 2.19</span>, plus terms in which the internal frequency locks to the external one (\( \delta_{nn'} \) from the \( \tau \) integral), which yield an explicit \( K(\wn) \). Collecting everything, the series and self-energy take the form <span class="jref">J 2.15, 2.16</span></p>
+$$ G(\wn) = G_0 - G_0\big[K(\wn) G_0 + \Sigma(\wn)\big] + \cdots, \qquad
+\Sigma(\wn) = \alpha + \gamma(\wn)\, g(\wn), \tag{22} $$
+<p>with the frequency-dependent coefficient <span class="jref">J 2.18</span></p>
+$$ \gamma(\wn) = \frac{M^2}{n_{01}^2}\Big[ \lambda_1 - (1-n_{01}^2)\, K(\wn) \Big]. \tag{23} $$
+<p>
+The full bookkeeping behind (23) (six orderings &times; the three exponential structures of (20)) is lengthy and is not reproduced here; the result is Jensen&rsquo;s, obtained with the standard-basis-operator contraction techniques of Yang&ndash;Wang (1974) and Care&ndash;Tucker (1977), building on Stinchcombe&rsquo;s 1/z expansion (1973), and confirmed by the checks below. The constant \( \alpha \), by contrast, does <em>not</em> have to be taken on trust: it is fixed exactly by the sum rule, as shown next.
+</p>
+</div>
+
+<h3>6.4 &nbsp;&alpha; fixed by the sum rule (independent derivation)</h3>
+<div class="box derived"><span class="tag">Derived in full &rarr; J 2.17</span>
+<p>Anticipating the exact sum rule of Sec. 7, \( \frac1\beta\sum_n G(\wn) = -M^2 \), which \( G_0 \) already saturates (Sec. 7), the \( 1/z \) correction in (22) must sum to zero:</p>
+$$ \frac1\beta\sum_n G_0(\wn)\big[ K(\wn) G_0(\wn) + \Sigma(\wn) \big] = 0 . \tag{24} $$
+<p>With \( G_0 = -M^2 g \) and (22), (23), the integrand is \( -M^2\big[ -M^2 K g^2 + \alpha g + \tfrac{M^2}{n_{01}^2}\lambda_1 g^2 - \tfrac{M^2}{n_{01}^2}(1-n_{01}^2) K g^2 \big] \). The two \( K g^2 \) terms combine, since \( 1 + (1-n_{01}^2)/n_{01}^2 = 1/n_{01}^2 \), into \( -\tfrac{M^2}{n_{01}^2} K g^2 \), whose frequency sum is \( -\tfrac{M^2}{n_{01}^2}\lambda_2 \). Using \( \frac1\beta\sum_n g(\wn) = 1 \) (Sec. 7), condition (24) becomes</p>
+$$ \alpha \;=\; \frac{M^2}{n_{01}^2}\Big[ \lambda_2 - \lambda_1\cdot \frac1\beta\sum_n g^2(\wn) \Big]. \tag{25} $$
+<p><b>The required Matsubara identity.</b> From the standard sum \( \frac1\beta\sum_n (\omega_n^2+\Delta^2)^{-1} = \coth(\beta\Delta/2)/(2\Delta) \), differentiation with respect to \( \Delta^2 \) gives \( \frac1\beta\sum_n (\omega_n^2+\Delta^2)^{-2} = \coth(\beta\Delta/2)/(4\Delta^3) + \beta\,{\rm csch}^2(\beta\Delta/2)/(8\Delta^2) \). Multiplying by \( (2 n_{01}\Delta)^2 \) and using \( n_{01} = \tanh(\beta\Delta/2) \) (so \( n_{01}^2\coth = n_{01} \) and \( n_{01}^2\,{\rm csch}^2 = {\rm sech}^2 = 1-n_{01}^2 \)):</p>
+$$ \frac1\beta\sum_n g^2(\wn) \;=\; \frac{n_{01}}{\Delta} + \frac{\beta}{2}(1-n_{01}^2)
+\;=\; \tfrac12\Big[ g(0) + \beta\,(1-n_{01}^2) \Big]. \tag{26} $$
+<p>Substituting (26) into (25) reproduces Jensen&rsquo;s constant exactly <span class="jref">J 2.17</span>:</p>
+$$ \boxed{\; \alpha = \frac{M^2}{n_{01}^2}\Big[ \lambda_2 - \tfrac12\big\{ g(0) + \beta(1-n_{01}^2) \big\}\,\lambda_1 \Big]. \;} \tag{27} $$
+<p>This closes the loop: given the structure (22) and \( \gamma \) of (23), the exact sum rule forces (27), confirming the internal consistency of the truncated series (&ldquo;the sum rule is obeyed if the series is terminated after the first or second term&rdquo;).</p>
+</div>
+
+<h3>6.5 &nbsp;Resummation and the final propagator</h3>
+<div class="box derived"><span class="tag">Derived in full &rarr; J 2.20, 2.30</span>
+<p>
+Higher terms of the single-site series repeat the pattern of (22) with additional factors of \( (K G_0 + \Sigma) \) at \( O(1/z^2) \) accuracy; the series is resummed Dyson-style by replacing the leading \( G_0 \) prefactor of the correction by the full \( G \):
+</p>
+$$ G = G_0 - G\,\big[K G_0 + \Sigma\big] \;\;\Longrightarrow\;\; G(\wn) = \frac{G_0(\wn)}{1 + \Sigma(\wn) + K(\wn) G_0(\wn)} . \tag{28} $$
+<p>Inserting (28) into the effective-medium form (15), \( K \) cancels identically, exactly as in the RPA check of Sec. 5:</p>
+$$ \boxed{\; G(\mathbf q, \wn) = \frac{G_0(\wn)}{1 + \Sigma(\wn) + \Jc(\mathbf q)\, G_0(\wn)} \;} \tag{29} $$
+<p><span class="jref">J 2.20</span>. Equivalently, defining the <em>renormalized single-ion propagator</em></p>
+$$ \tilde G_0(\wn) \;\equiv\; \frac{G(\wn)}{1 - K(\wn) G(\wn)} \;=\; \frac{G_0(\wn)}{1+\Sigma(\wn)}, \tag{30} $$
+<p>
+<span class="jref">J 2.30</span> (the second equality follows by substituting (28)), the theory is <em>exactly RPA in form</em>, (12), with \( G_0 \to \tilde G_0 \): all \( 1/z \) physics is carried by the multiplicative renormalization \( 1+\Sigma(\wn) \) of the single-ion response. This is the practically important statement: in a numerical implementation one divides the single-ion susceptibility by \( 1+\Sigma(\omega) \) and re-runs the RPA. Note the implicit self-consistency loop: \( \Sigma \) depends on \( K \) through \( \lambda_{1,2} \), \( K \) depends on \( G(\mathbf q) \) through (14), and \( G(\mathbf q) \) depends on \( \Sigma \) through (29); the equations are solved by iteration (Sec. 10).
+</p>
+</div>
+
+<h2 id="s7">7 &nbsp;The sum rule</h2>
+<div class="box derived"><span class="tag">Derived in full &rarr; J 2.23</span>
+<p>The frequency sum of \( G \) is the equal-time correlator: since \( [\tilde J_x, \tilde J_x] = 0 \) there is no ordering ambiguity at \( \tau\to0 \), and</p>
+$$ \frac1\beta \sum_n G(\wn) = G(\tau=0) = -\big\langle \tilde J_x^2 \big\rangle
+= -\big[ \langle J_x^2\rangle - \langle J_x\rangle^2 \big]
+= -\big[ M_0^2 - m^2 n_{01}^2 \big] = -\big[ M^2 + m^2 (1-n_{01}^2) \big], \tag{31} $$
+<p>
+using the operator identity (2) and \( \langle J_x\rangle = m\, n_{01} \). For \( m=0 \): \( \frac1\beta\sum_n G(\wn) = -M^2 \) <span class="jref">J 2.23</span> &mdash; an <em>exact</em>, temperature-independent constraint on the true \( G \), and the natural quality check in a numerical implementation. One caveat for implementations: Jensen notes that the truncated series (22) satisfies (31) strictly &mdash; that is the content of (24) &mdash; whereas the Dyson-resummed self-consistent form (28)&ndash;(29) satisfies it only to high numerical accuracy, so a small converged residual is expected rather than a bug.
+Convergence: \( g \sim 2n_{01}\Delta/\omega_n^2 \), so the sum converges absolutely and no convergence factor is needed. Check at zeroth order: \( \frac1\beta\sum_n g = n_{01}\coth(\beta\Delta/2) = 1 \), and the \( h \) term contributes \( -m^2(1-n_{01}^2) \) from \( n=0 \), so \( G_0 \) saturates (31) identically &mdash; which is why the \( 1/z \) correction had to obey (24).
+</p>
+</div>
+
+<h2 id="s8">8 &nbsp;Internal energy and heat capacity</h2>
+<h3>8.1 &nbsp;Exact energy formula</h3>
+<div class="box derived"><span class="tag">Derived in full &rarr; J 2.21</span>
+<p><b>Interaction energy (exact).</b> With \( \langle \tilde J_{ix}\tilde J_{jx}\rangle = -G(ij,\tau=0) \) and \( \sum_j \Jc(ij) e^{i\mathbf q\cdot\mathbf R_{ij}} = \Jc(\mathbf q) \):</p>
+$$ \langle \mathcal H_1 \rangle = -\tfrac12\sum_{ij}\Jc(ij)\,\langle\tilde J_{ix}\tilde J_{jx}\rangle
+= \frac{N}{2\beta}\sum_n \frac1N \sum_{\mathbf q} \Jc(\mathbf q)\, G(\mathbf q,\wn)
+= \frac{N}{2\beta}\sum_n K(\wn)\, G(\wn), \tag{32} $$
+<p>by the definition (14) of \( K \) &mdash; no approximation involved.</p>
+<p><b>Single-site energy (exact, via the equation of motion).</b> By (4), the exact Heisenberg equation for \( X \) is governed by \( \Delta a_{11} \) alone: \( \dot X(\tau) = [\mathcal H, X] = \Delta\,(b^\dagger - b) \), hence \( \Delta X - \dot X = 2\Delta\, b \). Consider \( Q(\tau) = \langle T\,(\Delta X - \dot X)(\tau)\, X(0)\rangle \). Since \( G_X(\beta^-) = G_X(0^-) = G_X(0^+) \) (bosonic periodicity, commuting equal-time operators), partial integration gives no boundary terms and \( \langle T\dot X(\tau)X(0)\rangle \) transforms to \( -\wn\, \langle TXX\rangle(\wn) \), so \( Q(\wn) = (\Delta+\wn)\langle TXX\rangle(\wn) \), i.e.</p>
+$$ Q(\wn) = -\,(\Delta + \wn)\, G_X(\wn), \qquad G_X = G/M^2 \;\;(m=0). $$
+<p>Its equal-time limit from \( \tau\to0^- \) (convergence factor \( e^{\wn 0^+} \)) is \( \langle X\cdot 2\Delta b\rangle = 2\Delta\langle b^\dagger b\rangle = 2\Delta\langle a_{11}\rangle \), the <em>exact</em> upper-level population. Therefore</p>
+$$ \langle \mathcal H_0\rangle = N\Delta\,\langle a_{11}\rangle = \frac{N}{2\beta}\sum_n e^{\wn 0^+}\,\Big[-\frac{\Delta+\wn}{M^2}\Big]\, G(\wn) . \tag{33} $$
+<p><i>Check at MF level</i>: \( (\Delta+\wn)\,g = 2n_{01}\Delta/(\Delta-\wn) \), and \( \frac1\beta\sum_n e^{\wn0^+}(\Delta-\wn)^{-1} = n_B(\Delta) \) with \( n_{01}\, n_B(\Delta) = n_1 \), so (33) gives \( N\Delta n_1 \) &nbsp;&#10003;. Subtracting the MF energy \( U_{\rm MF} = N\Delta n_1 \) (the MF interaction energy vanishes in the paramagnet):</p>
+$$ \boxed{\; \delta U = \frac{N}{2\beta}\sum_n \Big[ K(\wn) - \frac{\Delta+\wn}{M^2} \Big] G(\wn) \;-\; N\, n_1 \Delta \;} \tag{34} $$
+<p><span class="jref">J 2.21</span> &mdash; exact given \( G \); the frequency-odd piece of \( \wn G \) requires the convergence factor.</p>
+</div>
+<h3>8.2 &nbsp;Evaluation to first order in 1/z</h3>
+<div class="box quoted"><span class="tag">Two terms derived; population term is Jensen&rsquo;s resummed form &rarr; J 2.22</span>
+<p>Insert \( G = G_0 - G_0[KG_0+\Sigma] \) into (34). The \( -(\Delta+\wn)G_0/M^2 \) piece cancels \( -Nn_1\Delta \) (the MF check above); the term \( \frac{1}{\beta}\sum_n K G_0 = -M^2\lambda_1 \) is exact by definition (21); and the remainder of the interaction part is kept as \( \frac1\beta\sum_n K(G-G_0) \). The population shift extracted from (33) resums, at leading order in \(1/z\), into a renormalization of the population difference \( n_{01}\to n_{01}/(1+\alpha) \) (the same \( 1+\Sigma(0)\)-type factor that renormalizes the static single-ion response), i.e. \( \delta\langle a_{11}\rangle = \tfrac12\,\alpha\, n_{01}/(1+\alpha) \). Together <span class="jref">J 2.22</span>:</p>
+$$ \delta U = \frac N2 \left\{ \frac{\alpha\, n_{01}\Delta}{1+\alpha} \;-\; M^2 \lambda_1 \;+\; \frac1\beta\sum_n K(\wn)\big[ G(\wn) - G_0(\wn) \big] \right\}, \tag{35} $$
+<p>and the fluctuation contribution to the heat capacity is \( \delta C = d(\delta U)/dT \), to be added to the MF (Schottky) term. Note that \( \delta U \) itself does <em>not</em> vanish as \( T\to0 \): the \( \lambda_p \) tend to finite zero-temperature integrals, and \( \delta U(0) \) is the zero-point energy shift produced by the fluctuations (Jensen quotes \( \delta U/N = -9.06\;\mu\)eV for HoF<sub>3</sub> in the low-temperature limit). It is the heat-capacity correction \( \delta C \) that vanishes exponentially as \( T\to0 \), as it must for a gapped singlet ground state.</p>
+</div>
+<h2 id="s9">9 &nbsp;Ordered phase and finite field (m &ne; 0)</h2>
+<h3>9.1 &nbsp;The modified mean field</h3>
+<div class="box derived"><span class="tag">Rationale derived &rarr; J 2.24, 2.25</span>
+<p>
+Beyond MF theory the fluctuations shift the moment, so if the perturbation split is made around the <em>bare</em> MF Hamiltonian, the series contains nonzero first cumulants \( \langle \tilde J_x\rangle_0 \neq 0 \) (&ldquo;tadpole&rdquo; insertions) at every order. Jensen instead <em>defines</em> the single-site Hamiltonian by the requirement that the MF expectation value equals the exact one <span class="jref">J 2.24</span>,
+</p>
+$$ \langle J_x \rangle = \langle J_x \rangle_0 = m\, n_{01}, \tag{36} $$
+<p>
+which cancels all tadpole insertions identically. The field entering the single-ion problem is then not the naive \( H_0 \), defined by \( g\mu_B H_0 = g\mu_B H + \Jc(\mathbf 0)\langle J_x\rangle \) <span class="jref">J 2.25</span> (with \( H \) the applied field), but a shifted \( H_{\rm MF} = H_0 - \delta H \). The shift \( \delta H \) is itself \( O(1/z) \), and the residual perturbation \( \mathcal H_2 = -g\mu_B\,\delta H \sum_i \tilde J_{ix} \) contributes to \( G \) only at relative order \( (\delta H)^2 = O(1/z^2) \), so to first order in \( 1/z \) one simply solves the single-ion problem in the field \( H_{\rm MF} \) determined self-consistently below (Sec. 9.3). All quantities \( \Delta, M, m, n_{01}, g, h, G_0 \) are understood as functions of \( H_{\rm MF} \).
+</p>
+<div class="caution"><span class="tag">Erratum in the published paper</span>
+The published paper prints <span class="jref">J 2.24</span> as &ldquo;\( \langle J_x\rangle = \langle J_x\rangle_0 = m^2 n_{01} \)&rdquo;. This is a typo in the print itself, not a scanning artifact: the definition of \( m \) (diagonal elements \( \pm m \)) gives \( \langle J_x\rangle_0 = m n_0 - m n_1 = m\, n_{01} \), and differentiating \( m\, n_{01} \) with respect to \( H_{\rm MF} \) reproduces \( -G_0(0) = M^2 g(0) + m^2\beta(1-n_{01}^2) \) exactly as <span class="jref">J 2.31</span> requires, whereas \( m^2 n_{01} \) does not. Equation (36) uses the corrected form.
+</div>
+</div>
+
+<h3>9.2 &nbsp;Elastic (m&sup2;) modifications of &Sigma;</h3>
+<div class="box quoted"><span class="tag">Quoted with commentary &rarr; J 2.26&ndash;2.29</span>
+<p>
+When \( m\neq0 \), \( G_0 \) acquires the elastic term \( -m^2 h \), and the fourth-order semi-invariants mix diagonal and off-diagonal operators. The additional contributions are evaluated with one stated simplification: in the \( n' \) sums, factors \( g(\wm \pm \wn) \) are replaced by their static value \( g(\wm) \) &mdash; exact at \( \omega_n = 0 \), approximate at finite frequency &mdash; and the purely elastic (zero-frequency) sector is treated in a resummed, static approximation. The result replaces (22)&ndash;(23) by <span class="jref">J 2.26, 2.27</span>
+</p>
+$$ \Sigma(\wn) = \alpha - \alpha_m + \Big[\gamma(\wn) - \frac{2m^2}{M^2}\,\gamma(0)\Big]\, g(\wn), \tag{37} $$
+$$ \alpha_m = \frac{m^2}{n_{01}^2}\Big\{ \lambda_2 - g(0)\,\lambda_1 + \frac{4}{g(0)}\,\lambda_3
+- (1-n_{01}^2)\big( 1 + \tfrac12 \beta\Delta\, n_{01} \big)\, K(0)\, g(0) \Big\}, \tag{38} $$
+<p>with \( \gamma \) and \( \lambda_p \) as in (23), (21). At zero frequency the single-site function is written <span class="jref">J 2.28, 2.29</span></p>
+$$ G(0) = \frac{-M^2 g(0)}{1+\Sigma(0) - M^2 K(0) g(0)} \;-\; m^2\, \xi\, h(0), \tag{39} $$
+$$ \xi = \frac{ 1 + \tanh\!\big[\, m^2 n_{01}^2\, \beta K(0) - M^2 \beta\, \lambda_1 \,\big] }
+{ 1 + \big[\, 4 n_{01}^2 K(0)\, g(0) + 2\lambda_2 + g(0)\lambda_1 \,\big] M^2 / n_{01}^2 }, \tag{40} $$
+<p>
+where the \( \tanh \) in the numerator of \( \xi \) is Jensen&rsquo;s resummation of the leading (linear) term of the \(1/z\) expansion of the elastic weight &mdash; chosen because the linear term, multiplied by \( h(0) = \beta(1-n_{01}^2) \), diverges at low \( T \) while the resummed form is bounded; the exponential vanishing of \( h(0) \) then keeps the elastic corrections finite at all \( T \). At \( \omega_n \neq 0 \), (29) is used with (37); at \( \omega_n = 0 \), (39) is inserted directly into the effective-medium form (15).
+</p>
+<div class="box derived"><span class="tag">Transcription verified against the published PDF</span>
+<p>Equations (38) and (40) have been checked term by term against the published paper: the \( \lambda_p \) subscripts, the \( (4/g(0))\lambda_3 \) and \( (1-n_{01}^2)(1+\tfrac12\beta\Delta\, n_{01})K(0)g(0) \) groupings in (38), and the \( \tanh \) argument \( m^2 n_{01}^2\beta K(0) - M^2\beta\lambda_1 \) and denominator term \( 4 n_{01}^2 K(0) g(0) \) in (40) all match <span class="jref">J 2.27</span> and <span class="jref">J 2.29</span> exactly.</p>
+</div>
+</div>
+
+<h3>9.3 &nbsp;Self-consistent relation between the applied field and H<sub>MF</sub></h3>
+<div class="box derived"><span class="tag">Derived in full &rarr; J 2.31&ndash;2.33</span>
+<p>
+The MF moment is generated by the single-ion problem in the field \( H_{\rm MF} \); its differential static response is the single-site susceptibility \( -G_0(0; H_{\rm MF}) \) (zero-frequency, \( \mathbf q \)-independent), so <span class="jref">J 2.31</span>
+</p>
+$$ d\langle J_x\rangle_0 = -\,g\mu_B\, G_0(0; H_{\rm MF})\, dH_{\rm MF}
+\quad\Longrightarrow\quad
+\langle J_x \rangle = -\,g\mu_B \int_0^{H_{\rm MF}} G_0(0; H')\, dH'. \tag{41} $$
+<p>
+On the other hand, the exact differential response to the <em>applied</em> field is the bulk \( \mathbf q=\mathbf 0 \) static susceptibility: \( d\langle J_x\rangle = -g\mu_B\, G(\mathbf 0, 0)\, dH \). From (2.25), \( dH_0 = dH + [\Jc(\mathbf 0)/g\mu_B]\, d\langle J_x\rangle = \big[1 - \Jc(\mathbf 0) G(\mathbf 0,0)\big] dH \). Equating the two expressions for \( d\langle J_x\rangle \) (using (36)) gives <span class="jref">J 2.32</span>
+</p>
+$$ G(\mathbf 0, 0) = G_0(0; H_{\rm MF})\, \big[ 1 - \Jc(\mathbf 0)\, G(\mathbf 0,0) \big]\, \frac{dH_{\rm MF}}{dH_0}. \tag{42} $$
+<p>
+Now use the effective-medium/RPA structure at \( \mathbf q = \mathbf 0,\ \omega=0 \): from (15) and (30), \( G(\mathbf 0,0) = \tilde G_0 / [1 + \Jc(\mathbf 0)\tilde G_0] \) with \( \tilde G_0 \equiv G(0)/[1-K(0)G(0)] \), hence \( 1 - \Jc(\mathbf 0) G(\mathbf 0,0) = [1+\Jc(\mathbf 0)\tilde G_0]^{-1} \). Substituting into (42), the factors \( [1+\Jc(\mathbf 0)\tilde G_0] \) cancel and the differential equation separates:
+</p>
+$$ \tilde G_0(0;H_{\rm MF}) = G_0(0; H_{\rm MF})\, \frac{dH_{\rm MF}}{dH_0}
+\quad\Longrightarrow\quad
+\boxed{\; H_0 = \int_0^{H_{\rm MF}} \frac{G_0(0; H')}{\tilde G_0(0; H')}\, dH' \;} \tag{43} $$
+<p>
+<span class="jref">J 2.33</span>. Together with \( g\mu_B H_0 = g\mu_B H + \Jc(\mathbf 0)\langle J_x\rangle \) and (41), equation (43) determines \( H_{\rm MF} \) (hence \( \delta H = H_0 - H_{\rm MF} \)) for a given applied field \( H \). Since \( \tilde G_0 = G_0/(1+\Sigma) \) away from the elastic subtleties, the integrand is essentially \( 1 + \Sigma(0; H') \): the fluctuation renormalization accumulated along the magnetization curve.
+</p>
+</div>
+
+<h3>9.4 &nbsp;Free-energy consistency test</h3>
+<div class="box derived"><span class="tag">Derived in full &rarr; J 2.34</span>
+<p>
+Because \( \langle J_x\rangle = \langle J_x\rangle_0 \), the thermodynamic relation \( dF/N = -g\mu_B \langle J_x\rangle\, dH \) holds with the MF moment. Compare the \(1/z\) theory with the pure MF theory <em>at the same single-ion state</em> (same \( H_{\rm MF} \), same \( \langle J_x\rangle \)): the applied fields then differ by exactly \( \delta H = H_0 - H_{\rm MF} \). Legendre transform \( \Phi = F + N g\mu_B \langle J_x\rangle H \), so \( d\Phi = N g\mu_B H\, d\langle J_x\rangle \) and the difference between the theories at fixed moment obeys \( d(\delta\Phi) = N g\mu_B\, \delta H\, d\langle J_x\rangle \). Integrate from saturation \( \langle J_x\rangle = M_0 \) (infinite field, fluctuations quenched, \( \delta\Phi = 0 \)) down to \( \langle J_x\rangle = 0 \) (zero field, where \( \Phi = F \)):
+</p>
+$$ \delta F(m=0) = -\,N \int_0^{M_0} g\mu_B\, \delta H \; d\langle J_x \rangle . \tag{44} $$
+<p>
+<span class="jref">J 2.34</span>. The same quantity is obtained independently by temperature-integrating \( \delta U \) of (35) (via \( \delta F = -T\int (\delta U/T^2) dT \) from \( T=\infty \)); agreement of the two routes is a stringent global check on a numerical implementation, since (44) probes the field dependence of \( \Sigma \) while (35) probes its frequency structure.
+</p>
+</div>
+
+<h2 id="s10">10 &nbsp;Computational recipe and generalization</h2>
+<p>For a given temperature (paramagnetic phase; generalization below), the self-consistency loop is:</p>
+<ol class="steps">
+  <li>Solve the single-ion MF problem: \( \Delta, M, m, n_{01} \Rightarrow G_0(\wn) \) from (11), on a grid of Matsubara frequencies (the \( \lambda_p \) sums converge like \( \omega_n^{-4} \), rapidly).</li>
+  <li>Initialize with RPA: \( \Sigma = 0 \), \( G(\mathbf q,\wn) \) from (29).</li>
+  <li>Brillouin-zone averages: \( G(\wn) \) and \( K(\wn) \) from (14). For dipolar \( \Jc(\mathbf q) \) use Ewald summation; the averages are efficiently done once per lattice via a density-of-states representation of \( \Jc(\mathbf q) \).</li>
+  <li>Update \( \lambda_1, \lambda_2 \) from (21), then \( \gamma(\wn) \), \( \alpha \), \( \Sigma(\wn) \) from (23), (27), (22).</li>
+  <li>Recompute \( G(\mathbf q,\wn) \) from (29); iterate 3&ndash;5 to convergence.</li>
+  <li>Checks: sum rule (31) at every iteration (exact for the truncated series; the resummed self-consistent \( G \) obeys it only to high accuracy, so tolerate a small residual); \( \delta U \) from (34) vs. (35); near criticality, \( T_c \) is where \( 1+\Sigma(0)+\Jc(\mathbf q_{\rm ord}) G_0(0) \to 0 \), i.e. the MF/RPA \( T_c \) is suppressed by the factor \( 1+\Sigma(0) \) renormalizing the single-ion response.</li>
+</ol>
+<p>
+<b>Ordered phase / finite field:</b> add the outer loop of Sec. 9.3 determining \( H_{\rm MF} \) from \( H \) via (41), (43), and use the elastic-sector forms (37)&ndash;(40).
+</p>
+<p>
+<b>Generalization to realistic level schemes (from Sec. III of the paper, framework-level):</b> the entire construction survives with the single-ion response \( G_0 \) replaced by the full Cartesian susceptibility tensor of the actual crystal-field (+ hyperfine) level scheme, and multiple sublattices handled by the standard RPA matrix inversion; the \(1/z\) renormalization enters as division of the susceptibility components deriving from the dominant singlet&ndash;singlet (or doublet) transition by \( 1+\Sigma(\omega) \), with \( \Sigma \) computed from that sector; Jensen renormalizes <em>only</em> those components, neglecting the \(1/z\) corrections to the weaker transitions. Hyperfine coupling \( A\,\mathbf I\cdot\mathbf J \) enhances the static single-ion response, \( \tilde\chi_{\rm eff} = \tilde\chi\,(1 + A^2 \tilde\chi\, \chi_I) \) with \( \chi_I \) the nuclear Curie susceptibility, and correspondingly \( K(0) \to K(0)(1 + A^2\tilde\chi\,\chi_I) \) in the elastic sector &mdash; the mechanism by which nuclear moments shift \( T_c \) in LiHoF<sub>4</sub>-type systems.
+</p>
+<p>
+<b>Validity:</b> the theory is exact through \( O(1/z) \); dropped terms are \( O(1/z^2) \). It is <em>not</em> a critical theory &mdash; exponents remain MF-like &mdash; but for three-dimensional dipolar Ising systems (marginal dimensionality) the true critical behaviour differs from MF only by logarithmic corrections, so the \(1/z\)-renormalized MF/RPA description is quantitatively accurate essentially everywhere, including the location of \( T_c \) and the size of its fluctuation suppression.
+</p>
+
+<footer>
+<p><b>Source:</b> J. Jensen, <i>1/z renormalization of the mean-field behavior of the dipole-coupled singlet&ndash;singlet system HoF<sub>3</sub></i>, Phys. Rev. B <b>49</b>, 11833 (1994), Secs. I&ndash;II. Related treatments cited there: J. Jensen, J. Phys. C <b>17</b>, 5367 (1984) (the effective-medium method); R. B. Stinchcombe, J. Phys. C <b>6</b>, 2459 (1973) (systematic 1/z expansion); D. H.-Y. Yang and Y.-L. Wang, Phys. Rev. B <b>10</b>, 4714 (1974), and C. M. Care and J. W. Tucker, J. Phys. C <b>10</b>, 2773 (1977) (standard-basis-operator contractions); Y. Galili and V. Zevin, J. Phys. C <b>20</b>, 2543 (1987) (renormalized unconditional expansion).</p>
+<p>Equations tagged <span class="jref">J 2.x</span> map to the paper&rsquo;s numbering. Green boxes are self-contained derivations verified independently; amber boxes reproduce Jensen&rsquo;s stated results with the derivation route indicated; the red note flags a confirmed typo in the published equation <span class="jref">J 2.24</span>. All transcribed equations have been verified against the published PDF, and equations (19), (20) and (26) additionally verified numerically. Prepared July 2026.</p>
+</footer>
+
+</div>
+</body>
+</html>
