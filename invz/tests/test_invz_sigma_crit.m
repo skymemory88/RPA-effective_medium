@@ -30,12 +30,20 @@ Jq = Jq(2:end);                             % drop Gamma (f=0 origin is element 
 end
 
 function test_lihof4_sigma_crit(testCase)
-% R 2007: Sigma_c(0; H=0) = 0.3004 with J12 = -0.1 ueV.  SLOW (dipole sums on a 3D grid).
+% R 2007 eq (10): Sigma_c(0; H=0) = 0.3004 with J12 = -0.1 ueV.  SLOW (dipole sums on 3D grids).
+% Raw grid means converge sublinearly (integrable Gamma singularity): 0.2504/0.2639/0.2721/0.2809
+% at 8/12/16/24^3, so we Richardson-extrapolate the (12^3, 24^3) pair; controller study gives
+% 2*S24 - S12 = 0.2980 vs published 0.3004 (0.8%, different lattice-sum methods).
 assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), 'Set INVZ_SLOW=1 for slow tests');
 ion = invz_ion();
-[qvec, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'size', [16 16 16], 'range', [-0.5 0.5]);
-qvec = qvec(any(abs(qvec) > 1e-12, 2), :);          % drop Γ
-[Jnu, info] = invz_jq_modes(ion, qvec, struct('dpRng', 30, 'cache', true));
-Sc = invz_sigma_crit(info.Jcc0, Jnu(:));
-verifyEqual(testCase, Sc, 0.3004, 'AbsTol', 0.015);
+S = zeros(1,2); ns = [12 24];
+for k = 1:2
+    [T, qvec] = evalc("qVec_generator(ion.a, 'mode', 'grid', 'grid', [ns(k) ns(k) ns(k)], 'range', [-0.5 0.5])"); %#ok<ASGLU> capture fprintf noise
+    qvec = qvec(any(abs(qvec) > 1e-12, 2), :);
+    [Jnu, info] = invz_jq_modes(ion, qvec, struct('dpRng', 30, 'cache', true));
+    S(k) = invz_sigma_crit(info.Jcc0, Jnu(:));
+end
+Sc = 2*S(2) - S(1);   % Richardson over (12^3, 24^3)
+verifyEqual(testCase, Sc, 0.3004, 'AbsTol', 0.006);
+verifyEqual(testCase, info.Jcc0, 6.421e-3, 'RelTol', 0.03);
 end
