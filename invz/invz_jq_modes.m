@@ -67,7 +67,8 @@ dpRng = 30;  if isfield(opts,'dpRng'), dpRng = opts.dpRng; end
 useCache = ~isfield(opts,'cache') || opts.cache;
 C = invz_const();
 cacheDir = fullfile(fileparts(mfilename('fullpath')), 'cache');
-key = sprintf('jq_%d_%s.mat', dpRng, hash_qvec(qvec));
+pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac];
+key = sprintf('jq_%d_%s_%s.mat', dpRng, hash_vec(qvec(:)), hash_vec(pkey));
 cacheFile = fullfile(cacheDir, key);
 if useCache && exist(cacheFile, 'file')
     S = load(cacheFile);  Jnu = S.Jnu;  info = S.info;  return;
@@ -107,7 +108,7 @@ function tf = is_gamma_equiv(q, tau)
 tf = abs(real(sum(exp(2i*pi*(tau*q.'))))/size(tau,1) - 1) < 1e-9;
 end
 
-function h = hash_qvec(qvec)
-h = sprintf('%dq_%08x', size(qvec,1), ...
-    typecast(single(sum(qvec(:).*(1:numel(qvec))')), 'uint32'));
+function h = hash_vec(v)
+h = sprintf('%dv_%08x', numel(v), ...
+    typecast(single(sum(v.*(1:numel(v))')), 'uint32'));
 end

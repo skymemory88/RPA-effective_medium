@@ -26,3 +26,18 @@ verifyEqual(testCase, size(Jnu), [3 4]);
 verifyLessThan(testCase, max(abs(imag(Jnu(:)))), 1e-12);
 verifyLessThan(testCase, max(Jnu(:)), info.Jcc0 + 1e-4);   % Γ uniform mode is the max coupling
 end
+
+function test_cache_roundtrip(testCase)
+ion = invz_ion();
+q = [0.25 0 0; 0.31 0.17 0.09];
+opts = struct('dpRng', 10, 'cache', true);
+cacheDir = fullfile(fileparts(mfilename('fullpath')), '..', 'cache');
+[J1, i1] = invz_jq_modes(ion, q, opts);   % cold: computes and saves
+[J2, i2] = invz_jq_modes(ion, q, opts);   % warm: must load identical values
+verifyEqual(testCase, J2, J1, 'AbsTol', 0);
+verifyEqual(testCase, i2.Jcc0, i1.Jcc0, 'AbsTol', 0);
+% different physics params must MISS the cache (different key), not reuse it
+ion2 = ion;  ion2.J12 = -0.2e-3;
+[~, i3] = invz_jq_modes(ion2, q, opts);
+verifyEqual(testCase, i3.Jcc0 - i1.Jcc0, 4*(ion2.J12 - ion.J12), 'RelTol', 1e-9);
+end
