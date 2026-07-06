@@ -35,10 +35,11 @@ for it = 1:200                                   % transverse mean-field fixed p
         converged = true;
         break;
     end
+    dhx = abs(hx_new - hx);
     hx = hx_new;
 end
 if ~converged
-    warning('invz:mfNotConverged', 'Transverse mean field not converged after %d iterations: |dhx| = %.3g meV', it, abs(hx_new-hx));
+    warning('invz:mfNotConverged', 'Transverse mean field not converged after %d iterations: |dhx| = %.3g meV', it, dhx);
 end
 % Recompute H, eig, populations, and all output fields ONCE from the final
 % converged hx, so the returned struct is exactly self-consistent with si.hx.
