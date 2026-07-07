@@ -1,1 +1,0 @@
-# RPA-effective_medium
