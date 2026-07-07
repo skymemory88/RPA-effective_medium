@@ -57,6 +57,12 @@ Dependency direction is strictly top-to-bottom; T11 is the only consumer of
 | `invz_critical` | `bx = invz_critical(ion,T,Jnu_flat,opts)` | critical transverse field Bc(T), bisection on `pt.crit` |
 | `invz_chi_realaxis` | `out = invz_chi_realaxis(ion,T,Bx,pt,w,opts)` | `out.Sigma_w,chi0cc_w,chi_cc_q[nJsel,nw]` real-axis spectra |
 
+## Prerequisites
+
+Repo-root `MF_dipole.m`, `exchange.m`, `qVec_generator.m` (tracked). `src/` is
+optional — one cross-check test (`test_matches_existing_src_formula` in
+`invz/tests/test_invz_sigma.m`) auto-skips (via `assumeTrue`) if it is absent.
+
 ## Running the tests
 
 Fast suite (seconds; the default/CI gate):
@@ -66,9 +72,10 @@ Fast suite (seconds; the default/CI gate):
 ```
 
 Full suite including the slow, physics-benchmark tests (Jq caches for 12/16/24³
-grids at `dpRng=30` are pre-warmed in `invz/cache/`, so even the "slow" tests
-typically run in well under a minute once warm; cold-cache runs of the
-dipole-sum-heavy tests can take several minutes):
+grids at `dpRng=30` are pre-warmed in `invz/cache/` in this working tree, so
+even the "slow" tests typically run in well under a minute once warm;
+`invz/cache/` is gitignored, so a fresh clone starts cold — cold-cache runs of
+the dipole-sum-heavy tests can then take ~10-15 min on first run):
 
 ```bash
 INVZ_SLOW=1 "/Applications/MATLAB_R2025a.app/bin/matlab" -batch "results = runtests('invz/tests'); assertSuccess(results)"
@@ -99,7 +106,7 @@ printout is expected/useful for an interactive tool.
 | Tc(H=0) | 1.74 K | ≈1.74 K (`invz_critical_T0field`, AbsTol 0.08) | R 2007 |
 | Hc(0.31 K) | 42.4-43 kOe | within [4.0,4.6] T bisection window | R 2007 Fig. 1/2 |
 | Σ(0) at Hc(0.31 K) | 0.0932 | AbsTol 0.02 | R 2007 |
-| Soft-mode energy at H≈Hc, T=0.31 K | ≈0.19 meV (calc.) | measured ≈0.19-0.22 meV in `[0.10,0.28]` band | R 2007 Fig. 2 |
+| Soft-mode energy at H≈Hc, T=0.31 K | ≈0.19 meV (calc.) | computed 0.22 meV (within the [0.10, 0.28] acceptance band; published calculation ≈0.19 meV, R 2007 Fig. 2) | R 2007 Fig. 2 |
 
 ## Scope
 

@@ -17,7 +17,10 @@ for k = 1:numel(Ts)
     fprintf('[%d/%d] T = %.2f K : solving for Bc ...\n', k, numel(Ts), Ts(k));
     tic;
     try
-        Bc(k) = invz_critical(ion, Ts(k), Jnu(:), struct('J0eff', info.Jcc0));
+        % Wide bracket: high-T points near Tc need a wider window to bracket
+        % the boundary (e.g. Hc(1.6 K) ~ 1.5-2 T, close to the default lower
+        % edge), while low-T points need the upper edge to reach ~4-5 T.
+        Bc(k) = invz_critical(ion, Ts(k), Jnu(:), struct('J0eff', info.Jcc0, 'window', [0.5 7]));
     catch err
         warning('T=%.2f K: %s', Ts(k), err.message);
     end

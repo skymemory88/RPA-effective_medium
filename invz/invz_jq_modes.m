@@ -71,7 +71,11 @@ pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac];
 key = sprintf('jq_%d_%s_%s.mat', dpRng, hash_vec(qvec(:)), hash_vec(pkey));
 cacheFile = fullfile(cacheDir, key);
 if useCache && exist(cacheFile, 'file')
-    S = load(cacheFile);  Jnu = S.Jnu;  info = S.info;  return;
+    S = load(cacheFile);
+    if isfield(S,'pkey') && isfield(S,'qvec') && isequal(S.pkey, pkey) && isequal(S.qvec, qvec)
+        Jnu = S.Jnu;  info = S.info;  return;
+    end
+    % stale or legacy cache entry: fall through and recompute (file will be overwritten)
 end
 nq = size(qvec,1);
 Jnu = zeros(nq, 4);
@@ -100,7 +104,7 @@ info.Jcc0 = info.Jcc0_dipole + 4*ion.J12;
 info.dpRng = dpRng;
 if useCache
     if ~exist(cacheDir,'dir'), mkdir(cacheDir); end
-    save(cacheFile, 'Jnu', 'info');
+    save(cacheFile, 'Jnu', 'info', 'pkey', 'qvec');
 end
 end
 

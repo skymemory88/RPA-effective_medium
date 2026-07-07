@@ -1,6 +1,7 @@
 function pt = invz_solve_point(ion, T, Bx, Jnu_flat, opts)
 %INVZ_SOLVE_POINT Self-consistent 1/z solution at one paramagnetic (T, Bx) point.
 % Outer loop: EMT K (Task 7) <-> lambda_p (Task 8) <-> Sigma, at fixed single-ion input.
+% Inside the ordered phase the paramagnetic EMT fixed point does not exist; outputs may be non-finite and pt.converged false — invz_critical relies on this as the ordered-phase signal. Always check pt.converged.
 if nargin < 5, opts = struct(); end
 Ecut  = 40;   if isfield(opts,'Ecut'),      Ecut  = opts.Ecut;      end
 hyp   = true; if isfield(opts,'hyp'),       hyp   = opts.hyp;       end

@@ -40,4 +40,9 @@ verifyEqual(testCase, i2.Jcc0, i1.Jcc0, 'AbsTol', 0);
 ion2 = ion;  ion2.J12 = -0.2e-3;
 [~, i3] = invz_jq_modes(ion2, q, opts);
 verifyEqual(testCase, i3.Jcc0 - i1.Jcc0, 4*(ion2.J12 - ion.J12), 'RelTol', 1e-9);
+% 5% J12 retune collides in the filename hash (single-precision sum) — the
+% content verification must force a recompute, not return stale values:
+ion3 = ion;  ion3.J12 = -0.105e-3;
+[~, i4] = invz_jq_modes(ion3, q, opts);
+verifyEqual(testCase, i4.Jcc0 - i1.Jcc0, 4*(ion3.J12 - ion.J12), 'RelTol', 1e-9);
 end
