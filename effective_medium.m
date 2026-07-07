@@ -1,741 +1,94 @@
-% Effctive_medium.m
-% Corrected implementation of effective medium theory for tensor susceptibility
-% Now supports concurrent computation over cVar (temperature/field)
+% effective_medium.m
+% Entry script for rewritten EMT backbone.
 %
-% ============================================================================
-% CRITICAL CORRECTIONS APPLIED (based on Jensen 1994, PRB 49, 11833):
-% ============================================================================
+% Required workspace variables:
+%   scanMode, freq_total, chi0, qvec, Jq
 %
-% 1. GREEN'S FUNCTION EXTRACTION (Line 554):
-%    FIXED: Always use G = -β*χ relationship, regardless of RPA/single-ion seed
-%    Theoretical basis: Eq. 2.23 and fluctuation-dissipation theorem
+% Optional workspace variables:
+%   chiq, cVar, fields, temp, dscrt_var
+%   USE_SINGLE_ION_SEED (logical)
+%   EMT_PARAMS (struct, see src/emt_default_params.m)
 %
-% 2. SUM RULE CALCULATION (sum_rule_check.m):
-%    FIXED: Use discrete Matsubara sum (1/β)Σ_n G(iω_n) = -M²
-%    Theoretical basis: Eq. 2.23 is a discrete sum, NOT a continuous integral
+% Outputs written to workspace:
+%   chi_emt, K_emt, G_local_emt, G_q_emt, effective_medium_info
+%   effective_medium_validation, effective_medium_inputs
 %
-% 3. SUM RULE CONSTRAINT (Lines 437-478):
-%    ADDED: Optional enforcement of sum rule during SCF iterations
-%    Purpose: Constrain iterations to satisfy physical sum rule
-%    Usage: Set scf_params.enforce_sum_rule = true (see line 66)
-%    Caution: Start with moderate strength (0.3-0.5) to avoid instability
-%
-% ============================================================================
+% Notes:
+% - This implementation uses a modular EMT solver in src/.
+% - Optional Track-A renormalization (lambda/X) is available via
+%   EMT_PARAMS.track_a.enabled = true.
+% - The Track-A X model is configurable (moment-based ansatz by default).
 
-close all;
+required = {'scanMode', 'freq_total', 'chi0', 'qvec', 'Jq'};
+for ii = 1:numel(required)
+    if ~exist(required{ii}, 'var')
+        error('effective_medium:missingInput', ...
+            'Missing required workspace variable: %s', required{ii});
+    end
+end
 
-%% Step 1: Load existing RPA results from MF_RPA_Yikai.m
-% Expected inputs (passed from main script):
-% - cVar: continuous variable (temperature or field) [1 x n_cVar]
-% - freq_total: frequency range [GHz] [1 x n_freq]
-% - chi0: non-interacting susceptibility [3 x 3 x n_freq x n_cVar x n_q]
-% - chi_ini: initial susceptibility [3 x 3 x n_freq x n_cVar x n_q]
-% - qvec: q-points [n_q x 3]
-% - Jq: RPA interaction [3 x 3 x n_cVar x n_q]
-% - dscrt_var: discrete variable (single value)
-
-% Extract dimensions
-use_rpa_seed = true;
-if exist('USE_SINGLE_ION_SEED','var') && USE_SINGLE_ION_SEED
-    chi_ini = repmat(chi0,1,1,1,1,length(qvec));
-    use_rpa_seed = false;
+repo_src = fullfile(pwd, 'src');
+if exist(repo_src, 'dir') == 7
+    if isempty(strfind([path pathsep], [repo_src pathsep]))
+        addpath(repo_src);
+    end
 else
-    chi_ini = chiq; % default to RPA susceptibility
-end
-n_omega = size(chi_ini, 3);  % Number of frequencies
-switch scanMode
-    case 'field'
-        n_cVar = length(fields);   % Number of continuous variable points
-        cVar = fields;
-        dscrt_var = temp;
-    case 'temperature'
-        n_cVar = length(temp);
-        cVar = temp;
-        dscrt_var = fields;
-end
-n_q = size(qvec,1);      % Number of q-points
-
-fprintf('\n=== Effective Medium Theory with cVar dependence ===\n');
-fprintf('Computing for %d %s points concurrently...\n', n_cVar, scanMode);
-fprintf('Frequencies: %d points from %.2f to %.2f GHz\n', n_omega, min(freq_total), max(freq_total));
-fprintf('Q-points: %d\n', n_q);
-fprintf('----------------------------------------------------\n');
-
-% Jq carries J(q) for each cVar: [3 x 3 x n_cVar x n_q]
-
-%% Step 2: Initialize storage for effective medium results
-% Pre-allocate arrays for all cVar points
-K_emt = zeros(3, 3, n_omega, n_cVar);           % Effective medium K
-G_local_emt = zeros(3, 3, n_omega, n_cVar);     % Local Green's function
-chi_emt = zeros(3, 3, n_omega, n_cVar);         % Effective medium susceptibility
-converged_flags = false(n_cVar, 1);             % Convergence status
-
-%% Step 3: Parallel computation over cVar
-% Setup convergence parameters (same for all cVar points)
-scf_params_base = struct();
-scf_params_base.max_iter = 5e3;
-scf_params_base.tol = 1e-5;
-scf_params_base.mixing_alpha = 0.1;
-scf_params_base.G_damp = 0.5;
-scf_params_base.verbose = false;
-
-% Sum rule constraint parameters (optional - requires M2 and omega_grid)
-% To enable sum rule enforcement, add these fields:
-scf_params_base.omega_grid = freq_total;    % Frequency grid
-scf_params_base.enforce_sum_rule = true;    % Enable constraint enforcement
-scf_params_base.sum_rule_strength = 0.3;    % Correction strength (0-1, default: 0.5)
-scf_params_base.sum_rule_interval = 50;     % Apply every N iterations (default: 50)
-% Note: Sum rule enforcement can improve convergence but may cause instability
-% if strength is too high. Start with 0.3-0.5 and adjust as needed.
-
-fprintf('\n=== Starting parallel self-consistent calculations ===\n');
-
-% Loop over continuous variable (temperature/field)
-parfor ii = 1:n_cVar
-    cVar_val = cVar(ii);
-    [beta_local, var_str] = describe_state(scanMode, cVar_val, dscrt_var);
-    chi_seed_slice = chi_ini(:,:,:,ii,:);
-    scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi_seed_slice, Jq);
-
-    [K_sol, G_sol, converged] = compute_effective_medium(scf_params, var_str);
-
-    % Store results
-    K_emt(:,:,:,ii) = K_sol;
-    G_local_emt(:,:,:,ii) = G_sol;
-    converged_flags(ii) = converged;
-
-    % Compute susceptibility: χ = -G/β
-    for iw = 1:n_omega
-        chi_emt(:,:,iw,ii) = -G_sol(:,:,iw) / beta_local;
-    end
+    error('effective_medium:missingSrc', 'src/ directory not found.');
 end
 
-% Check convergence status
-n_converged = sum(converged_flags);
-fprintf('\n=== Convergence Summary (Initial) ===\n');
-fprintf('Converged: %d / %d points (%.1f%%)\n', n_converged, n_cVar, 100*n_converged/n_cVar);
+data = struct();
+data.scanMode = scanMode;
+data.freq_total = freq_total;
+data.chi0 = chi0;
+data.qvec = qvec;
+data.Jq = Jq;
 
-% Neighbor-seeding retry for non-converged points
-if n_converged < n_cVar && n_converged > 0
-    fprintf('\n=== Retrying non-converged points with neighbor seeding ===\n');
-    non_converged_indices = find(~converged_flags);
-    retry_success = 0;
-
-    for jj = 1:length(non_converged_indices)
-        ii = non_converged_indices(jj);
-        cVar_val = cVar(ii);
-
-        [beta_local, var_str] = describe_state(scanMode, cVar_val, dscrt_var);
-
-        % Find nearest converged neighbor(s)
-        converged_indices = find(converged_flags);
-        if isempty(converged_indices)
-            continue;
-        end
-
-        chi_seed_slice = chi_ini(:,:,:,ii,:);
-        scf_params = prepare_scf_params(scf_params_base, beta_local, n_omega, n_q, chi_seed_slice, Jq);
-
-        % Try multiple neighbor strategies
-        converged_this_point = false;
-
-        % Strategy 1: Single nearest neighbor
-        [distances, sort_idx] = sort(abs(converged_indices - ii));
-        neighbor_idx = converged_indices(sort_idx(1));
-
-        fprintf('  Retry %s using nearest neighbor (idx=%d)...\n', var_str, neighbor_idx);
-        K_init = K_emt(:,:,:,neighbor_idx);
-        G_init = G_local_emt(:,:,:,neighbor_idx);
-
-        [K_sol, G_sol, converged] = compute_effective_medium_seeded(...
-            scf_params, var_str, K_init, G_init);
-
-        if converged
-            [converged_this_point, closure_val] = seed_acceptable(K_sol, G_sol, scf_params.J_q, ...
-                'Seeded solution');
-            if converged_this_point
-                fprintf('    Accepted (closure %.2e)\n', closure_val);
-            end
-        else
-            % Strategy 2: Try second-nearest neighbor if available
-            if length(converged_indices) >= 2
-                neighbor_idx2 = converged_indices(sort_idx(2));
-                fprintf('  Retry %s using 2nd-nearest neighbor (idx=%d)...\n', var_str, neighbor_idx2);
-                K_init = K_emt(:,:,:,neighbor_idx2);
-                G_init = G_local_emt(:,:,:,neighbor_idx2);
-
-                [K_sol, G_sol, converged] = compute_effective_medium_seeded(...
-                    scf_params, var_str, K_init, G_init);
-
-                if converged
-                    [converged_this_point, closure_val] = seed_acceptable(K_sol, G_sol, scf_params.J_q, ...
-                        'Seeded solution (2nd)');
-                    if converged_this_point
-                        fprintf('    2nd neighbor accepted (closure %.2e)\n', closure_val);
-                    end
-                end
-            end
-
-            % Strategy 3: Interpolate between two nearest neighbors
-            if ~converged_this_point && length(converged_indices) >= 2
-                neighbor_idx1 = converged_indices(sort_idx(1));
-                neighbor_idx2 = converged_indices(sort_idx(2));
-
-                % Weighted interpolation based on distance
-                d1 = abs(neighbor_idx1 - ii);
-                d2 = abs(neighbor_idx2 - ii);
-                w1 = d2 / (d1 + d2);  % Closer neighbor gets more weight
-                w2 = d1 / (d1 + d2);
-
-                fprintf('  Retry %s using interpolation (idx=%d,%.2f + idx=%d,%.2f)...\n', ...
-                    var_str, neighbor_idx1, w1, neighbor_idx2, w2);
-
-                K_init = w1 * K_emt(:,:,:,neighbor_idx1) + w2 * K_emt(:,:,:,neighbor_idx2);
-                G_init = w1 * G_local_emt(:,:,:,neighbor_idx1) + w2 * G_local_emt(:,:,:,neighbor_idx2);
-
-                [K_sol, G_sol, converged] = compute_effective_medium_seeded(...
-                    scf_params, var_str, K_init, G_init);
-
-                if converged
-                    [converged_this_point, closure_val] = seed_acceptable(K_sol, G_sol, scf_params.J_q, ...
-                        'Seeded solution (interp)');
-                    if converged_this_point
-                        fprintf('    Interpolation accepted (closure %.2e)\n', closure_val);
-                    end
-                end
-            end
-        end
-
-        % Update results if any retry path succeeded
-        if converged_this_point
-            K_emt(:,:,:,ii) = K_sol;
-            G_local_emt(:,:,:,ii) = G_sol;
-            converged_flags(ii) = true;
-            retry_success = retry_success + 1;
-
-            % Compute susceptibility
-            for iw = 1:n_omega
-                chi_emt(:,:,iw,ii) = -G_sol(:,:,iw) / beta_local;
-            end
-        end
-    end
-
-    n_converged = sum(converged_flags);
-    fprintf('  Neighbor seeding: %d additional points converged\n', retry_success);
+if exist('chiq', 'var')
+    data.chiq = chiq;
+end
+if exist('cVar', 'var')
+    data.cVar = cVar;
+end
+if exist('fields', 'var')
+    data.fields = fields;
+end
+if exist('temp', 'var')
+    data.temp = temp;
+end
+if exist('dscrt_var', 'var')
+    data.dscrt_var = dscrt_var;
+end
+if exist('USE_SINGLE_ION_SEED', 'var')
+    data.use_single_ion_seed = logical(USE_SINGLE_ION_SEED);
+else
+    data.use_single_ion_seed = false;
 end
 
-fprintf('\n=== Final Convergence Summary ===\n');
-fprintf('Converged: %d / %d points (%.1f%%)\n', n_converged, n_cVar, 100*n_converged/n_cVar);
-if n_converged < n_cVar
-    warning('%d points did not converge!', n_cVar - n_converged);
+if exist('EMT_PARAMS', 'var')
+    params = EMT_PARAMS;
+else
+    params = struct();
 end
 
-plot_comparison(cVar, freq_total, chi_ini, chi_emt, scanMode, dscrt_var);
+outputs = emt_run_from_workspace(data, params);
 
-%% Supporting Functions
+chi_emt = outputs.chi_emt;
+K_emt = outputs.K_emt;
+G_local_emt = outputs.G_local_emt;
+G_q_emt = outputs.G_q_emt;
 
-%% Utility: compute initial K from G_RPA using one iteration
-function K_init = compute_K_from_G(G_RPA, J_q, n_omega, n_q)
-    % Compute a consistent initial guess for K given G_RPA
-    % Uses K_temp = 0 to compute G(q,ω), then derives K from self-consistency
+effective_medium_info = outputs.info;
+effective_medium_validation = outputs.validation;
+effective_medium_inputs = outputs.inputs;
 
-    I3 = eye(3);
-    K_init = zeros(3, 3, n_omega);
-
-    for iw = 1:n_omega
-        G_local_iw = G_RPA(:,:,iw);
-        sum_JG = zeros(3, 3);
-
-        for iq = 1:n_q
-            J_q_iq = J_q(:,:,iq);
-
-            % Compute G(q,ω) with K = 0 assumption
-            % G(q,ω) = [I + J(q)*G_RPA]^(-1) * G_RPA
-            denom = I3 + J_q_iq * G_local_iw;
-
-            % Regularize if needed
-            rc = rcond(denom);
-            if isnan(rc) || isinf(rc) || rc < 1e-10
-                denom = denom + 1e-8 * I3;
-            end
-
-            G_q_iw = denom \ G_local_iw;
-
-            % Accumulate J(q) * G(q,ω)
-            sum_JG = sum_JG + J_q_iq * G_q_iw;
-        end
-
-        % Average over q
-        sum_JG = sum_JG / n_q;
-
-        % Compute K = sum_JG / G_RPA
-        rc_G = rcond(G_local_iw);
-        if ~isnan(rc_G) && ~isinf(rc_G) && rc_G > 1e-12
-            K_tmp = sum_JG / G_local_iw;
-            % Symmetrize
-            K_tmp = (K_tmp + K_tmp') / 2;
-            if ~any(isnan(K_tmp(:))) && ~any(isinf(K_tmp(:)))
-                K_init(:,:,iw) = K_tmp;
-            end
-        end
-    end
+if isfield(params, 'enable_plot')
+    enable_plot = logical(params.enable_plot);
+else
+    enable_plot = true;
 end
 
-%% Utility: compute max closure residual across frequencies for a candidate solution
-function max_res = closure_residual_max(K_in, G_local_in, J_q_in)
-    I3 = eye(3);
-    [~,~,n_omega] = size(G_local_in);
-    n_q_loc = size(J_q_in, 3);
-    max_res = 0;
-    for iw = 1:n_omega
-        Gl = G_local_in(:,:,iw);
-        K  = K_in(:,:,iw);
-        sumJG = zeros(3,3);
-        for iq = 1:n_q_loc
-            D = I3 + (J_q_in(:,:,iq) - K) * Gl;
-            % Regularize if needed
-            rc = rcond(D);
-            if isnan(rc) || isinf(rc) || rc < 1e-10
-                D = D + 1e-8 * I3;
-            end
-            Gq = D \ Gl;
-            sumJG = sumJG + J_q_in(:,:,iq) * Gq;
-        end
-        sumJG = sumJG / n_q_loc;
-        denom = norm(K*Gl, 'fro') + eps;
-        res = norm(sumJG - K*Gl, 'fro') / denom;
-        if res > max_res
-            max_res = res;
-        end
-    end
-end
-
-%% Function 1: Self-consistent effective medium calculation (entry point)
-function [K, G_local, converged] = compute_effective_medium(scf_params, var_str)
-    % Entry point - calls internal function with no initial seed
-    [K, G_local, converged] = compute_effective_medium_seeded(scf_params, var_str, [], []);
-end
-
-%% Function 2: Self-consistent effective medium calculation with optional seeding
-function [K, G_local, converged] = compute_effective_medium_seeded(scf_params, var_str, K_seed, G_seed)
-    % Extract parameters
-    n_omega = scf_params.n_omega;
-    n_q = scf_params.n_q;
-    G0_RPA = scf_params.G0;
-    J_q_RPA = scf_params.J_q;
-
-    % Initialize with provided seed if available, otherwise use default
-    if ~isempty(K_seed) && ~isempty(G_seed)
-        K_init = K_seed;
-        G_local_init = G_seed;
-    else
-        K_init = [];
-        G_local_init = [];
-    end
-
-    opts = struct('mixing_alpha', scf_params.mixing_alpha, ...
-                  'G_damp', scf_params.G_damp, ...
-                  'max_iter', scf_params.max_iter);
-
-    [K, G_local, converged, final_iter, residual] = ...
-        attempt_convergence(scf_params, G0_RPA, J_q_RPA, n_omega, n_q, opts, K_init, G_local_init);
-
-    if converged
-        fprintf('  %s: Converged in %d iterations (residual = %.2e)\n', var_str, final_iter, residual);
-    else
-        fprintf('  %s: Not converged after %d iterations (residual = %.2e)\n', var_str, final_iter, residual);
-    end
-end
-
-%% Attempt convergence with adaptive step
-function [K, G_local, converged, final_iter, final_residual] = ...
-    attempt_convergence(scf_params, G0_RPA, J_q_RPA, n_omega, n_q, opts, K_init, G_local_init)
-
-    % Initialize K and G_local (use provided initial guess if available)
-    if isempty(K_init) || isempty(G_local_init)
-        G_local = G0_RPA;  % Start with RPA Green's function
-
-        % Compute consistent K_init from G_RPA using one iteration
-        % This gives a much better starting point than K = 0
-        K = compute_K_from_G(G0_RPA, J_q_RPA, n_omega, n_q);
-    else
-        K = K_init;
-        G_local = G_local_init;
-    end
-
-    % Adaptive mixing parameters
-    mixing_alpha = opts.mixing_alpha;
-    G_damp = opts.G_damp;
-
-    residual_history = zeros(opts.max_iter, 1);
-
-    % Sum rule validation and constraint setup
-    use_sum_rule = false;
-    enforce_sum_rule = false;  % Flag to enforce (project) vs just monitor
-    sum_rule_intv = 50;  % Apply constraint every N iterations
-    sum_rule_frac = 0.5;  % Fraction of violation to correct (0-1)
-    sum_rule_frac_min = 0.1;  % Minimum enforcement strength
-    sum_rule_frac_max = 0.9;  % Maximum enforcement strength
-    if isfield(scf_params, 'M2') && isfield(scf_params, 'omega_grid')
-        use_sum_rule = true;
-        M2 = scf_params.M2;
-        omega_grid = scf_params.omega_grid;
-        sum_rule_check_interval = 50; % Check every 50 iterations (aligned with enforcement)
-        sum_rule_history = zeros(opts.max_iter, 1);
-        sum_rule_enforcement_history = zeros(opts.max_iter, 1);  % Track enforcement events
-
-        % Enable enforcement if requested in scf_params
-        if isfield(scf_params, 'enforce_sum_rule') && scf_params.enforce_sum_rule
-            enforce_sum_rule = true;
-            if isfield(scf_params, 'sum_rule_strength')
-                sum_rule_frac = scf_params.sum_rule_strength;
-            end
-            if isfield(scf_params, 'sum_rule_interval')
-                sum_rule_intv = scf_params.sum_rule_interval;
-                sum_rule_check_interval = sum_rule_intv;  % Align validation with enforcement
-            end
-        end
-    end
-
-    % Main SCF loop
-    converged = false;
-    final_iter = opts.max_iter;
-    final_residual = inf;
-
-    % Suppress warnings for nearly singular matrices (we handle them explicitly)
-    warning_state = warning('query', 'MATLAB:nearlySingularMatrix');
-    warning('off', 'MATLAB:nearlySingularMatrix');
-    warning_state2 = warning('query', 'MATLAB:singularMatrix');
-    warning('off', 'MATLAB:singularMatrix');
-
-    for iter = 1:opts.max_iter
-        K_old = K;
-        G_local_old = G_local;
-
-        % Step A: Compute G(q,iω) for all q using CURRENT G_local
-        G_q = zeros(3, 3, n_q, n_omega);
-
-        for iq = 1:n_q
-            for iw = 1:n_omega
-                G_local_iw = G_local(:,:,iw);
-                J_q_iq = J_q_RPA(:,:,iq);
-                K_iw = K(:,:,iw);
-
-                % Eq. 2.12: G(q,iω) = [1 + (J(q) - K(iω))G_local(iω)]^(-1) * G_local(iω)
-                denom = eye(3) + (J_q_iq - K_iw) * G_local_iw;
-
-                % Check for NaN/Inf in matrix before computing condition number
-                has_nan_inf = any(isnan(denom(:))) || any(isinf(denom(:)));
-
-                % Adaptive regularization based on condition number
-                rc = rcond(denom);
-                if has_nan_inf || isnan(rc) || isinf(rc) || rc < 1e-10
-                    denom = denom + 1e-5 * eye(3);
-                end
-
-                % Solve denom * G_q = G_local using robust method
-                G_q(:,:,iq,iw) = denom \ G_local_iw;
-
-                % Verify result doesn't contain NaN/Inf
-                G_temp = G_q(:,:,iq,iw);
-                if any(isnan(G_temp(:))) || any(isinf(G_temp(:)))
-                    denom = eye(3) + (J_q_iq - K_iw) * G_local_iw + 1e-4 * eye(3);
-                    G_q(:,:,iq,iw) = denom \ G_local_iw;
-                end
-            end
-        end
-
-        % Step B: Update local Green's function (q-averaged)
-        G_local_new = zeros(3, 3, n_omega);
-        for iw = 1:n_omega
-            for iq = 1:n_q
-                G_local_new(:,:,iw) = G_local_new(:,:,iw) + G_q(:,:,iq,iw);
-            end
-            G_local_new(:,:,iw) = G_local_new(:,:,iw) / n_q;
-        end
-
-        % Apply adaptive damped mixing to G_local
-        % Note: G_damp acts as (1-alpha) where larger G_damp means more old value
-        G_local_mixed = G_damp * G_local + (1 - G_damp) * G_local_new;
-
-        % Safety check: if mixed result contains NaN/Inf, reduce mixing and retry
-        if any(isnan(G_local_mixed(:))) || any(isinf(G_local_mixed(:)))
-            G_local = G_local_old;
-        else
-            G_local = G_local_mixed;
-        end
-
-        % Step B2: Sum rule constraint enforcement with immediate validation
-        % Apply projection to enforce sum rule: (1/β) Σ_n G(iω_n) = -M²
-        if enforce_sum_rule && iter > 10 && mod(iter, sum_rule_intv) == 0
-            % Validate BEFORE enforcement
-            [~, ~, ~, sum_rule_error_before] = sum_rule_check(...
-                G_local, scf_params.beta, M2, omega_grid, false);
-
-            % Compute current sum rule value
-            G_sum_current = zeros(3, 3);
-            for iw_sr = 1:n_omega
-                G_sum_current = G_sum_current + G_local(:,:,iw_sr);
-            end
-            sum_current = (1/scf_params.beta) * G_sum_current;
-
-            % Compute target value
-            if isscalar(M2)
-                target_value = -M2 * eye(3);
-            else
-                target_value = -M2;
-            end
-
-            % Compute violation
-            violation = sum_current - target_value;
-
-            % Apply partial correction to avoid instability
-            % Distribute correction evenly across all frequencies
-            correction_per_freq = (sum_rule_frac * scf_params.beta / n_omega) * violation;
-
-            for iw_sr = 1:n_omega
-                G_local(:,:,iw_sr) = G_local(:,:,iw_sr) - correction_per_freq;
-            end
-
-            % IMMEDIATE validation AFTER enforcement
-            [sum_ok_after, ~, ~, sum_rule_error_after] = sum_rule_check(...
-                G_local, scf_params.beta, M2, omega_grid, false);
-
-            % Record enforcement event
-            sum_rule_enforcement_history(iter) = sum_rule_error_before;
-
-            % Adaptive adjustment of enforcement strength
-            error_reduction = sum_rule_error_before - sum_rule_error_after;
-            if error_reduction > 0
-                % Enforcement helped - check if we should increase strength
-                if sum_rule_error_after > 0.05 && sum_rule_frac < sum_rule_frac_max
-                    sum_rule_frac = min(sum_rule_frac * 1.2, sum_rule_frac_max);
-                    if scf_params.verbose
-                        fprintf('    [Iter %d] Sum rule: error still high, increasing strength to %.2f\n', ...
-                            iter, sum_rule_frac);
-                    end
-                end
-            else
-                % Enforcement made things worse (overshooting) - decrease strength
-                sum_rule_frac = max(sum_rule_frac * 0.5, sum_rule_frac_min);
-                if scf_params.verbose
-                    fprintf('    [Iter %d] Sum rule: enforcement overshooting, reducing strength to %.2f\n', ...
-                        iter, sum_rule_frac);
-                end
-            end
-
-            % Report enforcement results
-            if scf_params.verbose
-                fprintf('    [Iter %d] Sum rule enforcement: error %.3e -> %.3e ', ...
-                    iter, sum_rule_error_before, sum_rule_error_after);
-                if sum_ok_after
-                    fprintf('✓ (satisfied)\n');
-                else
-                    fprintf('(strength: %.1f%%)\n', sum_rule_frac*100);
-                end
-            end
-        end
-
-        % Step C: New K from self-consistency equation (2.11)
-        K_new = zeros(3, 3, n_omega);
-
-        for iw = 1:n_omega
-            % Sum: Σ_q J(q) * G(q,iω)
-            sum_JG = zeros(3, 3);
-            for iq = 1:n_q
-                sum_JG = sum_JG + J_q_RPA(:,:,iq) * G_q(:,:,iq,iw);
-            end
-            sum_JG = sum_JG / n_q;
-
-            % K = sum_JG * inv(G_local)
-            G_local_iw = G_local(:,:,iw);
-            if any(isnan(G_local_iw(:))) || any(isinf(G_local_iw(:))) || ...
-                    any(isnan(sum_JG(:))) || any(isinf(sum_JG(:)))
-                K_new(:,:,iw) = K(:,:,iw);
-                continue;
-            end
-
-            rc_G = rcond(G_local_iw);
-            if ~isnan(rc_G) && ~isinf(rc_G) && rc_G > 1e-12
-                K_tmp = sum_JG / G_local_iw;
-                K_tmp = (K_tmp + K_tmp') / 2;
-                if any(isnan(K_tmp(:))) || any(isinf(K_tmp(:)))
-                    K_new(:,:,iw) = K(:,:,iw);
-                else
-                    K_new(:,:,iw) = K_tmp;
-                end
-            else
-                K_new(:,:,iw) = K(:,:,iw);
-            end
-        end
-
-        % Step D: Apply simple mixing to K
-        K_update = K_new - K;
-        K = K + mixing_alpha * K_update;
-        if any(isnan(K(:))) || any(isinf(K(:)))
-            K = K_old;
-        end
-
-        % Step E: Compute residuals
-        residual_K = 0;
-        residual_G = 0;
-        for iw = 1:n_omega
-            residual_K = max(residual_K, max(max(abs(K(:,:,iw) - K_old(:,:,iw)))));
-            residual_G = max(residual_G, max(max(abs(G_local(:,:,iw) - G_local_old(:,:,iw)))));
-        end
-
-        residual = max(residual_K, residual_G);
-        residual_history(iter) = residual;
-        final_residual = residual;
-        if scf_params.verbose
-            fprintf('    it=%d residual=%.2e\n', iter, residual);
-        end
-
-        % Periodic sum rule validation (Eq. 2.23)
-        % Note: This runs independently of enforcement to track overall progress
-        if use_sum_rule && (mod(iter, sum_rule_check_interval) == 0 || iter == 1)
-            [sum_ok, ~, ~, sum_err] = sum_rule_check(...
-                G_local, scf_params.beta, M2, omega_grid, false);
-            sum_rule_history(iter) = sum_err;
-
-            if scf_params.verbose && mod(iter, sum_rule_check_interval*2) == 0
-                fprintf('    [Iter %d] Sum rule validation: error %.3e ', iter, sum_err);
-                if sum_ok
-                    fprintf('✓\n');
-                else
-                    fprintf('✗ (not satisfied)\n');
-                    % Warn if enforcement is disabled but sum rule is violated
-                    if ~enforce_sum_rule && iter > 50
-                        fprintf('    WARNING: Sum rule violated but enforcement is disabled!\n');
-                        fprintf('             Consider setting scf_params.enforce_sum_rule = true\n');
-                    end
-                end
-            end
-        end
-
-        % Option B: residual-based backoff to prevent overshoot
-        if iter > 1 && residual > 1.05 * residual_history(iter-1)
-            mixing_alpha = max(mixing_alpha * 0.5, 1e-3);
-            G_damp = min(G_damp * 1.1, 0.98);
-            if isfield(scf_params, 'verbose') && scf_params.verbose
-                fprintf('    Residual increased (%.2e -> %.2e); new mixing_alpha=%.3f, G_damp=%.3f\n', ...
-                    residual_history(iter-1), residual, mixing_alpha, G_damp);
-            end
-        end
-
-        % Check convergence
-        if residual < scf_params.tol
-            % Final sum rule validation on converged solution
-            if use_sum_rule
-                if scf_params.verbose
-                    fprintf('\n--- Final Sum Rule Validation ---\n');
-                end
-
-                [sum_ok, ~, ~, ~] = sum_rule_check(...
-                    G_local, scf_params.beta, M2, omega_grid, scf_params.verbose);
-
-                if ~sum_ok
-                    if scf_params.verbose
-                        warning('Converged solution does not satisfy sum rule (Eq. 2.23) within tolerance!');
-                        fprintf('This may indicate:\n');
-                        fprintf('  1. Insufficient frequency resolution\n');
-                        fprintf('  2. Incorrect M² value\n');
-                        fprintf('  3. Numerical instability in Green''s function\n');
-                        if ~enforce_sum_rule
-                            fprintf('  4. Sum rule enforcement was disabled - try setting scf_params.enforce_sum_rule = true\n');
-                        else
-                            fprintf('  4. Sum rule enforcement may need stronger settings (increase sum_rule_strength)\n');
-                        end
-                    end
-                end
-            end
-
-            converged = true;
-            final_iter = iter;
-            break;
-        end
-    end
-
-    % Restore warning states
-    warning(warning_state.state, 'MATLAB:nearlySingularMatrix');
-    warning(warning_state2.state, 'MATLAB:singularMatrix');
-end
-
-%% Helper: build SCF parameter struct for a given cVar index
-function scf_params = prepare_scf_params(base_params, beta_local, n_omega, n_q, chi_seed, J_slice)
-    scf_params = base_params;
-    scf_params.beta = beta_local;
-    scf_params.n_omega = n_omega;
-    scf_params.n_q = n_q;
-    scf_params.G0 = extract_G0(chi_seed, beta_local);
-    scf_params.J_q = J_slice;
-    scf_params.verbose = false;
-
-    % Compute M2 (second moment) from initial Green's function
-    % Using sum rule: (1/β) Σ_n G(iω_n) = -M²
-    % Therefore: M² = -(1/β) Σ_n G(iω_n)
-    scf_params.M2 = compute_M2_from_G(scf_params.G0, beta_local);
-end
-
-function G0 = extract_G0(chi_seed, beta_local)
-    % Extract Green's function from susceptibility using G = -β*χ
-    % This relationship holds regardless of whether chi is from RPA or single-ion
-    slice = squeeze(chi_seed);
-    if ndims(slice) == 4
-        slice = mean(slice, 4); % average over q for local seed
-    end
-    % CORRECTED: Always use G = -β*χ relationship (from Eq. 2.23 and theory)
-    % The susceptibility χ should already be in physical units [meV^-1]
-    G0 = -beta_local * slice;
-end
-
-function M2 = compute_M2_from_G(G0, beta_local)
-    % Compute second moment M² from Green's function using sum rule
-    % Sum rule (Eq. 2.23): (1/β) Σ_n G(iω_n) = -M²
-    % Therefore: M² = -(1/β) Σ_n G(iω_n)
-    %
-    % Input:
-    %   G0: Initial Green's function [3 x 3 x n_omega]
-    %   beta_local: Inverse temperature [meV^-1]
-    % Output:
-    %   M2: Second moment (3x3 matrix or scalar)
-
-    n_omega = size(G0, 3);
-    G_sum = zeros(3, 3);
-
-    % Sum over all frequencies
-    for iw = 1:n_omega
-        G_sum = G_sum + G0(:,:,iw);
-    end
-
-    % Apply sum rule: M² = -(1/β) Σ_n G(iω_n)
-    M2 = -(1/beta_local) * G_sum;
-
-    % For diagonal systems, we can return the trace as a scalar
-    % Otherwise return the full 3x3 matrix
-    % Here we return the full matrix to preserve all information
-end
-
-function [beta_local, descriptor] = describe_state(scanMode, cVar_val, dscrt_var)
-    kB = 8.61733e-2; % meV/K
-    switch scanMode
-        case 'field'
-            T_local = dscrt_var;
-            beta_local = 1 / (kB * T_local);
-            descriptor = sprintf('B = %.3f T, T = %.3f K', cVar_val, T_local);
-        case 'temp'
-            T_local = cVar_val;
-            beta_local = 1 / (kB * T_local);
-            descriptor = sprintf('T = %.3f K, B = %.3f T', T_local, dscrt_var);
-        otherwise
-            error('Unknown scan mode: %s', scanMode);
-    end
-end
-
-function [ok, max_closure] = seed_acceptable(K_candidate, G_candidate, J_q_slice, label)
-    max_closure = closure_residual_max(K_candidate, G_candidate, J_q_slice);
-    ok = max_closure < 1e-3;
-    if ~ok
-        fprintf('    %s rejected: closure residual %.2e > 1e-3\n', label, max_closure);
-    end
+if enable_plot && exist('plot_comparison', 'file') == 2
+    plot_comparison( ...
+        outputs.inputs.cVar, outputs.inputs.freq, outputs.inputs.chi_seed, ...
+        chi_emt, outputs.inputs.scan_mode, outputs.inputs.dscrt_value);
 end
