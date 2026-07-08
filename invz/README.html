@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>invz — 1/z Effective-Medium Expansion for LiHoF4 · User Manual</title>
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\\(', '\\)']],
+    displayMath: [['$$', '$$']],
+    tags: 'none',
+    macros: {
+      Jc: "{\\mathcal J}",
+      wn: "{i\\omega_n}",
+      half: "{\\tfrac12}"
+    }
+  }
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js"></script>
+<style>
+  :root{
+    --ink:#1c1a17; --paper:#fdfcf9; --rule:#d8d3c8;
+    --derived:#1e6b45; --derived-bg:#f0f7f2;
+    --quoted:#9a5b00; --quoted-bg:#fbf4e8;
+    --caution:#8a1f1f; --caution-bg:#fbeeee;
+    --accent:#26456b; --accent-bg:#eef2f8;
+    --code-bg:#f4f2ec;
+  }
+  html{font-size:17px;}
+  body{
+    font-family: Charter, "Bitstream Charter", "Palatino Linotype", Palatino, Georgia, serif;
+    color:var(--ink); background:var(--paper);
+    margin:0; line-height:1.55;
+  }
+  .wrap{max-width:860px; margin:0 auto; padding:2.4rem 1.4rem 5rem;}
+  h1{font-size:1.9rem; line-height:1.2; margin:0 0 .3rem; letter-spacing:-.01em;}
+  h1 .sub{display:block; font-size:1.02rem; font-weight:400; color:#5b554c; margin-top:.35rem; letter-spacing:0;}
+  h2{font-size:1.35rem; margin:2.4rem 0 .7rem; padding-bottom:.25rem; border-bottom:2px solid var(--rule); color:var(--accent);}
+  h3{font-size:1.08rem; margin:1.5rem 0 .4rem; color:var(--ink);}
+  p{margin:.6rem 0;}
+  a{color:var(--accent);}
+  code, kbd, .mono{font-family:"SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; font-size:.86em;}
+  code{background:var(--code-bg); padding:.08em .35em; border-radius:4px;}
+  pre{background:var(--code-bg); border:1px solid var(--rule); border-radius:8px; padding:.8rem 1rem; overflow-x:auto; font-size:.82rem; line-height:1.45;}
+  pre code{background:none; padding:0;}
+  table{border-collapse:collapse; width:100%; margin:1rem 0; font-size:.9rem;}
+  th,td{border:1px solid var(--rule); padding:.4rem .6rem; text-align:left; vertical-align:top;}
+  th{background:var(--accent-bg); color:var(--accent); font-weight:600;}
+  tbody tr:nth-child(even){background:#faf8f3;}
+  .lead{font-size:1.06rem; color:#3a352d;}
+  .callout{border-left:4px solid var(--accent); background:var(--accent-bg); padding:.6rem .9rem; border-radius:0 6px 6px 0; margin:1rem 0;}
+  .callout.caution{border-color:var(--caution); background:var(--caution-bg);}
+  .callout.note{border-color:var(--derived); background:var(--derived-bg);}
+  .callout .tag{font-variant:small-caps; font-weight:700; letter-spacing:.03em; font-size:.82rem; margin-right:.4rem;}
+  .callout.caution .tag{color:var(--caution);}
+  .callout.note .tag{color:var(--derived);}
+  .callout.plain .tag{color:var(--accent);}
+  figure{margin:1.4rem 0; text-align:center;}
+  figcaption{font-size:.85rem; color:#5b554c; margin-top:.5rem;}
+  .fc-band{fill:var(--accent-bg); stroke:var(--accent); stroke-width:1.3;}
+  .fc-band.loop{fill:var(--derived-bg); stroke:var(--derived);}
+  .fc-band.io{fill:#f3efe6; stroke:#a99a7d;}
+  .fc-title{font:600 13px "SF Mono",Menlo,monospace; fill:var(--accent);}
+  .fc-loop .fc-title{fill:var(--derived);}
+  .fc-fn{font:600 12.5px "SF Mono",Menlo,monospace; fill:var(--derived);}
+  .fc-note{font:12px Charter, Georgia, serif; fill:#3a352d;}
+  .fc-arrow{stroke:#8a806e; stroke-width:1.6; marker-end:url(#ah);}
+  .muted{color:#7a7264;}
+  ul.tight{margin:.4rem 0; padding-left:1.3rem;}
+  ul.tight li{margin:.25rem 0;}
+  .eqlabel{color:var(--muted); font-size:.8rem;}
+  hr{border:none; border-top:1px solid var(--rule); margin:2rem 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>The <code>invz</code> module
+  <span class="sub">1/z effective-medium expansion for the dipolar Ising ferromagnet LiHoF<sub>4</sub> — user manual &amp; mathematical reference</span>
+</h1>
+
+<p class="lead">This module computes the magnetic susceptibility of LiHoF<sub>4</sub> <em>one order beyond mean-field/RPA</em>, by resumming the leading 1/<em>z</em> single-ion self-energy self-consistently with a scalar effective-medium lattice sum. It covers <strong>both phases</strong> — the paramagnetic transverse-field boundary <span class="mono">B<sub>c</sub>(T)</span> and the real-frequency response <span class="mono">&chi;&Prime;<sub>cc</sub>(q,&omega;)</span>, including the soft mode that dips at the quantum phase transition and hardens into the ferromagnet below <span class="mono">B<sub>c</sub></span> — following Rønnow <em>et al.</em>, PRB <strong>75</strong>, 054426 (2007) ("R 2007"), which applies Jensen's high-density expansion (J. Jensen, PRB <strong>49</strong>, 11833 (1994)) to this material.</p>
+
+<div class="callout note"><span class="tag">Scope</span>Paramagnetic <em>and</em> ferromagnetic phases; scalar (cc-channel) self-energy; transverse field <span class="mono">B&parallel;a</span>. The ordered phase uses the bare mean-field order parameter with the elastic-sector self-energy (HTML eqs 37&ndash;38); the applied-field magnetization curve (eqs 41&ndash;43) and free-energy consistency (eq 44) are deferred. The full symbolic derivation lives in <code>jensen_1z_framework.html</code> at the repository root (equations there are cited in the code as "HTML eq N"). This page is the working manual: what to run, what it returns, and the equations each function evaluates. See <a href="#scope">Scope &amp; limitations</a> for what is deliberately left out.</div>
+
+<h2 id="physics">1 · Physical picture &amp; mathematical foundations</h2>
+
+<p>LiHoF<sub>4</sub> is an Ising dipolar ferromagnet. Each Ho<sup>3+</sup> ion has a crystal-field ground <em>doublet</em> (an effective two-level system along the <em>c</em> axis) that is split by a transverse field into a gap \(\Delta\), and a strongly hybridized <sup>165</sup>Ho nuclear spin (\(I=7/2\)). At the temperatures of interest the electronic and nuclear states are treated together as one larger single-ion Hilbert space (17 electronic × 8 nuclear = 136 states). The magnetic transition is driven by the <em>cc</em> (longitudinal) component of the dipolar + exchange coupling \(\Jc_\nu(\mathbf q)\).</p>
+
+<p>The theory has four moving parts, evaluated in the order below.</p>
+
+<h3>1.1 Single-ion two-level response</h3>
+<p>The dominant electronic doublet contributes a two-level response \(g\), with occupation difference \(n_{01}\) and static value \(g_0\):</p>
+$$g(z) = \frac{2\,n_{01}\,\Delta}{\Delta^{2}-z^{2}}, \qquad n_{01}=\tanh\frac{\Delta}{2k_BT}, \qquad g_0\equiv g(0)=\frac{2n_{01}}{\Delta}.$$
+<p>The bare local (cc) Green function is \(G_0=-\chi_0^{cc}\). In the pure two-level limit \(G_0=-M^{2}g\), where \(M^2=|\langle0|J_z|1\rangle|^{2}\) is the transition matrix element; in the code, \(G_0\) is the <em>full</em> electronuclear \(-\chi_0^{cc}\) (so hyperfine enhancement enters non-perturbatively), while the doublet parameters \((\Delta,M^{2},n_{01},g_0)\) set the self-energy.</p>
+
+<h3>1.2 Effective medium — the lattice sum</h3>
+<p>The self-consistent effective-medium coupling \(K(\wn)\) is the fixed point of (R 2007 eqs 7–9; \(\langle\cdot\rangle=\frac1N\sum_{\mathbf q,\nu}\) over the Brillouin zone and the four cc sublattice branches):</p>
+$$G=\frac{G_0}{1+\Sigma+K\,G_0}, \qquad G_{\mathbf q}=\frac{G}{1+(\Jc_\nu-K)\,G}, \qquad K=\Big\langle\frac{\Jc_\nu\,G_{\mathbf q}}{G}\Big\rangle.$$
+
+<h3>1.3 The 1/z self-energy</h3>
+<p>The Matsubara moments of \(K\) weighted by powers of \(g\),</p>
+$$\lambda_p=\frac1\beta\sum_n K(\wn)\,g(\wn)^{p},$$
+<p>fix the self-energy \(\Sigma=\alpha+\gamma\,g\) (Jensen; HTML eqs 21–27 / J 2.17–2.19):</p>
+$$\alpha=\frac{M^{2}}{n_{01}^{2}}\Big[\lambda_2-\half\big(g_0+\beta(1-n_{01}^{2})\big)\lambda_1\Big], \qquad
+\gamma=\frac{M^{2}}{n_{01}^{2}}\Big[\lambda_1-(1-n_{01}^{2})\,K\Big].$$
+<p>Equations 1.2 and 1.3 are coupled (\(K\) depends on \(\Sigma\), \(\Sigma\) depends on \(K\)); <code>invz_solve_point</code> iterates them to a fixed point at each \((T,B_x)\).</p>
+
+<h3>1.4 Renormalized susceptibility &amp; criticality</h3>
+<p>On the real axis the self-energy divides the whole cc component, and the observable is a mode RPA over the coupling branches (HTML eqs 22–23, 29–30):</p>
+$$\Sigma(\omega)=\alpha+\frac{M^{2}}{n_{01}^{2}}\big[\lambda_1-(1-n_{01}^{2})K(\omega)\big]\,g(\omega+i\eta),\qquad
+\tilde\chi_0=\frac{\chi_0^{cc}}{1+\Sigma},\qquad
+\chi(\mathbf q,\omega)=\frac{\tilde\chi_0}{1-\Jc_\nu(\mathbf q)\,\tilde\chi_0}.$$
+<p>The paramagnetic instability (phase boundary) is where the uniform mode diverges,</p>
+$$\Jc(0)\,\chi_0^{cc}(0)=1+\Sigma(0)\qquad\Longleftrightarrow\qquad \texttt{crit}\equiv 1+\Sigma(0)-\Jc(0)\,\chi_0^{cc}(0)=0,$$
+<p>and exactly at zero field the critical self-energy has the closed form (R 2007 eq 10)</p>
+$$\Sigma_c(0)=\frac1N\sum_{\mathbf q}\frac{\Jc_{\mathbf q}}{\Jc(0)-\Jc_{\mathbf q}}.$$
+
+<h3>1.5 &nbsp;Ferromagnetic phase (m &ne; 0)</h3>
+<p>Below \(B_c\) a spontaneous longitudinal moment \(m_0=\langle J_z\rangle\) develops: <code>invz_single_ion</code> (opts.order) solves the extra ordering mean field \(h_z=\Jc_{cc}(0)\langle J_z\rangle\) for its symmetry-broken branch. Spectral weight rotates from the transition matrix element into the diagonal moment, \(M^2+m^2=M_0^2\) fixed, and the self-energy gains an elastic correction (HTML eqs 37&ndash;38):</p>
+$$\begin{aligned}
+\Sigma(\wn)&=(\alpha-\alpha_m)+\Big[\gamma(\wn)-\tfrac{2m^2}{M^2}\gamma(0)\Big]g(\wn), \\[.3em]
+\alpha_m&=\frac{m^2}{n_{01}^2}\Big[\lambda_2-g_0\lambda_1+\tfrac{4}{g_0}\lambda_3-(1-n_{01}^2)\big(1+\tfrac12\beta\Delta\,n_{01}\big)K(0)g_0\Big].
+\end{aligned}$$
+<p>This reduces to the paramagnetic \(\Sigma=\alpha+\gamma g\) exactly at \(m=0\). The elastic weight \(h(0)=\beta(1-n_{01}^2)\) is exponentially small at low \(T\) (\(n_{01}\to1\)), so the \(\xi\,h\) static correction (eq 39) collapses to the ordinary Dyson form and \(\alpha_m\approx m^2[\lambda_2-g_0\lambda_1+(4/g_0)\lambda_3]\). The mode softens toward \(B_c\) from below (the ordered \(\texttt{crit}\to0\)) and hardens deeper into the ordered phase, tracing the soft-mode "V" of the quantum phase transition.</p>
+<div class="callout caution"><span class="tag">Option A boundary caveat</span> The moment is the <em>bare</em> mean-field order parameter (the eq-43 \(H_{\rm MF}\!\leftrightarrow\!H\) self-consistency is deferred), so it onsets at the mean-field boundary, slightly above the 1/z boundary. Near \(B_c\) the FM and PM soft-mode branches therefore meet with a small step (~15 μeV at 0.31 K), not perfect continuity; deep in each phase the result is unaffected.</div>
+
+<h3>1.6 &nbsp;Uniform-mode coupling &amp; sample shape</h3>
+<p>Ordering is driven by the <em>uniform</em> (\(\mathbf q\!=\!0\)) cc coupling \(\Jc(0)\), which carries two shape-dependent pieces on top of the intrinsic dipole lattice sum and the exchange \(4\Jc_{12}\) — the Lorentz cavity term (always) and an optional demagnetization correction:</p>
+$$\Jc(0)=\Jc_{\rm dip}(0)+4\Jc_{12}
+   +\underbrace{\frac{4\pi}{3V_c}\,g_{\rm fac}}_{\text{Lorentz cavity}}
+   -\underbrace{\frac{4\pi}{V_c}\,g_{\rm fac}\,\mathsf{demag}\cdot N_{zz}(\alpha)}_{\text{demagnetization (optional)}}.$$
+<p>\(N_{zz}(\alpha)\) is the \(c\)-axis demagnetizing factor of a spheroid with aspect ratio \(\alpha=a/c\) (<code>ellipsoid_demagn</code>). The default <code>ion.demag = 0</code> is the intrinsic, \(c\)-axis-needle limit (\(N_{zz}=0\)) that reproduces the R 2007 benchmark \(\Jc_{D\cdot D}^{cc}(0)=6.82\) μeV (Lorentz included, no shape term); a sphere (\(\alpha=1\), <code>demag = 1</code>) makes Lorentz and demag cancel, and intermediate shapes shift \(B_c/T_c\). Because the mean field, the RPA denominator, and the 1/z criticality all read the same <code>info.Jcc0</code> from <code>invz_jq_modes</code>, the coupling is <strong>single-sourced</strong> — setting the shape (or any coupling parameter) propagates to all three consistently.</p>
+<div class="callout note"><span class="tag">Shape scope</span> The demag correction currently reaches the <em>cc</em> (ordering) channel through <code>info.Jcc0</code>. The transverse (<em>aa</em>) mean field still uses the hardcoded <code>ion.Jxx0</code>, so a non-needle shape is applied to the ordering channel only — adequate for the transverse-field boundary and soft mode; wire <code>info.Jaa0</code> into the transverse MF for full-tensor shape consistency.</div>
+
+<div class="callout plain"><span class="tag">Conventions</span> \(\chi=-G\); ferromagnetic \(\Jc>0\); energies in meV; bosonic Matsubara \(\omega_n=2\pi n/\beta\), \(n\ge0\), with weights \([1,2,2,\dots]\). \(\Sigma(0)\) is <em>not</em> monotonic on cooling: it rises from its high-\(T\) decay, peaks near \(k_BT\sim\Delta\), and saturates to a finite zero-point value.</div>
+
+<h2 id="flow">2 · Data flow &amp; call structure</h2>
+
+<h3>2.1 &nbsp;Driver call structure — what you run, and what it calls</h3>
+<p>The two scripts you run are the <strong>drivers</strong>; everything below them is called to carry out the task. Both fan into one shared <em>solver core</em>, and the only phase-dependent fork is the paramagnet / ferromagnet solve pair — every other function is shared between the phases.</p>
+<figure>
+<svg viewBox="0 0 740 432" width="100%" role="img" aria-label="invz driver call structure" style="max-width:740px;">
+  <defs>
+    <marker id="ahcs" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#8a806e"/>
+    </marker>
+  </defs>
+
+  <!-- Tier 1: drivers -->
+  <rect class="fc-band" x="30" y="10" width="320" height="48" rx="7"/>
+  <text class="fc-title" x="48" y="30">DRIVER &middot; spectra</text>
+  <text class="fc-fn" x="48" y="49">invz_run_spectra</text>
+  <rect class="fc-band" x="390" y="10" width="320" height="48" rx="7"/>
+  <text class="fc-title" x="408" y="30">DRIVER &middot; phase boundary</text>
+  <text class="fc-fn" x="408" y="49">invz_run_phase_diagram</text>
+  <line class="fc-arrow" style="marker-end:url(#ahcs)" x1="190" y1="58" x2="190" y2="80"/>
+  <line class="fc-arrow" style="marker-end:url(#ahcs)" x1="550" y1="58" x2="550" y2="80"/>
+
+  <!-- Tier 2: orchestration -->
+  <rect class="fc-band" x="30" y="82" width="320" height="60" rx="7"/>
+  <text class="fc-fn" x="48" y="101">invz_spectra_map</text>
+  <text class="fc-note" x="48" y="119">sweep fields; per field FM/PM &rarr; build &chi;&Prime;(&omega;)</text>
+  <text class="fc-note" x="48" y="135">then invz_chi_realaxis &middot; invz_plot_spectra_map</text>
+  <rect class="fc-band" x="390" y="82" width="320" height="60" rx="7"/>
+  <text class="fc-fn" x="408" y="101">invz_critical (&middot;_T)</text>
+  <text class="fc-note" x="408" y="119">bisect B&#8339; at fixed T &middot; T at fixed B&#8339;</text>
+  <text class="fc-note" x="408" y="135">+ invz_critical_T0field &middot; invz_sigma_crit</text>
+  <line class="fc-arrow" style="marker-end:url(#ahcs)" x1="190" y1="142" x2="190" y2="164"/>
+  <line class="fc-arrow" style="marker-end:url(#ahcs)" x1="550" y1="142" x2="550" y2="164"/>
+
+  <!-- Tier 3: per-point solve (phase fork) -->
+  <rect class="fc-band loop" x="30" y="166" width="680" height="66" rx="7"/>
+  <text class="fc-title fc-loop" x="48" y="186" style="fill:#1e6b45">PER-POINT SOLVE &mdash; by phase: FM below B&#8347;, PM above</text>
+  <rect x="48" y="194" width="300" height="30" rx="5" style="fill:#fdfcf9;stroke:#1e6b45;stroke-width:1.2"/>
+  <text class="fc-fn" x="64" y="213">invz_solve_point  (PM)</text>
+  <rect x="392" y="194" width="300" height="30" rx="5" style="fill:#fdfcf9;stroke:#1e6b45;stroke-width:1.2"/>
+  <text class="fc-fn" x="408" y="213">invz_solve_point_ordered  (FM)</text>
+  <line class="fc-arrow" style="marker-end:url(#ahcs)" x1="370" y1="232" x2="370" y2="254"/>
+
+  <!-- Tier 4: solver core -->
+  <rect class="fc-band" x="30" y="256" width="680" height="72" rx="7"/>
+  <text class="fc-title" x="48" y="276">SOLVER CORE &mdash; both branches call these</text>
+  <text class="fc-fn" x="48" y="296">invz_single_ion &middot; invz_chi0z &middot; invz_twolevel / _ordered &middot; invz_g &middot; invz_matsubara</text>
+  <text class="fc-fn" x="48" y="316">invz_emt_scalar &middot; invz_lambdas &middot; invz_sigma / _ordered</text>
+  <line class="fc-arrow" style="marker-end:url(#ahcs)" x1="370" y1="328" x2="370" y2="350"/>
+
+  <!-- Tier 5: inputs / lattice -->
+  <rect class="fc-band io" x="30" y="352" width="680" height="70" rx="7"/>
+  <text class="fc-title" x="48" y="372" style="fill:#7a6a48">INPUTS &amp; LATTICE &mdash; built once, fed into every solve</text>
+  <text class="fc-fn" x="48" y="392">invz_ion &middot; invz_const &middot; stevens_ops</text>
+  <text class="fc-fn" x="48" y="412">invz_jq_modes &#8592; qVec_generator &middot; MF_dipole &middot; exchange &middot; ellipsoid_demagn</text>
+</svg>
+<figcaption>What the user runs (top) and the functions each driver calls to carry out the task. Calls flow downward; the two <code>invz_solve_point[_ordered]</code> boxes are the only phase-dependent fork.</figcaption>
+</figure>
+
+<h3>2.2 &nbsp;Data flow through the layers</h3>
+<p>Each layer consumes only the outputs of the layers above it. The self-consistent point solve (layer 6) is the loop that ties the effective medium (4) to the self-energy (5).</p>
+
+<figure>
+<svg viewBox="0 0 720 616" width="100%" role="img" aria-label="invz module data-flow chart" style="max-width:720px;">
+  <defs>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#8a806e"/>
+    </marker>
+  </defs>
+
+  <!-- band 1: inputs -->
+  <rect class="fc-band io" x="40" y="8" width="640" height="50" rx="7"/>
+  <text class="fc-title" x="58" y="30">1 · INPUTS</text>
+  <text class="fc-fn" x="58" y="48">invz_ion · invz_const · stevens_ops</text>
+  <text class="fc-note" x="360" y="48">CF / exchange / lattice parameters (R 2007 Table I)</text>
+  <line class="fc-arrow" x1="360" y1="58" x2="360" y2="74"/>
+
+  <!-- band 2: single-ion -->
+  <rect class="fc-band" x="40" y="76" width="640" height="58" rx="7"/>
+  <text class="fc-title" x="58" y="98">2 · SINGLE-ION RESPONSE</text>
+  <text class="fc-fn" x="58" y="116">invz_single_ion &#8594; invz_chi0z</text>
+  <text class="fc-note" x="330" y="116">&#967;&#8320;(z) &#8658; G&#8320; = &#8722;&#967;&#8320;&#7580;&#7580;  (136-state exact diag + transverse MF)</text>
+  <text class="fc-fn" x="58" y="130">invz_twolevel &#8594; invz_g</text>
+  <text class="fc-note" x="330" y="130">doublet (&#916;, M&#178;, n&#8320;&#8321;, g&#8320;) &#8658; g(z)</text>
+  <line class="fc-arrow" x1="360" y1="134" x2="360" y2="150"/>
+
+  <!-- band 3: coupling -->
+  <rect class="fc-band io" x="40" y="152" width="640" height="50" rx="7"/>
+  <text class="fc-title" x="58" y="174">3 · LATTICE COUPLING</text>
+  <text class="fc-fn" x="58" y="192">invz_jq_modes</text>
+  <text class="fc-note" x="330" y="192">&#119973;&#8341;(q) branches &amp; &#119973;(0)  [dipole + exchange, 4&#215;4 cc]</text>
+  <line class="fc-arrow" x1="360" y1="202" x2="360" y2="218"/>
+
+  <!-- band 4: EMT -->
+  <rect class="fc-band" x="40" y="220" width="640" height="50" rx="7"/>
+  <text class="fc-title" x="58" y="242">4 · EFFECTIVE MEDIUM</text>
+  <text class="fc-fn" x="58" y="260">invz_emt_scalar</text>
+  <text class="fc-note" x="330" y="260">K(i&#969;&#8345;) fixed point  (Dyson G, cavity G&#7549;)</text>
+  <line class="fc-arrow" x1="360" y1="270" x2="360" y2="286"/>
+
+  <!-- band 5: self-energy -->
+  <rect class="fc-band" x="40" y="288" width="640" height="50" rx="7"/>
+  <text class="fc-title" x="58" y="310">5 · SELF-ENERGY</text>
+  <text class="fc-fn" x="58" y="328">invz_lambdas &#8594; invz_sigma</text>
+  <text class="fc-note" x="330" y="328">&#955;&#8345; moments &#8658; &#931; = &#945; + &#947;g</text>
+  <line class="fc-arrow" x1="360" y1="338" x2="360" y2="354"/>
+
+  <!-- band 6: self-consistent point (loop) -->
+  <rect class="fc-band loop fc-loop" x="40" y="356" width="640" height="52" rx="7"/>
+  <text class="fc-title" x="58" y="379">6 · SELF-CONSISTENT POINT &#8635;</text>
+  <text class="fc-fn" x="58" y="398">invz_solve_point (&middot;_ordered)</text>
+  <text class="fc-note" x="360" y="398">outer loop [4]&#8646;[5], (T,B&#8339;) &#8658; pt  (PM / FM branches)</text>
+  <line class="fc-arrow" x1="360" y1="408" x2="360" y2="424"/>
+
+  <!-- band 7: observables -->
+  <rect class="fc-band" x="40" y="426" width="640" height="58" rx="7"/>
+  <text class="fc-title" x="58" y="448">7 · OBSERVABLES</text>
+  <text class="fc-fn" x="58" y="467">invz_chi_realaxis</text>
+  <text class="fc-note" x="220" y="467">&#967;(q,&#969;)</text>
+  <text class="fc-fn" x="300" y="467">invz_critical</text>
+  <text class="fc-note" x="440" y="467">B&#8347;(T)</text>
+  <text class="fc-fn" x="500" y="467">invz_spectra_map</text>
+  <text class="fc-note" x="500" y="481">&#967;&#8243;(&#969;, B)</text>
+  <text class="fc-note" x="58" y="481">also: invz_sigma_crit / invz_critical_T0field (closed-form B=0)</text>
+  <line class="fc-arrow" x1="360" y1="484" x2="360" y2="500"/>
+
+  <!-- band 8: drivers -->
+  <rect class="fc-band io" x="40" y="502" width="640" height="50" rx="7"/>
+  <text class="fc-title" x="58" y="524">8 · DRIVERS</text>
+  <text class="fc-fn" x="58" y="542">invz_run_phase_diagram · invz_run_spectra</text>
+  <text class="fc-note" x="430" y="542">interactive scripts (figures)</text>
+</svg>
+<figcaption>Dependency direction is strictly top-to-bottom. Layer 6 (<code>invz_solve_point</code>) is the only consumer of the point struct <code>pt</code>; layer 7 turns it into observables.</figcaption>
+</figure>
+
+<h2 id="quickstart">3 · Quick start</h2>
+
+<div class="callout plain"><span class="tag">Prerequisites</span> MATLAB (developed on R2025a). Repo-root <code>MF_dipole.m</code>, <code>exchange.m</code>, <code>qVec_generator.m</code> (tracked) are the only external dependencies. The Parallel Computing Toolbox is <em>optional</em> — the drivers use it if present and run serially otherwise.</div>
+
+<p>From the repository root (the path contains spaces — quote it):</p>
+<pre><code>% one-off: reproduce the field-vs-frequency spectrum at T = 0.31 K
+run invz/invz_run_spectra.m
+
+% the full paramagnetic phase boundary Bc(T)  (parallel over temperature)
+run invz/invz_run_phase_diagram.m</code></pre>
+
+<p>Programmatic use of the core solve:</p>
+<pre><code>ion = invz_ion();
+[qv,~,~] = qVec_generator(ion.a,'mode','grid','grid',[16 16 16],'range',[-0.5 0.5]);
+qv = qv(any(abs(qv)>1e-12,2),:);
+[Jnu,info] = invz_jq_modes(ion, qv, struct('dpRng',30,'cache',true));
+pt  = invz_solve_point(ion, 0.31, 4.5, Jnu(:), struct('J0eff',info.Jcc0));   % one (T,Bx)
+out = invz_chi_realaxis(ion, 0.31, 4.5, pt, (0.01:0.005:0.7)', struct('Jsel',info.Jcc0));
+plot(out.chi_cc_q(1,:));   % chi(q=0, omega)</code></pre>
+
+<h2 id="drivers">4 · Driver scripts</h2>
+
+<h3><code>invz_run_spectra.m</code> — susceptibility spectra</h3>
+<p>Computes \(\chi''_{cc}(\omega)\) at the uniform mode versus transverse field at fixed \(T\), and <strong>chooses its view automatically from the number of fields</strong>:</p>
+<ul class="tight">
+  <li><strong>Few fields</strong> (<code>numel(fields) &le; sliceMax</code>, default 8) → 1-D line-slice overlay, 1/z solid vs bare-RPA dashed, one colour per field (cf. R 2007 Fig. 2).</li>
+  <li><strong>Many fields</strong> → 2-D field-vs-frequency <em>colormap</em>: \(B_x\) on x, \(\omega\) on y, \(\log_{10}\chi''\) in colour, with 1/z and RPA panels side by side (cf. Kovačević 2016 Fig. 3d).</li>
+</ul>
+<p>Edit the block at the top of the file: <code>T</code>, <code>fields</code> (e.g. <code>[3.6 4.2 4.8 5.4 6.0]</code> for slices, <code>linspace(0,6,61)</code> for a map), <code>w</code>, <code>eta</code>, <code>sliceMax</code>, and <code>useParallel</code>; set <code>ion.demag</code>/<code>ion.alpha</code> just after <code>invz_ion()</code> for a sample-shape correction (§1.6). <code>eta</code> is the real-axis Lorentzian half-width — a <em>display</em> broadening, not physical damping (the model's intrinsic linewidth is negligible at these temperatures), so keep it \(\gtrsim\) the <code>w</code> spacing or the peaks alias. The heavy result <code>S</code> replots for free via <code>invz_plot_spectra_map(gca, S, S.chiz, '1/z')</code>.</p>
+<div class="callout note"><span class="tag">Both phases, automatically</span> At each field <code>invz_spectra_map</code> first tries the ferromagnetic (ordered) solve; if the point has a spontaneous moment it uses that, otherwise the paramagnet. So a sweep across \(B_c\) produces one continuous soft-mode map (the "V" dipping at the transition), FM below and PM above, labelled per field in <code>S.phase</code> (1 = FM, 2 = PM, 0 = no solution). Only genuinely intractable columns (the degenerate doublet at \(B_x\!\to\!0\) where the two-level treatment breaks down in <em>both</em> phases) come back <code>NaN</code> and masked.</div>
+
+<h3><code>invz_run_phase_diagram.m</code> — phase boundary \(B_c(T)\)</h3>
+<p>Traces the R 2007 Fig. 1 paramagnetic-side boundary in <strong>two regimes</strong>: the critical <em>field</em> \(B_c(T)\) bisected at each temperature in <code>Ts</code> (<code>invz_critical</code>, vertical cuts), and the critical <em>temperature</em> \(T_c(B)\) bisected at each field in <code>Bs</code> (<code>invz_critical_T</code>, horizontal cuts). The horizontal cuts own the high-\(T\) end, where the boundary runs nearly parallel to the field axis and a fixed-\(T\) cut crosses it at a glancing angle (brackets fail, tiny \(T\) errors give huge \(B_c\) errors). The \(T_c(B)\) bisection window is fixed in the script at <code>[Tlo, Tmax]</code> = [1.0, 2.0] K. Keep <code>Bs</code> entries between 0.5 T and \(B_c(T_{lo}) \approx 2.8\) T: below 0.5 T the paramagnetic solve develops non-convergence patches near the boundary that bias \(T_c\) upward (the 0–0.5 T segment spans only ~4 mK and is represented by the closed-form zero-field \(T_c\) endpoint); above \(B_c(T_{lo})\) the bracket assert fails cleanly to NaN. Full single-core run ≈ 1–2 h; see the next section for the parallel speedup.</p>
+
+<h2 id="parallel">5 · Parallelism</h2>
+<p>Two independent axes can be distributed over a parallel pool; the bisection <em>within</em> a single <code>invz_critical</code> cannot (each bracket halving needs the sign of the previous EMT solve).</p>
+<table>
+<thead><tr><th>Driver</th><th>Parallel axis</th><th>How to enable</th></tr></thead>
+<tbody>
+<tr><td><code>invz_run_phase_diagram</code></td><td>boundary points (one flat <code>parfor</code> over the <code>Ts</code> and <code>Bs</code> jobs)</td><td><code>useParallel = true</code> (default)</td></tr>
+<tr><td><code>invz_spectra_map</code> / <code>invz_run_spectra</code></td><td>field (<code>parfor</code> over <code>fields</code>)</td><td><code>opts.parallel = true</code> / <code>useParallel = true</code></td></tr>
+</tbody>
+</table>
+<p>Both use <code>parfor&nbsp;(k = 1:n, nWorkers)</code> with <code>nWorkers = 0</code> forcing a serial run — so the same code runs with or without the Parallel Computing Toolbox, and falls back to serial automatically when it is absent. A local pool is auto-created on first use (~10–30 s once). The \(\Jc(q)\) lattice sum is computed once up front, so workers do no disk I/O and never contend on <code>invz/cache/</code>. Progress lines interleave across workers — expected. With an 8-worker pool the phase boundary drops from ~1–2 h to roughly 15–25 min.</p>
+<div class="callout caution"><span class="tag">Boundary speckle</span> Right at the marginal phase boundary a field/temperature point can fail to converge and come back masked, next to converged neighbours. That is the para fixed point going marginal (not a bug). Widen <code>max_outer</code> / soften mixing there, or accept a couple of masked edge points.</div>
+
+<h2 id="reference">6 · Function reference</h2>
+<table>
+<thead><tr><th>Function</th><th>Signature</th><th>Produces</th></tr></thead>
+<tbody>
+<tr><td><code>invz_ion</code></td><td><code>ion = invz_ion()</code></td><td>LiHoF4 CF/exchange/lattice parameters (R 2007 Table I); shape defaults <code>demag=0</code>, <code>alpha=1</code></td></tr>
+<tr><td><code>invz_single_ion</code></td><td><code>si = invz_single_ion(ion,T,B,opts)</code></td><td><code>si.E,V,P,Mx,My,Mz,Jexp,hx,JzJz_fluct</code></td></tr>
+<tr><td><code>invz_chi0z</code></td><td><code>chi = invz_chi0z(si,T,z,opts)</code></td><td><code>[3,3,nz]</code> single-ion tensor \(\chi_0\) at complex <code>z</code></td></tr>
+<tr><td><code>invz_twolevel</code></td><td><code>tl = invz_twolevel(ion,T,Bx)</code></td><td><code>tl.Delta,M2,m,n01,g0</code> (doublet params)</td></tr>
+<tr><td><code>invz_twolevel_ordered</code></td><td><code>tl = invz_twolevel_ordered(ion,T,Bx,hz)</code></td><td>ordered doublet params (m&ne;0) with fixed longitudinal MF <code>hz</code>; adds <code>tl.h0</code></td></tr>
+<tr><td><code>invz_g</code></td><td><code>g = invz_g(tl,z)</code></td><td>two-level response \(g(z)\)</td></tr>
+<tr><td><code>invz_jq_modes</code></td><td><code>[Jnu,info] = invz_jq_modes(ion,qvec,opts)</code></td><td><code>Jnu [nq,4]</code> cc branch eigenvalues; <code>info.Jcc0</code> (uniform mode: Lorentz + optional demag via <code>ion</code>/<code>opts.demag,alpha</code>)</td></tr>
+<tr><td><code>invz_sigma_crit</code></td><td><code>Sc = invz_sigma_crit(J0,Jnu_flat)</code></td><td>closed-form critical self-energy \(\Sigma_c(0)\)</td></tr>
+<tr><td><code>invz_critical_T0field</code></td><td><code>Tc = invz_critical_T0field(ion,Sc,J0eff)</code></td><td>zero-field \(T_c\)</td></tr>
+<tr><td><code>invz_emt_scalar</code></td><td><code>med = invz_emt_scalar(G0,Sigma,Jnu_flat,opts)</code></td><td><code>med.G,K,closure,converged</code></td></tr>
+<tr><td><code>invz_lambdas</code></td><td><code>lam = invz_lambdas(K,g,wts,beta,plist)</code></td><td>moments \(\lambda_p\)</td></tr>
+<tr><td><code>invz_sigma</code></td><td><code>sig = invz_sigma(tl,lam,K,g,beta)</code></td><td><code>sig.alpha,gamma,Sigma</code></td></tr>
+<tr><td><code>invz_sigma_ordered</code></td><td><code>sig = invz_sigma_ordered(tl,lam,K,g,beta)</code></td><td>ordered self-energy (HTML eqs 37&ndash;38); needs <code>lam=[&lambda;1;&lambda;2;&lambda;3]</code>; adds <code>sig.alpha_m</code></td></tr>
+<tr><td><code>invz_solve_point</code></td><td><code>pt = invz_solve_point(ion,T,Bx,Jnu_flat,opts)</code></td><td><code>pt.alpha,lambda,K,Sigma,tl,Sigma0,crit,converged</code></td></tr>
+<tr><td><code>invz_solve_point_ordered</code></td><td><code>pt = invz_solve_point_ordered(ion,T,Bx,Jnu_flat,opts)</code></td><td>ferromagnetic-phase solve; adds <code>pt.m0,is_ordered,alpha_m,si</code> (<code>is_ordered=false</code> &rarr; use the paramagnetic solve)</td></tr>
+<tr><td><code>invz_critical</code></td><td><code>bx = invz_critical(ion,T,Jnu_flat,opts)</code></td><td>critical field \(B_c(T)\), bisection on <code>pt.crit</code></td></tr>
+<tr><td><code>invz_critical_T</code></td><td><code>tc = invz_critical_T(ion,Bx,Jnu_flat,opts)</code></td><td>critical temperature \(T_c(B)\), the same bisection over \(T\) at fixed field (near-vertical part of the boundary)</td></tr>
+<tr><td><code>invz_chi_realaxis</code></td><td><code>out = invz_chi_realaxis(ion,T,Bx,pt,w,opts)</code></td><td><code>out.Sigma_w,chi0cc_w,chi_cc_q[nJsel,nw]</code></td></tr>
+<tr><td><code>invz_spectra_map</code></td><td><code>S = invz_spectra_map(ion,T,fields,w,opts)</code></td><td><code>S.chiz,chirpa [nw&times;nB]</code> maps; <code>S.Sigma0,ordered</code></td></tr>
+<tr><td><code>invz_plot_spectra_map</code></td><td><code>invz_plot_spectra_map(ax,S,chi,ttl)</code></td><td>renders one \(\chi''(\omega,B)\) colormap panel</td></tr>
+</tbody>
+</table>
+
+<h2 id="tests">7 · Tests &amp; published benchmarks</h2>
+<p>Fast suite (seconds; the default gate) and the full suite including slow physics benchmarks:</p>
+<pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "results = runtests('invz/tests'); assertSuccess(results)"
+INVZ_SLOW=1 "/Applications/MATLAB_R2025a.app/bin/matlab" -batch "results = runtests('invz/tests'); assertSuccess(results)"</code></pre>
+<p>The <code>invz/cache/</code> Jq caches are gitignored (warm on this machine only); a fresh clone starts cold, so the first slow run recomputes the dipole sums (~10–15 min). Every benchmark below is asserted by a test:</p>
+<table>
+<thead><tr><th>Quantity</th><th>Published</th><th>This module</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td>\(\Sigma_c\), fcc nearest-neighbour (Watson integral)</td><td>0.3447</td><td>0.3447 (Richardson 40³/80³)</td><td>R 2007, below eq. (10)</td></tr>
+<tr><td>\(\Sigma_c(0)\), LiHoF4, H=0</td><td>0.3004</td><td>0.2980 (Richardson 12³/24³)</td><td>R 2007 eq. (10)</td></tr>
+<tr><td>\(\Jc_{D\cdot D}^{cc}(0)\)</td><td>6.821 μeV</td><td>6.821–6.824 μeV</td><td>R 2007 eq. (4)</td></tr>
+<tr><td>\(\Jc_{D\cdot D}^{aa}(0)\)</td><td>3.912 μeV</td><td>3.910–3.912 μeV</td><td>R 2007 eq. (4)</td></tr>
+<tr><td>\(T_c(H=0)\)</td><td>1.74 K</td><td>≈1.74 K (MF: 2.26 K)</td><td>R 2007</td></tr>
+<tr><td>\(H_c(0.31\,\mathrm K)\)</td><td>42.4–43 kOe</td><td>within [4.0, 4.6] T</td><td>R 2007 Fig. 1/2</td></tr>
+<tr><td>\(\Sigma(0)\) at that boundary</td><td>0.0932</td><td>0.0932 ± 0.02</td><td>R 2007</td></tr>
+<tr><td>Soft-mode minimum, \(H\!\approx\!H_c\)</td><td>≈0.19 meV (calc.)</td><td>0.22 meV</td><td>R 2007 Fig. 2</td></tr>
+<tr><td>CF level scheme (K)</td><td>0*, 11, 32, 72, 84</td><td>0*, 10.8, 32.2, 72.0, 83.6</td><td>R 2007 Table II</td></tr>
+<tr><td>\(g_\parallel\)</td><td>13.78</td><td>13.78</td><td>—</td></tr>
+</tbody>
+</table>
+
+<h2 id="scope">8 · Scope &amp; limitations</h2>
+<p><strong>In scope:</strong> both phases — single-ion response, the scalar (cc-channel) 1/z self-energy and effective-medium lattice sum, the paramagnetic-side boundary, the real-axis cc-susceptibility \(\chi(\mathbf q,\nu,\omega)\), and the ferromagnetic phase via the spontaneous-moment mean field + elastic-sector self-energy (\(\alpha_m\), \(\lambda_3\); HTML eqs 37&ndash;38), giving the soft mode on both sides of the transition; the uniform-mode coupling carries the Lorentz cavity term and an optional sample-shape demagnetization correction (§1.6), consistently shared by the mean field, RPA and 1/z.</p>
+<p><strong>Out of scope / future work:</strong></p>
+<ul class="tight">
+  <li><strong>Ordered-phase field &amp; thermodynamics</strong> (deferred part of the ferromagnetic extension) — the applied-field magnetization curve / \(H_\mathrm{MF}\!\leftrightarrow\!H\) self-consistency (HTML eqs 41&ndash;43), which would make the moment onset exactly at the 1/z boundary (removing the small FM/PM step near \(B_c\)), and the free-energy consistency test (eq 44). The elastic \(\xi\,h\) static correction (eq 39) is included only in its low-\(T\) (ordinary-Dyson) limit.</li>
+  <li><strong>Tensor observables</strong> — the full 3×3 / 4-sublattice RPA (neutron cross-sections, transverse components) lives in <code>MF_RPA_Yikai.m</code>; <code>invz_jq_modes</code>'s per-sublattice \(\Jc_{cc}(q)\) matrix is the hook point.</li>
+  <li><strong>Thermodynamics</strong> — free energy, \(\delta U\), heat capacity (HTML eqs 34–35, 44). Note \(\delta U(T\!\to\!0)\neq0\) (zero-point shift).</li>
+  <li><strong>Ewald acceleration</strong> of the dipole sums — brute-force + on-disk caching is enough at the 12–24³ grids here.</li>
+</ul>
+<div class="callout caution"><span class="tag">Small-B<sub>x</sub> caveat</span> Near zero field the doublet splitting \(\Delta\) can drop below the <sup>165</sup>Ho hyperfine scale (\(A\approx3.36\) μeV). There the two-level determination of \(\Sigma\) over-suppresses \(T_c\) (mirroring R 2007's own comparison with quantum Monte Carlo). Results near the degenerate-doublet limit are directional only — which is why <code>invz_twolevel</code> errors (<code>invz:degenerateDoublet</code>) rather than returning a value for \(\Delta<10^{-4}\) meV.</div>
+
+<hr>
+<p class="muted" style="font-size:.85rem;">Companion documents in this repository: <code>jensen_1z_framework.html</code> (full symbolic derivation) and <code>docs/SESSION-2026-07-07-invz-handoff.md</code> (developer handoff — module map, numerical landmines, next-steps roadmap).</p>
+
+</div>
+</body>
+</html>
