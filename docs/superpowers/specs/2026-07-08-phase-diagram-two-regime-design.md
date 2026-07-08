@@ -1,7 +1,33 @@
 # Two-regime phase-boundary search for `invz_run_phase_diagram`
 
 Date: 2026-07-08. Branch: `invz-1z-lihof4`. Status: design approved by user
-(conversation of 2026-07-08); implementation pending.
+(conversation of 2026-07-08); AMENDED the same day during implementation —
+see Amendments below, which govern wherever later sections conflict.
+
+## Amendments (2026-07-08, user-approved during implementation)
+
+Diagnostics during Task 1 (the crossing-consistency test passed on the first
+run; convergence scans at B = 0.2/0.3/0.5 T) established:
+
+1. At small fields the paramagnetic solve develops non-convergence patches
+   near the boundary; the non-finite ⇒ ordered classifier reads them as
+   ordered and biases Tc(B) upward (+0.04–0.05 K at 0.2–0.3 T; gentler
+   `max_outer`/`mix_outer` does NOT cure them). At B ≥ 0.5 T the method is
+   clean: Tc(0.5 T) = 1.777 K, just below the closed-form Tc0 = 1.7795 K
+   evaluated on the same 16³ q-grid. (The spec's 1.74 K baseline below is
+   the Richardson-extrapolated value — the wrong comparison for a 16³
+   computation; the undershoot expectation was right once compared
+   grid-consistently.)
+2. `Bs` is therefore floored at 0.5 T (default `[0.5 0.75 1.0 1.25 1.5]`).
+   The 0 < B < 0.5 T boundary segment spans only ~4 mK in temperature and
+   is represented by the closed-form Tc0 endpoint on the plot.
+3. The `Tsplit` knob is REMOVED (user decision: trimming `Ts` is redundant —
+   one can simply shorten `Ts`). The Tc(B) bisection window is fixed inside
+   the driver as commented constants `Tlo = 1.0` K / `Tmax = 2.0` K, with
+   the documented constraint `max(Bs) < Bc(Tlo) ≈ 2.8 T`. The script never
+   modifies `Ts`; the default `Ts` now ends at 1.6 K.
+4. The near-zero-field test becomes `test_tc_small_field`: B = 0.5 T,
+   window [1.0 2.0] K, bounds (1.70, 1.79) K.
 
 ## Problem
 
