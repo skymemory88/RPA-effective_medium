@@ -88,7 +88,8 @@ Tmax = 2.0;     % paramagnetic upper bracket edge for Tc(B) (above Tc0 = 1.74 K)
 - Plot: both branches on one axes — `plot(Ts, Bc*10, 'o-')` for the low-T
   branch, `plot(TcB, Bs*10, 's-')` for the high-T branch — plus the Tc0
   black-square marker, as today. Additionally assemble a merged, T-sorted
-  `boundary = [T, B]` array in the workspace for downstream use.
+  `phase_boundary = [T, B]` array in the workspace for downstream use (named
+  to avoid shadowing MATLAB's built-in `boundary`).
 
 ### 3. Cost
 
