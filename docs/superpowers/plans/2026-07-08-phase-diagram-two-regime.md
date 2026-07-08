@@ -13,7 +13,7 @@
 - The repo path contains spaces — ALWAYS double-quote paths in shell commands.
 - MATLAB is NOT on PATH. Invoke it as `"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "<code>"` from the repo root.
 - Repo root: `/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Programming scripts/Matlab/Simulation/invZ expansion` — every shell step below assumes `cd` there first.
-- Slow tests are gated: `assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), ...)`. The fast suite (`runtests('invz/tests')` without the env var) must stay at **26 passed / 0 failed**, with the filtered count growing from 5 to 7 (the two new tests are SLOW-gated).
+- Slow tests are gated: `assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), ...)`. The fast suite (`runtests('invz/tests')` without the env var) must show **0 failed**, with this plan's two new tests SLOW-gated (filtered count +2, i.e. 5 → 7). The passed count depends on the user's unrelated uncommitted test files in the working tree — on the current tree it is 32 passed / 7 filtered (the spec's original 26/5 was the committed-tree baseline). The invariant: 0 failed, and a passed count unchanged by this plan's diffs.
 - Do NOT modify `invz/invz_critical.m`, `invz/invz_solve_point.m`, or anything below them in the solver layer. They are validated by the existing slow tests.
 - Physics constants fixed by the approved spec, AS AMENDED 2026-07-08 after implementation findings and user decisions: NO `Tsplit` knob and NO trimming of `Ts`; driver-internal window constants `Tlo = 1.0` K, `Tmax = 2.0` K; `Bs = [0.5 0.75 1.0 1.25 1.5]` T (0.5 T floor — below it, non-convergence patches near the boundary bias Tc upward by ~0.04–0.05 K); default `Ts` ends at 1.6 K; `invz_critical_T` defaults `window = [1.0 2.0]` K and `tol = 0.01` K; crossing-test tolerance 0.05 K; small-field test at B = 0.5 T with bounds (1.70, 1.79) K — the grid-consistent closed-form Tc0 on the 16³ grid is 1.7795 K and the measured Tc(0.5 T) is 1.777 K (undershoot).
 - Timing expectation with the warm `invz/cache/` on this machine: one EMT solve at T ∈ [1, 2] K takes seconds; a full bisection (~10 solves) takes on the order of a minute; each slow-test command below takes single-digit minutes. A cold cache adds ~15 min once (dipole grid recompute) — do not interpret that as a hang.
@@ -150,7 +150,7 @@ Expected: PASS (~2–6 min warm cache; it runs two full bisections).
 cd "/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Programming scripts/Matlab/Simulation/invZ expansion" && "/Applications/MATLAB_R2025a.app/bin/matlab" -batch "results = runtests('invz/tests'); assertSuccess(results); disp(results)"
 ```
 
-Expected: PASS — 26 passed, 0 failed, 7 filtered (was 5; the two new tests are correctly SLOW-gated).
+Expected: PASS — 0 failed, 7 filtered (the two new tests correctly SLOW-gated); passed count per Global Constraints (32 on the current tree).
 
 - [ ] **Step 6: Commit**
 
@@ -306,7 +306,7 @@ Expected: no `L<line>:` output, exit 0. Any message (especially parfor variable-
 cd "/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Programming scripts/Matlab/Simulation/invZ expansion" && "/Applications/MATLAB_R2025a.app/bin/matlab" -batch "results = runtests('invz/tests'); assertSuccess(results)"
 ```
 
-Expected: PASS — 26 passed, 0 failed, 7 filtered.
+Expected: PASS — 0 failed; 32 passed / 7 filtered on the current tree (see Global Constraints).
 
 (No driver smoke run is required here: the underlying bisections, including the driver's exact `[Tlo Tmax]` = [1.0 2.0] window, are covered by Task 1's slow tests; a real driver run is the production step at the end of this plan.)
 
@@ -426,6 +426,6 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 cd "/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Programming scripts/Matlab/Simulation/invZ expansion" && "/Applications/MATLAB_R2025a.app/bin/matlab" -batch "setenv('INVZ_SLOW','1'); results = runtests('invz/tests'); assertSuccess(results)"
 ```
 
-Expected: all pass, 0 failed (33 passed / 0 filtered).
+Expected: all pass, 0 failed (39 passed / 0 filtered on the current tree).
 
 - [ ] Production run (user-initiated — hours-scale, NOT part of the implementation loop): run `invz_run_phase_diagram` in MATLAB and check the spec's acceptance criteria: finite `TcB` for every default `Bs` entry, monotonically decreasing with B; the two branches join smoothly where they meet (Bc(1.6 K) and Tc(1.5 T) both sit near (1.6 K, 1.4 T)); the high-T branch runs near-vertically up to the `Tc0` marker (≈1.78 K on the 16³ grid, plotted at B = 0), reproducing R 2007 Fig. 1.
