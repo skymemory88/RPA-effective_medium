@@ -176,7 +176,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `invz/invz_run_phase_diagram.m` (full-file replacement below)
 
 **Interfaces:**
-- Consumes: `invz_critical(ion, T, Jf, struct('J0eff', info.Jcc0, 'window', [0.5 7]))` (unchanged) and Task 1's `invz_critical_T(ion, B, Jf, struct('J0eff', info.Jcc0, 'window', [Tlo Tmax]))`.
+- Consumes: `invz_critical(ion, T, Jf, struct('J0eff', J0, 'window', [0.5 7]))` (unchanged) and Task 1's `invz_critical_T(ion, B, Jf, struct('J0eff', J0, 'window', [Tlo Tmax]))`, where `J0 = info.Jcc0` is hoisted before the parfor so only a scalar is broadcast.
 - Produces: workspace variables `Bc` (fields at `Ts`, low-T branch), `TcB` (temperatures at `Bs`, high-T branch), `Tc0`, and `phase_boundary` (T-sorted `[T, B]` array of all finite boundary points); a figure with both branches and the closed-form `Tc0` marker. No other file depends on this script.
 
 - [ ] **Step 1: Replace the driver**
@@ -226,6 +226,7 @@ ion = invz_ion();
 qvec = qvec(any(abs(qvec) > 1e-12, 2), :);
 [Jnu, info] = invz_jq_modes(ion, qvec, struct('dpRng', 30, 'cache', true));
 Jf = Jnu(:);
+J0 = info.Jcc0;   % scalar hoist: avoids broadcasting the whole info struct to workers
 
 % ---- knobs --------------------------------------------------------------
 Ts = [0.05 0.2 0.3 0.4 0.6 0.8 1.0 1.2 1.4 1.6];   % low-T regime: Bc(T) points
@@ -252,14 +253,14 @@ parfor (k = 1:nT+nB, nWorkers)
         try
             % Wide bracket: the low-T points need the upper edge to reach
             % ~4-5 T, while the 1.6 K point sits close to the lower edge.
-            val = invz_critical(ion, v, Jf, struct('J0eff', info.Jcc0, 'window', [0.5 7]));
+            val = invz_critical(ion, v, Jf, struct('J0eff', J0, 'window', [0.5 7]));
         catch err
             fprintf('  T = %.2f K: FAILED (%s)\n', v, err.message);
         end
         fprintf('  [%2d/%2d] T = %.2f K  ->  Bc = %.3f T   (%.0f s)\n', k, nT+nB, v, val, toc(t0));
     else
         try
-            val = invz_critical_T(ion, v, Jf, struct('J0eff', info.Jcc0, 'window', [Tlo Tmax]));
+            val = invz_critical_T(ion, v, Jf, struct('J0eff', J0, 'window', [Tlo Tmax]));
         catch err
             fprintf('  B = %.2f T: FAILED (%s)\n', v, err.message);
         end
@@ -270,13 +271,13 @@ end
 Bc  = out(1:nT);                    % low-T branch:  Bc at each Ts
 TcB = out(nT+1:end);                % high-T branch: Tc at each Bs
 
-Tc0 = invz_critical_T0field(ion, invz_sigma_crit(info.Jcc0, Jf), info.Jcc0);
+Tc0 = invz_critical_T0field(ion, invz_sigma_crit(J0, Jf), J0);
 fprintf('Zero-field Tc (1/z) = %.3f K  [target 1.74 K]\n', Tc0);
 
 % Merged boundary, T-sorted, finite points only -- workspace export for
 % downstream use ('boundary' would shadow the built-in of that name).
 phase_boundary = sortrows([Ts(:) Bc(:); TcB(:) Bs(:)], 1);
-phase_boundary = phase_boundary(all(isfinite(phase_boundary), 2), :); %#ok<NASGU>
+phase_boundary = phase_boundary(all(isfinite(phase_boundary), 2), :);
 
 figure; hold on;
 plot(Ts, Bc*10, 'o-');
@@ -289,7 +290,7 @@ legend({'B_c(T) bisection', 'T_c(B) bisection', 'closed-form T_c(B=0)'}, 'Locati
 
 Design notes baked into that code (do not "simplify" them away):
 - `jobs`/`kind` arrays exist so every parfor slice `jobs(k)`, `kind(k)`, `out(k)` is indexed by the plain loop variable over its full range. Indexing `Ts(k)` / `Bs(k-nT)` inside branches instead can trip parfor's sliced-variable handling for out-of-range k.
-- `Jf = Jnu(:)` is hoisted so workers broadcast the flat vector once.
+- `Jf = Jnu(:)` and `J0 = info.Jcc0` are hoisted so workers broadcast only what they use — checkcode flags broadcasting the whole `info` struct into the parfor.
 - The high-T window is `[Tlo Tmax]` = [1.0 2.0] K — the same values validated by `test_tc_small_field` in Task 1.
 
 - [ ] **Step 2: Static-check the driver**
