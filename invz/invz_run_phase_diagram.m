@@ -90,6 +90,9 @@ fprintf('Zero-field Tc (1/z) = %.3f K  [target 1.74 K]\n', Tc0);
 
 % Merged boundary, T-sorted, finite points only -- workspace export for
 % downstream use ('boundary' would shadow the built-in of that name).
+% Columns [T(K) B(Tesla)] (the plot converts to kOe). Near the regime join
+% (~1.5-1.6 K) both branches contribute a point, so the curve is not
+% strictly single-valued in T there.
 phase_boundary = sortrows([Ts(:) Bc(:); TcB(:) Bs(:)], 1);
 phase_boundary = phase_boundary(all(isfinite(phase_boundary), 2), :);
 

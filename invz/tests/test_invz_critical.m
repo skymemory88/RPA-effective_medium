@@ -65,6 +65,8 @@ function test_tc_small_field(testCase)
 % "ordered", biasing Tc upward by ~0.04-0.05 K. The window [1.0 2.0] is
 % exactly the driver's [Tlo Tmax], so this doubles as an integration check
 % of the driver's bracket geometry. SLOW.
+% Upper bound 1.79 (not 1.7795) absorbs the bisection's ~±0.005 K midpoint
+% quantization; the measured margin below Tc0 is smaller than that jitter.
 assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), 'Set INVZ_SLOW=1 for slow tests');
 ion = invz_ion();
 [Jf, J0] = lihof4_couplings();

@@ -5,8 +5,9 @@ function tc = invz_critical_T(ion, Bx, Jnu_flat, opts)
 % crit is positive in the paramagnet (high T); inside the ordered phase (low T)
 % the paramagnetic EMT fixed point does not exist and invz_solve_point returns
 % non-finite crit; non-finite or <=0 is classified as the ordered side.
-% Use where the boundary is nearly parallel to the field axis (T near Tc0 =
-% 1.74 K): a fixed-B (horizontal) cut crosses it transversally, exactly where
+% Use where the boundary is nearly parallel to the field axis (T near the
+% zero-field Tc0: ~1.74 K Richardson-extrapolated, ~1.78 K on a raw 16^3
+% grid): a fixed-B cut crosses it transversally, exactly where
 % the fixed-T cut of invz_critical is ill-conditioned.
 % opts.window = [Tlo Thi] (K, default [1.0 2.0]): Tlo must be on the ordered
 % side (i.e. Bx < Bc(Tlo)) and Thi paramagnetic. opts.tol (K, default 0.01).
