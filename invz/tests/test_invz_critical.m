@@ -54,3 +54,35 @@ verifyGreaterThan(testCase, bx, 4.0);  verifyLessThan(testCase, bx, 4.6);   % Te
 pt = invz_solve_point(ion, 0.31, bx, Jf, struct('hyp', true, 'J0eff', J0));
 verifyEqual(testCase, pt.Sigma0, 0.0932, 'AbsTol', 0.02);
 end
+
+function test_tc_small_field(testCase)
+% Small-field limit of the fixed-B temperature bisection: Tc(0.5 T) must sit
+% just below the closed-form Tc0 evaluated on the SAME 16^3 q-grid (1.7795 K;
+% the Richardson-extrapolated benchmark 1.74 K is a different baseline).
+% Measured: 1.777 K. The undershoot direction is R 2007's small-Bx caveat.
+% B = 0.5 T is the validated floor: at 0.2-0.3 T the paramagnetic solve has
+% non-convergence patches near the boundary that the classifier reads as
+% "ordered", biasing Tc upward by ~0.04-0.05 K. The window [1.0 2.0] is
+% exactly the driver's [Tlo Tmax], so this doubles as an integration check
+% of the driver's bracket geometry. SLOW.
+assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), 'Set INVZ_SLOW=1 for slow tests');
+ion = invz_ion();
+[Jf, J0] = lihof4_couplings();
+tc = invz_critical_T(ion, 0.5, Jf, struct('J0eff', J0, 'window', [1.0 2.0]));
+verifyGreaterThan(testCase, tc, 1.70);
+verifyLessThan(testCase, tc, 1.79);
+end
+
+function test_tc_at_fixed_field_crossing(testCase)
+% Mirror consistency: at a mid-slope boundary point (T* = 1.4 K, where both
+% cut directions are well-conditioned) the fixed-B temperature bisection must
+% land back on the fixed-T field bisection's point. 0.05 K tolerance covers
+% both bisection tolerances (0.02 T, 0.01 K) at the local boundary slope. SLOW.
+assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), 'Set INVZ_SLOW=1 for slow tests');
+ion = invz_ion();
+[Jf, J0] = lihof4_couplings();
+Tstar = 1.4;
+bstar = invz_critical(ion, Tstar, Jf, struct('J0eff', J0, 'window', [0.5 7]));
+tc = invz_critical_T(ion, bstar, Jf, struct('J0eff', J0, 'window', [1.0 2.0]));
+verifyEqual(testCase, tc, Tstar, 'AbsTol', 0.05);
+end
