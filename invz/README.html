@@ -280,7 +280,7 @@ $$\Jc(0)=\Jc_{\rm dip}(0)+4\Jc_{12}
 <pre><code>% one-off: reproduce the field-vs-frequency spectrum at T = 0.31 K
 run invz/invz_run_spectra.m
 
-% the full paramagnetic phase boundary Bc(T)  (parallel over temperature)
+% the full phase boundary, two regimes  (parallel over all boundary points)
 run invz/invz_run_phase_diagram.m</code></pre>
 
 <p>Programmatic use of the core solve:</p>
@@ -315,7 +315,7 @@ plot(out.chi_cc_q(1,:));   % chi(q=0, omega)</code></pre>
 <tr><td><code>invz_spectra_map</code> / <code>invz_run_spectra</code></td><td>field (<code>parfor</code> over <code>fields</code>)</td><td><code>opts.parallel = true</code> / <code>useParallel = true</code></td></tr>
 </tbody>
 </table>
-<p>Both use <code>parfor&nbsp;(k = 1:n, nWorkers)</code> with <code>nWorkers = 0</code> forcing a serial run — so the same code runs with or without the Parallel Computing Toolbox, and falls back to serial automatically when it is absent. A local pool is auto-created on first use (~10–30 s once). The \(\Jc(q)\) lattice sum is computed once up front, so workers do no disk I/O and never contend on <code>invz/cache/</code>. Progress lines interleave across workers — expected. With an 8-worker pool the phase boundary drops from ~1–2 h to roughly 15–25 min.</p>
+<p>Both use <code>parfor&nbsp;(k = 1:n, nWorkers)</code> with <code>nWorkers = 0</code> forcing a serial run — so the same code runs with or without the Parallel Computing Toolbox, and falls back to serial automatically when it is absent. A local pool is auto-created on first use (~10–30 s once). The \(\Jc(q)\) lattice sum is computed once up front, so workers do no disk I/O and never contend on <code>invz/cache/</code>. Progress lines interleave across workers — expected. With an 8-worker pool the phase boundary drops from ~2–3 h to roughly 20–30 min.</p>
 <div class="callout caution"><span class="tag">Boundary speckle</span> Right at the marginal phase boundary a field/temperature point can fail to converge and come back masked, next to converged neighbours. That is the para fixed point going marginal (not a bug). Widen <code>max_outer</code> / soften mixing there, or accept a couple of masked edge points.</div>
 
 <h2 id="reference">6 · Function reference</h2>
