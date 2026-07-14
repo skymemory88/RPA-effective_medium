@@ -41,11 +41,23 @@
 
 addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')),'..'));
 ion = invz_ion();
+% ion.demag = 1;  ion.alpha = 0.25;  % OPTIONAL sample-shape (demagnetization) knob; default off.
+%   - info.Jcc0, Jnu, and the ordering-channel contribution to criticality are demag-
+%     INVARIANT (R 2007: the demagnetizing field cancels from the critical condition,
+%     since ordering occurs at q -> 0+, not strict q = 0).
+%   - Tc(B = 0) is EXACTLY demag-invariant: the transverse moment vanishes there.
+%   - Bc(T) vs APPLIED transverse field CAN shift through the demag-aware transverse
+%     coupling info.Jaa0 (hoisted into Jxx0 below): internal-vs-applied field relation.
+%   demag = 0 (default) is the intrinsic / internal-field boundary matching the R 2007
+%   benchmark.
 [qvec, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5]);
 qvec = qvec(any(abs(qvec) > 1e-12, 2), :);
 [Jnu, info] = invz_jq_modes(ion, qvec, struct('dpRng', 30, 'cache', true));
 Jf = Jnu(:);
 J0 = info.Jcc0;   % scalar hoist: avoids broadcasting the whole info struct to workers
+Jxx0 = ion.Jxx0;  if isfield(info, 'Jaa0'), Jxx0 = info.Jaa0; end   % live transverse J(0)
+% (demag-aware; at demag = 0 it differs from the hardcoded ion.Jxx0 by <0.1% -- the live
+% dipole sum supersedes the pasted constant). Tc0 below needs no Jxx0: at B = 0, <Jx> = 0.
 % Zero-field Tc, computed ONCE up front (invz_sigma_crit warns once here rather
 % than in every worker): it anchors the Tc(B) adaptive window and is the B=0
 % endpoint on the plot.
@@ -83,14 +95,14 @@ parfor (k = 1:nT+nB, nWorkers)
             % Field window [0.1 6]: the top (6 T) is paramagnetic for every Ts
             % (Bc(T=0) ~ 5 T); invz_critical scans DOWN from there to the
             % converged ordered/paramagnet crossing (see its header).
-            val = invz_critical(ion, v, Jf, struct('J0eff', J0, 'window', [0.1 6]));
+            val = invz_critical(ion, v, Jf, struct('J0eff', J0, 'Jxx0', Jxx0, 'window', [0.1 6]));
         catch err
             fprintf('  T = %.2f K: FAILED (%s)\n', v, err.message);
         end
         fprintf('  [%2d/%2d] T = %.2f K  ->  Bc = %.3f T   (%.0f s)\n', k, nT+nB, v, val, toc(t0));
     else
         try
-            val = invz_critical_T(ion, v, Jf, struct('J0eff', J0, 'Tc0', Tc0));
+            val = invz_critical_T(ion, v, Jf, struct('J0eff', J0, 'Jxx0', Jxx0, 'Tc0', Tc0));
         catch err
             fprintf('  B = %.2f T: FAILED (%s)\n', v, err.message);
         end
