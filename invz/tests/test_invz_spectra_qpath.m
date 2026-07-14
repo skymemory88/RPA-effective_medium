@@ -54,6 +54,10 @@ S = invz_spectra_qpath(ion, T, B, qpath, w, ...
 verifySize(testCase, S.chiz,   [numel(w) 3]);
 verifySize(testCase, S.chirpa, [numel(w) 3]);
 verifyEqual(testCase, S.s, [0 0.5 1], 'AbsTol', 1e-12);
+% plot coordinate: single-axis path -> the ACTUAL Miller component (R2007 Fig 3 axis,
+% h = 1..2), NOT the distance-from-start s (which reads 0..1 for every unit-length path)
+verifyEqual(testCase, S.x, [1 1.5 2], 'AbsTol', 1e-12);
+verifyEqual(testCase, S.xlab, 'Q = (h, 0, 0) (r.l.u.)');
 verifyEqual(testCase, S.phase, 2);
 verifyTrue(testCase, all(isfinite(S.Epeak)));
 
@@ -99,6 +103,19 @@ S0 = invz_spectra_qpath(ion0, T, B, qpath, w, o);
 SS = invz_spectra_qpath(ionS, T, B, qpath, w, o);
 verifyEqual(testCase, SS.chiz, S0.chiz);
 verifyEqual(testCase, SS.Jq,   S0.Jq);
+end
+
+function test_qpath_plot_coordinate_fallback(testCase)
+% A path varying along more than one Miller axis has no single q coordinate to plot
+% against: S.x must fall back to the distance-from-start S.s (with the matching label).
+ion = invz_ion();
+info = struct('Jcc0', 6.4e-3);
+Jnu  = linspace(-2e-3, 6.0e-3, 24).';
+w = (0.05:0.05:0.3).';
+qpath = [1 0 0; 1.5 0 0.5; 2 0 1];                 % h and l both vary
+S = invz_spectra_qpath(ion, 0.31, 5.5, qpath, w, struct('Jnu', Jnu, 'info', info, 'dpRng', 10));
+verifyEqual(testCase, S.x, S.s);
+verifyTrue(testCase, startsWith(S.xlab, 's along path'));
 end
 
 function test_qpath_out_of_plane_gamma_limit(testCase)
