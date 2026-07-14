@@ -76,3 +76,26 @@ verifyLessThan(testCase, max(abs(Mz_prod - kron(oJ.Jz, eye(8))), [], 'all'), 1e-
 Mx_prod = si.V * si.Mx * si.V';
 verifyLessThan(testCase, max(abs(Mx_prod - kron(oJ.Jx, eye(8))), [], 'all'), 1e-10);
 end
+
+function test_jxx0_override(testCase)
+% opts.Jxx0 must control the transverse mean field end-to-end, on BOTH the
+% paramagnetic and ordered paths: with Jxx0 = 0 the converged hx is exactly 0,
+% and the two-level helpers must inherit the override.
+ion = invz_ion();
+% paramagnetic path
+s1 = invz_single_ion(ion, 0.31, [4 0 0], struct('hyp', false));
+verifyGreaterThan(testCase, abs(s1.hx), 1e-6);                 % default: finite MF
+s0 = invz_single_ion(ion, 0.31, [4 0 0], struct('hyp', false, 'Jxx0', 0));
+verifyEqual(testCase, s0.hx, 0);
+t1 = invz_twolevel(ion, 0.31, 4);
+t0 = invz_twolevel(ion, 0.31, 4, struct('Jxx0', 0));
+verifyGreaterThan(testCase, abs(t1.Delta - t0.Delta), 1e-9);   % override reached the doublet
+% ordered path: (0.5 K, 2 T) sits inside the ordered phase (cf. test_ordered_mean_field at 0.31 K)
+so  = invz_single_ion(ion, 0.5, [2 0 0], struct('hyp', false, 'order', true));
+so0 = invz_single_ion(ion, 0.5, [2 0 0], struct('hyp', false, 'order', true, 'Jxx0', 0));
+verifyGreaterThan(testCase, abs(so.hx), 1e-6);
+verifyEqual(testCase, so0.hx, 0);
+to1 = invz_twolevel_ordered(ion, 0.5, 2, so.hz);
+to0 = invz_twolevel_ordered(ion, 0.5, 2, so.hz, struct('Jxx0', 0));
+verifyGreaterThan(testCase, abs(to1.Delta - to0.Delta), 1e-9);
+end
