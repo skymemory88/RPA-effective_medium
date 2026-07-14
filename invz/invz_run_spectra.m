@@ -6,9 +6,10 @@
 %                                    colour per field)                      cf. R 2007 Fig 2
 %     numel(fields) >  sliceMax  ->  2D field-vs-frequency colormap, 1/z and RPA panels
 %                                                            cf. R 2007 Fig 2 / Kovacevic Fig 3d
-%   qpath = [nq x 3] r.l.u.  -- EXPLORATORY branch-resolved q-path view at fixed field(s)
-%     Bq, for comparison with the TRENDS in R 2007 Fig 3 (branch susceptibility, not
-%     neutron intensity; see invz_spectra_qpath header for the inherited caveats):
+%   qpath = [nq x 3] r.l.u.  -- ferromagnetic-mode q-path view at fixed field(s) Bq,
+%     reproducing the energy TRENDS in R 2007 Fig 3 (uniform FM-mode susceptibility, not
+%     neutron intensity; see invz_spectra_qpath header for the inherited caveats). Along
+%     (1,0,0)->(2,0,0) the mode softens monotonically toward the (2,0,0) zone centre:
 %     numel(Bq) == 1  ->  2D path-vs-frequency colormaps (1/z + RPA), censored peak overlay
 %     numel(Bq) >  1  ->  E_peak(q) dispersion overlay, one colour per field
 %
@@ -51,8 +52,8 @@ eUnit = 'meV';                       % 'meV' or 'GHz' -- plotting only; computat
 qh = linspace(1, 2, 51).';  
 qpath = [qh zeros(numel(qh), 2)];  % (1,0,0)->(2,0,0)
 
-Bq = 4.24;                           % field(s), T, for the q-path view. One value -> colormaps;
-% Bq = [3.6 4.24 6.0];           % several -> E_peak(q) overlay (R 2007 Fig 3: [3.6 4.24 6.0])
+% Bq = 4.24;                           % field(s), T, for the q-path view. One value -> colormaps;
+Bq = [3.6 4.24 6.0];           % several -> E_peak(q) overlay (R 2007 Fig 3: [3.6 4.24 6.0])
 wq = (0:0.004:0.85).';               % meV -- q-path grid. Fig 3 reaches ~0.75 meV near h = 1 at
                                      % 60 kOe (after their 1.15 scaling); 0.85 avoids clipping,
                                      % which the censoring peak picker would flag as NaN.
@@ -67,7 +68,7 @@ switch eUnit
 end
 
 if ~isempty(qpath)
-    % ---------------- exploratory q-path view at fixed field(s) ----------------
+    % ---------------- FM-mode q-path view at fixed field(s) ----------------
     if isscalar(Bq)
         S = invz_spectra_qpath(ion, T, Bq, qpath, wq, struct('eta', eta));
         Splot = S;   % display-only copy; the solve above always ran in meV
@@ -75,10 +76,10 @@ if ~isempty(qpath)
         figure('Position', [100 100 1150 460]);
         ax1 = subplot(1, 2, 1);
         invz_plot_spectra_qpath(ax1, Splot, Splot.chiz, Splot.Epeak, ...
-            sprintf('1/z branch \\chi''''_{cc} (exploratory), T = %.2f K, B = %.2f T', T, Bq), eUnit);
+            sprintf('1/z FM-mode \\chi''''_{cc}, T = %.2f K, B = %.2f T', T, Bq), eUnit);
         ax2 = subplot(1, 2, 2);
         invz_plot_spectra_qpath(ax2, Splot, Splot.chirpa, Splot.Epeak_rpa, ...
-            sprintf('RPA branch \\chi''''_{cc} (exploratory), T = %.2f K, B = %.2f T', T, Bq), eUnit);
+            sprintf('RPA FM-mode \\chi''''_{cc}, T = %.2f K, B = %.2f T', T, Bq), eUnit);
     else
         figure; hold on;  co = lines(numel(Bq));
         for k = 1:numel(Bq)
@@ -90,7 +91,7 @@ if ~isempty(qpath)
         end
         xlabel(Sk.xlab);
         ylabel(strrep(eLabel, '\omega', 'E_{peak}'));
-        title(sprintf('branch dispersion (exploratory), T = %.2f K, dispScale = %.2f', T, dispScale));
+        title(sprintf('FM-mode dispersion, T = %.2f K, dispScale = %.2f', T, dispScale));
         legend show;
         % cf. R 2007 Fig 3 TRENDS: the x-axis shows the actual varying Miller component
         % (h = 1..2 for the (1,0,0)->(2,0,0) path); their theory lines are the calculated
