@@ -10,9 +10,13 @@ debugging or further development.
 A self-contained MATLAB module `invz/` implementing Jensen's high-density 1/z
 expansion (J. Jensen, PRB **49**, 11833 (1994)) for LiHoF4, following the
 LiHoF4-specific application of Rønnow et al., PRB **75**, 054426 (2007)
-("R2007"). Scope: **paramagnetic phase only** (thermal + quantum paramagnet,
-transverse field B‖a). It computes the 1/z-renormalized susceptibility
-χ(q,ω) one order beyond MF-RPA.
+("R2007"). Scope: **paramagnetic AND ferromagnetic phases** (thermal + quantum
+paramagnet and the ordered phase, transverse field B‖a). It computes the
+1/z-renormalized susceptibility χ(q,ω) one order beyond MF-RPA, including the
+soft mode that dips at the quantum phase transition and hardens into the
+ordered phase. The ordered phase (added 2026-07-07, "Option A") uses the bare
+mean-field order parameter + the elastic-sector self-energy (HTML eqs 37–38);
+the eq-43 H_MF↔H self-consistency and eq-44 thermodynamics are deferred — see §7.
 
 Reference documents (all in this repo):
 - `jensen_1z_framework.html` — full derivation of the theory with equation
@@ -60,6 +64,16 @@ invz_critical_T0field.m   zero-field Tc from 1+Σc = J0·χ0cc(0;T) (elastic-
                           dominated; uses the closed-form Σc, not α+γg).
 invz_chi_realaxis.m       Σ(ω) = α + (M²/n01²)[λ1 −(1−n01²)K(ω)]·g(ω+iη);
                           χ̃0 = χ0cc/(1+Σ); mode-RPA χ = χ̃0/(1−Jν χ̃0).
+                          Branches to the ordered Σ(ω) (eq 37) when pt.is_ordered.
+── ordered phase (FM), added 2026-07-07 ──
+invz_single_ion.m         opts.order: + longitudinal ordering MF hz=J0eff·⟨Jz⟩,
+                          symmetry-broken branch → spontaneous m0. opts.hz_fixed:
+                          impose hz on the electronic doublet (no self-solve).
+invz_twolevel_ordered.m   electronic doublet with hz imposed → Δ,M²,m≠0,n01,g0,h0.
+invz_sigma_ordered.m      Σ=(α−α_m)+[γ−(2m²/M²)γ(0)]g (eqs 37-38, λ=[λ1;λ2;λ3]);
+                          = invz_sigma at m=0.
+invz_solve_point_ordered.m ordered outer loop; pt.{m0,is_ordered,alpha_m,si};
+                          is_ordered=false ⇒ caller uses invz_solve_point.
 invz_run_phase_diagram.m  driver: boundary Bc(T) + zero-field Tc (~1-2 h full).
 invz_run_spectra.m        driver: χ″(ω) RPA vs 1/z at several fields, 0.31 K.
 ```
@@ -87,7 +101,11 @@ Key design decisions (from R2007, section II):
 | Soft-mode minimum | ≈0.19 meV (calc) | 0.22 meV | test_invz_chi_observable (slow) |
 | CF level scheme | Table II: 0*,11,32,72,84 K | 0*,10.8,32.2,72.0,83.6 K | test_invz_single_ion |
 | g∥ | 13.78 | 13.78 | test_invz_single_ion |
-| Jensen α/γ formulas | — | 1e-9 match vs old src/ implementation | test_invz_sigma (auto-skips, see §5) |
+
+The Jensen α/γ self-energy formulas were also cross-checked at 1e-9 against the
+old `src/` "Track-A" implementation while it was still in the tree; that
+cross-check test was removed along with `src/` (see §5) and is recoverable from
+history (`git show bee3ca2`).
 
 Run commands (MATLAB is NOT on PATH on this machine):
 ```bash
@@ -130,9 +148,11 @@ cd "<repo root>"    # path contains spaces — always quote
 
 ## 5. Known gaps / deferred items
 
-- `test_matches_existing_src_formula` auto-skips (assumeTrue) because the old
-  `src/` EMT solver was removed from the tree (see §6). It re-arms if src/ is
-  restored from history.
+- `test_matches_existing_src_formula` (the α/γ cross-check against the old
+  `src/` solver) was **removed** — it could only ever skip once `src/` was
+  deleted from the tree (see §6), so it was dead weight in every test report.
+  Recover it with `git show bee3ca2:src/emt_compute_x_from_lambdas.m` plus the
+  test body from history if `src/` is ever restored.
 - `invz_chi_realaxis` opts.Jfull/npass multi-pass branch is implemented but
   untested and never exercised (single-shot default is what all tests/drivers
   use); it doesn't check med.converged. Harden before first real use.
@@ -171,16 +191,32 @@ cd "<repo root>"    # path contains spaces — always quote
 ## 7. Where to go next (in rough order of value)
 
 1. **Physics production runs**: `invz_run_phase_diagram` (full boundary,
-   ~1-2 h) and `invz_run_spectra`; compare against R2007 Figs 1-2 and
-   Kovacevic Fig 3(d). The GHz-frequency χ″ maps need ω grids in the
-   1.7–5.6 GHz range (× C.Gh2mV to meV) and the electronuclear elastic-sector
-   physics is already in χ0.
-2. **Ordered phase** (the big one): implement the m≠0 elastic sector —
-   HTML eqs 37–40 (α_m with λ3, the ξ tanh resummation) and the modified
-   mean field H_MF via HTML eqs 41–43 (J 2.31–2.33). Entry points:
-   invz_twolevel currently ERRORS on |m|>1e-3 — that guard marks exactly
-   where the extension goes; invz_solve_point's non-finite behavior in the
-   ordered phase is the other boundary.
+   ~1-2 h single-core, `parfor` over temperature — `useParallel` flag) and
+   `invz_run_spectra` (auto-switches few-field line slices ↔ dense
+   field-vs-frequency χ″ colormap by field count; `invz_spectra_map` computes
+   the χ″(ω,B) matrix with an optional `parallel` parfor over fields,
+   `invz_plot_spectra_map` renders a panel). Compare against R2007 Figs 1-2 and
+   Kovacevic Fig 3(d). The GHz-frequency χ″ maps need ω grids in the 1.7–5.6
+   GHz range (× C.Gh2mV to meV) and the electronuclear elastic-sector physics
+   is already in χ0. `invz_spectra_map` now computes BOTH phases (FM below Bc,
+   PM above; `S.phase` labels each field), so a cross-Bc sweep shows the full
+   soft-mode "V". Only the degenerate doublet at Bx→0 stays masked. Full user
+   manual is now `invz/README.html` (MathJax equations + data-flow chart);
+   `invz/README.md` was removed (HTML is the sole manual).
+2. **Ordered phase** — DONE 2026-07-07 (Option A). `invz_single_ion` gained an
+   `order` opt (longitudinal ordering MF → spontaneous m0) and an `hz_fixed`
+   opt; `invz_twolevel_ordered`, `invz_sigma_ordered` (HTML eqs 37–38, α_m with
+   λ3; reduces to para invz_sigma at m=0), and `invz_solve_point_ordered`
+   (returns `is_ordered`; falls back to para above Bc) implement it;
+   `invz_chi_realaxis` and `invz_spectra_map` branch on `pt.is_ordered`. Tests:
+   `test_invz_sigma_ordered`, the ordered case in `test_invz_single_ion`, and
+   the slow `test_invz_ordered_phase` (convergence, crit>0, soft-mode hardening,
+   para fallback). **Deferred (would-be Option B):** the eq-43 H_MF↔H
+   magnetization-curve self-consistency (would remove the ~15 μeV FM/PM step at
+   Bc by onsetting the moment at the 1/z rather than the MF boundary) and the
+   eq-44 free-energy consistency test. The eq-39 ξ·h elastic correction is
+   included only in its low-T (ordinary-Dyson) limit — fine at the QPT, revisit
+   for T approaching Tc where (1−n01²) is no longer tiny.
 3. **Tensor observables**: feed χ̃0 (cc ÷ (1+Σ)) into a 4-sublattice 3×3 RPA
    (MF_RPA_Yikai's machinery is the template) for neutron cross-sections /
    transverse components.

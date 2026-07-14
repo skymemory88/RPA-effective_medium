@@ -144,12 +144,25 @@ $$ \mathcal H_1 \;=\; -\tfrac12 \sum_{ij} \Jc(ij)\, \tilde J_{ix}\tilde J_{jx},
 $$ [\mathcal H_1,\, J_{ix}] = 0 \quad\text{exactly}, \tag{4} $$
 <p>a fact used repeatedly below (equations of motion, sum rule, energy formula).</p>
 
+<h3 id="s1-1">1.1 &nbsp;The scalar coupling as the Ising projection of the dipolar tensor</h3>
+<p>
+For a dipolar magnet the microscopic two-ion coupling is not a scalar: it is the Cartesian tensor
+</p>
+$$ \mathcal H_1^{\rm full} \;=\; -\tfrac12 \sum_{ij} \sum_{\alpha\beta} \Jc_{\alpha\beta}(ij)\, \tilde J_{i\alpha}\tilde J_{j\beta}, \qquad \alpha,\beta \in \{x,y,z\}, $$
+<p>
+with \( \Jc_{\alpha\beta}(ij) \) the classical dipole sum plus any exchange &mdash; all three components of \( \mathbf J \) participate, and this is as true of HoF<sub>3</sub> as of LiHoF<sub>4</sub>. The scalar model (3) is the projection of this tensor onto the two-level subspace, not an additional assumption about the interaction. Let \( P = a_{00} + a_{11} \) project onto the two low singlets. In the strongly anisotropic level schemes considered here exactly one component &mdash; \( J_x \) in the convention of (1) &mdash; has a nonvanishing 2&times;2 block, \( PJ_xP = m(a_{00}-a_{11}) + MX \); for the other components \( PJ_yP \) and \( PJ_zP \) vanish or are negligible (in LiHoF<sub>4</sub> the &Gamma;<sub>3,4</sub> ground doublet carries only the \(c\)-axis component of \( \mathbf J \), so there the surviving channel is \( cc \)). An interaction line \( \Jc_{\alpha\beta}\,\tilde J_{i\alpha}\tilde J_{j\beta} \) contributes to the fluctuation series of Secs. 2&ndash;9 only if <em>both</em> ends create or destroy fluctuations within the two-level subspace, so every block with \( \alpha\beta \neq xx \) drops out of the expansion. Such blocks are not discarded physically; they act through the two channels left open to them: (i) their <em>static mean-field</em> values, which are absorbed into the single-ion Hamiltonian that defines \( \Delta, M, m \) (a transverse-channel mean field mixes the singlets exactly like an external transverse field), and (ii) <em>virtual transitions to the remote levels</em> outside the two-level subspace, which belong to the weak-transition sector that the realistic-level-scheme generalization (Sec. 10) keeps in the bare susceptibility tensor but leaves unrenormalized. Inside the two-level subspace, therefore, \( \mathcal H_1^{\rm full} \) truncates to the single-channel form (3) with \( \Jc(ij) \equiv \Jc_{xx}(ij) \), and everything that follows is controlled 1/z bookkeeping for that channel.
+</p>
+
 <h2 id="s2">2 &nbsp;Green functions and the linked-cluster expansion</h2>
 <p>The imaginary-time Green function and its transforms are <span class="jref">J 2.1&ndash;2.3</span></p>
-$$ G(ij,\tau_1-\tau_2) \;=\; -\,\big\langle T_\tau\, \tilde J_{ix}(\tau_1)\, \tilde J_{jx}(\tau_2) \big\rangle, \qquad
-\tilde J_{ix}(\tau) = e^{\tau\mathcal H}\, \tilde J_{ix}\, e^{-\tau\mathcal H}, \tag{5} $$
-$$ G(\mathbf q, \wn) = \sum_j e^{-i\mathbf q\cdot(\mathbf R_i - \mathbf R_j)} \int_0^\beta \! d\tau\; e^{\wn \tau}\, G(ij,\tau),
-\qquad G(ij,\tau) = \frac{1}{N\beta}\sum_{\mathbf q, n} e^{i\mathbf q\cdot \mathbf R_{ij}} e^{-\wn\tau} G(\mathbf q,\wn). \tag{6} $$
+$$ \begin{aligned}
+G(ij,\tau_1-\tau_2) &\;=\; -\,\big\langle T_\tau\, \tilde J_{ix}(\tau_1)\, \tilde J_{jx}(\tau_2) \big\rangle, \\[.3em]
+\tilde J_{ix}(\tau) &= e^{\tau\mathcal H}\, \tilde J_{ix}\, e^{-\tau\mathcal H},
+\end{aligned} \tag{5} $$
+$$ \begin{aligned}
+G(\mathbf q, \wn) &= \sum_j e^{-i\mathbf q\cdot(\mathbf R_i - \mathbf R_j)} \int_0^\beta \! d\tau\; e^{\wn \tau}\, G(ij,\tau), \\[.3em]
+G(ij,\tau) &= \frac{1}{N\beta}\sum_{\mathbf q, n} e^{i\mathbf q\cdot \mathbf R_{ij}} e^{-\wn\tau} G(\mathbf q,\wn).
+\end{aligned} \tag{6} $$
 <p>
 Standard perturbation theory in \( \mathcal H_1 \) gives the linked-cluster series <span class="jref">J 2.5, 2.6</span>: expanding
 \( e^{-\beta\mathcal H} = e^{-\beta\mathcal H_0}\, T_\tau \exp[-\int_0^\beta \mathcal H_1(\tau)d\tau] \)
@@ -173,16 +186,22 @@ $$ G_0(\tau) = -\,M^2 f(\tau) - m^2\,(1-n_{01}^2), \qquad 0<\tau<\beta. \tag{9} 
 <p>Fourier transform, using \( e^{\wn\beta}=1 \):
 \( \int_0^\beta e^{(\wn \mp \Delta)\tau} d\tau = \dfrac{e^{\mp\beta\Delta}-1}{\wn \mp \Delta} \),
 together with the two population identities</p>
-$$ n_0\,(e^{-\beta\Delta}-1) = \frac{e^{-\beta\Delta}-1}{1+e^{-\beta\Delta}} = -\,n_{01},
-\qquad n_1\,(e^{\beta\Delta}-1) = \frac{1-e^{-\beta\Delta}}{1+e^{-\beta\Delta}} = +\,n_{01}, \tag{10} $$
+$$ \begin{aligned}
+n_0\,(e^{-\beta\Delta}-1) &= \frac{e^{-\beta\Delta}-1}{1+e^{-\beta\Delta}} = -\,n_{01}, \\[.3em]
+n_1\,(e^{\beta\Delta}-1) &= \frac{1-e^{-\beta\Delta}}{1+e^{-\beta\Delta}} = +\,n_{01},
+\end{aligned} \tag{10} $$
 <p>gives</p>
-$$ -M^2\!\int_0^\beta\! e^{\wn\tau} f(\tau)\, d\tau
-= -M^2 n_{01}\left[ \frac{1}{\wn+\Delta} - \frac{1}{\wn-\Delta} \right]
-= -M^2\, \frac{2 n_{01}\Delta}{\Delta^2 - (\wn)^2}, $$
+$$ \begin{aligned}
+-M^2\!\int_0^\beta\! e^{\wn\tau} f(\tau)\, d\tau
+&= -M^2 n_{01}\left[ \frac{1}{\wn+\Delta} - \frac{1}{\wn-\Delta} \right] \\[.3em]
+&= -M^2\, \frac{2 n_{01}\Delta}{\Delta^2 - (\wn)^2},
+\end{aligned} $$
 <p>and \( \int_0^\beta e^{\wn\tau} d\tau = \beta\,\delta_{n,0} \) for the elastic part. Therefore <span class="jref">J 2.7, 2.8</span></p>
-$$ \boxed{\; G_0(\wn) = -M^2 g(\wn) - m^2 h(\wn), \qquad
-g(\wn) = \frac{2 n_{01}\Delta}{\Delta^2-(\wn)^2}, \qquad
-h(\wn) = \beta\,(1-n_{01}^2)\,\delta_{n,0}. \;} \tag{11} $$
+$$ \boxed{\begin{aligned}
+& G_0(\wn) = -M^2 g(\wn) - m^2 h(\wn), \\[.3em]
+& g(\wn) = \frac{2 n_{01}\Delta}{\Delta^2-(\wn)^2}, \qquad
+h(\wn) = \beta\,(1-n_{01}^2)\,\delta_{n,0}.
+\end{aligned}} \tag{11} $$
 <p>
 \( g \) carries the inelastic (Van Vleck) response with poles at \( \pm\Delta \); \( h \) is the elastic (Curie-like) response of the diagonal moment, present only when \( m\neq0 \). Both are even in \( \omega_n \). Static single-site susceptibility: \( \chi_0(0) = -G_0(0) = M^2 g(0) + m^2\beta(1-n_{01}^2) \) with \( g(0) = 2n_{01}/\Delta \).
 </p>
@@ -191,16 +210,20 @@ h(\wn) = \beta\,(1-n_{01}^2)\,\delta_{n,0}. \;} \tag{11} $$
 <h2 id="s4">4 &nbsp;1/z power counting and the RPA</h2>
 <div class="box derived"><span class="tag">Derived in full &rarr; J 2.9</span>
 <p><b>First order.</b> With sites decoupled at zeroth order, the connected first-order term of (5) requires the two interaction indices to coincide with the external sites \( (i,j) \); the two assignments cancel the factor \( \tfrac12 \):</p>
-$$ \delta G(ij,\tau) = \Big\langle T_\tau\, \tilde J_{ix}(\tau)\, \tilde J_{jx}(0) \int_0^\beta\! d\tau_1\, \mathcal H_1(\tau_1) \Big\rangle_0^{\rm conn}
-= -\,\Jc(ij) \int_0^\beta\! d\tau_1\, G_0(\tau-\tau_1)\, G_0(\tau_1), $$
+$$ \begin{aligned}
+\delta G(ij,\tau) &= \Big\langle T_\tau\, \tilde J_{ix}(\tau)\, \tilde J_{jx}(0) \int_0^\beta\! d\tau_1\, \mathcal H_1(\tau_1) \Big\rangle_0^{\rm conn} \\[.3em]
+&= -\,\Jc(ij) \int_0^\beta\! d\tau_1\, G_0(\tau-\tau_1)\, G_0(\tau_1),
+\end{aligned} $$
 <p>i.e. \( \delta G(\mathbf q,\wn) = -\Jc(\mathbf q)\, G_0^2(\wn) \). Iterating the same contraction pattern (chains of single-site pairs joined by \( \Jc \) lines) produces a geometric series,</p>
 $$ G(\mathbf q,\wn)\big|_{\rm RPA} = G_0 - \Jc(\mathbf q) G_0^2 + \Jc^2(\mathbf q) G_0^3 - \cdots
 = \boxed{\;\frac{G_0(\wn)}{1+\Jc(\mathbf q)\, G_0(\wn)}\;} \tag{12} $$
 <p><span class="jref">J 2.9</span>. (With \( \chi = -G \) this is the familiar \( \chi = \chi_0/[1-\Jc(\mathbf q)\chi_0] \).)</p>
 <p><b>Power counting.</b> Let \( \Jc \) denote the typical coupling to each of \( z \) neighbours, so the coherent scale is \( \Jc(\mathbf q) \sim z\Jc \). Site-diagonal loops cost powers of \( 1/z \):</p>
-$$ \frac1N \sum_{\mathbf q} \Jc(\mathbf q)^p \;=\; \big(\Jc^{\,p}\big)(ii)
-= \sum_{j_1,\dots,j_{p-1}} \Jc(ij_1)\Jc(j_1 j_2)\cdots \Jc(j_{p-1} i)
-\;\sim\; z^{\,p-1}\Jc^p \;=\; \frac{(z\Jc)^p}{z} , \tag{13} $$
+$$ \begin{aligned}
+\frac1N \sum_{\mathbf q} \Jc(\mathbf q)^p \;&=\; \big(\Jc^{\,p}\big)(ii)
+= \sum_{j_1,\dots,j_{p-1}} \Jc(ij_1)\Jc(j_1 j_2)\cdots \Jc(j_{p-1} i) \\[.3em]
+&\;\sim\; z^{\,p-1}\Jc^p \;=\; \frac{(z\Jc)^p}{z} ,
+\end{aligned} \tag{13} $$
 <p>
 Every independent Brillouin-zone average of a \( \Jc \)-dependent quantity therefore carries a relative factor \( 1/z \). The RPA (12) is exact at order \( (1/z)^0 \) beyond MF; the diagrams neglected by it (self-energy insertions in which an interaction line begins and ends on paths through the <em>same</em> site) first enter at order \( 1/z \). For dipolar coupling the interaction is long ranged, the effective \( z \) is large, and &mdash; since \( d=3 \) is the marginal dimensionality for a dipolar Ising system &mdash; the neglected critical fluctuations produce only logarithmic corrections to the MF/RPA critical behaviour. This is what makes the scheme quantitatively reliable for LiHoF<sub>4</sub>-type magnets.
 </p>
@@ -217,14 +240,18 @@ Jensen&rsquo;s ansatz for restoring the \( \mathbf q \) dependence around the si
 </p>
 $$ G(\mathbf q, \wn) = \frac{G(\wn)}{1 + \big[\Jc(\mathbf q) - K(\wn)\big]\, G(\wn)} . \tag{15} $$
 <p><b>Self-consistency.</b> Rewrite (15) as \( G(\mathbf q) = G - G(\mathbf q)\,[\Jc(\mathbf q)-K]\,G \) and average over \( \mathbf q \):</p>
-$$ \frac1N\sum_{\mathbf q} G(\mathbf q) = G - \Big[\tfrac1N\sum_{\mathbf q}\Jc(\mathbf q)G(\mathbf q)\Big] G + K\,G\cdot G
-= G - (KG)\,G + (KG)\,G = G \quad\checkmark $$
+$$ \begin{aligned}
+\frac1N\sum_{\mathbf q} G(\mathbf q) &= G - \Big[\tfrac1N\sum_{\mathbf q}\Jc(\mathbf q)G(\mathbf q)\Big] G + K\,G\cdot G \\[.3em]
+&= G - (KG)\,G + (KG)\,G = G \quad\checkmark
+\end{aligned} $$
 <p>so (15) is automatically consistent with both definitions (14), whatever \( K(\wn) \) is. The content of the theory is the computation of \( G(\wn) \) itself: it is the Green function of a <em>single</em> site embedded in a medium that acts on it through the retarded field \( K(\tau_1-\tau_2) \). Its perturbation series is the single-site cumulant series of Sec. 2 with \( \Jc(ij) \) lines replaced by \( K \) lines (an interaction line must leave the site and return; \( K \) is precisely that amplitude, and using it removes the double counting of the chain diagrams already resummed by (15)).</p>
 <p><b>RPA check.</b> Decoupling all single-site cumulants into products of two-point functions gives the geometric series <span class="jref">J 2.14</span></p>
 $$ G(\wn)\big|_{\rm RPA} = \frac{G_0(\wn)}{1 + K(\wn)\, G_0(\wn)}, \tag{16} $$
 <p>and inserting (16) into (15) makes \( K \) cancel identically:</p>
-$$ G(\mathbf q,\wn) = \frac{G_0/(1+KG_0)}{1+(\Jc(\mathbf q)-K)\,G_0/(1+KG_0)}
-= \frac{G_0}{1 + K G_0 + (\Jc(\mathbf q)-K)G_0} = \frac{G_0}{1+\Jc(\mathbf q) G_0}, $$
+$$ \begin{aligned}
+G(\mathbf q,\wn) &= \frac{G_0/(1+KG_0)}{1+(\Jc(\mathbf q)-K)\,G_0/(1+KG_0)} \\[.3em]
+&= \frac{G_0}{1 + K G_0 + (\Jc(\mathbf q)-K)G_0} = \frac{G_0}{1+\Jc(\mathbf q) G_0},
+\end{aligned} $$
 <p>recovering (12). The effective-medium construction therefore reproduces the RPA exactly at leading order, and organizes the \( 1/z \) corrections as corrections to the <em>single-site</em> function.</p>
 </div>
 <h2 id="s6">6 &nbsp;The single-site series to first order in 1/z</h2>
@@ -233,16 +260,20 @@ $$ G(\mathbf q,\wn) = \frac{G_0/(1+KG_0)}{1+(\Jc(\mathbf q)-K)\,G_0/(1+KG_0)}
 <h3>6.1 &nbsp;The first 1/z term and its pairing part</h3>
 <div class="box derived"><span class="tag">Derived in full &rarr; J 2.13 and the &minus;G&#8320;KG&#8320; term of J 2.15</span>
 <p>The single-site cumulant series with one \( K \) line is <span class="jref">J 2.13</span></p>
-$$ \delta G(\wn) = -\tfrac12 \int_0^\beta\!\!\!\int_0^\beta\!\!\!\int_0^\beta d\tau\, d\tau_1\, d\tau_2\;
-e^{\wn\tau}\, \frac1\beta \sum_{n'} K(\wm)\, e^{\wm(\tau_1-\tau_2)}
-\Big[ \big\langle T\tilde J_x(\tau_2)\tilde J_x(\tau_1)\tilde J_x(\tau)\tilde J_x(0)\big\rangle_0
-- \big\langle T\tilde J_x(\tau_2)\tilde J_x(\tau_1)\big\rangle_0 \big\langle T\tilde J_x(\tau)\tilde J_x(0)\big\rangle_0 \Big], \tag{17} $$
+$$ \begin{aligned}
+\delta G(\wn) \;=\; & -\tfrac12 \int_0^\beta\!\!\!\int_0^\beta\!\!\!\int_0^\beta d\tau\, d\tau_1\, d\tau_2\;
+e^{\wn\tau}\, \frac1\beta \sum_{n'} K(\wm)\, e^{\wm(\tau_1-\tau_2)} \\[.3em]
+& \times \Big[ \big\langle T\tilde J_x(\tau_2)\tilde J_x(\tau_1)\tilde J_x(\tau)\tilde J_x(0)\big\rangle_0
+- \big\langle T\tilde J_x(\tau_2)\tilde J_x(\tau_1)\big\rangle_0 \big\langle T\tilde J_x(\tau)\tilde J_x(0)\big\rangle_0 \Big]
+\end{aligned} \tag{17} $$
 <p>
 where the subtracted product is the disconnected (vacuum-loop \( \times G_0 \)) part removed by the linked-cluster theorem. Decompose the four-point average into the three pair products plus the fourth-order semi-invariant \( S_4 \). The two remaining pairings are RPA-like and evaluate exactly. For the pairing \( (\tau_2,\tau)(\tau_1,0) \): \( \langle T\rangle\langle T\rangle = G_0(\tau_2-\tau)\,G_0(\tau_1) \), and
 </p>
-$$ \int_0^\beta \! d\tau_2\, e^{-\wm\tau_2} G_0(\tau_2-\tau) = e^{-\wm\tau} G_0(\wm), \quad
-\int_0^\beta \! d\tau_1\, e^{\wm\tau_1} G_0(\tau_1) = G_0(\wm), \quad
-\int_0^\beta \! d\tau\, e^{i(\omega_n-\omega_{n'})\tau} = \beta\,\delta_{nn'} , $$
+$$ \begin{aligned}
+\int_0^\beta \! d\tau_2\, e^{-\wm\tau_2} G_0(\tau_2-\tau) &= e^{-\wm\tau} G_0(\wm), \\[.3em]
+\int_0^\beta \! d\tau_1\, e^{\wm\tau_1} G_0(\tau_1) &= G_0(\wm), \\[.3em]
+\int_0^\beta \! d\tau\, e^{i(\omega_n-\omega_{n'})\tau} &= \beta\,\delta_{nn'} ,
+\end{aligned} $$
 <p>
 (using periodicity and \( G_0(\wn) = G_0(-\wn) \)), giving \( -\tfrac12 K(\wn) G_0^2(\wn) \). The pairing \( (\tau_2,0)(\tau_1,\tau) \) gives the same with \( n'\to -n \), hence an equal contribution. Together:
 </p>
@@ -263,7 +294,10 @@ $$ u = \tau_a-\tau_b+\tau_c-\tau_d, \qquad v = \tau_a+\tau_b-\tau_c-\tau_d \;(\g
 \( f(x)f(y) = n_0^2 e^{-\Delta(x+y)} + n_1^2 e^{\Delta(x+y)} + 2 n_0 n_1 \cosh[\Delta(x-y)] \) and \( n_0-n_0^2 = n_1 - n_1^2 = n_0 n_1 \), the semi-invariant
 \( S_4 = \langle XXXX\rangle_0 - f(\tau_{ab})f(\tau_{cd}) - f(\tau_{ac})f(\tau_{bd}) - f(\tau_{ad})f(\tau_{bc}) \) collapses: the \( e^{\pm\Delta u} \) terms cancel between \( f(u) - f(\tau_{ab})f(\tau_{cd}) \) and \( -f(\tau_{ad})f(\tau_{bc}) \), leaving
 </p>
-$$ \boxed{\; S_4(\tau_a,\tau_b,\tau_c,\tau_d) \;=\; -\,2\Big[\, 2 n_0 n_1 \cosh(\Delta w) \;+\; n_0^2\, e^{-\Delta v} \;+\; n_1^2\, e^{\Delta v} \,\Big], \qquad \tau_a\ge\tau_b\ge\tau_c\ge\tau_d. \;} \tag{20} $$
+$$ \boxed{\begin{aligned}
+& S_4(\tau_a,\tau_b,\tau_c,\tau_d) \;=\; -\,2\Big[\, 2 n_0 n_1 \cosh(\Delta w) \;+\; n_0^2\, e^{-\Delta v} \;+\; n_1^2\, e^{\Delta v} \,\Big], \\[.3em]
+& \tau_a\ge\tau_b\ge\tau_c\ge\tau_d.
+\end{aligned}} \tag{20} $$
 <p>
 <b>Checks.</b> \( T=0 \) (\( n_0=1, n_1=0 \)): direct evaluation gives \( S_4 = e^{-\Delta u} - e^{-\Delta u} - 2e^{-\Delta v} = -2e^{-\Delta v} \) &nbsp;&#10003;.
 \( T\to\infty \) (\( n_0=n_1=\tfrac12 \), \( f=\cosh\Delta\tau \)): product-to-sum identities give \( S_4 = -\cosh(\Delta v) - \cosh(\Delta w) \), matching (20) &nbsp;&#10003;.
@@ -319,9 +353,11 @@ $$ \tilde G_0(\wn) \;\equiv\; \frac{G(\wn)}{1 - K(\wn) G(\wn)} \;=\; \frac{G_0(\
 <h2 id="s7">7 &nbsp;The sum rule</h2>
 <div class="box derived"><span class="tag">Derived in full &rarr; J 2.23</span>
 <p>The frequency sum of \( G \) is the equal-time correlator: since \( [\tilde J_x, \tilde J_x] = 0 \) there is no ordering ambiguity at \( \tau\to0 \), and</p>
-$$ \frac1\beta \sum_n G(\wn) = G(\tau=0) = -\big\langle \tilde J_x^2 \big\rangle
-= -\big[ \langle J_x^2\rangle - \langle J_x\rangle^2 \big]
-= -\big[ M_0^2 - m^2 n_{01}^2 \big] = -\big[ M^2 + m^2 (1-n_{01}^2) \big], \tag{31} $$
+$$ \begin{aligned}
+\frac1\beta \sum_n G(\wn) &= G(\tau=0) = -\big\langle \tilde J_x^2 \big\rangle
+= -\big[ \langle J_x^2\rangle - \langle J_x\rangle^2 \big] \\[.3em]
+&= -\big[ M_0^2 - m^2 n_{01}^2 \big] = -\big[ M^2 + m^2 (1-n_{01}^2) \big],
+\end{aligned} \tag{31} $$
 <p>
 using the operator identity (2) and \( \langle J_x\rangle = m\, n_{01} \). For \( m=0 \): \( \frac1\beta\sum_n G(\wn) = -M^2 \) <span class="jref">J 2.23</span> &mdash; an <em>exact</em>, temperature-independent constraint on the true \( G \), and the natural quality check in a numerical implementation. One caveat for implementations: Jensen notes that the truncated series (22) satisfies (31) strictly &mdash; that is the content of (24) &mdash; whereas the Dyson-resummed self-consistent form (28)&ndash;(29) satisfies it only to high numerical accuracy, so a small converged residual is expected rather than a bug.
 Convergence: \( g \sim 2n_{01}\Delta/\omega_n^2 \), so the sum converges absolutely and no convergence factor is needed. Check at zeroth order: \( \frac1\beta\sum_n g = n_{01}\coth(\beta\Delta/2) = 1 \), and the \( h \) term contributes \( -m^2(1-n_{01}^2) \) from \( n=0 \), so \( G_0 \) saturates (31) identically &mdash; which is why the \( 1/z \) correction had to obey (24).
@@ -332,9 +368,11 @@ Convergence: \( g \sim 2n_{01}\Delta/\omega_n^2 \), so the sum converges absolut
 <h3>8.1 &nbsp;Exact energy formula</h3>
 <div class="box derived"><span class="tag">Derived in full &rarr; J 2.21</span>
 <p><b>Interaction energy (exact).</b> With \( \langle \tilde J_{ix}\tilde J_{jx}\rangle = -G(ij,\tau=0) \) and \( \sum_j \Jc(ij) e^{i\mathbf q\cdot\mathbf R_{ij}} = \Jc(\mathbf q) \):</p>
-$$ \langle \mathcal H_1 \rangle = -\tfrac12\sum_{ij}\Jc(ij)\,\langle\tilde J_{ix}\tilde J_{jx}\rangle
-= \frac{N}{2\beta}\sum_n \frac1N \sum_{\mathbf q} \Jc(\mathbf q)\, G(\mathbf q,\wn)
-= \frac{N}{2\beta}\sum_n K(\wn)\, G(\wn), \tag{32} $$
+$$ \begin{aligned}
+\langle \mathcal H_1 \rangle &= -\tfrac12\sum_{ij}\Jc(ij)\,\langle\tilde J_{ix}\tilde J_{jx}\rangle
+= \frac{N}{2\beta}\sum_n \frac1N \sum_{\mathbf q} \Jc(\mathbf q)\, G(\mathbf q,\wn) \\[.3em]
+&= \frac{N}{2\beta}\sum_n K(\wn)\, G(\wn),
+\end{aligned} \tag{32} $$
 <p>by the definition (14) of \( K \) &mdash; no approximation involved.</p>
 <p><b>Single-site energy (exact, via the equation of motion).</b> By (4), the exact Heisenberg equation for \( X \) is governed by \( \Delta a_{11} \) alone: \( \dot X(\tau) = [\mathcal H, X] = \Delta\,(b^\dagger - b) \), hence \( \Delta X - \dot X = 2\Delta\, b \). Consider \( Q(\tau) = \langle T\,(\Delta X - \dot X)(\tau)\, X(0)\rangle \). Since \( G_X(\beta^-) = G_X(0^-) = G_X(0^+) \) (bosonic periodicity, commuting equal-time operators), partial integration gives no boundary terms and \( \langle T\dot X(\tau)X(0)\rangle \) transforms to \( -\wn\, \langle TXX\rangle(\wn) \), so \( Q(\wn) = (\Delta+\wn)\langle TXX\rangle(\wn) \), i.e.</p>
 $$ Q(\wn) = -\,(\Delta + \wn)\, G_X(\wn), \qquad G_X = G/M^2 \;\;(m=0). $$
@@ -371,8 +409,10 @@ The published paper prints <span class="jref">J 2.24</span> as &ldquo;\( \langle
 When \( m\neq0 \), \( G_0 \) acquires the elastic term \( -m^2 h \), and the fourth-order semi-invariants mix diagonal and off-diagonal operators. The additional contributions are evaluated with one stated simplification: in the \( n' \) sums, factors \( g(\wm \pm \wn) \) are replaced by their static value \( g(\wm) \) &mdash; exact at \( \omega_n = 0 \), approximate at finite frequency &mdash; and the purely elastic (zero-frequency) sector is treated in a resummed, static approximation. The result replaces (22)&ndash;(23) by <span class="jref">J 2.26, 2.27</span>
 </p>
 $$ \Sigma(\wn) = \alpha - \alpha_m + \Big[\gamma(\wn) - \frac{2m^2}{M^2}\,\gamma(0)\Big]\, g(\wn), \tag{37} $$
-$$ \alpha_m = \frac{m^2}{n_{01}^2}\Big\{ \lambda_2 - g(0)\,\lambda_1 + \frac{4}{g(0)}\,\lambda_3
-- (1-n_{01}^2)\big( 1 + \tfrac12 \beta\Delta\, n_{01} \big)\, K(0)\, g(0) \Big\}, \tag{38} $$
+$$ \begin{aligned}
+\alpha_m = \frac{m^2}{n_{01}^2}\Big\{ &\lambda_2 - g(0)\,\lambda_1 + \frac{4}{g(0)}\,\lambda_3 \\[.3em]
+&- (1-n_{01}^2)\big( 1 + \tfrac12 \beta\Delta\, n_{01} \big)\, K(0)\, g(0) \Big\},
+\end{aligned} \tag{38} $$
 <p>with \( \gamma \) and \( \lambda_p \) as in (23), (21). At zero frequency the single-site function is written <span class="jref">J 2.28, 2.29</span></p>
 $$ G(0) = \frac{-M^2 g(0)}{1+\Sigma(0) - M^2 K(0) g(0)} \;-\; m^2\, \xi\, h(0), \tag{39} $$
 $$ \xi = \frac{ 1 + \tanh\!\big[\, m^2 n_{01}^2\, \beta K(0) - M^2 \beta\, \lambda_1 \,\big] }
@@ -434,6 +474,9 @@ $$ \delta F(m=0) = -\,N \int_0^{M_0} g\mu_B\, \delta H \; d\langle J_x \rangle .
 </p>
 <p>
 <b>Generalization to realistic level schemes (from Sec. III of the paper, framework-level):</b> the entire construction survives with the single-ion response \( G_0 \) replaced by the full Cartesian susceptibility tensor of the actual crystal-field (+ hyperfine) level scheme, and multiple sublattices handled by the standard RPA matrix inversion; the \(1/z\) renormalization enters as division of the susceptibility components deriving from the dominant singlet&ndash;singlet (or doublet) transition by \( 1+\Sigma(\omega) \), with \( \Sigma \) computed from that sector; Jensen renormalizes <em>only</em> those components, neglecting the \(1/z\) corrections to the weaker transitions. Hyperfine coupling \( A\,\mathbf I\cdot\mathbf J \) enhances the static single-ion response, \( \tilde\chi_{\rm eff} = \tilde\chi\,(1 + A^2 \tilde\chi\, \chi_I) \) with \( \chi_I \) the nuclear Curie susceptibility, and correspondingly \( K(0) \to K(0)(1 + A^2\tilde\chi\,\chi_I) \) in the elastic sector &mdash; the mechanism by which nuclear moments shift \( T_c \) in LiHoF<sub>4</sub>-type systems.
+</p>
+<p>
+<b>Bookkeeping for the tensor (dipole&ndash;dipole) coupling &mdash; the LiHoF<sub>4</sub> case:</b> the projection of Sec. 1.1 dictates where each block of the 3&times;3 tensor \( \Jc_{\alpha\beta}(\mathbf q) \) goes when the theory is applied with the Ising axis along \( c \), as done by H. M. R&oslash;nnow <i>et al.</i>, Phys. Rev. B <b>75</b>, 054426 (2007) (&ldquo;R&nbsp;2007&rdquo;). (i) <em>The \( cc \) block is the fluctuation channel:</em> the expansion is of \( G(ij,\tau) = -\langle T_\tau\, \tilde J_{iz}(\tau_1)\tilde J_{jz}(\tau_2)\rangle \) [R 2007 eq. (5)], and the &ldquo;\( \Jc(\mathbf q) \)&rdquo; entering the effective-medium equations (14)&ndash;(15) means the eigenvalue branches of the 4&times;4 \( cc \) sublattice block of the dipole + exchange tensor [R 2007 eqs. (7)&ndash;(9)]. (ii) <em>The transverse \( aa \) block acts as a static mean field</em> \( \Jc_{aa}(\mathbf 0)\langle J_x\rangle \) added to the applied transverse field in the single-ion problem (it recalibrates \( \Delta \) and \( M^2 \) at every field); its own 1/z renormalization is neglected, justified because the internal transverse field is only about 5% of the applied field at the largest fields considered [R 2007 Sec. II B]. (iii) <em>Off-diagonal blocks (\( ac \), &hellip;) and all coupling paths through the higher crystal-field levels</em> have no matrix elements inside the doublet; statically they act like internally generated transverse fields [R 2007 Sec. I], and dynamically they enter the noninteracting susceptibility through doublet&harr;higher-level transitions &mdash; kept in a full-level-scheme \( \chi_0 \) but excluded from \( \Sigma \). R 2007 bounds that share of \( \chi_0^{cc}(0) \) at below 1% at zero frequency at maximum field, so computing \( \Sigma \) from the two-level sector and dividing only \( \chi_0^{cc} \) by \( 1+\Sigma \) &mdash; the &ldquo;dominant components only&rdquo; rule above &mdash; is quantitatively safe.
 </p>
 <p>
 <b>Validity:</b> the theory is exact through \( O(1/z) \); dropped terms are \( O(1/z^2) \). It is <em>not</em> a critical theory &mdash; exponents remain MF-like &mdash; but for three-dimensional dipolar Ising systems (marginal dimensionality) the true critical behaviour differs from MF only by logarithmic corrections, so the \(1/z\)-renormalized MF/RPA description is quantitatively accurate essentially everywhere, including the location of \( T_c \) and the size of its fluctuation suppression.
