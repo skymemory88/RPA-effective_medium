@@ -6,16 +6,17 @@ if nargin < 5, opts = struct(); end
 Ecut  = 40;   if isfield(opts,'Ecut'),      Ecut  = opts.Ecut;      end
 hyp   = true; if isfield(opts,'hyp'),       hyp   = opts.hyp;       end
 J0eff = ion.J0eff; if isfield(opts,'J0eff'), J0eff = opts.J0eff;    end
+Jxx0  = ion.Jxx0;  if isfield(opts,'Jxx0'), Jxx0 = opts.Jxx0; end
 mixo  = 0.7;  if isfield(opts,'mix_outer'), mixo  = opts.mix_outer; end
 tolo  = 1e-8; if isfield(opts,'tol_outer'), tolo  = opts.tol_outer; end
 maxo  = 60;   if isfield(opts,'max_outer'), maxo  = opts.max_outer; end
 eopts = struct(); if isfield(opts,'emt'), eopts = opts.emt; end
 
 [wn, wts, beta] = invz_matsubara(T, Ecut);
-si  = invz_single_ion(ion, T, [Bx 0 0], struct('hyp', hyp));
+si  = invz_single_ion(ion, T, [Bx 0 0], struct('hyp', hyp, 'Jxx0', Jxx0));
 c0  = invz_chi0z(si, T, 1i*wn, struct('elastic', true));
 G0  = -real(squeeze(c0(3,3,:)));                 % full (electro)nuclear cc Green function
-tl  = invz_twolevel(ion, T, Bx);                 % electronic two-level params for Sigma
+tl  = invz_twolevel(ion, T, Bx, struct('Jxx0', Jxx0));   % electronic two-level params for Sigma
 g   = real(invz_g(tl, 1i*wn));
 
 Sigma = zeros(size(wn));  K = zeros(size(wn));
