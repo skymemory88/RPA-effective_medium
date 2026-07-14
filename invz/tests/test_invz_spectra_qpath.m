@@ -36,15 +36,16 @@ verifyEqual(testCase, P40.s_cart(end), 2*pi*0.10/ion.a(1,1), 'RelTol', 1e-9);
 end
 
 function test_qpath_structure_and_gamma_limit(testCase)
-% Structural contract + physics anchors of the q-path spectrum:
+% Structural contract + physics anchors of the q-path spectrum (default = uniform FM mode):
 %  - shapes [nw x nq]; index path coordinate starts at 0;
-%  - (2,0,0) IS Gamma-equivalent for the 4-site basis (structure factor 4): the max
-%    coupling branch there equals the uniform-mode info.Jcc0 of the same dpRng;
-%  - (1,0,0) is NOT Gamma-equivalent (structure factor 0): weaker coupling, so the
-%    mode sits HIGHER in energy and the dispersion falls toward the zone centre.
+%  - (2,0,0) IS Gamma-equivalent for the 4-site basis (structure factor 4): the uniform-mode
+%    coupling S.Jq there equals info.Jcc0 of the same dpRng;
+%  - the uniform-mode coupling GROWS monotonically toward (2,0,0) (~-5.2 -> +6.4 ueV), so the
+%    mode softens monotonically along h = 1 -> 2 (R 2007 Fig 3). The zone-edge (1,0,0) mode is
+%    the HIGHEST in energy, so the frequency window must reach ~0.9 meV to keep it in view.
 ion = invz_ion();
 T = 0.31;  B = 5.5;                        % paramagnetic side: fast, well-converged
-w = (0.02:0.02:0.6).';
+w = (0.02:0.02:0.9).';
 info = struct('Jcc0', 6.4e-3);             % synthetic medium (as in test_invz_spectra_map)
 Jnu  = linspace(-2e-3, 6.0e-3, 24).';
 qpath = [1 0 0; 1.5 0 0; 2 0 0];
@@ -62,9 +63,12 @@ verifyEqual(testCase, S.phase, 2);
 verifyTrue(testCase, all(isfinite(S.Epeak)));
 
 [~, iref] = invz_jq_modes(ion, [0 0 0], struct('dpRng', 10, 'cache', false));
-verifyEqual(testCase, S.Jq(3), iref.Jcc0, 'RelTol', 1e-9);
-verifyGreaterThan(testCase, iref.Jcc0, S.Jq(1));         % (1,0,0) couples more weakly
-verifyGreaterThan(testCase, S.Epeak(1), S.Epeak(3));     % mode softens toward Gamma
+verifyEqual(testCase, S.Jq(3), iref.Jcc0, 'RelTol', 1e-9);   % (2,0,0) = uniform info.Jcc0
+verifyGreaterThan(testCase, S.Jq(2), S.Jq(1));               % coupling grows toward Gamma...
+verifyGreaterThan(testCase, S.Jq(3), S.Jq(2));               % ...monotonically
+% ...so the mode softens monotonically toward Gamma (Epeak: 0.68 -> 0.45 -> 0.40 meV)
+verifyGreaterThan(testCase, S.Epeak(1), S.Epeak(2));
+verifyGreaterThan(testCase, S.Epeak(2), S.Epeak(3));
 end
 
 function test_qpath_peak_censoring(testCase)
@@ -116,6 +120,32 @@ qpath = [1 0 0; 1.5 0 0.5; 2 0 1];                 % h and l both vary
 S = invz_spectra_qpath(ion, 0.31, 5.5, qpath, w, struct('Jnu', Jnu, 'info', info, 'dpRng', 10));
 verifyEqual(testCase, S.x, S.s);
 verifyTrue(testCase, startsWith(S.xlab, 's along path'));
+end
+
+function test_qpath_fm_mode_monotonic(testCase)
+% R 2007 Fig 3: along (1,0,0)->(2,0,0) the ferromagnetic-mode coupling rises
+% MONOTONICALLY (the mode softens ~0.6 -> 0.2 meV toward the (2,0,0) zone centre).
+% The physical dispersion is the UNIFORM FM-mode projection v'*Jcc*v -- identical to
+% MF_RPA_Yikai.m's sum(sum(J_int))/4 and to info.Jcc0 at q=0 -- exposed as P.Juni.
+% The max-eigenvalue branch P.Jnu(:,4) instead MIRRORS about h=1.5 (it selects the
+% wrong sublattice branch for h<1.5); that was the "[-1,1]-looking" artifact. This
+% test is the regression guard against reverting the default to that branch.
+ion = invz_ion();
+hs = linspace(1, 2, 21).';                     % 0.05 steps: hits 1.90,1.95,2.00 (avoids the
+qpath = [hs zeros(numel(hs), 2)];              % lone h=1.96 truncation wiggle in the raw sum)
+P = invz_jq_path(ion, qpath, struct('dpRng', 30, 'cache', false));
+verifySize(testCase, P.Juni, [21 1]);
+% physical FM-mode coupling: monotonically non-decreasing across the whole path
+verifyGreaterThanOrEqual(testCase, min(diff(P.Juni)), -1e-9);
+% and it genuinely rises: weak/negative at the (1,0,0) edge, strongest at Gamma (2,0,0)
+verifyLessThan(testCase, P.Juni(1), 0);                          % ~ -5.2 ueV at (1,0,0)
+[~, iref] = invz_jq_modes(ion, [0 0 0], struct('dpRng', 30, 'cache', false));
+verifyEqual(testCase, P.Juni(end), iref.Jcc0, 'RelTol', 1e-9);   % (2,0,0) = uniform info.Jcc0
+% the max-eig branch is demonstrably NON-monotonic (mirror artifact): it has a clear
+% downhill step somewhere (the mirror falls from ~6.4 ueV at h=1.05 to ~2.9 at h=1.5),
+% whereas a monotonic dispersion would have min(diff) >= 0. This is WHY the default
+% follows Juni, not P.Jnu(:,4).
+verifyLessThan(testCase, min(diff(P.Jnu(:,4))), -1e-4);
 end
 
 function test_qpath_out_of_plane_gamma_limit(testCase)

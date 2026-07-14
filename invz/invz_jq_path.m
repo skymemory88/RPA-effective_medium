@@ -15,12 +15,20 @@ function P = invz_jq_path(ion, qpath, opts)
 %   at G defaults to the in-plane (uniform-mode) convention.
 %
 %   Scope: the guard covers Gamma-EQUIVALENT points only. Near non-Gamma-equivalent
-%   integer points (e.g. (1,0,0), structure factor 0) the staggered branches retain
-%   truncated-sum quality -- exploratory. Branch index = sorted-eigenvalue position per q;
-%   branch identity is NOT tracked through crossings.
+%   integer points (e.g. (1,0,0), structure factor 0) the branches retain truncated-sum
+%   quality. Branch index = sorted-eigenvalue position per q; branch identity is NOT
+%   tracked through crossings.
+%
+%   P.Juni is the PHYSICAL single-mode dispersion: the uniform ferromagnetic-mode
+%   projection v'*Jcc(q)*v (see invz_jq_modes), guard applied. Along (1,0,0)->(2,0,0) it
+%   rises monotonically (R 2007 Fig 3: the mode softens toward the (2,0,0) zone centre),
+%   matching MF_RPA_Yikai.m. Prefer it over any P.Jnu column for a q-path dispersion:
+%   max(eig) selects the wrong sublattice branch for h < 1.5 and mirrors the curve about
+%   h = 1.5. The four P.Jnu branches remain available for exploratory branch-resolved views.
 %
 %   Returns:
-%     P.Jnu     [nq x 4]  branch couplings (meV), guard applied
+%     P.Juni    [nq x 1]  uniform FM-mode coupling (meV), guard applied -- physical mode
+%     P.Jnu     [nq x 4]  sorted branch couplings (meV), guard applied (exploratory)
 %     P.snapped [nq x 1]  logical: true where the directional limit replaced the raw sum
 %     P.s       [1 x nq]  cumulative path distance in INDEX (r.l.u.) coordinates
 %     P.s_cart  [1 x nq]  cumulative path distance in Cartesian reciprocal Ang^-1
@@ -35,8 +43,9 @@ snapfac  = 2.5; if isfield(opts,'snapfac'), snapfac  = opts.snapfac; end
 C  = invz_const();
 nq = size(qpath, 1);
 
-Jnu = invz_jq_modes(ion, qpath, struct('dpRng', dpRng, 'cache', useCache));
+[Jnu, ~, Juni] = invz_jq_modes(ion, qpath, struct('dpRng', dpRng, 'cache', useCache));
 
+v     = ones(4, 1) / 2;                     % uniform ferromagnetic mode (see invz_jq_modes)
 Brec  = 2*pi*inv(ion.a).';                 % reciprocal basis rows: k_cart = q_rlu * Brec
 ksnap = snapfac * 2*pi / (dpRng * min(vecnorm(ion.a, 2, 2)));
 snapped = false(nq, 1);
@@ -63,10 +72,11 @@ for iq = 1:nq
     Jm = Greg + C.gfac*(4*pi/ion.Vc)*(1/3 - kz2);     % directional nonanalytic broadcast
     Jm = (Jm + Jm')/2;
     Jnu(iq, :) = sort(real(eig(Jm))).';
+    Juni(iq)   = real(v.'*Jm*v);                      % same directional limit, uniform mode
     snapped(iq) = true;
 end
 
-P.Jnu = Jnu;  P.snapped = snapped;  P.ksnap = ksnap;
+P.Jnu = Jnu;  P.Juni = Juni(:);  P.snapped = snapped;  P.ksnap = ksnap;
 P.s      = [0 cumsum(vecnorm(diff(qpath, 1, 1),        2, 2)).'];
 P.s_cart = [0 cumsum(vecnorm(diff(qpath, 1, 1) * Brec, 2, 2)).'];
 end

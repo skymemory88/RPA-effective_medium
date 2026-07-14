@@ -28,6 +28,26 @@ verifyLessThan(testCase, max(abs(imag(Jnu(:)))), 1e-12);
 verifyLessThan(testCase, max(Jnu(:)), info.Jcc0 + 1e-4);   % Γ uniform mode is the max coupling
 end
 
+function test_uniform_mode_projection(testCase)
+% Third output Juni [nq x 1] is the uniform ferromagnetic-mode projection v'*Jcc*v,
+% v = [1 1 1 1]/2. It is the physical single-mode coupling (matches MF_RPA_Yikai's
+% sum(sum(J_int,4),3)/unitN) and generalizes info.Jcc0 to finite q: Juni([0 0 0]) == Jcc0.
+% It is bounded above by max(eig) = Jnu(:,4) at every q (Rayleigh quotient of the
+% symmetric Jcc), but is NOT equal to it away from Gamma -- that is the whole point.
+ion = invz_ion();
+q = [0 0 0; 0.25 0 0; 0.31 0.17 0.09; 1 0 0];
+[Jnu, info, Juni] = invz_jq_modes(ion, q, struct('dpRng', 20, 'cache', false));
+verifyEqual(testCase, size(Juni), [4 1]);
+verifyLessThan(testCase, max(abs(imag(Juni))), 1e-12);
+% q = 0 uniform projection is exactly info.Jcc0
+verifyEqual(testCase, Juni(1), info.Jcc0, 'RelTol', 1e-9);
+% every Juni lies at or below the top sorted branch (Rayleigh bound)
+verifyLessThanOrEqual(testCase, Juni, Jnu(:, 4) + 1e-12);
+% at the non-Gamma zone point (1,0,0) the uniform mode is strictly BELOW the max branch
+% (they select different sublattice combinations there)
+verifyLessThan(testCase, Juni(4), Jnu(4, 4) - 1e-6);
+end
+
 function test_demag_shape_term(testCase)
 % Ordering-channel couplings are demag-INVARIANT: per R2007 the demagnetization
 % field cancels from the critical condition (ordering occurs at q -> 0+, not the
