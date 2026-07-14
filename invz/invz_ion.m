@@ -11,10 +11,15 @@ ion.J12 = -0.1e-3;                                  % meV, nn exchange (4 neighb
 % Uniform-mode couplings in meV (validated in Task 5): J0eff = J_D*D_cc(0) + 4*J12 = 6.821e-3 + 4*(-0.1e-3) = 6.421e-3 meV; Jxx0 = J_D*D_aa(0) + 4*J12 = 3.912e-3 + 4*(-0.1e-3) = 3.512e-3 meV.
 ion.J0eff = 6.421e-3;   % meV: J_D*D_cc(0) + 4*J12  (R 2007, after eq 11)
 ion.Jxx0  = 3.512e-3;   % meV: J_D*D_aa(0) + 4*J12, transverse MF channel
-% Sample-shape (demagnetization) correction to the uniform-mode coupling J(0), applied in
-% invz_jq_modes as  J(0) -> J(0) + Lorentz(4pi/3Vc) - 4pi/Vc*demag*N.  demag = 0 is the intrinsic
-% (c-axis-needle) limit that reproduces the R2007 benchmark; demag ~= 0 pulls in the ellipsoid
-% shape via ellipsoid_demagn(alpha) and shifts Bc/Tc. Read consistently by the MF, RPA and 1/z.
+% Sample-shape (demagnetization) knob. demag = 0 (default): intrinsic couplings, the R2007
+% benchmark. demag ~= 0: the ellipsoid shape (ellipsoid_demagn(alpha)) enters ONLY as
+%   (a) info.Jshape_cc -- strict-uniform observable correction applied in invz_chi_realaxis
+%       (chi_meas = chi/(1 + Jshape_cc*chi)), and
+%   (b) demag-aware info.Jaa0 -- the transverse mean-field channel.
+% Consequences: info.Jcc0/Jnu and the ordering-channel criticality are demag-INVARIANT
+% (R2007: the demagnetizing field cancels from the critical condition; ordering at q -> 0+);
+% Tc(B=0) is exactly demag-invariant (<Jx> = 0 there); Bc(T) vs APPLIED field can still
+% shift through (b) -- the internal-vs-applied transverse field relation.
 ion.demag = 0;          % demag factor (0 = off/intrinsic; 1 = full ellipsoid)
 ion.alpha = 1;          % spheroid aspect ratio a/c for ellipsoid_demagn (1 sphere, 0 c-needle, Inf disk)
 end
