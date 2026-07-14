@@ -56,17 +56,14 @@ verifyEqual(testCase, pt.Sigma0, 0.0932, 'AbsTol', 0.02);
 end
 
 function test_tc_small_field(testCase)
-% Small-field limit of the fixed-B temperature bisection: Tc(0.5 T) must sit
-% just below the closed-form Tc0 evaluated on the SAME 16^3 q-grid (1.7795 K;
-% the Richardson-extrapolated benchmark 1.74 K is a different baseline).
-% Measured: 1.777 K. The undershoot direction is R 2007's small-Bx caveat.
-% B = 0.5 T is the validated floor: at 0.2-0.3 T the paramagnetic solve has
-% non-convergence patches near the boundary that the classifier reads as
-% "ordered", biasing Tc upward by ~0.04-0.05 K. The window [1.0 2.0] is
-% exactly the driver's [Tlo Tmax], so this doubles as an integration check
-% of the driver's bracket geometry. SLOW.
-% Upper bound 1.79 (not 1.7795) absorbs the bisection's ~±0.005 K midpoint
-% quantization; the measured margin below Tc0 is smaller than that jitter.
+% Small-field limit of the fixed-B temperature cut: Tc(0.5 T) must sit just
+% below the closed-form Tc0 evaluated on the SAME 16^3 q-grid (1.7795 K; the
+% Richardson-extrapolated benchmark 1.74 K is a different baseline). The
+% undershoot direction is R 2007's small-Bx caveat. B = 0.5 T is a sensible
+% low-field floor: below it the doublet is near-degenerate and few points
+% converge. Passing an explicit window [1.0 2.0] exercises invz_critical_T's
+% grid+interpolate path over a fixed bracket (rather than the adaptive one). SLOW.
+% Upper bound 1.79 leaves margin below Tc0 = 1.7795 K for the small-Bx undershoot.
 assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), 'Set INVZ_SLOW=1 for slow tests');
 ion = invz_ion();
 [Jf, J0] = lihof4_couplings();
@@ -77,9 +74,9 @@ end
 
 function test_tc_at_fixed_field_crossing(testCase)
 % Mirror consistency: at a mid-slope boundary point (T* = 1.4 K, where both
-% cut directions are well-conditioned) the fixed-B temperature bisection must
-% land back on the fixed-T field bisection's point. 0.05 K tolerance covers
-% both bisection tolerances (0.02 T, 0.01 K) at the local boundary slope. SLOW.
+% cut directions are well-conditioned) the fixed-B temperature cut must land
+% back on the fixed-T field cut's point. 0.05 K tolerance covers the two
+% solvers' crossing tolerances (0.02 T, 0.005 K) at the local boundary slope. SLOW.
 assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), 'Set INVZ_SLOW=1 for slow tests');
 ion = invz_ion();
 [Jf, J0] = lihof4_couplings();
@@ -87,4 +84,28 @@ Tstar = 1.4;
 bstar = invz_critical(ion, Tstar, Jf, struct('J0eff', J0, 'window', [0.5 7]));
 tc = invz_critical_T(ion, bstar, Jf, struct('J0eff', J0, 'window', [1.0 2.0]));
 verifyEqual(testCase, tc, Tstar, 'AbsTol', 0.05);
+end
+
+function test_tc_boundary_is_smooth(testCase)
+% Regression for the rugged high-T boundary. The old classifier
+% (~isfinite(crit) || crit<=0) counted the paramagnetic solve's
+% critical-slowing-down FAILURES (NaN / non-converged crit) as "ordered",
+% so the fixed-B bisection latched onto spurious sign flips and Tc(B)
+% scattered by ~0.1-0.4 K -- one field even returned Tc > Tc0, which is
+% unphysical. The fix must classify from CONVERGED points only.
+%
+% We assert SMOOTHNESS (low curvature), NOT monotonicity: a genuine
+% hyperfine-driven re-entrant "nose" is smooth on this field grid and must
+% be allowed to survive. The RMS discrete second difference is the
+% artifact detector -- numerical jitter has high curvature, both a monotone
+% and a gently re-entrant physical boundary have low curvature. Measured
+% RMS(d2) with the old code ~0.14 K; a smooth boundary is <~0.01 K. SLOW.
+assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), 'Set INVZ_SLOW=1 for slow tests');
+ion = invz_ion();
+[Jf, J0] = lihof4_couplings();
+Bs = 0.4:0.2:1.8;                                   % low-field / high-T band
+Tc = arrayfun(@(B) invz_critical_T(ion, B, Jf, struct('J0eff', J0)), Bs);
+verifyTrue(testCase, all(isfinite(Tc)), 'every field must return a finite Tc');
+d2 = Tc(1:end-2) - 2*Tc(2:end-1) + Tc(3:end);      % discrete curvature proxy
+verifyLessThan(testCase, sqrt(mean(d2.^2)), 0.02);  % smooth (old code ~0.14)
 end

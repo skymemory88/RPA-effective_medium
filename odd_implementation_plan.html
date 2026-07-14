@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>invz — ODD Extension Implementation Plan</title>
+<script>
+MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['$$','$$']], tags: 'none' } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+<style>
+:root{
+  --ink:#1c2126; --muted:#5b6570; --paper:#fbfaf7; --rule:#d8d4cb;
+  --id:#0b5d66;            /* task-ID teal */
+  --ok-bg:#eef6ee; --ok-edge:#3d7a45;      /* acceptance / verified  */
+  --warn-bg:#fdf6e7; --warn-edge:#a67618;  /* design decision / approximation */
+  --bad-bg:#fbeeee; --bad-edge:#a03434;    /* pitfall */
+  --code-bg:#f2f0ea;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:15.5px/1.55 "Charter","Georgia",serif;}
+main{max-width:900px;margin:0 auto;padding:2.2rem 1.4rem 5rem}
+h1{font-size:1.65rem;line-height:1.25;margin:.2rem 0 .3rem;font-weight:700}
+h2{font-size:1.22rem;margin:2.6rem 0 .6rem;border-bottom:1px solid var(--rule);padding-bottom:.25rem}
+h3{font-size:1.02rem;margin:1.6rem 0 .4rem}
+p{margin:.55rem 0}
+.sub{color:var(--muted);font-size:.95rem;margin-bottom:1.2rem}
+code,pre{font-family:"SF Mono","Menlo","Consolas",monospace;font-size:.86em}
+code{background:var(--code-bg);padding:.08em .32em;border-radius:3px}
+pre{background:var(--code-bg);padding:.75rem .9rem;border-radius:5px;overflow-x:auto;line-height:1.45}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:.7rem 0;font-size:.93em}
+th,td{border:1px solid var(--rule);padding:.35rem .55rem;text-align:left;vertical-align:top}
+th{background:#f0eee7;font-weight:600}
+.task{border:1px solid var(--rule);border-left:4px solid var(--id);border-radius:4px;
+  margin:1.1rem 0;padding:.7rem .95rem;background:#fff}
+.task-head{display:flex;gap:.7rem;align-items:baseline;flex-wrap:wrap;margin-bottom:.3rem}
+.tid{font-family:"SF Mono","Menlo",monospace;font-weight:700;color:var(--id);font-size:.95em}
+.tstatus{font-family:"SF Mono","Menlo",monospace;color:var(--muted);font-size:.85em}
+.ttitle{font-weight:600}
+.ok,.warn,.bad{border-radius:4px;padding:.55rem .8rem;margin:.6rem 0;font-size:.95em}
+.ok{background:var(--ok-bg);border-left:4px solid var(--ok-edge)}
+.warn{background:var(--warn-bg);border-left:4px solid var(--warn-edge)}
+.bad{background:var(--bad-bg);border-left:4px solid var(--bad-edge)}
+.ok b:first-child,.warn b:first-child,.bad b:first-child{display:block;margin-bottom:.15rem}
+.tag{display:inline-block;font-family:"SF Mono",monospace;font-size:.75em;
+  border:1px solid var(--rule);border-radius:3px;padding:0 .35em;color:var(--muted);margin-left:.3em}
+ul,ol{margin:.4rem 0 .6rem 1.4rem;padding:0}
+li{margin:.22rem 0}
+.toc{columns:2;font-size:.94em}
+.toc li{margin:.1rem 0}
+a{color:var(--id)}
+hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
+.small{font-size:.88em;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+
+<h1>ODD Extension for the <code>invz</code> 1/z Module — Implementation Plan</h1>
+<p class="sub">Off-diagonal dipolar (ODD) terms in the LiHoF<sub>4</sub> 1/z effective-medium calculation, via
+(Tier 1) an ODD-mediated fluctuation-channel correction to the cc coupling and
+(Tier 2) internal-transverse-field renormalization of the single-ion doublet.
+Physics target: the mechanism of Dollberg, Andresen &amp; Schechter, PRB <b>105</b>, L180413 (2022),
+realized inside the controlled 1/z expansion of Jensen (PRB <b>49</b>, 11833) / Rønnow et&nbsp;al. (PRB <b>75</b>, 054426, “R&nbsp;2007”).
+Companion documents: <code>invz/README.html</code>, <code>jensen_1z_framework.html</code>. Prepared July 2026.</p>
+
+<h2 id="agent">0 · Instructions to the implementing agent (Claude Code)</h2>
+<ul>
+<li><b>Work order.</b> Execute phases strictly in order: P0 → T1 → T2 → T3 → V4. Do not start a phase until every task of the previous phase is <code>[x]</code> or explicitly waived by the user. Task IDs (<code>P0.1</code>, <code>T1.3</code>, …) are stable — use them in commit messages, one commit per task where practical.</li>
+<li><b>State tracking.</b> Flip the <code>[ ]</code> in each task header to <code>[x]</code> in this file as tasks complete; the JSON manifest at the bottom (<code>#task-manifest</code>) mirrors the task list with dependencies — update its <code>status</code> fields in lockstep.</li>
+<li><b>Test gate.</b> After every task that touches code, run the fast suite; after each phase, run the slow suite once:
+<pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "results = runtests('invz/tests'); assertSuccess(results)"
+INVZ_SLOW=1 "/Applications/MATLAB_R2025a.app/bin/matlab" -batch "results = runtests('invz/tests'); assertSuccess(results)"</code></pre>
+The repository path contains spaces — always quote it.</li>
+<li><b>Non-negotiables.</b> (i) With the ODD feature <em>off</em> (default), every existing benchmark in README §7 must be bit-for-bit reproduced — the extension is strictly additive and opt-in. (ii) Never edit the published benchmark values in the tests. (iii) Physics acceptance criteria marked <em>report</em> are measurements, not pass/fail — record the number, do not tune to a target.</li>
+<li><b>When P0 findings contradict this plan</b> (e.g. <code>MF_dipole</code> does not expose the full tensor), stop and report to the user before improvising — the plan is written from the documentation, not from the source.</li>
+<li><b>Reporting.</b> At the end of each phase append a short dated entry to <code>docs/ODD-LOG.md</code> (create it): what was implemented, test status, and the phase’s headline numbers (ΔT<sub>c</sub>, Σ<sub>c</sub> shifts, timings).</li>
+</ul>
+
+<h2 id="contents">Contents</h2>
+<ol class="toc">
+<li><a href="#physics">1 · Physics summary &amp; conventions</a></li>
+<li><a href="#p0">2 · Phase P0 — preflight verification</a></li>
+<li><a href="#t1">3 · Phase T1 — Tier 1a: static ODD-mediated coupling</a></li>
+<li><a href="#t2">4 · Phase T2 — Tier 1b: retardation sensitivity</a></li>
+<li><a href="#t3">5 · Phase T3 — Tier 2: single-ion renormalization</a></li>
+<li><a href="#v4">6 · Phase V4 — validation &amp; reporting</a></li>
+<li><a href="#tier3">7 · Deferred — Tier 3 multi-channel 1/z</a></li>
+<li><a href="#pitfalls">8 · Pitfalls ledger</a></li>
+<li><a href="#manifest">9 · Task manifest (JSON)</a></li>
+<li><a href="#appendix-full-tensor">Appendix A · Explicit multilevel tensor 1/z route <span class="tag">optional</span></a></li>
+</ol>
+
+<h2 id="physics">1 · Physics summary &amp; conventions</h2>
+
+<p>The full dipolar + exchange Hamiltonian is
+$$\mathcal H \;=\; -\tfrac12\sum_{ij}\sum_{\mu\nu\in\{a,b,c\}} \mathcal J^{\mu\nu}(ij)\, J_{i\mu} J_{j\nu},$$
+of which the current module keeps only the longitudinal block \( \mathcal J^{cc} \) (the four sublattice
+branches <code>Jnu</code>) plus a diagonal transverse mean field (<code>ion.Jxx0</code>). The ODD blocks
+\( \mathcal J^{c\alpha},\ \alpha\in\{a,b\} \) are discarded at the <code>invz_jq_modes</code> projection.
+By the C<sub>2</sub>-about-<i>c</i> element of the S<sub>4</sub> Ho-site symmetry, every element of the
+4×4 sublattice matrix \( \mathcal J^{c\alpha}(\mathbf q{=}\mathbf 0) \) vanishes, so ODD contributes nothing at
+mean-field level in either phase of the pure system: its entire effect on \(T_c\) lives in the fluctuation
+channel — exactly what the 1/z machinery is built to resum.</p>
+
+<h3>1.1 Tier 1 — mediated coupling (the Dollberg three-spin term, resummed)</h3>
+<p>The transverse response of Ho<sup>3+</sup> is Van Vleck: the first excited CF level sits at
+\( \varepsilon_1 \approx 10.8\,\mathrm K = 0.931\,\mathrm{meV} \) (README §7 benchmark), far above
+\(k_BT\) at the transition. Integrating out the transverse channel at Gaussian (adiabatic) level converts the
+ODD blocks into an additive correction to the cc coupling, a 4×4 Hermitian sublattice matrix at each
+\( \mathbf q \):
+$$\boxed{\;\delta\mathcal J^{cc}(\mathbf q) \;=\; \sum_{\alpha\beta\in\{a,b\}}
+   \mathcal J^{c\alpha}(\mathbf q)\;\big[\chi_\perp(0)\big]_{\alpha\beta}\;\mathcal J^{\beta c}(\mathbf q),
+   \qquad \mathcal J^{\beta c}(\mathbf q) = \big[\mathcal J^{c\beta}(\mathbf q)\big]^\dagger,\;}
+   \tag{E1}$$
+with \( \chi_\perp(0) \) the static 2×2 transverse single-ion susceptibility (hyperfine-dressed, from
+<code>invz_chi0z</code> at \(z=0\); units meV<sup>−1</sup>, so \( \delta\mathcal J \) is in meV, consistent).
+The physical content is Dollberg’s three-spin term — an anticorrelated \(J_c\) pair polarizing the transverse
+moment of an intermediate ion — resummed into a pairwise coupling.</p>
+<p>Two structural facts drive the entire acceptance logic:</p>
+<ul>
+<li>\( \delta\mathcal J(\mathbf q) = A\,X\,A^\dagger \) with \(X=\chi_\perp(0)\succ 0\), hence
+\( \delta\mathcal J(\mathbf q) \succeq 0 \) at every \( \mathbf q \) (mediated interactions lower energy);</li>
+<li>\( \delta\mathcal J(\mathbf 0) = 0 \) by symmetry <em>before</em> the self-site subtraction — but the
+subtraction (E4) then shifts the whole spectrum, including the uniform mode, by the constant
+$$ d \;=\; \frac1{N_q}\sum_{\mathbf q'}\big[\delta\mathcal J(\mathbf q')\big]_{ss}
+   \;=\; \sum_{\alpha\beta\in\{a,b\}} \big[\chi_\perp(0)\big]_{\alpha\beta}\,
+   \sum_{j(\neq i)} \mathcal J^{c\alpha}(ij)\,\mathcal J^{\beta c}(ji) \;&gt;\;0 ,
+   \tag{E5}$$
+an absolutely convergent \( \sim r^{-6} \) real-space sum (equal on all four sublattices by symmetry).
+The physical uniform pair coupling therefore <b>decreases</b>: \( \mathcal J(0) \to \mathcal J(0)-d \).
+This is not an artifact — it is exactly the mean-field ODD reduction of Dollberg–Schechter (DS2023,
+arXiv:2308.10095) Eq. (7), whose last term evaluates to \( -B_{xz,xz} \) because the shape sums
+\( A_{xz}=A_{yz}=0 \): the mediated interaction has an overall antiferromagnetic preference for the uniform
+mode. Their MF numbers set its scale: a 5% \(T_c\) reduction already in the 3-state model
+(2.27 → 2.18 K), larger with the full CF spectrum.</li>
+<li>The <em>q-dependent remainder</em> \( \delta\mathcal J(\mathbf q)+d \succeq 0 \) is the pure
+fluctuation channel: extra coupling weight at \( \mathbf q\neq\mathbf 0 \) raises
+$$\Sigma_c(0) \;=\; \frac1N\sum_{\mathbf q,\nu}\frac{\mathcal J_\nu(\mathbf q)}{\mathcal J(0)-\mathcal J_\nu(\mathbf q)}
+\tag{E2}$$
+(README §1.4 / R&nbsp;2007 eq. 10, evaluated with \( \mathcal J_\nu \to \) modes of
+\( \mathcal J^{cc}+\delta\mathcal J \) and the shifted \( \mathcal J(0) \)), and the critical condition
+\( [\mathcal J(0)-d]\,\chi_0^{cc}(0)=1+\Sigma(0) \) then requires a larger \( \chi_0 \), i.e. lower \(T_c\).
+This is the part DS2023’s MF <em>cannot</em> see (their mirror-symmetry cancellations, Fig. S1) and their
+spin-½ MC does — the MF↔MC gap in their Fig. 2 is the target observable for the Σ-driven piece here.</li>
+</ul>
+<p><b>Cross-validation of (E1).</b> In the 3-state, \(T\to0\), \(B_x=0\) limit, (E1) with
+\( \chi_\perp \to (2\rho^2/\Delta)\,\mathbb 1 \) reduces exactly to the first (classical) term of DS2023’s
+three-body Hamiltonian \(H_{3B}\), with the end-site \( \alpha^2 = M^2 \) factors carried by \( \chi_0^{cc} \)
+in the 1/z bookkeeping. (E1) is thus the all-CF-state, finite-temperature, hyperfine-dressed, and (Phase T2)
+retardation-capable generalization of their result. Their two-body emergent terms \( \varepsilon^{\mu\nu}_{ij} \)
+— the transverse–transverse mediated channel \( \propto \mathcal J^{\alpha\beta}\mathcal J^{\gamma\delta}/\Delta \)
+— are quantified by DS2023 as two orders of magnitude below the exchange scale, which justifies restricting
+Tier 1 to the single-excitation \( c\!\leftrightarrow\!\alpha \) channel.</p>
+
+<h3>1.2 Tier 2 — internal-field renormalization of the doublet</h3>
+<p>The fluctuating internal transverse field also renormalizes the single-ion problem — Dollberg’s
+second effect (variable moments). Its covariance (energy units, conjugate to \(J_\alpha\)) is
+$$ C_{\alpha\beta} \;=\; \big\langle h_\alpha h_\beta \big\rangle
+ \;=\; \frac1{4N}\sum_{\mathbf q}\operatorname{tr}_{\rm subl}\!\Big[
+   \mathcal J^{\alpha c}(\mathbf q)\; S_{cc}(\mathbf q)\; \mathcal J^{c\beta}(\mathbf q) \Big],
+ \qquad S_{cc}(\mathbf q) = \tfrac1\beta{\textstyle\sum_n}\,\chi_{cc}(\mathbf q, i\omega_n),
+ \tag{E3}$$
+i.e. the equal-time cc structure factor of the converged 1/z solution contracted with the ODD blocks
+(trace over sublattices, per-site normalization 1/4). The single-ion doublet parameters
+\( (\Delta, M^2, n_{01}) \) are then averaged over a Gaussian field of covariance \(C\)
+(Gauss–Hermite quadrature) before entering \( \Sigma \). The site-diagonal coupling removed from Tier 1 by the
+self-site subtraction (E4 below) is a constant in the strict two-level limit; its physical residue — the
+internal field renormalizing \( (\Delta, M^2, n_{01}) \) — is precisely what Tier 2 owns. No double
+counting.</p>
+
+<h3>1.3 Conventions &amp; constants (must match the codebase)</h3>
+<table>
+<tr><th>Item</th><th>Value / convention</th></tr>
+<tr><td>Energies</td><td>meV throughout; \(k_B = 0.0861733\) meV/K; \( \mu_B = 0.05788 \) meV/T; \( g_L = 5/4 \)</td></tr>
+<tr><td>Susceptibility</td><td>\( \chi = -G \); \( \chi_0 \) in meV<sup>−1</sup>; <code>crit</code> dimensionless (verify in P0.2)</td></tr>
+<tr><td>Coupling sign</td><td>ferromagnetic \( \mathcal J &gt; 0 \); \( \delta\mathcal J \succeq 0 \) <em>adds</em> to \( \mathcal J^{cc}(\mathbf q) \)</td></tr>
+<tr><td>Sublattices</td><td>4 Ho sites (scheelite); cc channel = 4×4 per \( \mathbf q \) → <code>Jnu [nq,4]</code> eigenvalues</td></tr>
+<tr><td>\( \mathcal J(ii)=0 \)</td><td>enforced for \( \delta\mathcal J \) by per-sublattice q-average subtraction (E4)</td></tr>
+<tr><td>Lorentz / demag</td><td>both are diagonal (isotropic / axis-aligned spheroid) → <b>no</b> ODD-block shape terms; \( \delta\mathcal J \) is a pure lattice sum</td></tr>
+<tr><td>Key scales</td><td>\( \varepsilon_1 = 0.931\) meV; \( \omega_1(1.53\,\mathrm K) = 2\pi k_BT = 0.828\) meV; benchmark \( \mathcal J^{cc}_{D\cdot D}(0)=6.82\,\mu\)eV, \( \Sigma_c(0)=0.2980\)–0.3004, \(T_c(0)=1.74\) K (1/z, no ODD)</td></tr>
+<tr><td>DS2023 anchors</td><td>ODD lattice sums (Suppl. Table I, \(a=5.175\) Å): \( B_{xz,xz}=B_{yz,yz}=36.73\,a^{-6} \), \( B_{zz,zz}=17.93\,a^{-6} \), \( B_{xy,xy}=4.80\,a^{-6} \), \( B_{xx,yy}=-22.05\,a^{-6} \); shape sums \( A_{\mu\nu}=0 \) for \( \mu\neq\nu \). 3-state params: \( \Delta=11.5 \) K, \( \rho=2.34 \), \( \alpha=5.53 \) → \( \chi_\perp^{(3\text{-state})}(0)=2\rho^2/\Delta \approx 11.1 \) meV<sup>−1</sup>; full CF spectrum ≈ 1.5× (their \( \Gamma \approx 1.5\,\alpha^2\rho^2/\Delta \)) → \( \chi_\perp(0)\approx 16\text{–}17 \) meV<sup>−1</sup> at \(T\to0\), \(B_x=0\). Spin-½ MC, ODD included: \( T_c=1.6295(2) \) K</td></tr>
+</table>
+
+<div class="warn"><b>Framing of the physics outcome (read before writing any acceptance test)</b>
+The scientific question is whether Tier 1 + Tier 2 inside the 1/z expansion reproduces the
+ODD suppression that Dollberg et&nbsp;al. obtain by classical MC — their zero-field gap is
+\(T_c^{\rm MF}-T_c^{\rm exp} \approx 1.79-1.53 = 0.25\) K; the module’s no-ODD 1/z baseline is 1.74 K, so the
+missing suppression in <em>this</em> framework is ≈ 0.21 K. Whether the two tiers deliver ~0.05 K or ~0.2 K is
+the result, not a pass/fail criterion. The comparison is also inexact in both directions: their MC excludes
+inter-doublet quantum fluctuations (valid \(B_x \lesssim 1\) T) but captures non-Gaussian field statistics;
+the 1/z treatment is Gaussian in the transverse channel but quantum in the cc channel. Report, don’t tune.</div>
+<h2 id="p0">2 · Phase P0 — preflight verification <span class="tag">read-only · ~1 h</span></h2>
+<p>No code changes. Every task produces a short note in <code>docs/ODD-LOG.md</code>. If any finding
+contradicts §1, stop and report.</p>
+
+<div class="task"><div class="task-head"><span class="tid">P0.1</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Confirm the full dipole tensor exists upstream of the cc projection</span></div>
+<ul>
+<li>Read <code>MF_dipole.m</code>: confirm it returns (or can return) the full 3×3 Cartesian dipole tensor per sublattice pair per \( \mathbf q \), including the \(ca\)/\(cb\) off-diagonal components. Record the exact output shape and index convention (which index is sublattice, which Cartesian).</li>
+<li>Read <code>invz_jq_modes.m</code>: locate the line(s) where the cc block is extracted and eigendecomposed into <code>Jnu [nq,4]</code>. Record how <code>info.Jcc0</code> is assembled (Lorentz, demag, exchange <code>4J12</code>).</li>
+<li>Grep: <code>grep -rn "Jxx0\|Jcc0\|MF_dipole\|3,3\|(:,:,3,3)" invz/ *.m</code></li>
+</ul>
+<div class="ok"><b>Done when</b> the log entry states: full-tensor availability (yes/no), tensor units (μeV vs meV — compare against the 6.82 μeV benchmark), index layout, and the projection line numbers. If <code>MF_dipole</code> computes only \(cc\) (and \(aa\)), note the cheapest way to expose the \(c\alpha\) components (usually: return the whole 3×3 it already builds internally).</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">P0.2</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Pin units and dimensional consistency of \( \mathcal J\chi_0 \)</span></div>
+<ul>
+<li>In <code>invz_solve_point.m</code> / <code>invz_chi0z.m</code>, verify: \( \chi_0^{cc} \) in meV<sup>−1</sup> (dimensionless \(J\) operators), <code>Jnu</code>/<code>Jcc0</code> in meV, product dimensionless. Confirm whether the \((g_L\mu_B)^2\) factor lives inside the dipole sum (it must, given the 6.82 μeV benchmark) so that (E1) needs <b>no</b> extra g-factors.</li>
+<li>Evaluate \( \chi_\perp(0) \) once at (T, B<sub>x</sub>) = (1.53 K, 0 T) via <code>invz_single_ion</code> + <code>invz_chi0z</code>; record the 2×2 numbers. Expected: \( \chi_{aa}=\chi_{bb} \approx 16\text{–}17 \) meV<sup>−1</sup> — the DS2023 3-state value \( 2\rho^2/\Delta \approx 11.1 \) meV<sup>−1</sup> enhanced ≈ 1.5× by the higher CF states (their \( \Gamma \) ratio) — with \( \chi_{ab} \) small/antisymmetric at \(B_x=0\). A result near 11 suggests an unintended truncation; a result off by ×2-scale factors suggests a convention slip.</li>
+</ul>
+<div class="ok"><b>Done when</b> the log records the χ⊥ matrix and confirms (E1) is dimensionally closed with no additional prefactors.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">P0.3</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Numerical symmetry check: \( \mathcal J^{c\alpha}(\mathbf q\to\mathbf 0) = 0 \)</span></div>
+<ul>
+<li>Throwaway script (do not commit into the module; keep under <code>invz/tests/exploratory/</code>): build the \(c a\) and \(c b\) 4×4 blocks from <code>MF_dipole</code> at the smallest few \(|\mathbf q|\) on the standard grid and at a sequence \( \mathbf q = (q,0,0),\ q\to0 \). Confirm element-wise decay to 0 (the C<sub>2</sub>-about-c argument of §1) and record the decay rate and the residual scale relative to <code>Jcc0</code>.</li>
+<li>Also record the typical magnitude of \( \mathcal J^{c\alpha}(\mathbf q) \) at generic zone points (needed for the T1 magnitude sanity check).</li>
+</ul>
+<div class="ok"><b>Done when</b> the uniform-limit ODD blocks are confirmed ≤ 10<sup>−6</sup>·<code>Jcc0</code> (or the deviation is explained by grid geometry) and generic-q magnitudes are logged.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">P0.4</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Cache &amp; parallel audit</span></div>
+<ul>
+<li>Record the <code>invz/cache/</code> key scheme used by <code>invz_jq_modes</code> (what parameters key the cache: grid, <code>dpRng</code>, shape?). The new geometric ODD blocks must get their own key namespace (proposal: suffix <code>_odd</code>) so existing caches never collide.</li>
+<li>Confirm the drivers compute all lattice sums <em>before</em> entering <code>parfor</code> (README §5 claims workers do no disk I/O) — the ODD blocks must follow the same discipline.</li>
+</ul>
+<div class="ok"><b>Done when</b> the log names the cache key format and the single pre-parfor point where ODD blocks will be built.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">P0.5</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Baseline freeze</span></div>
+<ul>
+<li>Run the full slow suite on a clean tree; commit nothing. Save the console benchmark table to <code>docs/ODD-LOG.md</code> as the frozen baseline (Σ<sub>c</sub> values, T<sub>c</sub>(0), H<sub>c</sub>(0.31 K), soft-mode minimum, timings).</li>
+</ul>
+<div class="ok"><b>Done when</b> the baseline table is in the log with the git commit hash it was measured at.</div></div>
+
+<h2 id="t1">3 · Phase T1 — Tier 1a: static ODD-mediated coupling <span class="tag">core deliverable</span></h2>
+
+<div class="task"><div class="task-head"><span class="tid">T1.1</span><span class="tstatus">[ ]</span>
+<span class="ttitle">New function <code>invz_odd_blocks.m</code> — geometric ODD lattice sums (cached)</span></div>
+<pre><code>% [Vca, Vcb] = invz_odd_blocks(ion, qvec, opts)
+%   Vca, Vcb : [4,4,nq] complex Hermitian-pair blocks J^{ca}(q), J^{cb}(q)
+%              (dipole-only; same dpRng / prefactor conventions as the cc sums,
+%               so units are meV, identical to Jnu)
+%   opts     : dpRng, cache (default true; cache key includes '_odd', grid hash, dpRng)</code></pre>
+<ul>
+<li>Reuse the <code>MF_dipole</code> machinery identified in P0.1; do <b>not</b> reimplement dipole sums.</li>
+<li>Exchange is isotropic nearest-neighbour in the current model → contributes nothing off-diagonal; ODD blocks are dipolar only. No Lorentz/demag terms (§1.3).</li>
+<li>Store both blocks in one cache file per grid to halve I/O.</li>
+</ul>
+<div class="ok"><b>Acceptance</b> — new test <code>invz/tests/test_odd_blocks.m</code> (fast):
+(i) structure: \( \mathcal J^{c\alpha}(-\mathbf q) = [\mathcal J^{c\alpha}(\mathbf q)]^* \) (real-space couplings real) and, downstream, \( \delta\mathcal J(\mathbf q) \) Hermitian with real eigenvalues on a small grid;
+(ii) smallest-|q| block norms ≤ 10<sup>−6</sup>·<code>Jcc0</code> (from P0.3);
+(iii) cache round-trip: second call bitwise-equal, no recompute;
+(iv) <b>exact lattice-sum benchmark (DS2023 Suppl. Table I):</b> the BZ-averaged squared block,
+\( \frac1{N_q}\sum_{\mathbf q}\sum_{s'} |[\mathcal J^{ca}(\mathbf q)]_{ss'}|^2 \), equals the real-space sum
+\( \sum_{j(\neq i)} [\mathcal J^{ca}(ij)]^2 \) (Parseval), which in DS2023 units is
+\( E_D^2\,B_{xz,xz} = E_D^2 \cdot 36.73\,a^{-6} \) with \( a = 5.175 \) Å — assert agreement to 1% after
+converting to the code’s prefactor convention (the conversion factor itself is fixed in P0.2; the same check
+with the cc block against \( B_{zz,zz}=17.93\,a^{-6} \) validates the conversion independently). This is the
+strongest available guard against \((g_L\mu_B)^2\)-type unit slips, which enter \( \delta\mathcal J \)
+squared.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">T1.2</span><span class="tstatus">[ ]</span>
+<span class="ttitle">New function <code>invz_chiperp.m</code> — static transverse single-ion susceptibility</span></div>
+<pre><code>% Xp = invz_chiperp(ion, T, Bx, opts)   % Xp: real symmetric 2x2 [meV^-1], full
+%                                       % electronuclear chi0 at z=0, (a,b) block</code></pre>
+<ul>
+<li>Wrap <code>invz_single_ion</code> → <code>invz_chi0z(si,T,0,opts)</code>; extract the (a,b)×(a,b) block; symmetrize (the antisymmetric \( \chi_{ab} \) part is gyrotropic and drops out of the static Gaussian elimination — discard it, but assert it is small and log its size).</li>
+<li>Works at \(B_x=0\): the transverse response crosses the ~10 K CF gap and is regular where <code>invz_twolevel</code> is not — do <b>not</b> route this through the two-level object, and do not let the <code>invz:degenerateDoublet</code> guard fire here.</li>
+<li>χ⊥ must be evaluated at the <em>same converged single-ion state</em> (transverse MF <code>hx</code>) as the rest of the point solve.</li>
+</ul>
+<div class="warn"><b>Design decision — χ⊥ held fixed within the point solve.</b> χ⊥ is Van Vleck-dominated and
+essentially insensitive to the cc order parameter and to K; treat it as a per-(T,B<sub>x</sub>) constant computed
+once before the EMT⇆Σ loop, not self-consistently inside it. Record this in the function header.</div>
+<div class="ok"><b>Acceptance</b>: at (1.53 K, 0 T) reproduces the P0.2 numbers and sits in the 16–17 meV<sup>−1</sup> band implied by DS2023's \( \Gamma \approx 1.5\,\alpha^2\rho^2/\Delta \); \( \chi_{aa}=\chi_{bb} \) at \(B_x=0\) to 10<sup>−10</sup>; smooth (no jumps) along \(B_x\in[0,6]\) T at 0.31 K.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">T1.3</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Assemble \( \delta\mathcal J(\mathbf q) \), self-site subtraction, extend <code>invz_jq_modes</code></span></div>
+<pre><code>% [Jnu, info] = invz_jq_modes(ion, qvec, opts)
+%   opts.odd        : false (default) | struct('Xp', [2x2])
+%   With odd on:  Jcc4(q) &lt;- Jcc4(q) + dJ(q),  Jnu = eig per q as before
+%   info.odd        : struct(dJ_mean_diag [4x1], dJ_max, uniform_residual, Xp)</code></pre>
+<p>Per q: \( \delta\mathcal J(\mathbf q) = V_{ca} X_{aa} V_{ca}^\dagger + V_{ca}X_{ab}V_{cb}^\dagger
++ V_{cb}X_{ba}V_{ca}^\dagger + V_{cb}X_{bb}V_{cb}^\dagger \) (E1), then enforce \( \delta\mathcal J(ii)=0 \):
+$$ \delta\mathcal J_{ss}(\mathbf q)\;\leftarrow\;\delta\mathcal J_{ss}(\mathbf q)
+   \;-\;\frac1{N_q}\sum_{\mathbf q'}\delta\mathcal J_{ss}(\mathbf q'),
+   \qquad s = 1..4 \;\text{(diagonal only)}. \tag{E4}$$</p>
+<ul>
+<li>The subtracted on-site constant multiplies \( (\sigma^z_i)^2 = 1 \) in the strict two-level limit — a pure energy shift with no \(T_c\) content; the <em>parameter-renormalization</em> physics of the internal field is what Tier 2 owns (§1.2). Cite (E4)/(E5) and this plan in a comment to prevent future double counting.</li>
+<li><b><code>info.Jcc0</code> gains the uniform shift:</b> \( \texttt{info.Jcc0} \leftarrow \texttt{info.Jcc0} - d \) with \(d\) from (E5), computed as the BZ average of the pre-subtraction diagonal (identical for the four sublattices — assert this to 10<sup>−10</sup> relative). This single line carries the entire MF-level DS2023 mechanism into the mean field, the RPA denominator, and the 1/z criticality simultaneously (single-sourcing, README §1.6). Bookkeeping rule so the shift is applied exactly once everywhere: the finite-q grid matrices receive the <em>post-subtraction</em> \( \delta\mathcal J(\mathbf q) \) (which already contains the −d diagonal), and <code>Jcc0</code> receives the explicit −d; no other q=0 special-casing.</li>
+<li>Assert pre-subtraction \( \delta\mathcal J(\mathbf q\to\mathbf 0)\to 0 \) (smallest-|q| shell ≤ 10<sup>−4</sup>·<code>Jcc0</code>), so the post-subtraction uniform value is \(-d\) exactly, not \(-d\) plus a symmetry-violation residue.</li>
+<li>Note (E4) makes \( \delta\mathcal J(\mathbf q) \) no longer ⪰0 pointwise (eigenvalues shift down by the q-independent \(d\)); assert positivity <em>before</em> subtraction, and after subtraction assert the BZ-average of the diagonal is 0 to machine precision.</li>
+<li>Expected scale (report): with \( \chi_\perp \approx 16\text{–}17 \) meV<sup>−1</sup> and \( B_{xz,xz}=B_{yz,yz}=36.73\,a^{-6} \), \( d \sim 0.3\text{–}0.5\,\mu\)eV against \( \mathcal J^{cc}_{D\cdot D}(0)=6.82\,\mu\)eV — a few-percent uniform-coupling reduction, consistent with DS2023’s 5–8% MF \(T_c\) effect. An order-of-magnitude miss here means a prefactor bug (see pitfalls).</li>
+</ul>
+<div class="ok"><b>Acceptance</b> — extend <code>test_odd_blocks.m</code>:
+(i) <code>opts.odd=false</code> path bitwise-identical to current <code>Jnu</code> (regression);
+(ii) with <code>Xp=zeros(2)</code>, identical output to odd=false;
+(iii) pre-subtraction \( \delta\mathcal J(\mathbf q)\succeq -10^{-12} \) at every grid q;
+(iv) post-subtraction per-sublattice diagonal BZ-average = 0;
+(v) ordering mode remains the uniform branch: \( \max_{\mathbf q,\nu}\mathcal J_\nu &lt; \) <code>Jcc0</code> − d still holds with ODD on (guards against a spurious q≠0 instability — note the margin shrinks from both sides: finite-q modes gain \( \delta\mathcal J + d \succeq 0 \) while the uniform mode loses d);
+(vi) closure of the decomposition: \( \frac1{N_q}\sum_{\mathbf q}\mathrm{diag}\,\delta\mathcal J(\mathbf q) = -d \) recovered from the assembled output (self-consistency of E4/E5).</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">T1.4</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Wire into the point solve and critical-point finders</span></div>
+<ul>
+<li><code>invz_solve_point</code> / <code>invz_solve_point_ordered</code>: accept <code>opts.odd = true</code>; when set, obtain <code>Xp = invz_chiperp(ion,T,Bx)</code> and rebuild <code>Jnu</code> from the cached geometric blocks (cheap: 4×4 contraction + <code>eig</code> over nq — O(ms) at 16³; the heavy dipole sums stay cached). The rebuilt <code>Jnu</code> feeds K, λ<sub>p</sub>, Σ, and <code>crit</code> unchanged — no formula in the EMT/Σ layer changes.</li>
+<li><code>invz_critical</code> / <code>invz_critical_T</code>: pass the flag through; since T (or B<sub>x</sub>) changes at every bisection step and χ⊥ depends on both, the rebuild happens per solve — precompute <code>[Vca,Vcb]</code> once outside the bisection and thread them via opts to avoid cache reads in the loop (P0.4 discipline).</li>
+<li><code>invz_critical_T0field</code>: Σ<sub>c</sub>(0) (E2) now depends on T through χ⊥(T). Replace the direct inversion with a scalar root find on \( \mathcal J(0)\chi_0^{cc}(0;T) - 1 - \Sigma_c(0;T) = 0 \); χ⊥(T) is nearly flat so 3–4 iterations suffice.</li>
+<li>Drivers: expose a single switch (proposal: <code>ion.odd = 0|1</code> set right after <code>invz_ion()</code>, mirroring <code>ion.demag</code>), plumbed to <code>opts.odd</code> everywhere.</li>
+</ul>
+<div class="ok"><b>Acceptance</b>: fast suite green with the flag off; with the flag on, one PM point solve at (1.60 K, 0.1 T) converges with <code>pt.converged=true</code> and per-point overhead ≤ 20% vs baseline.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">T1.5</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Physics measurements (report, not pass/fail)</span></div>
+<ul>
+<li>Zero field: \( T_c^{\rm ODD}(0) \) via the modified <code>invz_critical_T0field</code>, Richardson 12³/24³ as in the existing Σ<sub>c</sub> benchmark. Report \( \Delta T_c = 1.74\,\mathrm K - T_c^{\rm ODD}(0) \) and \( \Sigma_c^{\rm ODD}(0) - 0.2980 \).</li>
+<li><b>MF/fluctuation decomposition</b> (the key measurement — it maps directly onto DS2023): run zero-field \(T_c\) three ways: (a) full \( \delta\mathcal J(\mathbf q) \) + shifted <code>Jcc0</code>; (b) uniform shift only (<code>Jcc0</code> − d, grid matrices unmodified) — the MF-level piece, DS2023’s Eq. (7) mechanism; (c) q-structure only (grid matrices get \( \delta\mathcal J + d\,\mathbb 1 \), <code>Jcc0</code> unshifted) — the fluctuation piece their MF misses and their spin-½ MC picks up (mirror-symmetry argument, DS2023 Fig. S1). Report the split (a)≈(b)+(c) and its deviation.</li>
+<li>DS2023 comparison anchors (qualitative — models differ, see pitfalls): 3-state MF gives a 5% \(T_c\) reduction (2.27 → 2.18 K, unrescaled); their spin-½ MC with ODD gives \( T_c = 1.6295(2) \) K; their analytic MF finds the ODD effect attenuating with field and minimal at \( B_x \gtrsim 3.5 \) T. The 1/z boundary shift should show the same attenuation with a comparable crossover scale.</li>
+<li>Boundary: recompute \(B_c(T)\) at the README grid for T = 0.31, 0.8, 1.2, 1.5 K with ODD on/off; tabulate shifts. Expected pattern: suppression largest at low B<sub>x</sub>/high T, fading toward the ≳3.5 T crossover — χ⊥ stiffens and the cc channel weakens as the doublet splits.</li>
+<li>Magnitude sanity (lighter now that T1.1(iv) pins the lattice sums exactly): confirm the computed d lands in the 0.3–0.5 μeV band estimated in T1.3; an order-of-magnitude miss with T1.1(iv) passing means the χ⊥ contraction, not the blocks, is at fault.</li>
+</ul>
+<div class="ok"><b>Done when</b> the log table has ΔT<sub>c</sub>(0), ΔΣ<sub>c</sub>(0), the (a)/(b)/(c) decomposition, the B<sub>c</sub>(T) shift table with the attenuation crossover, and the d-scale check. Add a <em>slow</em> test asserting only reproducibility (values match the logged ones to 1%), not their size.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">T1.6</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Documentation</span></div>
+<ul>
+<li>README.html: new §1.7 “ODD-mediated coupling (Tier 1)” with (E1)–(E5), the flag, the χ⊥-fixed design decision, and the measured ΔT<sub>c</sub>; add <code>invz_odd_blocks</code>, <code>invz_chiperp</code> to the function reference; note the Σ<sub>c</sub> closed form now T-dependent with ODD on.</li>
+<li>Scope §8: move “ODD terms” from out-of-scope to in-scope-(Gaussian), with the Tier 3 caveat.</li>
+</ul>
+<div class="ok"><b>Done when</b> README renders correctly and cross-references this plan.</div></div>
+
+<h2 id="t2">4 · Phase T2 — Tier 1b: retardation sensitivity <span class="tag">measurement phase</span></h2>
+<p>The static χ⊥(0) in (E1) is an adiabatic approximation. It is <em>not</em> obviously safe here:
+at \(T_c \approx 1.53\) K the first Matsubara frequency is \( \omega_1 = 0.828 \) meV against a CF gap
+\( \varepsilon_1 = 0.931 \) meV, so \( \chi_\perp(i\omega_1)/\chi_\perp(0) \approx
+\varepsilon_1^2/(\varepsilon_1^2+\omega_1^2) \approx 0.56 \). The static form therefore <em>overweights</em>
+the \(n\neq0\) channels of the mediated coupling. Mitigation: criticality is controlled by the elastic
+(\(n=0\)) sector, where χ⊥(0) is exact — this phase measures how much the \(n\neq0\) error matters.</p>
+
+<div class="task"><div class="task-head"><span class="tid">T2.1</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Retarded mediated coupling \( \delta\mathcal J(\mathbf q, i\omega_n) \)</span></div>
+<ul>
+<li>Evaluate <code>invz_chiperp</code> on the Matsubara grid (χ<sub>0</sub> at \(z=i\omega_n\) — <code>invz_chi0z</code> already accepts complex z); build \( \delta\mathcal J(\mathbf q,i\omega_n) \) per (E1) with \( X = \chi_\perp(i\omega_n) \); apply (E4) per frequency.</li>
+<li>Plumbing: <code>invz_emt_scalar</code> already loops frequencies for K(iω<sub>n</sub>); generalize its Jnu argument from <code>[nq·4,1]</code> to <code>[nq·4, nfreq]</code> (constant across the second dim reproduces current behaviour — assert this). λ<sub>p</sub> and Σ formulas unchanged; only the branch spectrum entering each frequency’s BZ average changes.</li>
+<li>Frequency-dependent Jnu means the eigendecomposition runs per (q, n): budget nq·nfreq 4×4 <code>eig</code> calls; if slow, exploit that \( \delta\mathcal J(\mathbf q,i\omega_n) = c_n\,\delta\mathcal J(\mathbf q,0) \) is <em>not</em> exact (X is a matrix) but \( \chi_\perp(i\omega_n)\approx r_n\,\chi_\perp(0) \) with scalar \(r_n\) is an excellent surrogate given \( \chi_{aa}=\chi_{bb} \) — then \( \delta\mathcal J \) just rescales and first-order eigenvalue perturbation avoids the per-n eig entirely. Implement the scalar-\(r_n\) route first; log its accuracy against a full per-n eig at one point.</li>
+</ul>
+<div class="ok"><b>Acceptance</b>: with \(r_n\equiv1\), bitwise agreement with T1 output (regression); sum-rule residual of the point solve unchanged at the 10<sup>−6</sup> level.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">T2.2</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Decision measurement</span></div>
+<ul>
+<li>Report \( T_c(0) \) and \( B_c(1.2\,\mathrm K) \) static vs retarded.</li>
+</ul>
+<div class="warn"><b>Decision rule.</b> If |ΔT<sub>c</sub>| between static and retarded &lt; 10 mK, freeze the
+static form as default (retain the retarded path behind <code>opts.odd_retarded</code>) and document. If ≥ 10 mK,
+the retarded form becomes the default and T1.5 numbers are re-measured. Either way the log records both.</div>
+</div>
+
+<h2 id="t3">5 · Phase T3 — Tier 2: single-ion internal-field renormalization</h2>
+
+<div class="task"><div class="task-head"><span class="tid">T3.1</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Field covariance <code>invz_odd_fieldvar.m</code></span></div>
+<pre><code>% C = invz_odd_fieldvar(ion, pt, Vca, Vcb, qwts, opts)   % C: 2x2 [meV^2], eq (E3)</code></pre>
+<ul>
+<li>\( S_{cc}(\mathbf q) \) from the converged 1/z Green function of <code>pt</code>: per branch,
+\( S_\nu(\mathbf q) = \frac1\beta\sum_n \chi_\nu(\mathbf q, i\omega_n) \) — reuse the Matsubara grid and
+weights of the point solve; the sum converges like \( \omega_n^{-2} \) (same tail handling as the sum rule,
+framework §7). Rotate branch → sublattice basis before contracting with the ODD blocks, or contract in the
+mode basis with the eigenvectors — pick whichever the code structure makes cheaper, document the choice.</li>
+<li>Do <b>not</b> approximate \(S_{cc}\approx k_BT\chi_{cc}(0)\) silently; if used for speed, gate behind an option and log the difference once.</li>
+</ul>
+<div class="ok"><b>Acceptance</b>: C symmetric ⪰0; \(C_{aa}=C_{bb}\) at \(B_x=0\); scale check — compare
+\( g_L\mu_B \sqrt{C_{aa}}/(g_L\mu_B)\)… i.e. convert \( \sqrt{C_{aa}} \) to an equivalent field
+\( \sqrt{C_{aa}}/(g_L\mu_B\langle J\rangle_{\rm scale}) \) and log it next to Dollberg’s distribution width
+\(h \approx 0.4\) T (their Fig. 4 secondary peaks) as a qualitative cross-check, not an assertion.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">T3.2</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Gaussian-averaged doublet parameters</span></div>
+<ul>
+<li>Extend <code>invz_twolevel</code> (new wrapper <code>invz_twolevel_avg(ion,T,Bx,C,opts)</code>): 2-D Gauss–Hermite quadrature (default 7×7 nodes, diagonalize C first) over transverse fields \( (h_a,h_b) \) added to the single-ion Hamiltonian; at each node solve the single ion and extract \( (\Delta, M^2, n_{01}, g_0) \).</li>
+</ul>
+<div class="warn"><b>Design decision — what to average.</b> Averaging the parameters
+\((\Delta, M^2, n_{01})\) and averaging the response \(g(z)\) are inequivalent (quenched-field, static
+approximation either way). Default: average the <em>response functions</em> \( g(i\omega_n) \) and
+\( \chi_0^{cc} \) node-by-node (physically the disorder-averaged propagator), then fit effective
+\((\Delta_{\rm eff}, M^2_{\rm eff}, n_{01,\rm eff})\) by matching \(g(0)\), \(\frac1\beta\sum_n g\) (=1 exactly per
+node — check it survives averaging) and the leading \( \omega_n^{-2} \) tail, so the Σ machinery keeps its
+two-level algebra. Keep parameter-averaging behind an option; report the T<sub>c</sub> difference between the two
+once. This is the least rigorous step of the whole plan — flag it in the README as such.</div>
+<div class="ok"><b>Acceptance</b>: C=0 reproduces <code>invz_twolevel</code> bitwise; averaged \( \Delta_{\rm eff} \ge \Delta \) (level repulsion) and \( M^2_{\rm eff} \le M^2_0 - m^2 \) monotonically in ‖C‖ on a ray.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">T3.3</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Outer self-consistency and wiring</span></div>
+<ul>
+<li><code>invz_solve_point</code> with <code>opts.odd_tier2=true</code>: after the T1 point solve converges, compute C (T3.1), re-solve with averaged doublet (T3.2), iterate. χ<sub>cc</sub> feedback is stabilizing (suppression reduces S<sub>cc</sub>); 2–4 outer iterations expected — cap at 8, mix at 0.5, mask on non-convergence exactly like the EMT loop.</li>
+<li>Near the boundary S<sub>cc</sub>(q→0) grows; C stays finite because the ODD blocks vanish at q=0 — assert C remains bounded as <code>crit → 0</code> at fixed T (this is the mechanism’s built-in infrared safety and a strong correctness check).</li>
+</ul>
+<div class="ok"><b>Acceptance</b>: converged Tier1+Tier2 point at (1.55 K, 0 T → use 0.05 T to dodge the degenerate-doublet guard, plus the zero-field closed-form route); log combined ΔT<sub>c</sub>(0) and the Tier1 : Tier2 split.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">T3.4</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Small-B<sub>x</sub> interaction with the hyperfine scale</span></div>
+<ul>
+<li>Tier 2 injects a transverse field spread even at \(B_x=0\), where the bare doublet is degenerate and the README’s small-B<sub>x</sub> caveat (hyperfine \(A\approx3.36\,\mu\)eV) already applies. Verify the averaged doublet no longer trips <code>invz:degenerateDoublet</code> at B<sub>x</sub>=0 (the internal field lifts the degeneracy node-wise except at the origin node — handle the origin node by its \(h\to0\) limit). Document whether zero-field results move from “directional only” to quantitative, or the caveat stands.</li>
+</ul>
+<div class="ok"><b>Done when</b> the B<sub>x</sub>→0 behaviour is characterized in the log and the guard behaviour is deliberate, not accidental.</div></div>
+
+<h2 id="v4">6 · Phase V4 — validation &amp; reporting</h2>
+
+<div class="task"><div class="task-head"><span class="tid">V4.1</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Headline comparison figure</span></div>
+<ul>
+<li>Extend <code>invz_run_phase_diagram</code> (new flag) to overlay: 1/z baseline, 1/z+Tier1, 1/z+Tier1+2, MF, and the experimental points already used for README §7 (Bitko 1996 / Babkevich 2016 values as in R 2007 Fig. 1). Zero-field endpoints from the closed-form route.</li>
+<li>Second panel: \( \Sigma(0) \) along the boundary with/without ODD.</li>
+</ul>
+<div class="ok"><b>Done when</b> the figure script is committed and the log states the final numbers:
+\(T_c(0)\) [1/z: 1.74 K → 1/z+ODD: <em>x</em> K vs exp 1.53 K], and the fraction of the 0.21 K gap closed.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">V4.2</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Robustness sweeps</span></div>
+<ul>
+<li>Grid convergence: ΔT<sub>c</sub>(0) at 12³/16³/24³ (+ Richardson) — δ𝒥 shifts weight to finite q, so convergence may be slower than the baseline Σ<sub>c</sub>; report.</li>
+<li><code>dpRng</code> sensitivity of the ODD blocks (mediated coupling is effectively shorter-ranged, \( \sim r^{-6} \) at large r after the χ⊥ contraction of two \(r^{-3}\) kernels — confirm numerically).</li>
+<li>GH node count 5×5 vs 7×7 vs 9×9 (Tier 2).</li>
+</ul>
+<div class="ok"><b>Done when</b> all reported numbers carry a numerical-error bar from these sweeps.</div></div>
+
+<div class="task"><div class="task-head"><span class="tid">V4.3</span><span class="tstatus">[ ]</span>
+<span class="ttitle">Test-suite consolidation &amp; handoff</span></div>
+<ul>
+<li>Fast suite additions from T1/T2/T3 total &lt; 30 s; slow suite gains the reproducibility assertions of T1.5/T3.3. Flag-off path re-verified against the P0.5 frozen baseline.</li>
+<li>Update <code>docs/SESSION-*-handoff.md</code> with the ODD module map and the open Tier 3 items (§7).</li>
+</ul>
+<div class="ok"><b>Done when</b> both suites are green and the handoff doc lists every new function, flag, and cache key.</div></div>
+
+<h2 id="tier3">7 · Deferred — Tier 3: genuine multi-channel 1/z <span class="tag">not tasked</span></h2>
+<p>The rigorous version replaces Tiers 1–2 (do <b>not</b> stack them with it — the mediated coupling and the
+field variance are both contained in a full tensor treatment; stacking double-counts). Scope notes for a future
+plan:</p>
+<ul>
+<li>Matrix effective medium \( K_{\mu\nu}(i\omega_n) \) over the 12×12 (Cartesian ⊗ sublattice) coupling — Jensen’s 1984 EMT and the tensor-RPA generalization sketched in framework §10 are the templates.</li>
+<li>The single-channel identities are lost: \([\mathcal H_1, J_c]\neq0\) once ODD vertices enter, so the sum rule (framework eq. 31), the energy formula (eq. 34), and the even-in-\(\omega_n\) structure of \(G_0\) all require rederivation.</li>
+<li>A two-level ion cannot host the ODD vertex at all (\( \langle 0|J_{a}|1\rangle \approx 0 \) within the Ising doublet); the minimal single-ion sector is a ground quasi-doublet + remote CF level — i.e. the three-level anisotropy-Ising scheme of the Part II framework, which is the natural host. The mixed fourth-order semi-invariants generalize framework eq. (20) to standard-basis operators of the three-level ion.</li>
+<li>CF-state convergence (DS2023 Fig. S3): a single excited level (3-state) underestimates the ODD effect
+by ~30–50% (their 17-state \( \Gamma \approx 1.5\,\alpha^2\rho^2/\Delta \)); ≈ 6 states are converged. For the
+Part II three-level scheme this bounds the truncation error of the minimal sector — while Tiers 1–2 sidestep
+it entirely by using the full electronuclear χ⊥.</li>
+<li>Cross-validation target: Tier 3 at Gaussian truncation must reproduce Tier 1 + Tier 2 — a strong mutual check and, independently of the LiHoF<sub>4</sub> numbers, a publishable methodological result.</li>
+</ul>
+
+<h2 id="pitfalls">8 · Pitfalls ledger</h2>
+<div class="bad"><b>Double counting.</b> Three distinct traps: (i) the on-site part of (E1) vs Tier 2 — handled
+by (E4), keep the comment trail; (ii) Tier 1+2 vs Tier 3 — never enable together with a future tensor EMT;
+(iii) the diagonal transverse MF (<code>ion.Jxx0</code>) already contains the <em>aa-diagonal</em> lattice
+coupling — the ODD blocks are strictly \(c\alpha\) off-diagonal, so no overlap, but verify no aa terms leak
+into <code>invz_odd_blocks</code>.</div>
+<div class="bad"><b>Units / prefactors.</b> \( \delta\mathcal J \propto (\mathcal J^{c\alpha})^2\chi_\perp \):
+any slip in the \((g_L\mu_B)^2\) convention enters <em>squared</em> relative to the cc benchmark. T1.5’s
+hand-estimate cross-check is mandatory, not optional. Same for μeV↔meV: the 6.82 μeV benchmark is the anchor.</div>
+<div class="bad"><b>q=0 handling.</b> The grid excludes q=0 (drivers filter it); the ODD blocks are
+conditionally convergent as q→0 like every dipole sum but the C<sub>2</sub> symmetry kills the limit — never
+special-case q=0 by extrapolation: the only q=0 modification is the explicit, absolutely convergent
+constant −d applied to <code>info.Jcc0</code> (E5) — never a grid-extrapolated \( \delta\mathcal J(\mathbf q\to0) \).</div>
+<div class="bad"><b>Comparing against DS2023 numbers.</b> Their curves contain two ad hoc ingredients the
+1/z calculation must <em>not</em> import: (i) the longitudinal interaction is rescaled by 0.805 to absorb
+c-axis fluctuations into MF — in the 1/z framework that job belongs to Σ, so adding the factor would
+double-count fluctuations; (ii) hyperfine coupling enters as a temperature-dependent renormalization of the
+transverse field, whereas <code>invz_chi0z</code> carries it non-perturbatively in the 136-state single ion.
+Their unrescaled MF anchors (2.27/2.18 K, 3-state) and lattice sums (Suppl. Table I) are convention-free and
+safe to assert against; their phase-boundary curves and MC \(T_c\) are qualitative anchors only.</div>
+<div class="bad"><b>Boundary speckle.</b> ODD raises Σ near criticality and will widen the known marginal
+non-convergence patches (README §5); apply the same mitigation (soften mixing, widen <code>max_outer</code>)
+before suspecting the new code.</div>
+<div class="bad"><b>χ⊥ near level crossings.</b> At high B<sub>x</sub> (≫ B<sub>c</sub>) CF levels approach; if
+<code>invz_chiperp</code> is ever evaluated there (spectra maps to 6 T), watch for near-degenerate
+denominators in χ<sub>0</sub> — the existing <code>invz_chi0z</code> handling applies, just don’t bypass it.</div>
+
+<h2 id="manifest">9 · Task manifest</h2>
+<p class="small">Machine-readable mirror of the task list. <code>status ∈ {todo, doing, done, waived}</code>.
+Keep in lockstep with the <code>[ ]</code> markers above.</p>
+<script type="application/json" id="task-manifest">
+{
+  "plan": "invz-odd-extension",
+  "version": 1,
+  "phases": ["P0", "T1", "T2", "T3", "V4"],
+  "tasks": [
+    {"id":"P0.1","phase":"P0","deps":[],"files":["MF_dipole.m","invz/invz_jq_modes.m"],"status":"todo"},
+    {"id":"P0.2","phase":"P0","deps":[],"files":["invz/invz_chi0z.m","invz/invz_solve_point.m"],"status":"todo"},
+    {"id":"P0.3","phase":"P0","deps":["P0.1"],"files":["invz/tests/exploratory/"],"status":"todo"},
+    {"id":"P0.4","phase":"P0","deps":[],"files":["invz/invz_jq_modes.m","invz/invz_run_phase_diagram.m"],"status":"todo"},
+    {"id":"P0.5","phase":"P0","deps":[],"files":["docs/ODD-LOG.md"],"status":"todo"},
+    {"id":"T1.1","phase":"T1","deps":["P0.1","P0.3","P0.4"],"files":["invz/invz_odd_blocks.m","invz/tests/test_odd_blocks.m"],"status":"todo"},
+    {"id":"T1.2","phase":"T1","deps":["P0.2"],"files":["invz/invz_chiperp.m"],"status":"todo"},
+    {"id":"T1.3","phase":"T1","deps":["T1.1","T1.2"],"files":["invz/invz_jq_modes.m"],"status":"todo"},
+    {"id":"T1.4","phase":"T1","deps":["T1.3"],"files":["invz/invz_solve_point.m","invz/invz_solve_point_ordered.m","invz/invz_critical.m","invz/invz_critical_T.m","invz/invz_critical_T0field.m"],"status":"todo"},
+    {"id":"T1.5","phase":"T1","deps":["T1.4"],"files":["docs/ODD-LOG.md","invz/tests/"],"status":"todo"},
+    {"id":"T1.6","phase":"T1","deps":["T1.5"],"files":["invz/README.html"],"status":"todo"},
+    {"id":"T2.1","phase":"T2","deps":["T1.4"],"files":["invz/invz_chiperp.m","invz/invz_emt_scalar.m"],"status":"todo"},
+    {"id":"T2.2","phase":"T2","deps":["T2.1"],"files":["docs/ODD-LOG.md"],"status":"todo"},
+    {"id":"T3.1","phase":"T3","deps":["T1.4"],"files":["invz/invz_odd_fieldvar.m"],"status":"todo"},
+    {"id":"T3.2","phase":"T3","deps":[],"files":["invz/invz_twolevel_avg.m"],"status":"todo"},
+    {"id":"T3.3","phase":"T3","deps":["T3.1","T3.2"],"files":["invz/invz_solve_point.m"],"status":"todo"},
+    {"id":"T3.4","phase":"T3","deps":["T3.3"],"files":["docs/ODD-LOG.md"],"status":"todo"},
+    {"id":"V4.1","phase":"V4","deps":["T2.2","T3.3"],"files":["invz/invz_run_phase_diagram.m"],"status":"todo"},
+    {"id":"V4.2","phase":"V4","deps":["V4.1"],"files":["docs/ODD-LOG.md"],"status":"todo"},
+    {"id":"V4.3","phase":"V4","deps":["V4.2"],"files":["invz/tests/","docs/"],"status":"todo"}
+  ]
+}
+</script>
+
+<h2 id="appendix-full-tensor">Appendix A · Explicit multilevel tensor 1/z route <span class="tag">optional</span></h2>
+
+<div class="warn"><b>Optional scope — not part of P0 → V4.</b>
+This appendix records a research-grade alternative to Tiers 1–2. It has no required task IDs and is deliberately
+absent from the JSON manifest. Start it only after an explicit user decision. <b>Replacement rule — staged, not blanket.</b>
+The full program A2+A3 contains both the ODD-mediated interaction <em>and</em> the local transverse-field feedback, so it
+must <b>replace</b>, never be stacked with, the Tier-1 \(\delta\mathcal J^{cc}\) and Tier-2 field-variance corrections.
+The A0+A1 bridge, however, contains Tier 1 only (with the T2 retardation included for free): Tier 2's field-variance
+dressing of the doublet is a <em>local mixed-cumulant</em> effect (\(\langle T\,J_cJ_cJ_aJ_a\rangle_c\)-class) that first
+appears at A3. Tier 2 and A1 are disjoint diagram classes — running A0+A1 <em>with</em> Tier 2 enabled does not
+double-count <em>at first order in \(1/z\)</em> (the Gauss–Hermite dressing resums higher orders, so overlap first
+enters at \(O(1/z^2)\)), while running A0+A1 <em>instead of</em> Tiers 1–2 silently drops the variable-moments half of the
+Dollberg mechanism (the effect L180413 singles out as not capturable by mean-field-like analyses). Rule:
+A0+A1 replaces Tier 1/T2 only; keep Tier 2 additive until A2+A3 replaces everything. Where §7's deferred-scope
+summary states the blanket form of this rule (Gaussian truncation ↔ Tier 1+2), the staged statement here governs
+within the appendix route: Gaussian truncation reproduces Tier 1 / Phase T2, and Tier 2 is recovered only by the
+static-Gaussian limit of the A3 mixed cumulants.</div>
+
+<h3>A.1 · Feasibility and the actual missing layer</h3>
+<p>A three-level ion resolves the minimal Hilbert-space obstruction: the first excited crystal-field state gives
+\(J_a\) and \(J_b\) nonzero matrix elements and therefore permits explicit \(J_cJ_a\) and \(J_cJ_b\) ODD vertices.
+It is not quantitatively converged for LiHoF<sub>4</sub>, however. DS2023 finds that one excited state
+underestimates the dominant emergent interaction by roughly 30–50%, while about six electronic CF states reproduce
+the 17-state result. The repository already contains the ingredients needed to avoid that truncation at the
+two-point/RPA level; the missing object is the <em>multicomponent local four-point cumulant</em> required by the
+first \(1/z\) self-energy.</p>
+
+<table>
+<tr><th>Layer</th><th>Already available</th><th>Required extension</th></tr>
+<tr><td>Single ion</td><td><code>invz_single_ion(..., hyp=true)</code> diagonalizes the 17 electronic × 8 nuclear = 136-state problem; <code>invz_chi0z</code> returns the full \(3\times3\) Cartesian susceptibility on complex frequencies.</td><td>Expose transition-resolved contributions and the \(J_a,J_b,J_c\) matrices in the converged eigenbasis through a common cached interface.</td></tr>
+<tr><td>Lattice interaction</td><td><code>MF_dipole</code> and <code>exchange</code> produce the full \(3\times3\times4\times4\) Cartesian × sublattice tensor.</td><td>Retain it as a \(12\times12\) matrix at every \(\mathbf q\); do not project to \(cc\) branches or average over the four sublattices before the Brillouin-zone calculation.</td></tr>
+<tr><td>RPA</td><td><code>MF_RPA_Yikai</code> inverts a full \(3\times3\) Cartesian denominator using the 136-state susceptibility, but the interaction entering that denominator is doubly reduced: unit-cell-averaged (<code>Jav = sum(sum(D,4),3)/4</code>) <em>and then diagonal-projected</em> by the elementwise renorm product <code>Jq = -diag(ion.renorm).*Jav</code> (RPA subfunction), which zeroes the ODD blocks entirely. The existing RPA therefore propagates the full-tensor \(\chi_0\) but <em>no</em> ODD interaction and no optical sublattice modes.</td><td>A \(12\times12\) tensor RPA/Schur-complement path retaining acoustic and optical sublattice modes and all nine Cartesian blocks. The local susceptibility is \(I_4\otimes\chi_0\) in the equivalent-site paramagnet.</td></tr>
+<tr><td>Effective medium</td><td><code>invz_emt_scalar</code> supplies one scalar \(K(i\omega_n)\).</td><td>A local Cartesian medium \(K_s^{\mu\nu}(i\omega_n)\), one \(3\times3\) block per sublattice and reducible by site symmetry after verification; the lattice inversion remains \(12\times12\).</td></tr>
+<tr><td>Self-energy</td><td><code>invz_sigma</code> is the analytic two-level, single-\(J_c\) result.</td><td>A Cartesian self-energy obtained by contracting \(K^{\rho\sigma}\) with connected mixed cumulants such as \(\langle T J_cJ_cJ_aJ_a\rangle_{\!c}\) and \(\langle T J_cJ_aJ_aJ_c\rangle_{\!c}\).</td></tr>
+</table>
+
+<h3>A.2 · Recommended staged route</h3>
+
+<ol>
+<li><b>A0 — full-tensor RPA parity layer.</b> Add a cached tensor builder returning
+\(\mathcal J(\mathbf q)\) as <code>[12,12,nq]</code> and evaluate
+$$\boldsymbol\chi_{\rm RPA}(\mathbf q,z)
+=\big[\boldsymbol\chi_0^{-1}(z)-\boldsymbol{\mathcal J}(\mathbf q)\big]^{-1}.$$
+With ODD blocks disabled, its uniform mode must reproduce the existing Cartesian RPA <em>after mirroring that
+code's two reductions</em> — sublattice averaging and the diagonal renorm projection (set
+<code>ion.renorm = [1 1 1]</code> or apply identical factors; see the A.1 table) — and its \(cc\) sublattice
+branches must reproduce <code>invz_jq_modes</code>. In the three-state, \(B_x=0\) limit, eliminating the transverse
+block by a Schur complement must give (E1) with
+\(\chi_\perp(0)=2\rho^2/\Delta\) and hence DS2023’s leading \(H_{3B}\). This is the decisive convention and
+double-counting test.
+<br><b>Small-q pitfall (shared with P0.3/T1.1).</b> The C<sub>2</sub> symmetry kills the ODD blocks only at the
+<em>exactly</em>-\(\mathbf q{=}\mathbf 0\) spherical lattice sum; the \(\mathbf q\to\mathbf 0\) <em>limit</em> is
+direction-dependent, carrying a macroscopic term \(\propto \hat q_c\hat q_\alpha\) of magnitude
+\(4\pi g_{\rm fac}/V_c \approx 3.7\,\mu\)eV (element scale up to ≈ 1.8 μeV on tilted rays — a quarter of
+<code>Jcc0</code>), and the smallest grid shells sit in the sharp-cutoff crossover of <code>MF_dipole</code>
+(\(q_{\min}R = O(1)\): for the standard 16³ grid at <code>dpRng</code> = 30, \(q_{\min}R\approx2.3\) along
+\(a^*\) and ≈ 1.1 along \(c^*\)), so their ODD blocks are <code>dpRng</code>-sensitive. Treat this
+exactly as the cc channel treats its own shape physics: intrinsic convention (no grid extrapolation at \(\Gamma\);
+diagonal-only Lorentz broadcast there), decay assertions on high-symmetry rays only, and the smallest-shell
+<code>dpRng</code> sweep in the validation ladder below. The assertions written into P0.3/T1.1/T1.3
+(\(\le10^{-6}\)/\(10^{-4}\cdot\)<code>Jcc0</code> on the smallest shells) hold on-axis only and must be corrected
+the same way before implementation.</li>
+
+<li><b>A1 — practical full-spectrum / projected-\(1/z\) bridge (recommended first deliverable).</b> Decompose the
+exact local response into a dominant longitudinal low-energy sector plus the remaining transitions,
+\(\boldsymbol\chi_0=\boldsymbol\chi_{\rm dom}+\boldsymbol\chi_{\rm rest}\), using an explicit transition mask rather
+than a Cartesian-component shortcut. Apply the existing \(1/z\) self-energy only to the dominant sector,
+$$\widetilde{\boldsymbol\chi}_0(z)
+=\frac{\boldsymbol\chi_{\rm dom}(z)}{1+\Sigma_c(z)}+\boldsymbol\chi_{\rm rest}(z),$$
+then use \(\widetilde{\boldsymbol\chi}_0\) in the full \(12\times12\) RPA inversion. Recompute the scalar return
+propagator entering \(K_c\) and \(\Sigma_c\) from the site-diagonal \(cc\) block of that full tensor lattice
+response. This retains all 136 states and all ODD blocks in the Gaussian propagation while applying the controlled
+non-Gaussian correction only where the present Jensen formula is valid. It is the multilevel version of the
+“dominant transition renormalized, weak transitions kept at RPA” approximation used by Jensen/Rønnow.</li>
+
+<li><b>A2 — matrix effective medium.</b> Promote the impurity and medium to Cartesian matrices and impose the local
+closure
+$$\boldsymbol\chi_{\rm lat}(\mathbf q,z)
+=\big[\{\boldsymbol\chi_{\rm imp}^{(12)}(z)\}^{-1}+\mathbf K^{(12)}(z)-\boldsymbol{\mathcal J}(\mathbf q)\big]^{-1},
+\qquad
+\boldsymbol\chi_{{\rm imp},s}(z)=\frac1{N_q}\sum_{\mathbf q}
+\boldsymbol\chi_{\rm lat}^{ss}(\mathbf q,z),\quad s=1,\dots,4.$$
+Here \(\boldsymbol\chi_{\rm imp}^{(12)}=\operatorname{diag}_s\boldsymbol\chi_{{\rm imp},s}\) and
+\(\mathbf K^{(12)}=\operatorname{diag}_s\mathbf K_s\) are block-diagonal embeddings of the local \(3\times3\)
+objects in the lattice space.
+Begin with four independent local \(3\times3\) blocks and reduce them only after the expected Ho-site symmetry
+relations have been demonstrated numerically. Unlike a cluster self-energy, the medium remains site-local; the
+\(12\times12\) dimension belongs to lattice propagation. The scalar\(\to\)matrix template is Jensen's own
+multi-channel effective medium, J. Jensen, J. Phys. C <b>17</b>, 5367 (1984); in the single-channel limit the
+closure above is equivalent to the \(K\) definition of the scalar theory (framework §5).</li>
+
+<li><b>A3 — genuine tensor \(1/z\) self-energy.</b> For external components \(\mu,\nu\), the first correction has
+the schematic form
+$$\delta G_{\mu\nu}(i\omega_n)=-\frac1{2\beta}\sum_{m,\rho\sigma}K_{\rho\sigma}(i\omega_m)
+\!\int d\tau\,d\tau_1\,d\tau_2\,
+e^{i\omega_n\tau+i\omega_m(\tau_1-\tau_2)}
+C^{(4)}_{\mu\nu;\rho\sigma}(\tau,0;\tau_1,\tau_2),$$
+where \(C^{(4)}\) is the connected single-ion four-point function built from the actual component sequence, not
+four copies of one scalar operator. Extract the irreducible matrix self-energy through a Dyson equation; matrix
+division by \(G_0\), the scalar \(\alpha\)-shortcut, and assumptions of componentwise evenness are forbidden.
+<br><b>Derivation base — Part II.</b> The machinery for \(C^{(4)}\) already exists at framework level in
+<code>three_level_1z_extension.html</code> (Part II): its path-sum representation (Part II eqs. 11–12) generalizes directly to component-labelled vertices — the
+printed eq. 11 is written with four \(J_x\) insertions, but the complete-set-insertion derivation applies verbatim
+when each vertex carries its own operator's matrix elements — and is precisely the mixed-cumulant engine
+required here; its KMS boundary-layer counting sizes the mixed sectors a priori (each remote-level excursion costs
+one factor \(1/\bar\Delta\) weighted by the <em>launching-state</em> population — how ODD physics survives
+\(T\to0\)); its one-point-shift closure (Part II eq. 10, verified analytically in the Blume–Capel sector) is the
+derivation behind ladder item (v) below, replacing the forbidden \(\alpha\)-shortcut; and its Blume–Capel and
+\(\Delta\to0\) limits are ready-made regression anchors for A4. What Part II does <em>not</em> yet provide — it is
+single-channel by construction — is the matrix medium (A2), the mixed-sector catalogue for two operator patterns,
+and the coefficient assembly it already earmarks for symbolic automation; those three items are the actual new
+derivation content of A3.</li>
+
+<li><b>A4 — controlled state-space convergence.</b> Validate the tensor cumulant engine first on the physical
+three-state matrices, then on 6 and 17 electronic states. Add hyperfine progressively as 3×8 = 24, 6×8 = 48,
+and finally 17×8 = 136 states. The final 136-state calculation must retain all virtual intermediate states. Initial-state truncation by
+population tolerance is <em>not</em> automatically KMS-safe: Part II's thermal-circle identities (its eq. 18) show
+that an exponentially small initial-state weight can be the boundary-layer image of an \(O(1)\) term and contribute
+equally after the \(\tau\) integrations. Truncate initial states only after a KMS/cyclic regrouping of the path
+sums yields an explicit bound on the discarded weight; otherwise retain all 136 initial states. Report convergence of
+\(T_c\), the ODD shift, the tensor sum rule, and runtime at every level. Note the ceiling of this ladder: a larger
+local basis does not repair the mean-field-like critical exponents (the \(d=3\) marginal-dimensionality logarithms
+persist at every rung — Part II Sec. 8); near-critical universal precision must be benchmarked against a critical
+method such as QMC, not against more states.</li>
+</ol>
+
+<h3>A.3 · Numerical strategy for 136 states</h3>
+<p>A literal storage of \(C^{(4)}_{\mu\nu;\rho\sigma}\) over four state indices and two Matsubara frequencies is
+not viable: \(136^4\approx3.4\times10^8\) state paths before operator and frequency indices. The feasible route is
+to contract with \(K_{\rho\sigma}\) <em>while constructing</em> the cumulant. Work in the converged eigenbasis,
+retain all 136 levels in the intermediate resolvents, exploit Hermiticity/KMS/site symmetries, discard matrix
+elements only below a recorded tolerance, and use matrix products or resolvent actions rather than explicit
+four-index loops. Cache only the contracted \(\delta G_{\mu\nu}(i\omega_n)\), never the raw rank-four object.</p>
+
+<div class="ok"><b>Validation ladder.</b>
+(i) \(\Sigma=0\): exact agreement with the full tensor RPA;
+(ii) ODD blocks zero: agreement with the current scalar \(cc\) implementation in its domain;
+(iii) physical three-state \(B_x=0\): Schur complement and tensor cumulant reproduce (E1) and the leading
+Schrieffer–Wolff \(H_{3B}\);
+(iv) \(\Delta\to\infty\): ODD correction vanishes;
+(v) tensor reciprocity \(\chi_{\mu\nu}(i\omega)=\chi_{\nu\mu}(-i\omega)\), positivity on the Matsubara axis, and
+the component-resolved equal-time sum rule close at the chosen numerical tolerance;
+(vi) 6→17 and 48→136 state changes are smaller than the reported physical uncertainty;
+(vii) smallest-|q|-shell ODD blocks stable under <code>dpRng</code> 20→40 within the quoted error bars (the
+small-q pitfall of A0).</div>
+
+<div class="warn"><b>Recommended decision point.</b>
+A0+A1 is feasible with the present code and is the preferred optional bridge: it propagates the full 136-state
+and full ODD tensor content through RPA while preserving the existing, tested longitudinal \(1/z\) correction —
+and it subsumes Phase T2, since \(\chi_\perp(i\omega_n)\) retardation is automatic in the tensor RPA. It does
+<em>not</em> contain Tier 2's physics (see the scope box at the top of this appendix): keep the Tier-2 dressing
+alongside A1 if the variable-moments effect is wanted before A3. A2+A3 is also feasible in principle, but it is a
+separate research-scale derivation and numerical implementation, not a small extension of <code>invz_sigma</code> —
+with <code>three_level_1z_extension.html</code> as its derivation base (see A3). Use the physical three-state
+system as its exact validation model, not as the final quantitative truncation.</div>
+
+<hr>
+<p class="small">Sources: T. Dollberg, J. C. Andresen, M. Schechter, PRB <b>105</b>, L180413 (2022) — ODD
+mechanism, three-spin term, Fig. 4 field-distribution width, ΔT<sub>c</sub> ≈ 0.25 K;
+T. Dollberg, M. Schechter, arXiv:2308.10095 ("DS2023") — Schrieffer–Wolff effective spin-½ Hamiltonian,
+\(H_{3B}\), MF \(T_c\) formula with the \(-B_{xz,xz}\) term, lattice-sum table (Suppl. Table I),
+mirror-symmetry MF↔MC argument (Fig. S1), CF-state convergence (Fig. S3), spin-½ MC \(T_c=1.6295(2)\) K,
+field-attenuation crossover ≈ 3.5 T, and the Fe8 structural null test;
+J. Jensen, PRB <b>49</b>, 11833 (1994) and <code>jensen_1z_framework.html</code> — 1/z formalism, sum rule,
+semi-invariants; J. Jensen, J. Phys. C <b>17</b>, 5367 (1984) — multi-channel (matrix) effective medium, the
+Appendix A2 template; <code>three_level_1z_extension.html</code> (&ldquo;Part II&rdquo;) — three-level path sums,
+KMS boundary-layer counting, sum-rule closure and validation limits, the Appendix A3 derivation base;
+H. M. Rønnow et&nbsp;al., PRB <b>75</b>, 054426 (2007) — LiHoF<sub>4</sub> application,
+Σ<sub>c</sub> closed form, benchmarks. Equations (E1)–(E5) are specific to this plan.</p>
+
+</main>
+</body>
+</html>

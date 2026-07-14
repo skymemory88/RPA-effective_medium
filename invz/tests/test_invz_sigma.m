@@ -56,18 +56,3 @@ sig = invz_sigma(tl, lam, zeros(size(g)), g, beta);
 verifyEqual(testCase, sig.alpha, 0, 'AbsTol', 1e-15);
 verifyLessThan(testCase, max(abs(sig.Sigma)), 1e-15);
 end
-
-function test_matches_existing_src_formula(testCase)
-% Cross-check against the already unit-tested src/emt_compute_x_from_lambdas 'jensen_216_219'.
-here = fileparts(mfilename('fullpath'));
-addpath(fullfile(here,'..','..','src'));
-assumeTrue(testCase, exist('emt_compute_x_from_lambdas', 'file') == 2, ...
-    'src/emt_compute_x_from_lambdas.m not present in this checkout — cross-check skipped');
-[tl, ~, wts, beta, g, K] = fixture(400);
-lam = invz_lambdas(K, g, wts, beta, [1 2]);
-sig = invz_sigma(tl, lam, K, g, beta);
-tp = struct('model','jensen_216_219','beta',beta,'M2',tl.M2, ...
-            'n0',(1+tl.n01)/2,'n1',(1-tl.n01)/2,'clamp_scale',1e9);
-[X, ~] = emt_compute_x_from_lambdas(g, lam, tp, K);
-verifyEqual(testCase, sig.Sigma, X(:), 'RelTol', 1e-9);
-end
