@@ -27,6 +27,32 @@ verifyLessThan(testCase, max(abs(imag(Jnu(:)))), 1e-12);
 verifyLessThan(testCase, max(Jnu(:)), info.Jcc0 + 1e-4);   % Γ uniform mode is the max coupling
 end
 
+function test_demag_shape_term(testCase)
+% J(0) -> J(0) + Lorentz(4pi/3Vc) - 4pi/Vc*demag*N. demag=0 is the intrinsic / c-axis-needle
+% limit that reproduces R2007; a sphere makes the Lorentz cavity and demag cancel exactly.
+ion0 = invz_ion();                                  % demag = 0 default
+[~, i0] = invz_jq_modes(ion0, [0 0 0], struct('dpRng',30,'cache',false));
+
+% c-axis needle (Nz = 0): identical to demag=0 in the cc (ordering) channel
+ionN = invz_ion();  ionN.demag = 1;  ionN.alpha = 0;
+[~, iN] = invz_jq_modes(ionN, [0 0 0], struct('dpRng',30,'cache',false));
+verifyEqual(testCase, iN.Jcc0, i0.Jcc0, 'AbsTol', 1e-12);
+
+% sphere: Lorentz (4pi/3Vc) exactly cancels demag (4pi/Vc * 1/3), leaving the bare dipole sum
+C = invz_const();  lorz4 = 4 * (4*pi/(3*ion0.Vc)*C.gfac);   % uniform-mode Lorentz share (4*lorz)
+ionS = invz_ion();  ionS.demag = 1;  ionS.alpha = 1;
+[~, iS] = invz_jq_modes(ionS, [0 0 0], struct('dpRng',30,'cache',false));
+verifyEqual(testCase, iS.Jcc0_dipole, i0.Jcc0_dipole - lorz4, 'RelTol', 1e-9);
+verifyLessThan(testCase, iS.Jcc0, i0.Jcc0);         % a sphere weakens the uniform coupling
+
+% cache must distinguish demag settings, not hand back the demag=0 result for a sphere
+opts = struct('dpRng',10,'cache',true);
+[~, c0] = invz_jq_modes(invz_ion(), [0 0 0], opts);
+ionS2 = invz_ion();  ionS2.demag = 1;  ionS2.alpha = 1;
+[~, cS] = invz_jq_modes(ionS2, [0 0 0], opts);
+verifyGreaterThan(testCase, abs(cS.Jcc0 - c0.Jcc0), 1e-6);
+end
+
 function test_cache_roundtrip(testCase)
 ion = invz_ion();
 q = [0.25 0 0; 0.31 0.17 0.09];

@@ -47,6 +47,23 @@ si = invz_single_ion(ion, 0.31, [4 0 0], struct('hyp', false));
 verifyGreaterThan(testCase, abs(si.hx), 1e-6);
 end
 
+function test_ordered_mean_field(testCase)
+% Ordered (opts.order) mode adds the longitudinal ordering mean field and finds the
+% spontaneous moment <Jz> = m0 below the boundary; it relaxes to ~0 above it, and the
+% default (paramagnetic) path is unchanged.
+ion = invz_ion();  T = 0.31;
+% deep in the ordered phase: sizable spontaneous moment
+si_lo = invz_single_ion(ion, T, [2 0 0], struct('hyp', false, 'order', true));
+verifyGreaterThan(testCase, si_lo.Jexp(3), 1.0);
+verifyGreaterThan(testCase, abs(si_lo.hz), 1e-4);              % longitudinal MF switched on
+% well above the boundary: no spontaneous moment
+si_hi = invz_single_ion(ion, T, [6 0 0], struct('hyp', false, 'order', true));
+verifyLessThan(testCase, abs(si_hi.Jexp(3)), 0.1);
+% paramagnetic path (order off) is unaffected: <Jz> stays zero even at low field
+si_p = invz_single_ion(ion, T, [2 0 0], struct('hyp', false));
+verifyLessThan(testCase, abs(si_p.Jexp(3)), 1e-8);
+end
+
 function test_hyp_operators_are_electronic(testCase)
 % Tasks 3-4 depend on Mx/My/Mz being kron(J_electronic, eye(nuclear)) in the
 % eigenbasis, i.e. the response operators act as electronic-J tensor

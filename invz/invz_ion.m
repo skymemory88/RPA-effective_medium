@@ -11,4 +11,10 @@ ion.J12 = -0.1e-3;                                  % meV, nn exchange (4 neighb
 % Uniform-mode couplings in meV (validated in Task 5): J0eff = J_D*D_cc(0) + 4*J12 = 6.821e-3 + 4*(-0.1e-3) = 6.421e-3 meV; Jxx0 = J_D*D_aa(0) + 4*J12 = 3.912e-3 + 4*(-0.1e-3) = 3.512e-3 meV.
 ion.J0eff = 6.421e-3;   % meV: J_D*D_cc(0) + 4*J12  (R 2007, after eq 11)
 ion.Jxx0  = 3.512e-3;   % meV: J_D*D_aa(0) + 4*J12, transverse MF channel
+% Sample-shape (demagnetization) correction to the uniform-mode coupling J(0), applied in
+% invz_jq_modes as  J(0) -> J(0) + Lorentz(4pi/3Vc) - 4pi/Vc*demag*N.  demag = 0 is the intrinsic
+% (c-axis-needle) limit that reproduces the R2007 benchmark; demag ~= 0 pulls in the ellipsoid
+% shape via ellipsoid_demagn(alpha) and shifts Bc/Tc. Read consistently by the MF, RPA and 1/z.
+ion.demag = 0;          % demag factor (0 = off/intrinsic; 1 = full ellipsoid)
+ion.alpha = 1;          % spheroid aspect ratio a/c for ellipsoid_demagn (1 sphere, 0 c-needle, Inf disk)
 end
