@@ -46,10 +46,13 @@ useParallel = true;                  % true -> parfor over fields (Parallel Comp
 eUnit = 'meV';                       % 'meV' or 'GHz' -- plotting only; computation always runs in meV
 
 % ---- q-path view (R 2007 Fig 3 trends): set qpath non-empty to switch views -------------
-qpath = [];                          % [] = field-sweep views; [nq x 3] r.l.u. = q-path view
-% qh = linspace(1, 2, 51).';  qpath = [qh zeros(numel(qh), 2)];  % (1,0,0)->(2,0,0), Fig 3 path
+% qpath = [];                          % [] = field-sweep views; [nq x 3] r.l.u. = q-path view
+
+qh = linspace(1, 2, 51).';  
+qpath = [qh zeros(numel(qh), 2)];  % (1,0,0)->(2,0,0)
+
 Bq = 4.24;                           % field(s), T, for the q-path view. One value -> colormaps;
-                                     % several -> E_peak(q) overlay (R 2007 Fig 3: [3.6 4.24 6.0])
+% Bq = [3.6 4.24 6.0];           % several -> E_peak(q) overlay (R 2007 Fig 3: [3.6 4.24 6.0])
 wq = (0:0.004:0.85).';               % meV -- q-path grid. Fig 3 reaches ~0.75 meV near h = 1 at
                                      % 60 kOe (after their 1.15 scaling); 0.85 avoids clipping,
                                      % which the censoring peak picker would flag as NaN.
@@ -65,7 +68,7 @@ end
 
 if ~isempty(qpath)
     % ---------------- exploratory q-path view at fixed field(s) ----------------
-    if numel(Bq) == 1
+    if isscalar(Bq)
         S = invz_spectra_qpath(ion, T, Bq, qpath, wq, struct('eta', eta));
         Splot = S;   % display-only copy; the solve above always ran in meV
         Splot.w = S.w*eScale;  Splot.Epeak = S.Epeak*eScale;  Splot.Epeak_rpa = S.Epeak_rpa*eScale;
@@ -80,19 +83,19 @@ if ~isempty(qpath)
         figure; hold on;  co = lines(numel(Bq));
         for k = 1:numel(Bq)
             Sk = invz_spectra_qpath(ion, T, Bq(k), qpath, wq, struct('eta', eta));
-            plot(Sk.s, Sk.Epeak*eScale*dispScale,     '-',  'Color', co(k, :), ...
+            plot(Sk.x, Sk.Epeak*eScale*dispScale,     '-',  'Color', co(k, :), ...
                  'DisplayName', sprintf('1/z, %.2f T', Bq(k)));
-            plot(Sk.s, Sk.Epeak_rpa*eScale*dispScale, '--', 'Color', co(k, :), ...
+            plot(Sk.x, Sk.Epeak_rpa*eScale*dispScale, '--', 'Color', co(k, :), ...
                  'DisplayName', sprintf('RPA, %.2f T', Bq(k)));
         end
-        xlabel(sprintf('s along path from Q = [%g %g %g] (index r.l.u.)', qpath(1, :)));
+        xlabel(Sk.xlab);
         ylabel(strrep(eLabel, '\omega', 'E_{peak}'));
         title(sprintf('branch dispersion (exploratory), T = %.2f K, dispScale = %.2f', T, dispScale));
         legend show;
-        % cf. R 2007 Fig 3 TRENDS: for the (1,0,0)->(2,0,0) path, Q = (1+s, 0, 0); their
-        % plotted theory lines are the calculated energies scaled by 1.15 (dispScale = 1.15).
-        % Gaps in the lines are CENSORED peaks (mode outside the wq window) -- widen wq,
-        % do not interpolate over them.
+        % cf. R 2007 Fig 3 TRENDS: the x-axis shows the actual varying Miller component
+        % (h = 1..2 for the (1,0,0)->(2,0,0) path); their theory lines are the calculated
+        % energies scaled by 1.15 (set dispScale = 1.15). Gaps in the lines are CENSORED
+        % peaks (mode outside the wq window) -- widen wq, do not interpolate over them.
     end
 else
     % ---------------- field-sweep views at the uniform mode ----------------

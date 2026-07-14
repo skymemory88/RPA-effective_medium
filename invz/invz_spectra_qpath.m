@@ -31,6 +31,9 @@ function S = invz_spectra_qpath(ion, T, B, qpath, w, opts)
 %     S.snapped [1 x nq]   true where invz_jq_path replaced the raw truncated sum
 %     S.s       [1 x nq]   path distance in INDEX (r.l.u.) coordinates
 %     S.s_cart  [1 x nq]   path distance in Cartesian reciprocal Ang^-1
+%     S.x, S.xlab          plot coordinate + label: the varying Miller component for a
+%                          monotonic single-axis path (Fig-3 style, e.g. h = 1..2),
+%                          else falls back to S.s
 %     S.qpath, S.w, S.T, S.B, S.info, S.phase (1 = FM, 2 = PM solve used)
 %
 %   opts fields (all optional):
@@ -96,6 +99,23 @@ chirpa = imag(o0.chi_cc_q).';
 
 S = struct();
 S.qpath = qpath;  S.s = P.s;  S.s_cart = P.s_cart;  S.snapped = P.snapped(:).';
+% Plot coordinate S.x: when the path varies along exactly ONE Miller axis (monotonically),
+% use that actual component -- e.g. h = 1..2 for the R2007 Fig-3 path -- so the axis shows
+% real q positions. (The distance-from-start S.s reads 0..1 for EVERY unit-length window,
+% hiding where in the zone the path sits.) Multi-axis or non-monotonic paths fall back to S.s.
+span = max(qpath, [], 1) - min(qpath, [], 1);
+vary = find(span > 1e-12);
+if numel(vary) == 1 && (all(diff(qpath(:, vary)) > 0) || all(diff(qpath(:, vary)) < 0))
+    S.x = qpath(:, vary).';
+    lbl = {'h', 'k', 'l'};  parts = cell(1, 3);
+    for c = 1:3
+        if c == vary, parts{c} = lbl{c}; else, parts{c} = sprintf('%g', qpath(1, c)); end
+    end
+    S.xlab = sprintf('Q = (%s, %s, %s) (r.l.u.)', parts{:});
+else
+    S.x = P.s;
+    S.xlab = sprintf('s along path from Q = [%g %g %g] (index r.l.u.)', qpath(1, :));
+end
 S.w = w;  S.T = T;  S.B = B;  S.phase = phase;  S.info = info;  S.Jq = Jq;
 S.chiz = chiz;  S.chirpa = chirpa;
 S.Epeak     = peak_energy(chiz,   w, wmin);
