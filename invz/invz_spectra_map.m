@@ -10,6 +10,9 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %   Each column is one field. Returned maps:
 %     S.chiz   [nw x nB]  1/z-renormalized chi''_cc  (FM below Bc, PM above)
 %     S.chirpa [nw x nB]  bare-RPA chi''_cc          (Sigma = 0, matching phase)
+%     When ion.demag ~= 0, both maps are the strict-uniform MEASURED observable
+%     (demag-corrected via info.Jshape_cc; the soft mode saturates at 1/Jshape_cc
+%     instead of diverging); with demag = 0 they are the intrinsic response.
 %   Per-field diagnostics:
 %     S.phase  [1 x nB]   0 = no solution (masked), 1 = ferromagnet, 2 = paramagnet
 %     S.Sigma0 [1 x nB]   static self-energy at that field
@@ -50,6 +53,8 @@ else
     Jnu = Jnu(:);
 end
 Jcc0 = info.Jcc0;
+Jaa0   = ion.Jxx0;  if isfield(info, 'Jaa0'),      Jaa0   = info.Jaa0;      end
+Jshape = 0;         if isfield(info, 'Jshape_cc'), Jshape = info.Jshape_cc; end
 
 % Sliced plain-array outputs (parfor-safe); packed into S after the sweep.
 chizM   = nan(nw, nB);   chirpaM = nan(nw, nB);
@@ -62,7 +67,7 @@ if parallel && ~isempty(ver('parallel')), nWorkers = Inf; end
 
 parfor (k = 1:nB, nWorkers)
     [chizM(:, k), chirpaM(:, k), Sig0(k), phaseC(k)] = ...
-        one_field(ion, T, fields(k), Jnu, Jcc0, w, eta, hyp);
+        one_field(ion, T, fields(k), Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp);
     if verbose
         ph = {'ordered/degenerate (masked)', 'ferromagnet', 'paramagnet'};
         fprintf('  B = %5.2f T : %-28s Sigma0 = %s\n', fields(k), ph{phaseC(k)+1}, num2str(Sig0(k)));
@@ -76,47 +81,45 @@ S.Sigma0 = Sig0;  S.phase = phaseC;
 end
 
 % -------------------------------------------------------------------------------------------
-function [chiz, chirpa, Sigma0, phase] = one_field(ion, T, B, Jnu, Jcc0, w, eta, hyp)
-%ONE_FIELD chi''_cc(omega) at one field. Tries the ferromagnetic (ordered) solve first, then
-% the paramagnet; returns phase = 1 (FM), 2 (PM), or 0 (no solution -> NaN columns).
+function [chiz, chirpa, Sigma0, phase] = one_field(ion, T, B, Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp)
+%ONE_FIELD chi''_cc(omega) at one field via the shared ordered-first solve
+% (invz_solve_auto); returns phase = 1 (FM), 2 (PM), or 0 (no solution -> NaN columns).
+% Jsel = Jcc0 is the strict-uniform observable, so the demag correction Jshape applies.
 nw = numel(w);
 chiz = nan(nw, 1);  chirpa = nan(nw, 1);  Sigma0 = NaN;  phase = 0;
+sopts = struct('hyp', hyp, 'J0eff', Jcc0, 'Jxx0', Jaa0);
+copts = struct('Jsel', Jcc0, 'eta', eta, 'Jxx0', Jaa0, 'Jshape', Jshape, 'hyp', hyp);
 
-% --- ferromagnetic (ordered) branch ---
-try
-    pto = invz_solve_point_ordered(ion, T, B, Jnu, struct('hyp', hyp, 'J0eff', Jcc0));
-    if pto.is_ordered && pto.converged && isfinite(pto.Sigma0)
-        o  = invz_chi_realaxis(ion, T, B, pto, w, struct('Jsel', Jcc0, 'eta', eta));
-        chiz = imag(o.chi_cc_q(1, :)).';
-        pt0 = struct('alpha', 0, 'alpha_m', 0, 'lambda', [0; 0; 0], 'tl', pto.tl, ...
-                     'K', [], 'is_ordered', true, 'si', pto.si);
-        o0  = invz_chi_realaxis(ion, T, B, pt0, w, struct('Jsel', Jcc0, 'npass', 1, 'eta', eta));
-        chirpa = imag(o0.chi_cc_q(1, :)).';
-        Sigma0 = pto.Sigma0;  phase = 1;
-        return;
-    end
-catch
-    % fall through to the paramagnetic branch
-end
+[pt, phase] = invz_solve_auto(ion, T, B, Jnu, sopts);
 
-% --- paramagnetic branch: bare-RPA overlay (needs only the two-level params) ---
-try
-    tl0 = invz_twolevel(ion, T, B);
-    pt0 = struct('alpha', 0, 'lambda', [0; 0], 'tl', tl0, 'K', []);
-    o0  = invz_chi_realaxis(ion, T, B, pt0, w, struct('Jsel', Jcc0, 'npass', 1, 'eta', eta));
+if phase == 1                                     % --- ferromagnetic (ordered) branch ---
+    o  = invz_chi_realaxis(ion, T, B, pt, w, copts);
+    chiz = imag(o.chi_cc_q(1, :)).';
+    pt0 = struct('alpha', 0, 'alpha_m', 0, 'lambda', [0; 0; 0], 'tl', pt.tl, ...
+                 'K', [], 'is_ordered', true, 'si', pt.si);
+    c0opts = copts;  c0opts.npass = 1;
+    o0  = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
     chirpa = imag(o0.chi_cc_q(1, :)).';
-catch
-end
-% --- paramagnetic 1/z solve ---
-try
-    pt = invz_solve_point(ion, T, B, Jnu, struct('hyp', hyp, 'J0eff', Jcc0));
     Sigma0 = pt.Sigma0;
-    if pt.converged && isfinite(pt.Sigma0)
-        o = invz_chi_realaxis(ion, T, B, pt, w, struct('Jsel', Jcc0, 'eta', eta));
-        chiz = imag(o.chi_cc_q(1, :)).';
-        phase = 2;
-    end
-catch
+    return;
+end
+
+% --- paramagnetic side: bare-RPA overlay first (needs only the two-level params), so a
+% non-converged 1/z point still gets its RPA column. invz:degenerateDoublet is the one
+% expected condition here (Bx -> 0); anything else is a defect and propagates.
+try
+    tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0));
+    pt0 = struct('alpha', 0, 'lambda', [0; 0], 'tl', tl0, 'K', []);
+    c0opts = copts;  c0opts.npass = 1;
+    o0  = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
+    chirpa = imag(o0.chi_cc_q(1, :)).';
+catch err
+    if ~strncmp(err.identifier, 'invz:', 5), rethrow(err); end
+end
+if ~isempty(pt) && isfield(pt, 'Sigma0'), Sigma0 = pt.Sigma0; end
+if phase == 2                                     % --- converged paramagnetic 1/z ---
+    o = invz_chi_realaxis(ion, T, B, pt, w, copts);
+    chiz = imag(o.chi_cc_q(1, :)).';
 end
 end
 
