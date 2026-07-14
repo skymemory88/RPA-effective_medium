@@ -66,8 +66,23 @@ if nargin < 3, opts = struct(); end
 dpRng = 30;  if isfield(opts,'dpRng'), dpRng = opts.dpRng; end
 useCache = ~isfield(opts,'cache') || opts.cache;
 C = invz_const();
+% Sample-shape terms live at the uniform mode only: the Lorentz cavity +4pi/3Vc (always, below)
+% and the demagnetization correction -4pi/Vc*demag*N (parameterized here, default off). demag = 0
+% gives the intrinsic / c-axis-needle coupling that matches the R2007 benchmark; demag ~= 0 pulls
+% in the ellipsoid shape. All of MF, RPA and 1/z read info.Jcc0, so this propagates consistently.
+demag = 0;   if isfield(ion,'demag')  && ~isempty(ion.demag),  demag = ion.demag;  end
+if isfield(opts,'demag') && ~isempty(opts.demag), demag = opts.demag; end
+alpha = 1;   if isfield(ion,'alpha')  && ~isempty(ion.alpha),  alpha = ion.alpha;  end
+if isfield(opts,'alpha') && ~isempty(opts.alpha), alpha = opts.alpha; end
+if demag ~= 0
+    Nd    = ellipsoid_demagn(alpha);                  % trace-1 demag tensor (sphere -> 1/3 each)
+    dm_cc = C.gfac*(4*pi/ion.Vc)*demag*Nd(3,3);       % c-axis demag share (subtracted from Lorentz)
+    dm_aa = C.gfac*(4*pi/ion.Vc)*demag*Nd(1,1);       % a-axis demag share
+else
+    dm_cc = 0;  dm_aa = 0;                             % off: byte-identical to the pre-demag code
+end
 cacheDir = fullfile(fileparts(mfilename('fullpath')), 'cache');
-pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac];
+pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; demag; alpha];
 key = sprintf('jq_%d_%s_%s.mat', dpRng, hash_vec(qvec(:)), hash_vec(pkey));
 cacheFile = fullfile(cacheDir, key);
 if useCache && exist(cacheFile, 'file')
@@ -86,7 +101,7 @@ for iq = 1:nq
     ex  = exchange(q, abs(ion.J12), ion.a, ion.tau); % [3,3,4,4], carries |J12|
     Jcc = -squeeze(C.gfac*dip(3,3,:,:)) + sign(ion.J12)*squeeze(ex(3,3,:,:));
     if is_gamma_equiv(q, ion.tau)
-        Jcc = Jcc + lorz;                            % add Lorentz cavity term at Γ (scalar broadcast)
+        Jcc = Jcc + lorz - dm_cc;                    % uniform-mode shape term: Lorentz cavity - demag
     end
     Jcc = (Jcc + Jcc')/2;
     Jnu(iq,:) = sort(real(eig(Jcc))).';
@@ -94,8 +109,8 @@ end
 % Γ-point info block (always computed at q=[0 0 0]), uniform-mode projection:
 v = ones(4,1)/2;
 dip0 = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
-Jcc0d = -squeeze(C.gfac*dip0(3,3,:,:)) + lorz;
-Jaa0d = -squeeze(C.gfac*dip0(1,1,:,:)) + lorz;
+Jcc0d = -squeeze(C.gfac*dip0(3,3,:,:)) + lorz - dm_cc;
+Jaa0d = -squeeze(C.gfac*dip0(1,1,:,:)) + lorz - dm_aa;
 Jcc0d = (Jcc0d + Jcc0d')/2;
 Jaa0d = (Jaa0d + Jaa0d')/2;
 info.Jcc0_dipole = real(v.'*Jcc0d*v);
