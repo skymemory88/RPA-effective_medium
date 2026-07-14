@@ -10,10 +10,19 @@ function out = invz_chi_realaxis(ion, T, Bx, pt, w, opts)
 % For an ordered point the single-ion response must come from the ORDERED eigenstates: pass
 % opts.si (or rely on pt.si), so chi0_cc is evaluated in the symmetry-broken state. alpha, alpha_m,
 % lambda1 and K(0) are fixed by the converged Matsubara solve (pt).
+%
+% opts.Jxx0   (ion.Jxx0)  transverse MF coupling for the internally built single-ion state.
+% opts.hyp    (true)      hyperfine manifold for that internal state; pass the caller's hyp so
+%                         the real-axis chi0 matches the Matsubara medium's Hilbert space.
+% opts.Jshape (0)         strict-uniform demag observable correction (use info.Jshape_cc);
+%                         applied in place to chi_cc_q. Leave 0 for finite-q (intrinsic) paths.
 if nargin < 6, opts = struct(); end
 eta   = 5e-3; if isfield(opts,'eta'),   eta   = opts.eta;   end
 npass = 3;    if isfield(opts,'npass'), npass = opts.npass; end
 Jsel  = ion.J0eff; if isfield(opts,'Jsel'), Jsel = opts.Jsel; end
+Jxx0   = ion.Jxx0; if isfield(opts,'Jxx0'),   Jxx0   = opts.Jxx0;   end
+Jshape = 0;        if isfield(opts,'Jshape'), Jshape = opts.Jshape; end
+hyp    = true;     if isfield(opts,'hyp'),    hyp    = opts.hyp;    end
 ordered = isfield(pt,'is_ordered') && pt.is_ordered;
 
 if isfield(opts,'si') && ~isempty(opts.si)
@@ -21,7 +30,7 @@ if isfield(opts,'si') && ~isempty(opts.si)
 elseif ordered && isfield(pt,'si') && ~isempty(pt.si)
     si = pt.si;                                    % ordered eigenstates from the solve
 else
-    si = invz_single_ion(ion, T, [Bx 0 0], struct('hyp', true));   % paramagnet
+    si = invz_single_ion(ion, T, [Bx 0 0], struct('hyp', hyp, 'Jxx0', Jxx0));   % paramagnet
 end
 z  = w(:) + 1i*eta;
 c0 = invz_chi0z(si, T, z, struct('elastic', false));
@@ -53,6 +62,14 @@ out.chi_cc_q = zeros(numel(Jsel), numel(z));
 for k = 1:numel(Jsel)
     out.chi_cc_q(k,:) = (chit ./ (1 - Jsel(k)*chit)).';
 end
+if Jshape ~= 0
+    % Sample-shape correction for the STRICT-UNIFORM measured observable only:
+    % chi_meas = chi_int/(1 + Jshape*chi_int)  (demag-limited: the soft mode
+    % saturates at 1/Jshape instead of diverging). Callers evaluating a finite-q
+    % path (intrinsic longitudinal probe) must NOT pass Jshape.
+    out.chi_cc_q = out.chi_cc_q ./ (1 + Jshape*out.chi_cc_q);
+end
+out.Jshape = Jshape;
 end
 
 function Sw = realaxis_sigma(pt, tl, pref, Kw, K0, g, ordered)

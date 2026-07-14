@@ -48,3 +48,21 @@ out = invz_chi_realaxis(ion, T, bx, pt, w, struct('Jsel', info.Jcc0, 'eta', 5e-3
 Epk = w(ipk);
 verifyGreaterThan(testCase, Epk, 0.10);  verifyLessThan(testCase, Epk, 0.28);
 end
+
+function test_demag_observable_rescale(testCase)
+% The measured strict-uniform response chi_meas = chi_int/(1 + Jshape*chi_int) must
+% equal the OLD-convention shifted pole chit/(1 - (Jcc0 - Jshape)*chit) exactly
+% (algebraic identity), and Jshape = 0 must be a byte-identical no-op.
+ion = invz_ion();
+T = 0.31;  Bx = 5.0;  w = (0:0.01:0.4).';
+tl0 = invz_twolevel(ion, T, Bx);
+pt0 = struct('alpha', 0, 'lambda', [0; 0], 'tl', tl0, 'K', []);
+Jcc0 = ion.J0eff;  Jsh = 1e-3;
+oi = invz_chi_realaxis(ion, T, Bx, pt0, w, struct('Jsel', Jcc0, 'npass', 1));
+om = invz_chi_realaxis(ion, T, Bx, pt0, w, struct('Jsel', Jcc0, 'npass', 1, 'Jshape', Jsh));
+chit  = oi.chi0cc_w(:).' ./ (1 + oi.Sigma_w(:).');
+expct = chit ./ (1 - (Jcc0 - Jsh)*chit);
+verifyEqual(testCase, om.chi_cc_q(1,:), expct, 'RelTol', 1e-10);
+verifyEqual(testCase, oi.Jshape, 0);
+verifyEqual(testCase, om.Jshape, Jsh);
+end
