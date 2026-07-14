@@ -1,18 +1,19 @@
 function S = invz_spectra_qpath(ion, T, B, qpath, w, opts)
-%INVZ_SPECTRA_QPATH Branch-resolved chi''_cc(q, omega) along a q-path at fixed (T, B).
-%   EXPLORATORY: this is a branch susceptibility -- ONE sorted coupling eigenvalue per q
-%   fed to the scalar pole formula. It is NOT neutron scattering intensity (no eigenvector/
-%   sublattice-interference weights, no polarization factor, no magnetic form factor), and
-%   it inherits the known open issues of the medium solve (closed-grid BZ quadrature, the
-%   real-axis continuation's possible negative weight, and the bare-MF FM/PM handoff of
-%   invz_solve_auto). Energy TRENDS are comparable with R 2007 Fig 3; quantitative
-%   reproduction is not claimed.
+%INVZ_SPECTRA_QPATH Ferromagnetic-mode chi''_cc(q, omega) along a q-path at fixed (T, B).
+%   The default dispersion follows the UNIFORM ferromagnetic-mode coupling J(q) = v'*Jcc*v
+%   (invz_jq_path P.Juni) -- the same effective coupling MF_RPA_Yikai.m uses and the mode
+%   whose energy TRENDS reproduce R 2007 Fig 3 (along (1,0,0)->(2,0,0) the mode softens
+%   monotonically toward the (2,0,0) zone centre). It is NOT neutron scattering intensity
+%   (no eigenvector/sublattice-interference weights, no polarization factor, no magnetic
+%   form factor), and it inherits the known open issues of the medium solve (closed-grid BZ
+%   quadrature, the real-axis continuation's possible negative weight, and the bare-MF
+%   FM/PM handoff of invz_solve_auto); quantitative reproduction is not claimed.
 %
 %   S = invz_spectra_qpath(ion, T, B, qpath, w) computes chi''_cc along qpath (nq x 3,
 %   r.l.u.) at fixed T (K) and transverse field B (T), for the 1/z and bare-RPA theories.
 %   The 1/z medium (Sigma, K, lambda) is solved ONCE at (T, B) on the BZ-integration grid
 %   (ordered-first via invz_solve_auto); the path susceptibility then follows from the same
-%   single-site response chit(w) via chi(q, w) = chit/(1 - J_nu(q) chit), with J_nu(q) from
+%   single-site response chit(w) via chi(q, w) = chit/(1 - J(q) chit), with J(q) from
 %   invz_jq_path (direction-aware Gamma-limit guard; see its header).
 %
 %   Demag semantics (canonical): the strict-uniform Jshape_cc transform is NOT applied
@@ -27,7 +28,8 @@ function S = invz_spectra_qpath(ion, T, B, qpath, w, opts)
 %                                     when the maximum is non-positive/non-finite or sits
 %                                     in the first/last usable bin -- i.e. the true peak
 %                                     lies outside the sampled window)
-%     S.Jq      [1 x nq]   selected coupling branch along the path (meV)
+%     S.Jq      [1 x nq]   selected coupling along the path (meV): the uniform FM-mode
+%                          projection by default, or a sorted branch if opts.branch is set
 %     S.snapped [1 x nq]   true where invz_jq_path replaced the raw truncated sum
 %     S.s       [1 x nq]   path distance in INDEX (r.l.u.) coordinates
 %     S.s_cart  [1 x nq]   path distance in Cartesian reciprocal Ang^-1
@@ -38,8 +40,11 @@ function S = invz_spectra_qpath(ion, T, B, qpath, w, opts)
 %
 %   opts fields (all optional):
 %     .grid ([16 16 16]), .dpRng (30), .eta (5e-3)   as in invz_spectra_map
-%     .branch (4)        which ascending-sorted coupling branch to follow (sorted index,
-%                        NOT a tracked mode identity through crossings)
+%     .branch (0)        0 (default) = uniform ferromagnetic-mode coupling v'*Jcc*v (the
+%                        physical single mode, matches MF_RPA_Yikai / R 2007 Fig 3);
+%                        1..4 = follow that ascending-sorted eigenvalue branch instead
+%                        (exploratory; sorted index, NOT a tracked mode identity through
+%                        crossings -- max(eig) mirrors the (1,0,0)->(2,0,0) dispersion)
 %     .snapfac (2.5)     Gamma-limit trust-radius factor (see invz_jq_path)
 %     .peak_wmin (0.05)  meV; excludes the low-frequency hyperfine pole (R 2007 Fig 2)
 %                        from the peak search so Epeak tracks the doublet mode
@@ -51,7 +56,7 @@ if nargin < 6, opts = struct(); end
 grid    = getf(opts, 'grid', [16 16 16]);
 dpRng   = getf(opts, 'dpRng', 30);
 eta     = getf(opts, 'eta', 5e-3);
-branch  = getf(opts, 'branch', 4);
+branch  = getf(opts, 'branch', 0);   % 0 = uniform FM mode (default); 1..4 = sorted branch
 snapfac = getf(opts, 'snapfac', 2.5);
 wmin    = getf(opts, 'peak_wmin', 0.05);
 
@@ -76,9 +81,14 @@ if phase == 0
          '(near-degenerate doublet or critical band).'], T, B);
 end
 
-% guarded coupling branches along the path
+% guarded coupling along the path: physical uniform FM mode by default (P.Juni),
+% or an exploratory sorted eigenvalue branch when opts.branch is 1..4
 P  = invz_jq_path(ion, qpath, struct('dpRng', dpRng, 'cache', true, 'snapfac', snapfac));
-Jq = P.Jnu(:, branch).';
+if branch == 0
+    Jq = P.Juni(:).';                 % uniform ferromagnetic-mode coupling v'*Jcc*v
+else
+    Jq = P.Jnu(:, branch).';          % exploratory: one ascending-sorted branch
+end
 
 % path spectra from ONE real-axis evaluation each: Jsel is vectorized over q, and the
 % single-site chit(w) is q-independent. Intrinsic: no Jshape here (see header).

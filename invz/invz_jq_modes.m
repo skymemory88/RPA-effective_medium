@@ -1,7 +1,17 @@
-function [Jnu, info] = invz_jq_modes(ion, qvec, opts)
+function [Jnu, info, Juni] = invz_jq_modes(ion, qvec, opts)
 %INVZ_JQ_MODES Eigenvalue branches of the 4x4 cc sublattice coupling matrix (meV).
 % J_cc(q)_{rs} = -gfac*dip_cc_{rs}(q) [+ Lorentz at q≡0] + sign(J12)*|J12|*ex_cc_{rs}(q)
 % Convention: ferromagnetic-positive; criticality when J(0)*chi0 = 1+Sigma(0).
+%
+% Third output Juni [nq x 1] is the UNIFORM ferromagnetic-mode projection of the cc
+% coupling at each q,  Juni(q) = v'*Jcc(q)*v  with v = [1 1 1 1]/2 (all sublattices in
+% phase). This is the q-resolved generalization of info.Jcc0 (Juni([0 0 0]) == Jcc0),
+% and equals MF_RPA_Yikai.m's J_avg = sum(sum(J_int,4),3)/unitN exactly. It is the
+% PHYSICAL single-mode dispersion under the "all four moments equivalent" mean-field/RPA
+% approximation both codes make (mode pole set by v'*Jcc*v). Use Juni -- NOT max(eig) of
+% the 4x4 block -- to trace a dispersion along a q-path: away from Gamma the uniform mode
+% stops being an eigenvector, so the sorted branches cross and max(eig) selects the wrong
+% branch (it mirrors the (1,0,0)->(2,0,0) dispersion about h=1.5). See invz_jq_path.
 %
 % ---------------------------------------------------------------------------
 % Step-4 physics checkpoint (Rønnow et al., PRB 75, 054426 (2007), eq. 4):
@@ -88,18 +98,20 @@ else
     dm_cc = 0;  dm_aa = 0;                             % off: byte-identical to the pre-demag code
 end
 cacheDir = fullfile(fileparts(mfilename('fullpath')), 'cache');
-pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; demag; alpha; 2];   % trailing 2 = cache schema v2
-key = sprintf('jq2_%d_%s_%s.mat', dpRng, hash_vec(qvec(:)), hash_vec(pkey));
+pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; demag; alpha; 3];   % trailing 3 = cache schema v3 (adds Juni)
+key = sprintf('jq3_%d_%s_%s.mat', dpRng, hash_vec(qvec(:)), hash_vec(pkey));
 cacheFile = fullfile(cacheDir, key);
 if useCache && exist(cacheFile, 'file')
     S = load(cacheFile);
-    if isfield(S,'pkey') && isfield(S,'qvec') && isequal(S.pkey, pkey) && isequal(S.qvec, qvec)
-        Jnu = S.Jnu;  info = S.info;  return;
+    if isfield(S,'pkey') && isfield(S,'qvec') && isfield(S,'Juni') && isequal(S.pkey, pkey) && isequal(S.qvec, qvec)
+        Jnu = S.Jnu;  info = S.info;  Juni = S.Juni;  return;
     end
     % stale or legacy cache entry: fall through and recompute (file will be overwritten)
 end
+v = ones(4,1)/2;                 % uniform (all-sublattices-in-phase) ferromagnetic mode
 nq = size(qvec,1);
-Jnu = zeros(nq, 4);
+Jnu  = zeros(nq, 4);
+Juni = zeros(nq, 1);
 lorz = 4*pi/(3*ion.Vc)*C.gfac;   % scalar; broadcasts to ones(4,4)-type Lorentz block (see header)
 for iq = 1:nq
     q = qvec(iq,:);
@@ -111,9 +123,9 @@ for iq = 1:nq
     end
     Jcc = (Jcc + Jcc')/2;
     Jnu(iq,:) = sort(real(eig(Jcc))).';
+    Juni(iq)  = real(v.'*Jcc*v);                     % uniform FM-mode coupling (physical dispersion)
 end
 % Γ-point info block (always computed at q=[0 0 0]), uniform-mode projection:
-v = ones(4,1)/2;
 dip0 = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
 Jcc0d = -squeeze(C.gfac*dip0(3,3,:,:)) + lorz;
 Jaa0d = -squeeze(C.gfac*dip0(1,1,:,:)) + lorz - dm_aa;
@@ -127,7 +139,7 @@ info.Jshape_cc = 4*dm_cc;                        % strict-uniform observable cor
 info.dpRng = dpRng;
 if useCache
     if ~exist(cacheDir,'dir'), mkdir(cacheDir); end
-    save(cacheFile, 'Jnu', 'info', 'pkey', 'qvec');
+    save(cacheFile, 'Jnu', 'info', 'Juni', 'pkey', 'qvec');
 end
 end
 
