@@ -62,6 +62,22 @@ verifyEqual(testCase, pt.si.E, si.E, 'AbsTol', 1e-12);
 verifyEqual(testCase, pt.si.Jexp, si.Jexp, 'AbsTol', 1e-12);
 end
 
+function test_warm_start_same_fixed_point(testCase)
+% A warm Sigma/K seed changes only the iteration path, not the converged fixed
+% point (finding #6): seeding from a nearby (same-T) solve reproduces the cold
+% result and reaches it in strictly fewer outer iterations.
+ion = invz_ion();
+Jf = toy_couplings(ion.J0eff);
+cold = invz_solve_point(ion, 1.0, 4.0, Jf, struct('hyp', true));
+seed = invz_solve_point(ion, 1.0, 4.2, Jf, struct('hyp', true));    % neighbour, same T -> same nw
+warm = invz_solve_point(ion, 1.0, 4.0, Jf, ...
+        struct('hyp', true, 'Sigma_seed', seed.Sigma, 'K_seed', seed.K));
+verifyTrue(testCase, warm.converged);
+verifyEqual(testCase, warm.Sigma0, cold.Sigma0, 'RelTol', 1e-6);
+verifyEqual(testCase, warm.K, cold.K, 'RelTol', 1e-6);
+verifyLessThan(testCase, warm.outer_iters, cold.outer_iters);       % seed was consumed
+end
+
 function test_interaction_off_gives_zero_sigma(testCase)
 ion = invz_ion();
 pt = invz_solve_point(ion, 1.0, 4.0, 1e-12*ones(100,1), struct('hyp', false));

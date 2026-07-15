@@ -86,13 +86,17 @@ against source this session: #2, #3, #4, #10(gL) confirmed accurate; #1's algebr
   against convergence tests; longer-term irreducible-BZ set with weights. Files:
   `qVec_generator.m:188-197`, `invz_spectra_map.m:50-53`, `invz_spectra_qpath.m:68-71`,
   `invz_run_phase_diagram.m:53-56`.
-- **#6 (Medium)** Critical-boundary searches don't warm-start from nearby solutions; every (T,B)
-  restarts `Sigma`/`K`/mean fields from defaults, and `invz_critical_T` scans a full coarse grid
-  before picking the highest-T crossing. Fix: accept initial state in `invz_solve_point`; carry last
-  converged state through scans; tolerance-based termination in `invz_critical_T0field` (fixed 60
-  iters → bisect to tol); consider Anderson/quasi-Newton near critical slowing. Files:
-  `invz_critical.m:31-68`, `invz_critical_T.m:57-79`, `invz_solve_point.m:22-33`,
-  `invz_critical_T0field.m:7-11`.
+- **#6 (Medium) — PARTIAL (2026-07-15).** DONE: `invz_solve_point` accepts `opts.Sigma_seed`/
+  `opts.K_seed` (same length as `wn`; only changes the iteration path, not the converged fixed
+  point — `test_warm_start_same_fixed_point` proves same result + strictly fewer outer iters);
+  `invz_critical_T0field` bisection now stops at bracket width 1e-9 K (~31 vs the old fixed 60
+  136-state solves). DELIBERATELY NOT DONE: wiring warm-start into `invz_critical`/`invz_critical_T`
+  boundary classification — near critical slowing-down a warm seed can flip a point from (cold)
+  non-converged to (warm) converged, shifting the classified `Bc` and breaking the field-cut vs
+  temperature-cut mirror consistency (`test_tc_at_fixed_field_crossing`); the ordered-phase
+  non-convergence signal these searches depend on must stay seed-independent. Anderson/quasi-Newton
+  and the multiple-crossing-audit option (bullet 6) not pursued (the full-grid re-entrance scan in
+  `invz_critical_T` is intentional).
 - **#7 (Medium)** Config knobs scattered (scripts require source edits; grid/cutoff hardcoded above
   the "knobs" section; nonempty `qpath` silently unuses `fields`/`w`; two sources for uniform
   couplings — pasted `ion.J0eff`/`ion.Jxx0` vs derived `info.Jcc0`/`info.Jaa0`). Fix: make drivers
@@ -108,11 +112,15 @@ against source this session: #2, #3, #4, #10(gL) confirmed accurate; #1's algebr
   `invz_run_phase_diagram.m` ~53%, `invz_critical_T.m` ~37%, `invz_spectra_qpath.m` ~42%).
   Move derivations / rejected alternatives / benchmark tables / bug history into README/design note;
   keep headers to I/O, invariants, numerical limits, non-obvious conventions.
-- **#10 (Low)** Legacy/minor: `invz_const.m:6` unused `gL` (Code Analyzer); `invz_plot_spectra_qpath.m:17-20`
-  pre-`S.x` compat branch (decide support / isolate in loader); `invz/cache/` `jq_`/`jq2_`/`jq3_`
-  schema generations not auto-cleaned; `qVec_generator.m` unconditional diagnostics + unused
-  `display_qvectors`; phase codes 0/1/2 want named constants; terse names (`si`,`tl`,`sg`,`med`,
-  `Jf`,`c0`) fine in kernels but hurt driver readability.
+- **#10 (Low) — MOSTLY DONE (2026-07-15).** DONE: removed unused `gL` in `invz_const.m` (Analyzer
+  clean); `qVec_generator.m` gained `verbose` (default true), gated all diagnostics, removed the dead
+  `display_qvectors` helper + its commented call, and the three production callers
+  (`invz_spectra_map`/`invz_spectra_qpath`/`invz_run_phase_diagram`) now pass `verbose=false`;
+  deleted orphaned `invz/cache/jq_*`/`jq2_*` (kept current `jq3_`). NOT DONE (deliberate): the
+  `invz_plot_spectra_qpath` pre-`S.x` compat branch is KEPT — it is covered by
+  `test_qpath_plot_coordinate_fallback`, so removing it would drop tested behaviour. Phase-code
+  named constants and the terse-name renames (`si`/`tl`/`sg`/…) were skipped as high-churn,
+  low-value edits with regression risk and no functional benefit.
 
 Recommended order (per review): #1 ✓ → #2 → #6 (warm start) → #4 + #5 → #7 → #8 → #9/#10.
 
