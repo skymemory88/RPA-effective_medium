@@ -35,28 +35,36 @@ ion = invz_ion();
 %       (chi_meas = chi/(1 + Jshape*chi)): the soft mode saturates instead of diverging;
 %     - q-path spectra omit the Jshape_cc transform (finite-q probe = intrinsic longitudinal
 %       response) but still see demag through info.Jaa0.
-T = 0.31;                             % K
+T = 0.1;                             % K
+useParallel = true;                  % true -> parfor over fields (Parallel Computing Toolbox)
+eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency INPUTS (w, wq) AND
+                                     % the plotted axes. Computation always runs in meV; the driver
+                                     % converts in/out (with 'meV' it is a no-op). eta is ALWAYS in
+                                     % meV (below), independent of eUnit.
+
 % fields = [3.6 4.2 4.8 5.4 6.0];       % few -> slices;  many -> colormap
 fields = linspace(3,6.5,151);
-w = (0:0.002:0.45).';               % meV -- field-sweep views
-eta = 1e-3;                          % real-axis line width: Lorentzian HWHM in meV (5e-3 meV ~ 1.2 GHz).
-                                     % Lower -> sharper peaks (resolves the sub-6-GHz hyperfine lines),
-                                     % but keep eta >~ the w-spacing above or the peaks alias.
+w = (0:0.02:6).';                  % eUnit -- field-sweep frequency grid (0-108 GHz ~ 0-0.45 meV)
+eta = 1e-3;                          % real-axis Lorentzian HWHM, ALWAYS in meV (1e-3 meV ~ 0.24 GHz),
+                                     % independent of eUnit. Lower -> sharper peaks (resolves the
+                                     % sub-6-GHz hyperfine lines); keep eta above the w/wq step
+                                     % (converted to meV: step/eScale) or the peaks alias.
 sliceMax = 6;                         % field count at/below which the line-slice view is used
-useParallel = true;                  % true -> parfor over fields (Parallel Computing Toolbox)
-eUnit = 'meV';                       % 'meV' or 'GHz' -- plotting only; computation always runs in meV
 
 % ---- q-path view (R 2007 Fig 3 trends): set qpath non-empty to switch views -------------
 % qpath = [];                          % [] = field-sweep views; [nq x 3] r.l.u. = q-path view
 
-qh = linspace(1, 2, 51).';  
-qpath = [qh zeros(numel(qh), 2)];  % (1,0,0)->(2,0,0)
+qh = linspace(0, 1, 101).';  
+qpath = [qh zeros(numel(qh), 2)];  % (h0,0,0)->(h1,0,0)
+% qpath = [zeros(numel(qh), 1) qh zeros(numel(qh), 1)];  % (0,h0,0)->(0,h1,0)
+% qpath = [zeros(numel(qh), 2) qh];  % (0,0,h0)->(0,0,h1) problematic
 
-% Bq = 4.24;                           % field(s), T, for the q-path view. One value -> colormaps;
-Bq = [3.6 4.24 6.0];           % several -> E_peak(q) overlay (R 2007 Fig 3: [3.6 4.24 6.0])
-wq = (0:0.004:0.85).';               % meV -- q-path grid. Fig 3 reaches ~0.75 meV near h = 1 at
-                                     % 60 kOe (after their 1.15 scaling); 0.85 avoids clipping,
-                                     % which the censoring peak picker would flag as NaN.
+Bq = 4.95;                           % field(s), T, for the q-path view. One value -> colormaps;
+% Bq = [4.75 4.85 4.95 5.05];
+% Bq = [3.6 4.24 6.0];           % several -> E_peak(q) overlay (R 2007 Fig 3: [3.6 4.24 6.0])
+wq = (0:0.025:6).';                 % eUnit -- q-path frequency grid (0-6 GHz ~ 0-0.025 meV). The
+                                     % Fig-3 mode reaches ~0.75 meV (~180 GHz) at 60 kOe; keep the
+                                     % top above the mode or the censoring peak picker NaNs it.
 dispScale = 1;                       % dispersion display scale factor; R 2007 scales the
                                      % calculated energies by 1.15 to match experiment (Fig 3)
 
@@ -67,10 +75,19 @@ switch eUnit
     otherwise, error('invz_run_spectra:eUnit', 'eUnit must be ''meV'' or ''GHz''.');
 end
 
+% The frequency-axis inputs w and wq are given in eUnit; the solves run in meV, so convert
+% on the way in. eScale is the meV->eUnit factor, hence eUnit->meV divides by it. With
+% eUnit = 'meV' (eScale = 1) these are exact no-ops. eta is ALREADY in meV and passes through
+% unconverted. The plots below scale the returned meV grids (S.w, Epeak) back up by eScale,
+% so every axis ends up in eUnit consistently -- e.g. eUnit = 'GHz' with wq = (0:0.05:6).'
+% gives a 0-6 GHz q-path axis.
+wMeV   = w   / eScale;
+wqMeV  = wq  / eScale;
+
 if ~isempty(qpath)
     % ---------------- FM-mode q-path view at fixed field(s) ----------------
     if isscalar(Bq)
-        S = invz_spectra_qpath(ion, T, Bq, qpath, wq, struct('eta', eta));
+        S = invz_spectra_qpath(ion, T, Bq, qpath, wqMeV, struct('eta', eta));
         Splot = S;   % display-only copy; the solve above always ran in meV
         Splot.w = S.w*eScale;  Splot.Epeak = S.Epeak*eScale;  Splot.Epeak_rpa = S.Epeak_rpa*eScale;
         figure('Position', [100 100 1150 460]);
@@ -83,7 +100,7 @@ if ~isempty(qpath)
     else
         figure; hold on;  co = lines(numel(Bq));
         for k = 1:numel(Bq)
-            Sk = invz_spectra_qpath(ion, T, Bq(k), qpath, wq, struct('eta', eta));
+            Sk = invz_spectra_qpath(ion, T, Bq(k), qpath, wqMeV, struct('eta', eta));
             plot(Sk.x, Sk.Epeak*eScale*dispScale,     '-',  'Color', co(k, :), ...
                  'DisplayName', sprintf('1/z, %.2f T', Bq(k)));
             plot(Sk.x, Sk.Epeak_rpa*eScale*dispScale, '--', 'Color', co(k, :), ...
@@ -100,13 +117,13 @@ if ~isempty(qpath)
     end
 else
     % ---------------- field-sweep views at the uniform mode ----------------
-    S = invz_spectra_map(ion, T, fields, w, struct('parallel', useParallel, 'eta', eta));
+    S = invz_spectra_map(ion, T, fields, wMeV, struct('parallel', useParallel, 'eta', eta));
 
     if numel(fields) <= sliceMax
         figure; hold on;  co = lines(numel(fields));
         for k = 1:numel(fields)
-            plot(w*eScale, S.chiz(:, k),   '-',  'Color', co(k, :), 'DisplayName', sprintf('1/z, %.2f T', fields(k)));
-            plot(w*eScale, S.chirpa(:, k), '--', 'Color', co(k, :), 'DisplayName', sprintf('RPA, %.2f T', fields(k)));
+            plot(w, S.chiz(:, k),   '-',  'Color', co(k, :), 'DisplayName', sprintf('1/z, %.2f T', fields(k)));
+            plot(w, S.chirpa(:, k), '--', 'Color', co(k, :), 'DisplayName', sprintf('RPA, %.2f T', fields(k)));
         end
         xlabel(eLabel);  ylabel('\chi''''_{cc}');  title(sprintf('T = %.2f K', T));  legend show;
     else
