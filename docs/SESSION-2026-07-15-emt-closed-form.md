@@ -60,17 +60,21 @@ Two improvements beyond speed:
 Preserved verbatim-in-substance from the deleted `Code_efficiency_review_by_codex.md`. Spot-checked
 against source this session: #2, #3, #4, #10(gL) confirmed accurate; #1's algebra proven exact.
 
-- **#2 (High)** Paramagnetic spectra repeat expensive single-ion work.
-  `invz_solve_auto`→`invz_solve_point` recomputes `si`/`tl` from scratch and does not return `si`;
-  spectra layer calls `invz_single_ion` ~6× and `invz_chi0z` ~3× per field point.
-  Fix: return `si` from `invz_solve_point`; reuse `pt.tl` for the RPA overlay; compute real-axis
-  `chi0cc(w)` once and derive both RPA and 1/z from it; phase-continue ordered sweeps instead of
-  re-testing the ordered branch at every clearly-PM point.
-  Files: `invz_solve_auto.m:19-36`, `invz_solve_point.m:15-20`, `invz_spectra_map.m:93-122`,
-  `invz_chi_realaxis.m:28-39`.
-- **#3 (High)** `invz_chi0z` computes all 9 tensor components; callers use only `cc`=(3,3).
-  Fix: component-selection option or scalar `invz_chi_cc_z`; precompute `dE`/`dp`/masks/elastic
-  weights once; keep full-tensor path for tests only. File: `invz_chi0z.m:10-30`.
+- **#2 (High) — DONE (2026-07-15).** Paramagnetic spectra repeated expensive single-ion work.
+  `invz_solve_point` now returns `pt.si` (matching the ordered solver). `invz_chi_realaxis`
+  accepts `opts.chi0cc_w` (a precomputed bare cc), so the RPA-overlay and 1/z calls of one field
+  point share a single `chi0cc` instead of each rebuilding the single ion + `invz_chi0z`.
+  `invz_spectra_map/one_field` reuses `pt.tl`/`pt.si` on the converged paramagnet and threads the
+  overlay's `chi0cc_w` into the 1/z call (both branches). Output is bit-identical (regression:
+  full `INVZ_SLOW=1` suite 60/60). Tests: `test_returns_single_ion_state`,
+  `test_chi0cc_passthrough_is_consumed` (perturbation proves consumption). NOT done: the phase-
+  continuation sub-item (skip the ordered-branch test at clearly-PM points) — folded into #6.
+- **#3 (High) — WAIVED (2026-07-15).** `invz_chi0z`'s full 3×3 tensor is a required substrate for
+  the planned ODD work (`odd_implementation_plan.html`: Tier-1 `invz_chiperp` extracts the `(a,b)`
+  transverse block; the full-tensor RPA parity layer needs all 9 Cartesian blocks; the plan is
+  written against the current source). An opt-in `comp` fast path was prototyped and reverted per
+  user direction — leave the full-tensor kernel alone. If the ~9× production `cc` speedup is later
+  wanted, an *additive* `opts.comp` (default = all 9) is ODD-compatible.
 - **#4 (High)** Cold q-space construction rebuilds q-invariant geometry per q-point. `MF_dipole`
   rebuilds lattice grid, displacements, `r^-3/r^-5`, cutoff masks, and all 9 Cartesian components
   every call; only `exp(-iq·r)` and the final contraction are q-dependent. ~0.114 s/call ⇒ ~8 min

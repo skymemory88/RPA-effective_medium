@@ -49,6 +49,19 @@ verifyGreaterThan(testCase, c(2), c(3));
 verifyGreaterThan(testCase, c(3), 0);
 end
 
+function test_returns_single_ion_state(testCase)
+% invz_solve_point returns pt.si (the paramagnetic single-ion struct), matching
+% the ordered solver, so the spectra layer can reuse it instead of rebuilding the
+% 136-state diagonalization for every real-axis call (finding #2).
+ion = invz_ion();
+Jf = toy_couplings(ion.J0eff);
+pt = invz_solve_point(ion, 1.0, 4.0, Jf, struct('hyp', true));
+verifyTrue(testCase, isfield(pt, 'si'));
+si = invz_single_ion(ion, 1.0, [4.0 0 0], struct('hyp', true, 'Jxx0', ion.Jxx0));
+verifyEqual(testCase, pt.si.E, si.E, 'AbsTol', 1e-12);
+verifyEqual(testCase, pt.si.Jexp, si.Jexp, 'AbsTol', 1e-12);
+end
+
 function test_interaction_off_gives_zero_sigma(testCase)
 ion = invz_ion();
 pt = invz_solve_point(ion, 1.0, 4.0, 1e-12*ones(100,1), struct('hyp', false));
