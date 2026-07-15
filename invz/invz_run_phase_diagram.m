@@ -50,7 +50,7 @@ ion = invz_ion();
 %     coupling info.Jaa0 (hoisted into Jxx0 below): internal-vs-applied field relation.
 %   demag = 0 (default) is the intrinsic / internal-field boundary matching the R 2007
 %   benchmark.
-[qvec, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5]);
+[qvec, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5], 'verbose', false);
 qvec = qvec(any(abs(qvec) > 1e-12, 2), :);
 [Jnu, info] = invz_jq_modes(ion, qvec, struct('dpRng', 30, 'cache', true));
 Jf = Jnu(:);
@@ -68,10 +68,9 @@ Tc0 = invz_critical_T0field(ion, invz_sigma_crit(J0, Jf), J0);
 % Tc(B) search window: invz_critical_T now self-adapts per field -- it anchors
 % the window top at Tc0+0.05 K, spans 0.5 K down, samples crit on a grid,
 % classifies from CONVERGED points only, and interpolates the highest-T
-% crossing (see invz_critical_T header). No fixed [Tlo Tmax] bracket is needed
-% and the old non-convergence ruggedness is gone. To force an explicit window
-% instead, pass 'window',[Tlo Tmax] in the opts struct below.
-Ts = linspace(0.05, 1.85, 26);   % low-T regime: Bc(T) points
+% crossing (see invz_critical_T header). 
+
+Ts = linspace(0.05, 1.95, 28);   % low-T regime: Bc(T) points
 Bs = [];   % high-T regime: Tc(B) points
 
 % Ts = [];

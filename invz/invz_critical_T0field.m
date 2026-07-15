@@ -4,7 +4,9 @@ function Tc = invz_critical_T0field(ion, Sc, J0eff)
 f = @(T) J0eff*static_chi_cc(ion, T) - (1 + Sc);
 Tlo = 0.8;  Thi = 3.0;
 assert(f(Tlo) > 0 && f(Thi) < 0, 'invz:bracket', 'Tc not bracketed in [0.8, 3.0] K');
+tol = 1e-9;                                     % bracket width (K); ~31 bisections vs the old fixed 60
 for it = 1:60
+    if Thi - Tlo < tol, break; end             % each step is a 136-state single-ion solve; stop early
     Tm = 0.5*(Tlo + Thi);
     if f(Tm) > 0, Tlo = Tm; else, Thi = Tm; end
 end

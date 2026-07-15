@@ -28,6 +28,9 @@ function [qvec, qvec_cart, recip_lattice] = qVec_generator(lattice, varargin)
 %   'sympoints'   - Cell array of high symmetry point labels to include
 %                   (default: all standard points for the lattice type)
 %
+%   'verbose'     - Print lattice / q-vector diagnostics (default: true). Pass
+%                   false in batch/production callers to keep the console clean.
+%
 % OUTPUTS:
 %   qvec          - Q-vectors in reduced coordinates [n_q x 3]
 %                   (in units of reciprocal lattice vectors: q = h*a* + k*b* + l*c*)
@@ -84,6 +87,7 @@ addParameter(p, 'range', [-1, 1], @(x) isnumeric(x) && length(x) == 2);
 addParameter(p, 'path', {}, @(x) iscell(x) || (isnumeric(x) && size(x,2) == 3));
 addParameter(p, 'npoints', 50, @(x) isnumeric(x) && isscalar(x) && x > 0);
 addParameter(p, 'sympoints', {}, @iscell);
+addParameter(p, 'verbose', true, @(x) islogical(x) || (isnumeric(x) && isscalar(x)));
 parse(p, lattice, varargin{:});
 
 mode = p.Results.mode;
@@ -92,6 +96,7 @@ q_range = p.Results.range;
 path_spec = p.Results.path;
 n_path_points = p.Results.npoints;
 sympoints_spec = p.Results.sympoints;
+verbose = logical(p.Results.verbose);    % opts.verbose = false silences the lattice diagnostics
 
 %% Compute reciprocal lattice vectors
 % Real space lattice vectors (rows of lattice matrix)
@@ -112,37 +117,33 @@ recip_lattice = [a_star; b_star; c_star];
 
 %% Detect lattice type
 lattice_type = detect_lattice_type(lattice);
-fprintf('Detected lattice type: %s\n', lattice_type);
-fprintf('Unit cell volume: %.4f Å³\n', V);
-fprintf('Lattice parameters:\n');
-a_len = norm(a);
-b_len = norm(b);
-c_len = norm(c);
-fprintf('  a = %.4f Å\n', a_len);
-fprintf('  b = %.4f Å\n', b_len);
-fprintf('  c = %.4f Å\n', c_len);
-fprintf('Reciprocal lattice parameters:\n');
-fprintf('  a* = %.4f Å⁻¹ (= 2π/%.4f)\n', norm(a_star), 2*pi/norm(a_star));
-fprintf('  b* = %.4f Å⁻¹ (= 2π/%.4f)\n', norm(b_star), 2*pi/norm(b_star));
-fprintf('  c* = %.4f Å⁻¹ (= 2π/%.4f)\n', norm(c_star), 2*pi/norm(c_star));
-fprintf('\n');
+if verbose
+    fprintf('Detected lattice type: %s\n', lattice_type);
+    fprintf('Unit cell volume: %.4f Å³\n', V);
+    fprintf('Lattice parameters:\n');
+    fprintf('  a = %.4f Å\n', norm(a));
+    fprintf('  b = %.4f Å\n', norm(b));
+    fprintf('  c = %.4f Å\n', norm(c));
+    fprintf('Reciprocal lattice parameters:\n');
+    fprintf('  a* = %.4f Å⁻¹ (= 2π/%.4f)\n', norm(a_star), 2*pi/norm(a_star));
+    fprintf('  b* = %.4f Å⁻¹ (= 2π/%.4f)\n', norm(b_star), 2*pi/norm(b_star));
+    fprintf('  c* = %.4f Å⁻¹ (= 2π/%.4f)\n', norm(c_star), 2*pi/norm(c_star));
+    fprintf('\n');
+end
 
 %% Generate q-vectors based on mode
 switch mode
     case 'grid'
-        [qvec, qvec_cart] = generate_grid(grid_size, q_range, recip_lattice);
+        [qvec, qvec_cart] = generate_grid(grid_size, q_range, recip_lattice, verbose);
 
     case 'path'
-        [qvec, qvec_cart] = generate_path(path_spec, n_path_points, lattice_type, recip_lattice);
+        [qvec, qvec_cart] = generate_path(path_spec, n_path_points, lattice_type, recip_lattice, verbose);
 
     case 'highsym'
-        [qvec, qvec_cart] = generate_highsym(lattice_type, sympoints_spec, recip_lattice);
+        [qvec, qvec_cart] = generate_highsym(lattice_type, sympoints_spec, recip_lattice, verbose);
 end
 
-fprintf('Generated %d q-vectors\n\n', size(qvec, 1));
-
-%% Display q-vectors
-% display_qvectors(qvec, qvec_cart);
+if verbose, fprintf('Generated %d q-vectors\n\n', size(qvec, 1)); end
 
 end
 
@@ -179,10 +180,12 @@ function lattice_type = detect_lattice_type(lattice)
 end
 
 %% Helper function: Generate uniform grid
-function [qvec, qvec_cart] = generate_grid(grid_size, q_range, recip_lattice)
-    fprintf('Generating uniform q-space grid...\n');
-    fprintf('Grid size: [%d, %d, %d]\n', grid_size(1), grid_size(2), grid_size(3));
-    fprintf('Q-range: [%.2f, %.2f]\n', q_range(1), q_range(2));
+function [qvec, qvec_cart] = generate_grid(grid_size, q_range, recip_lattice, verbose)
+    if verbose
+        fprintf('Generating uniform q-space grid...\n');
+        fprintf('Grid size: [%d, %d, %d]\n', grid_size(1), grid_size(2), grid_size(3));
+        fprintf('Q-range: [%.2f, %.2f]\n', q_range(1), q_range(2));
+    end
 
     % Create grid in reduced coordinates
     qx = linspace(q_range(1), q_range(2), grid_size(1));
@@ -198,8 +201,8 @@ function [qvec, qvec_cart] = generate_grid(grid_size, q_range, recip_lattice)
 end
 
 %% Helper function: Generate path through high-symmetry points
-function [qvec, qvec_cart] = generate_path(path_spec, n_points, lattice_type, recip_lattice)
-    fprintf('Generating q-space path through high-symmetry points...\n');
+function [qvec, qvec_cart] = generate_path(path_spec, n_points, lattice_type, recip_lattice, verbose)
+    if verbose, fprintf('Generating q-space path through high-symmetry points...\n'); end
 
     % Get high-symmetry points for this lattice type
     sym_points = get_symmetry_points(lattice_type);
@@ -240,13 +243,15 @@ function [qvec, qvec_cart] = generate_path(path_spec, n_points, lattice_type, re
     % Convert to Cartesian
     qvec_cart = qvec * recip_lattice;
 
-    fprintf('Path segments: %d\n', n_segments);
-    fprintf('Points per segment: %d\n', n_points);
+    if verbose
+        fprintf('Path segments: %d\n', n_segments);
+        fprintf('Points per segment: %d\n', n_points);
+    end
 end
 
 %% Helper function: Generate high-symmetry points only
-function [qvec, qvec_cart] = generate_highsym(lattice_type, sympoints_spec, recip_lattice)
-    fprintf('Generating high-symmetry q-points for %s lattice...\n', lattice_type);
+function [qvec, qvec_cart] = generate_highsym(lattice_type, sympoints_spec, recip_lattice, verbose)
+    if verbose, fprintf('Generating high-symmetry q-points for %s lattice...\n', lattice_type); end
 
     % Get high-symmetry points
     sym_points = get_symmetry_points(lattice_type);
@@ -268,9 +273,11 @@ function [qvec, qvec_cart] = generate_highsym(lattice_type, sympoints_spec, reci
     % Convert to Cartesian
     qvec_cart = qvec * recip_lattice;
 
-    fprintf('High-symmetry points included:\n');
-    for i = 1:n_points
-        fprintf('  %s = (%.3f, %.3f, %.3f)\n', point_names{i}, qvec(i,1), qvec(i,2), qvec(i,3));
+    if verbose
+        fprintf('High-symmetry points included:\n');
+        for i = 1:n_points
+            fprintf('  %s = (%.3f, %.3f, %.3f)\n', point_names{i}, qvec(i,1), qvec(i,2), qvec(i,3));
+        end
     end
 end
 
@@ -312,30 +319,4 @@ function sym_points = get_symmetry_points(lattice_type)
             sym_points.Y     = [0.0, 0.5, 0.0];
             sym_points.Z     = [0.0, 0.0, 0.5];
     end
-end
-
-%% Helper function: Display q-vectors
-function display_qvectors(qvec, qvec_cart)
-    fprintf('Q-vectors (showing first 20 and last 5):\n');
-    fprintf('%-4s  %-30s  %-30s  %-10s\n', 'No.', 'Reduced (h, k, l)', 'Cartesian (Å⁻¹)', '|q| (Å⁻¹)');
-    fprintf('%s\n', repmat('-', 1, 80));
-
-    n_show = min(20, size(qvec, 1));
-    for i = 1:n_show
-        q_mag = norm(qvec_cart(i,:));
-        fprintf('%-4d  (%7.4f, %7.4f, %7.4f)  (%7.4f, %7.4f, %7.4f)  %7.4f\n', ...
-                i, qvec(i,1), qvec(i,2), qvec(i,3), ...
-                qvec_cart(i,1), qvec_cart(i,2), qvec_cart(i,3), q_mag);
-    end
-
-    if size(qvec, 1) > 25
-        fprintf('  ...\n');
-        for i = size(qvec,1)-4:size(qvec,1)
-            q_mag = norm(qvec_cart(i,:));
-            fprintf('%-4d  (%7.4f, %7.4f, %7.4f)  (%7.4f, %7.4f, %7.4f)  %7.4f\n', ...
-                    i, qvec(i,1), qvec(i,2), qvec(i,3), ...
-                    qvec_cart(i,1), qvec_cart(i,2), qvec_cart(i,3), q_mag);
-        end
-    end
-    fprintf('\n');
 end

@@ -47,7 +47,7 @@ nB = numel(fields);     nw = numel(w);
 if isfield(opts, 'Jnu') && isfield(opts, 'info')
     Jnu = opts.Jnu(:);   info = opts.info;
 else
-    [qc, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', grid, 'range', [-0.5 0.5]);
+    [qc, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', grid, 'range', [-0.5 0.5], 'verbose', false);
     qc = qc(any(abs(qc) > 1e-12, 2), :);
     [Jnu, info] = invz_jq_modes(ion, qc, struct('dpRng', dpRng, 'cache', true));
     Jnu = Jnu(:);
