@@ -32,12 +32,9 @@ for nt = 1:ntau
         r    = geom.r{nt,mt};
         mask = geom.mask{nt,mt};
         exp_qr = exp(-1i*q*r');
-        for n = 1:3
-            for m = 1:3
-%                 d(n,m,nt,mt) = exp_qr*ones(length(rr),1)*Jex*eq(n,m); % exchange interaction
-                d(n,m,nt,mt) = exp_qr*mask*Jex*eq(n,m); % original code, 13.906 ~ 14 (NN distance^2)
-            end
-        end
+        % Diagonal exchange: exp_qr*mask (the NN sum, mask = rr<=14 ~ 13.906) is
+        % (n,m)-independent, so compute it once instead of 9x with eq(n,m)=eye(3).
+        d(:,:,nt,mt) = (exp_qr*mask)*Jex*eye(3);
         %  d(:,:,nt,mt) = d(:,:,nt,mt) + (4*pi/3)*0.01389*eye(3)/4; %Lorentz
         d(:,:,mt,nt) = conj(d(:,:,nt,mt)); % symmetrize the tensor
     end

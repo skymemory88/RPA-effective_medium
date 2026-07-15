@@ -113,10 +113,12 @@ nq = size(qvec,1);
 Jnu  = zeros(nq, 4);
 Juni = zeros(nq, 1);
 lorz = 4*pi/(3*ion.Vc)*C.gfac;   % scalar; broadcasts to ones(4,4)-type Lorentz block (see header)
-% Build the q-independent lattice geometry ONCE and reuse it for every q below
-% (and for the Gamma-point dip0). MF_dipole/exchange are otherwise bit-identical.
-[~, ~, geomD] = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
-[~,    geomX] = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau);
+% Build the q-independent lattice geometry ONCE and reuse it for every q below.
+% This priming call is itself at q=[0 0 0], so capture its dip0 for the Gamma-
+% point info block instead of recomputing it. MF_dipole/exchange are otherwise
+% bit-identical whether the geometry is rebuilt or passed in.
+[dip0, ~, geomD] = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
+[~,       geomX] = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau);
 for iq = 1:nq
     q = qvec(iq,:);
     dip = MF_dipole(q, dpRng, ion.a, ion.tau, geomD);       % [3,3,4,4], Å^-3
@@ -129,8 +131,7 @@ for iq = 1:nq
     Jnu(iq,:) = sort(real(eig(Jcc))).';
     Juni(iq)  = real(v.'*Jcc*v);                     % uniform FM-mode coupling (physical dispersion)
 end
-% Γ-point info block (always computed at q=[0 0 0]), uniform-mode projection:
-dip0 = MF_dipole([0 0 0], dpRng, ion.a, ion.tau, geomD);
+% Γ-point info block (dip0 from the priming call above), uniform-mode projection:
 Jcc0d = -squeeze(C.gfac*dip0(3,3,:,:)) + lorz;
 Jaa0d = -squeeze(C.gfac*dip0(1,1,:,:)) + lorz - dm_aa;
 Jcc0d = (Jcc0d + Jcc0d')/2;

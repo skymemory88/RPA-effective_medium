@@ -109,8 +109,8 @@ end
 % expected condition here (Bx -> 0); anything else is a defect and propagates.
 % When the 1/z point converged (phase 2) reuse its two-level / single-ion state and the
 % bare chi0cc, so the overlay and the 1/z call don't each rebuild the diagonalization.
-reuse = phase == 2 && ~isempty(pt);
-if reuse, tl0 = pt.tl;  si0 = pt.si;  else, tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0));  si0 = []; end
+if phase == 2 && ~isempty(pt), tl0 = pt.tl;  si0 = pt.si;
+else, tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0));  si0 = []; end
 chi0cc = [];
 try
     pt0 = struct('alpha', 0, 'lambda', [0; 0], 'tl', tl0, 'K', []);

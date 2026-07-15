@@ -19,15 +19,15 @@ G0  = -real(squeeze(c0(3,3,:)));                 % full (electro)nuclear cc Gree
 tl  = invz_twolevel(ion, T, Bx, struct('Jxx0', Jxx0));   % electronic two-level params for Sigma
 g   = real(invz_g(tl, 1i*wn));
 
-% Warm-start seeds (finding #6): a converged neighbouring point's Sigma/K speed
-% up the outer/EMT fixed points. They must be the SAME length as wn (same T), and
-% only change the iteration path, not the converged fixed point; ignored otherwise.
-Sigma = zeros(size(wn));  K = zeros(size(wn));
+% Warm-start seed (finding #6): a converged neighbouring point's Sigma speeds up
+% the outer fixed point. It must be the SAME length as wn (same T), and only
+% changes the iteration path, not the converged fixed point; ignored otherwise.
+% (Only Sigma is seeded: the closed-form EMT solves K directly and ignores any K
+% seed, so seeding K had no effect.)
+Sigma = zeros(size(wn));
 if isfield(opts,'Sigma_seed') && numel(opts.Sigma_seed) == numel(wn), Sigma = opts.Sigma_seed(:); end
-if isfield(opts,'K_seed')     && numel(opts.K_seed)     == numel(wn), K     = opts.K_seed(:);     end
 converged = false;
 for outer = 1:maxo
-    eopts.K0 = K;
     med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
     K   = med.K;
     lam = invz_lambdas(K, g, wts, beta, [1 2]);

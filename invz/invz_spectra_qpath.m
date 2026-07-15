@@ -103,7 +103,7 @@ else
     tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0));
     pt0 = struct('alpha', 0, 'lambda', [0; 0], 'tl', tl0, 'K', []);
 end
-c0opts = copts;  c0opts.npass = 1;
+c0opts = copts;  c0opts.npass = 1;  c0opts.chi0cc_w = o.chi0cc_w;   % share bare cc from the 1/z call
 o0 = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
 chirpa = imag(o0.chi_cc_q).';
 

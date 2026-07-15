@@ -29,15 +29,23 @@ end
 K = A .* D ./ (1 - A .* G0);
 G = G0 ./ (D + K .* G0);
 
-% Closure diagnostic (R eq: q-averaged Gq must equal the local G), also blocked.
-cl = zeros(nw,1);
-for i0 = 1:blk:nw
-    idx = i0:min(i0+blk-1, nw);
-    Gqb = G(idx).' ./ (1 + (Jf - K(idx).').*G(idx).');    % [nJ, numel(idx)]
-    cl(idx) = abs(mean(Gqb,1).' - G(idx)) ./ max(abs(G(idx)), 1e-14);
-end
 med.G = G;  med.K = K;
-med.closure = max(cl);
+% Closure diagnostic (R eq 8: q-averaged Gq must equal the local G). The closed
+% form makes this machine-zero whenever a solution exists, so it never affects
+% the returned G/K -- but it costs a second full-width [nJ x nw] pass, doubling
+% the solve. Compute it only when opts.debug is set (the tests do); production
+% detects a missing solution through med.converged below, not through closure.
+if isfield(opts,'debug') && ~isempty(opts.debug) && opts.debug
+    cl = zeros(nw,1);
+    for i0 = 1:blk:nw
+        idx = i0:min(i0+blk-1, nw);
+        Gqb = G(idx).' ./ (1 + (Jf - K(idx).').*G(idx).');    % [nJ, numel(idx)]
+        cl(idx) = abs(mean(Gqb,1).' - G(idx)) ./ max(abs(G(idx)), 1e-14);
+    end
+    med.closure = max(cl);
+else
+    med.closure = NaN;                                        % not computed unless opts.debug
+end
 % Singular medium (1 - A.*G0 -> 0, i.e. a vanishing RPA denominator) leaves K
 % or G non-finite: report that as not-converged so invz_solve_point treats the
 % point as having no paramagnetic solution. The old iteration masked this

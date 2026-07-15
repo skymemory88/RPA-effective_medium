@@ -22,7 +22,7 @@ end
 function test_rpa_recovery_at_sigma_zero(testCase)
 % HTML Sec 5: with Sigma=0 the effective-medium G(q) equals the RPA G0/(1+J*G0) exactly.
 [G0, Jf, wn, ~, ~] = synthetic_case();
-med = invz_emt_scalar(G0, zeros(size(G0)), Jf, struct());
+med = invz_emt_scalar(G0, zeros(size(G0)), Jf, struct('debug', true));
 verifyTrue(testCase, med.converged);
 Grpa_avg = mean(G0.'./(1 + Jf.*G0.'), 1).';        % (1/N)sum_q RPA
 verifyEqual(testCase, med.G, Grpa_avg, 'RelTol', 1e-8);
@@ -60,13 +60,13 @@ function test_solution_is_exact_fixed_point(testCase)
 % stopped at tol=1e-10 cannot meet a 1e-12 residual check.
 [G0, Jf, ~, ~, ~] = synthetic_case();
 Sigma = zeros(size(G0));
-med = invz_emt_scalar(G0, Sigma, Jf, struct());
+med = invz_emt_scalar(G0, Sigma, Jf, struct('debug', true));
 verifyTrue(testCase, med.converged);
 verifyLessThan(testCase, emt_residual(G0, Sigma, Jf, med), 1e-12);
 verifyLessThan(testCase, med.closure, 1e-12);          % mean_q Gq == G exactly
 % Also exact with a non-zero, frequency-dependent Sigma.
 Sigma2 = 0.15 ./ (1:numel(G0)).';
-med2 = invz_emt_scalar(G0, Sigma2, Jf, struct());
+med2 = invz_emt_scalar(G0, Sigma2, Jf, struct('debug', true));
 verifyLessThan(testCase, emt_residual(G0, Sigma2, Jf, med2), 1e-12);
 verifyLessThan(testCase, med2.closure, 1e-12);
 end
