@@ -75,17 +75,25 @@ against source this session: #2, #3, #4, #10(gL) confirmed accurate; #1's algebr
   written against the current source). An opt-in `comp` fast path was prototyped and reverted per
   user direction — leave the full-tensor kernel alone. If the ~9× production `cc` speedup is later
   wanted, an *additive* `opts.comp` (default = all 9) is ODD-compatible.
-- **#4 (High)** Cold q-space construction rebuilds q-invariant geometry per q-point. `MF_dipole`
-  rebuilds lattice grid, displacements, `r^-3/r^-5`, cutoff masks, and all 9 Cartesian components
-  every call; only `exp(-iq·r)` and the final contraction are q-dependent. ~0.114 s/call ⇒ ~8 min
-  for a cold 4096-pt grid. Fix: split geometry prep from Fourier eval; batch q-points; scalar `cc`
-  path (+ `aa` only at Γ). Files: `invz_jq_modes.m:116-130`, `MF_dipole.m:25-53`, `exchange.m:30-51`.
-- **#5 (Medium)** Reciprocal grid has duplicate periodic boundary faces: inclusive
-  `linspace(-0.5,0.5,N)` double-counts the ±0.5 faces (16³ evaluates 4096 pts, only 3375 distinct;
-  17.6% redundant). Fix: half-open grid (integer mesh / N); re-confirm quadrature normalisation
-  against convergence tests; longer-term irreducible-BZ set with weights. Files:
-  `qVec_generator.m:188-197`, `invz_spectra_map.m:50-53`, `invz_spectra_qpath.m:68-71`,
-  `invz_run_phase_diagram.m:53-56`.
+- **#4 (High) — DONE (2026-07-15).** `MF_dipole`/`exchange` gained an optional precomputed-geometry
+  arg (5th/5th) and return the geometry struct; `invz_jq_modes` builds the q-independent lattice
+  geometry (reciprocal basis, meshgrid/`r0`, per-pair cutoff `r`, `r^-3`/`r^-5`, the 9 tensor-factor
+  columns, `nN`) ONCE and reuses it across the whole q-loop and the Γ `dip0`. Cold-grid speedup
+  without touching the cache key or any numerics. BIT-IDENTICAL verified against a golden from the
+  unmodified code: max abs diff 0 for `dip`, `exchange`, `Jnu`, `Juni`, `Jcc0`, full `info`
+  `isequal`. The full 3×3 Cartesian tensor output is UNCHANGED (kept for ODD, like #3 — the review's
+  "scalar cc dipole path" sub-item was NOT taken, as ODD needs all blocks). External callers
+  (`MF_RPA_Yikai`, `RPA_line`, `invz_jq_path`) use the 4-arg form and are untouched. Test:
+  `test_invz_dipole_geometry_reuse` (4-arg == 5-arg-reused-geom over 7 q). The `exchange` cutoff
+  quirk (`max(vecnorm(a,1).^2)` vs `max(vecnorm(a,1)).^2`, equal by coincidence for this lattice)
+  is preserved verbatim.
+- **#5 (Medium) — OPT-IN PROVIDED (2026-07-15).** `qVec_generator` gained an `endpoint` option
+  (default `true` = the historical inclusive `linspace`, byte-identical). `endpoint=false` gives the
+  half-open grid (`lo + (0:N-1)/N*(hi-lo)`) with no duplicate ±0.5 face. NOT flipped by default:
+  the LiHoF4 benchmarks (Tc0≈1.7795 K on the 16³ grid, Σ_c, Bc) are calibrated on the inclusive
+  grid, so changing the quadrature shifts every grid-dependent result and requires re-validation
+  against R2007 — a physics decision left to the user. Test `test_qVec_generator` pins both the
+  unchanged default and the half-open point set. Irreducible-BZ-with-weights left as future work.
 - **#6 (Medium) — PARTIAL (2026-07-15).** DONE: `invz_solve_point` accepts `opts.Sigma_seed`/
   `opts.K_seed` (same length as `wn`; only changes the iteration path, not the converged fixed
   point — `test_warm_start_same_fixed_point` proves same result + strictly fewer outer iters);
@@ -97,21 +105,25 @@ against source this session: #2, #3, #4, #10(gL) confirmed accurate; #1's algebr
   non-convergence signal these searches depend on must stay seed-independent. Anderson/quasi-Newton
   and the multiple-crossing-audit option (bullet 6) not pursued (the full-grid re-entrance scan in
   `invz_critical_T` is intentional).
-- **#7 (Medium)** Config knobs scattered (scripts require source edits; grid/cutoff hardcoded above
-  the "knobs" section; nonempty `qpath` silently unuses `fields`/`w`; two sources for uniform
-  couplings — pasted `ion.J0eff`/`ion.Jxx0` vs derived `info.Jcc0`/`info.Jaa0`). Fix: make drivers
-  callable functions returning results; one validated cfg struct (`invz_defaults()`); explicit
-  `cfg.mode`; treat uniform couplings as derived; `arguments` blocks. Files: `invz_ion.m:3-24`,
-  `invz_run_spectra.m:24-60`, `invz_run_phase_diagram.m:53-79`, `invz_jq_modes.m:134-138`.
-- **#8 (Medium)** Duplicated code to consolidate (do AFTER perf fixes so numerics stay pinnable):
-  `invz_solve_point[_ordered]` (option parsing / Matsubara / EMT-Σ loop / packing);
-  `invz_spectra_map`+`invz_spectra_qpath`+`invz_run_phase_diagram` (q-grid prep / zero-filter /
-  `invz_jq_modes` / `Jaa0` fallback); the two `invz_plot_spectra_*` (log scaling / percentile /
-  colorbar); duplicated local `getf`; `invz_twolevel[_ordered]`.
-- **#9 (Low)** Comments carry heavy historical narrative (`invz_jq_modes.m` ~56% comment,
-  `invz_run_phase_diagram.m` ~53%, `invz_critical_T.m` ~37%, `invz_spectra_qpath.m` ~42%).
-  Move derivations / rejected alternatives / benchmark tables / bug history into README/design note;
-  keep headers to I/O, invariants, numerical limits, non-obvious conventions.
+- **#7 (Medium) — PARTIAL (2026-07-15).** DONE: the pasted `ion.J0eff`/`ion.Jxx0` are relabelled
+  as explicit REFERENCE/FALLBACK values with the authoritative live `info.Jcc0`/`info.Jaa0`
+  (from `invz_jq_modes`, dpRng-dependent) called out as the source of truth. DELIBERATELY NOT DONE:
+  converting the drivers (`invz_run_spectra`, `invz_run_phase_diagram`) into callable functions with
+  a validated `invz_defaults()` cfg struct — the house style is hand-edited script variables (see
+  2026-07-14 note), and an `invz_defaults()` nobody wires in would be dead code. `arguments`-block
+  option normalisation not pursued (would touch every solver signature; deferred with #8).
+- **#8 (Medium) — PARTIAL (2026-07-15).** DONE: the duplicated local `getf` in `invz_spectra_map`
+  and `invz_spectra_qpath` is centralised to `invz/getf.m` (both local copies removed;
+  `test_getf_shared_helper`). DEFERRED (review's own guidance — do these as a dedicated refactor
+  now the numerics are pinned): the `invz_solve_point[_ordered]` prepared-core extraction, the
+  `invz_spectra_*`/`invz_run_phase_diagram` shared lattice-prep, the two `invz_plot_spectra_*`
+  helpers, and `invz_twolevel[_ordered]` dedup — each carries numerical-drift risk that outweighs
+  the readability gain in this pass.
+- **#9 (Low) — WAIVED (2026-07-15).** Not trimming the in-code physics narrative. This is research
+  code whose long comments (the `invz_jq_modes` sign-resolution + candidate table, demag semantics,
+  critical-classifier history) are load-bearing documentation tightly coupled to subtle lines;
+  moving them to `README.html` reduces discoverability for whoever maintains the kernels. The review
+  rates this "Low"; per code-review discipline this is a reasoned decline, not an omission.
 - **#10 (Low) — MOSTLY DONE (2026-07-15).** DONE: removed unused `gL` in `invz_const.m` (Analyzer
   clean); `qVec_generator.m` gained `verbose` (default true), gated all diagnostics, removed the dead
   `display_qvectors` helper + its commented call, and the three production callers
@@ -122,7 +134,25 @@ against source this session: #2, #3, #4, #10(gL) confirmed accurate; #1's algebr
   named constants and the terse-name renames (`si`/`tl`/`sg`/…) were skipped as high-churn,
   low-value edits with regression risk and no functional benefit.
 
-Recommended order (per review): #1 ✓ → #2 → #6 (warm start) → #4 + #5 → #7 → #8 → #9/#10.
+### Codex efficiency-review — final disposition (2026-07-15)
+
+All 10 findings triaged and actioned in this session (commits on `invz-1z-lihof4`):
+
+| # | Sev | Status | Note |
+|---|-----|--------|------|
+| 1 | Critical | DONE | closed-form EMT (~84× kernel), non-finite guard |
+| 2 | High | DONE | share si/tl/chi0cc per field point (bit-identical) |
+| 3 | High | WAIVED | full chi0z tensor is required ODD substrate |
+| 4 | High | DONE | dipole/exchange geometry reuse (bit-identical) |
+| 5 | Medium | OPT-IN | half-open grid available (`endpoint=false`), default unchanged |
+| 6 | Medium | PARTIAL | seed capability + T0field early-stop; not wired into boundary search (physics) |
+| 7 | Medium | PARTIAL | couplings relabelled fallback; driver→function declined (house style) |
+| 8 | Medium | PARTIAL | `getf` centralised; large refactors deferred (numerics now pinned) |
+| 9 | Low | WAIVED | in-code physics narrative kept (research-code asset) |
+| 10 | Low | MOSTLY | gL, qVec verbose, dead code, cache cleanup; compat branch kept (tested) |
+
+"WAIVED/PARTIAL/OPT-IN" items each carry a documented rationale above; none is a silent omission.
+Every code change was gated behind the full `INVZ_SLOW=1` suite (0 failures throughout).
 
 ## Gotchas
 

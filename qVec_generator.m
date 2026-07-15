@@ -18,6 +18,9 @@ function [qvec, qvec_cart, recip_lattice] = qVec_generator(lattice, varargin)
 %   FOR 'grid' MODE:
 %   'grid'        - Grid dimensions [n1, n2, n3] for uniform q-space mesh (default: [11, 11, 11])
 %   'range'       - Q-space range in reduced coordinates (default: [-1, 1] for each direction)
+%   'endpoint'    - Include the upper range face (default: true, inclusive linspace). Set false
+%                   for a half-open grid with no duplicate reciprocal-periodic boundary face;
+%                   this CHANGES the finite-grid quadrature (opt-in -- re-validate benchmarks).
 %
 %   FOR 'path' MODE:
 %   'path'        - High-symmetry path definition as cell array of point labels
@@ -88,6 +91,7 @@ addParameter(p, 'path', {}, @(x) iscell(x) || (isnumeric(x) && size(x,2) == 3));
 addParameter(p, 'npoints', 50, @(x) isnumeric(x) && isscalar(x) && x > 0);
 addParameter(p, 'sympoints', {}, @iscell);
 addParameter(p, 'verbose', true, @(x) islogical(x) || (isnumeric(x) && isscalar(x)));
+addParameter(p, 'endpoint', true, @(x) islogical(x) || (isnumeric(x) && isscalar(x)));
 parse(p, lattice, varargin{:});
 
 mode = p.Results.mode;
@@ -97,6 +101,7 @@ path_spec = p.Results.path;
 n_path_points = p.Results.npoints;
 sympoints_spec = p.Results.sympoints;
 verbose = logical(p.Results.verbose);    % opts.verbose = false silences the lattice diagnostics
+endpoint = logical(p.Results.endpoint);  % see generate_grid
 
 %% Compute reciprocal lattice vectors
 % Real space lattice vectors (rows of lattice matrix)
@@ -134,7 +139,7 @@ end
 %% Generate q-vectors based on mode
 switch mode
     case 'grid'
-        [qvec, qvec_cart] = generate_grid(grid_size, q_range, recip_lattice, verbose);
+        [qvec, qvec_cart] = generate_grid(grid_size, q_range, recip_lattice, verbose, endpoint);
 
     case 'path'
         [qvec, qvec_cart] = generate_path(path_spec, n_path_points, lattice_type, recip_lattice, verbose);
@@ -180,7 +185,15 @@ function lattice_type = detect_lattice_type(lattice)
 end
 
 %% Helper function: Generate uniform grid
-function [qvec, qvec_cart] = generate_grid(grid_size, q_range, recip_lattice, verbose)
+function [qvec, qvec_cart] = generate_grid(grid_size, q_range, recip_lattice, verbose, endpoint)
+    % endpoint = true (default): inclusive linspace(lo, hi, N) -- the historical grid. For a
+    %   reciprocal-periodic range like [-0.5, 0.5] the two boundary faces are duplicates, so an
+    %   N^3 grid has only (N-1)^3 distinct points (16^3 -> 4096 sampled, 3375 distinct; ~17.6%
+    %   redundant) and the EMT lattice average double-counts those faces.
+    % endpoint = false: half-open grid lo + (0:N-1)/N*(hi-lo) -- N distinct points per axis, no
+    %   duplicate face. NOTE: this CHANGES the finite-grid quadrature, so it shifts every
+    %   grid-dependent result (Tc, Bc, Sigma_c). It is OPT-IN; the LiHoF4 benchmarks are
+    %   calibrated on the inclusive grid, so re-validate against R2007 before adopting it.
     if verbose
         fprintf('Generating uniform q-space grid...\n');
         fprintf('Grid size: [%d, %d, %d]\n', grid_size(1), grid_size(2), grid_size(3));
@@ -188,9 +201,15 @@ function [qvec, qvec_cart] = generate_grid(grid_size, q_range, recip_lattice, ve
     end
 
     % Create grid in reduced coordinates
-    qx = linspace(q_range(1), q_range(2), grid_size(1));
-    qy = linspace(q_range(1), q_range(2), grid_size(2));
-    qz = linspace(q_range(1), q_range(2), grid_size(3));
+    if endpoint
+        qx = linspace(q_range(1), q_range(2), grid_size(1));
+        qy = linspace(q_range(1), q_range(2), grid_size(2));
+        qz = linspace(q_range(1), q_range(2), grid_size(3));
+    else
+        qx = q_range(1) + (0:grid_size(1)-1)/grid_size(1) * (q_range(2) - q_range(1));
+        qy = q_range(1) + (0:grid_size(2)-1)/grid_size(2) * (q_range(2) - q_range(1));
+        qz = q_range(1) + (0:grid_size(3)-1)/grid_size(3) * (q_range(2) - q_range(1));
+    end
 
     [QX, QY, QZ] = meshgrid(qx, qy, qz);
 

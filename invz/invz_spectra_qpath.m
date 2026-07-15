@@ -152,8 +152,3 @@ for k = 1:size(chi, 2)
     E(k) = wm(i) + d*dw;
 end
 end
-
-% -------------------------------------------------------------------------------------------
-function v = getf(s, f, d)
-if isfield(s, f), v = s.(f); else, v = d; end
-end

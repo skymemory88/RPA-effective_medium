@@ -129,8 +129,3 @@ if phase == 2                                     % --- converged paramagnetic 1
     chiz = imag(o.chi_cc_q(1, :)).';
 end
 end
-
-% -------------------------------------------------------------------------------------------
-function v = getf(s, f, d)
-if isfield(s, f), v = s.(f); else, v = d; end
-end
