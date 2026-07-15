@@ -1,43 +1,10 @@
 %INVZ_RUN_PHASE_DIAGRAM Reproduce R 2007 Fig 1 (paramagnetic-side boundary).
 %
 % Two-regime search:
-%   low-T:  find the critical field Bc(T) at each fixed T in Ts
+%   Bc search:  find the critical field Bc(T) at each fixed T in Ts
 %           (invz_critical, vertical cuts);
-%   high-T: find the critical temperature Tc(B) at each fixed B in Bs
+%   Tc search: find the critical temperature Tc(B) at each fixed B in Bs
 %           (invz_critical_T, horizontal cuts, self-adapting window).
-% Near the classical critical point (B -> 0, T -> the zero-field Tc) the
-% boundary is nearly parallel to the field axis, so a vertical cut crosses it
-% at a glancing angle: it becomes ill-conditioned and tiny T errors give large
-% Bc errors. A horizontal cut crosses it transversally and is well-conditioned
-% there. That is why the low-T Ts list is best kept below ~1.6 K and the Bs
-% list owns the part of the boundary just under Tc0.
-%
-% Robustness (both cuts): within a narrow band around the boundary the
-% paramagnetic self-consistency suffers critical slowing down (the outer loop
-% does not reach tolerance; the soft-mode Dyson denominator blows up to NaN).
-% Both invz_critical_T (samples crit on a T grid) and invz_critical (scans the
-% field down from the paramagnet) classify from CONVERGED points ONLY and
-% interpolate the crossing, so those failures no longer masquerade as "ordered"
-% and scatter the boundary. (The previous bisection counted them as ordered and
-% produced a rugged boundary, some Tc(B) points even above Tc0.) invz_critical_T
-% additionally raises invz:multipleCrossings on more than one converged crossing
-% -- a candidate hyperfine re-entrant nose worth inspecting rather than hiding.
-%
-% Small B: below ~0.5 T the doublet is near-degenerate (invz_twolevel raises
-% invz:degenerateDoublet as Bx -> 0) so few points converge; the 0 < B < 0.5 T
-% segment spans only ~4 mK below Tc0 and is best read from the closed-form Tc0
-% endpoint on the plot.
-%
-% Parallelism: all nT+nB boundary points are INDEPENDENT 1-D root finds, so a
-% single flat parfor covers both regimes -- near-linear speedup up to the job
-% count. Each point is solved on its own worker; the per-point root find (a
-% serial scan/grid of EMT solves plus interpolation) is left serial within a
-% point, since the job-level parfor already saturates the pool. parfor degrades to a
-% serial loop automatically when the Parallel Computing Toolbox is absent
-% (nWorkers = 0); with it, a local pool is auto-created on first use
-% (~10-30 s once). The Jq lattice sum is computed ONCE up front, so workers
-% do no disk I/O and never touch the invz/cache -- no contention. Progress
-% lines interleave across workers when running in parallel; that is expected.
 
 addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')),'..'));
 ion = invz_ion();
