@@ -113,10 +113,14 @@ nq = size(qvec,1);
 Jnu  = zeros(nq, 4);
 Juni = zeros(nq, 1);
 lorz = 4*pi/(3*ion.Vc)*C.gfac;   % scalar; broadcasts to ones(4,4)-type Lorentz block (see header)
+% Build the q-independent lattice geometry ONCE and reuse it for every q below
+% (and for the Gamma-point dip0). MF_dipole/exchange are otherwise bit-identical.
+[~, ~, geomD] = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
+[~,    geomX] = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau);
 for iq = 1:nq
     q = qvec(iq,:);
-    dip = MF_dipole(q, dpRng, ion.a, ion.tau);       % [3,3,4,4], Å^-3
-    ex  = exchange(q, abs(ion.J12), ion.a, ion.tau); % [3,3,4,4], carries |J12|
+    dip = MF_dipole(q, dpRng, ion.a, ion.tau, geomD);       % [3,3,4,4], Å^-3
+    ex  = exchange(q, abs(ion.J12), ion.a, ion.tau, geomX); % [3,3,4,4], carries |J12|
     Jcc = -squeeze(C.gfac*dip(3,3,:,:)) + sign(ion.J12)*squeeze(ex(3,3,:,:));
     if is_gamma_equiv(q, ion.tau)
         Jcc = Jcc + lorz;                            % uniform-mode Lorentz cavity (demag-invariant)
@@ -126,7 +130,7 @@ for iq = 1:nq
     Juni(iq)  = real(v.'*Jcc*v);                     % uniform FM-mode coupling (physical dispersion)
 end
 % Γ-point info block (always computed at q=[0 0 0]), uniform-mode projection:
-dip0 = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
+dip0 = MF_dipole([0 0 0], dpRng, ion.a, ion.tau, geomD);
 Jcc0d = -squeeze(C.gfac*dip0(3,3,:,:)) + lorz;
 Jaa0d = -squeeze(C.gfac*dip0(1,1,:,:)) + lorz - dm_aa;
 Jcc0d = (Jcc0d + Jcc0d')/2;
