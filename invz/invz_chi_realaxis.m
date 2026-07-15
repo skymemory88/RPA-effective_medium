@@ -16,6 +16,10 @@ function out = invz_chi_realaxis(ion, T, Bx, pt, w, opts)
 %                         the real-axis chi0 matches the Matsubara medium's Hilbert space.
 % opts.Jshape (0)         strict-uniform demag observable correction (use info.Jshape_cc);
 %                         applied in place to chi_cc_q. Leave 0 for finite-q (intrinsic) paths.
+% opts.chi0cc_w           precomputed bare chi0_cc(w) on this exact z grid (= a prior call's
+%                         out.chi0cc_w). When supplied, the single-ion diagonalization and
+%                         invz_chi0z are skipped and this value is used directly, so a field
+%                         point can share one chi0cc between its RPA and 1/z evaluations.
 if nargin < 6, opts = struct(); end
 eta   = 5e-3; if isfield(opts,'eta'),   eta   = opts.eta;   end
 npass = 3;    if isfield(opts,'npass'), npass = opts.npass; end
@@ -25,16 +29,20 @@ Jshape = 0;        if isfield(opts,'Jshape'), Jshape = opts.Jshape; end
 hyp    = true;     if isfield(opts,'hyp'),    hyp    = opts.hyp;    end
 ordered = isfield(pt,'is_ordered') && pt.is_ordered;
 
-if isfield(opts,'si') && ~isempty(opts.si)
-    si = opts.si;                                  % caller-supplied single-ion state
-elseif ordered && isfield(pt,'si') && ~isempty(pt.si)
-    si = pt.si;                                    % ordered eigenstates from the solve
-else
-    si = invz_single_ion(ion, T, [Bx 0 0], struct('hyp', hyp, 'Jxx0', Jxx0));   % paramagnet
-end
 z  = w(:) + 1i*eta;
-c0 = invz_chi0z(si, T, z, struct('elastic', false));
-G0 = -squeeze(c0(3,3,:));
+if isfield(opts,'chi0cc_w') && ~isempty(opts.chi0cc_w)
+    G0 = -opts.chi0cc_w(:);                        % reuse a shared bare cc; no si/chi0z needed
+else
+    if isfield(opts,'si') && ~isempty(opts.si)
+        si = opts.si;                              % caller-supplied single-ion state
+    elseif ordered && isfield(pt,'si') && ~isempty(pt.si)
+        si = pt.si;                                % ordered eigenstates from the solve
+    else
+        si = invz_single_ion(ion, T, [Bx 0 0], struct('hyp', hyp, 'Jxx0', Jxx0));   % paramagnet
+    end
+    c0 = invz_chi0z(si, T, z, struct('elastic', false));
+    G0 = -squeeze(c0(3,3,:));
+end
 tl = pt.tl;
 g  = invz_g(tl, z);
 pref = tl.M2/tl.n01^2;

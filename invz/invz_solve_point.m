@@ -32,7 +32,7 @@ for outer = 1:maxo
     if dS < tolo, converged = true; break; end
 end
 pt.Sigma0 = Sigma(1);  pt.alpha = sg.alpha;  pt.lambda = lam;
-pt.K = K;  pt.G = med.G;  pt.Sigma = Sigma;  pt.tl = tl;
+pt.K = K;  pt.G = med.G;  pt.Sigma = Sigma;  pt.tl = tl;  pt.si = si;
 pt.chi0cc0 = -G0(1);
 pt.crit = 1 + pt.Sigma0 - J0eff*pt.chi0cc0;
 pt.sumrule_rel = abs(sum(wts.*med.G)/beta + si.JzJz_fluct) / si.JzJz_fluct;

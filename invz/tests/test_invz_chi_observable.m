@@ -49,6 +49,27 @@ Epk = w(ipk);
 verifyGreaterThan(testCase, Epk, 0.10);  verifyLessThan(testCase, Epk, 0.28);
 end
 
+function test_chi0cc_passthrough_is_consumed(testCase)
+% invz_chi_realaxis reuses a precomputed bare chi0cc(w) when given, so one field
+% point need not rebuild the single ion / chi0 for both its RPA and 1/z calls
+% (finding #2). A correct precomputed value reproduces the internal result exactly;
+% a perturbed one changes the output, proving the option is actually consumed.
+ion = invz_ion();
+T = 1.0;  Bx = 3.0;  w = (0.05:0.02:0.7).';  eta = 5e-3;
+pt = struct('alpha', 0.1, 'lambda', [0.2; 0.1], 'tl', invz_twolevel(ion, T, Bx), 'K', []);
+copts = struct('hyp', false, 'eta', eta, 'npass', 1, 'Jsel', [5e-3; 6.4e-3]);
+o_ref = invz_chi_realaxis(ion, T, Bx, pt, w, copts);
+si  = invz_single_ion(ion, T, [Bx 0 0], struct('hyp', false, 'Jxx0', ion.Jxx0));
+c0  = invz_chi0z(si, T, w + 1i*eta, struct('elastic', false));
+chi0cc = squeeze(c0(3,3,:));
+copts2 = copts;  copts2.chi0cc_w = chi0cc;
+o_new = invz_chi_realaxis(ion, T, Bx, pt, w, copts2);
+verifyEqual(testCase, o_new.chi_cc_q, o_ref.chi_cc_q, 'AbsTol', 1e-12);
+copts3 = copts;  copts3.chi0cc_w = 1.5*chi0cc;
+o_pert = invz_chi_realaxis(ion, T, Bx, pt, w, copts3);
+verifyGreaterThan(testCase, max(abs(o_pert.chi_cc_q(:) - o_ref.chi_cc_q(:))), 1e-6);
+end
+
 function test_demag_observable_rescale(testCase)
 % The measured strict-uniform response chi_meas = chi_int/(1 + Jshape*chi_int) must
 % equal the OLD-convention shifted pole chit/(1 - (Jcc0 - Jshape)*chit) exactly

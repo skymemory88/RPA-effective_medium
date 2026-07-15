@@ -93,11 +93,11 @@ copts = struct('Jsel', Jcc0, 'eta', eta, 'Jxx0', Jaa0, 'Jshape', Jshape, 'hyp', 
 [pt, phase] = invz_solve_auto(ion, T, B, Jnu, sopts);
 
 if phase == 1                                     % --- ferromagnetic (ordered) branch ---
-    o  = invz_chi_realaxis(ion, T, B, pt, w, copts);
+    o  = invz_chi_realaxis(ion, T, B, pt, w, copts);   % reuses pt.si (ordered eigenstates)
     chiz = imag(o.chi_cc_q(1, :)).';
     pt0 = struct('alpha', 0, 'alpha_m', 0, 'lambda', [0; 0; 0], 'tl', pt.tl, ...
                  'K', [], 'is_ordered', true, 'si', pt.si);
-    c0opts = copts;  c0opts.npass = 1;
+    c0opts = copts;  c0opts.npass = 1;  c0opts.chi0cc_w = o.chi0cc_w;   % share bare cc
     o0  = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
     chirpa = imag(o0.chi_cc_q(1, :)).';
     Sigma0 = pt.Sigma0;
@@ -107,18 +107,25 @@ end
 % --- paramagnetic side: bare-RPA overlay first (needs only the two-level params), so a
 % non-converged 1/z point still gets its RPA column. invz:degenerateDoublet is the one
 % expected condition here (Bx -> 0); anything else is a defect and propagates.
+% When the 1/z point converged (phase 2) reuse its two-level / single-ion state and the
+% bare chi0cc, so the overlay and the 1/z call don't each rebuild the diagonalization.
+reuse = phase == 2 && ~isempty(pt);
+if reuse, tl0 = pt.tl;  si0 = pt.si;  else, tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0));  si0 = []; end
+chi0cc = [];
 try
-    tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0));
     pt0 = struct('alpha', 0, 'lambda', [0; 0], 'tl', tl0, 'K', []);
-    c0opts = copts;  c0opts.npass = 1;
+    c0opts = copts;  c0opts.npass = 1;  c0opts.si = si0;
     o0  = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
     chirpa = imag(o0.chi_cc_q(1, :)).';
+    chi0cc = o0.chi0cc_w;                          % share the bare cc with the 1/z call
 catch err
     if ~strncmp(err.identifier, 'invz:', 5), rethrow(err); end
 end
 if ~isempty(pt) && isfield(pt, 'Sigma0'), Sigma0 = pt.Sigma0; end
 if phase == 2                                     % --- converged paramagnetic 1/z ---
-    o = invz_chi_realaxis(ion, T, B, pt, w, copts);
+    copts1 = copts;
+    if ~isempty(chi0cc), copts1.chi0cc_w = chi0cc; end
+    o = invz_chi_realaxis(ion, T, B, pt, w, copts1);
     chiz = imag(o.chi_cc_q(1, :)).';
 end
 end
