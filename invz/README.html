@@ -99,6 +99,9 @@ $$g(z) = \frac{2\,n_{01}\,\Delta}{\Delta^{2}-z^{2}}, \qquad n_{01}=\tanh\frac{\D
 <h3>1.2 Effective medium — the lattice sum</h3>
 <p>The self-consistent effective-medium coupling \(K(\wn)\) is the fixed point of (R 2007 eqs 7–9; \(\langle\cdot\rangle=\frac1N\sum_{\mathbf q,\nu}\) over the Brillouin zone and the four cc sublattice branches):</p>
 $$G=\frac{G_0}{1+\Sigma+K\,G_0}, \qquad G_{\mathbf q}=\frac{G}{1+(\Jc_\nu-K)\,G}, \qquad K=\Big\langle\frac{\Jc_\nu\,G_{\mathbf q}}{G}\Big\rangle.$$
+<p>At fixed \(\Sigma\) this is <em>not</em> iterated: substituting \(G\) into \(G_{\mathbf q}\) cancels \(K\) (\(G_{\mathbf q}=G_0/(1+\Sigma+\Jc_\nu G_0)\)), leaving a <em>linear</em> equation for \(K\) that <code>invz_emt_scalar</code> solves in closed form,</p>
+$$K=\frac{A\,(1+\Sigma)}{1-A\,G_0}, \qquad A=\Big\langle\frac{\Jc_\nu}{1+\Sigma+\Jc_\nu\,G_0}\Big\rangle, \qquad G=\frac{G_0}{1+\Sigma+K\,G_0}.$$
+<p>So each medium solve is one direct evaluation per \(\Sigma\) (no inner fixed-point loop; frequencies may be blocked via <code>opts.freq_block</code> to bound peak memory), and at the true fixed point \(\langle G_{\mathbf q}\rangle=G\) exactly (the <code>med.closure</code> diagnostic is then machine-zero). A vanishing denominator \(1-A\,G_0\to0\) is the ordered-side instability where the paramagnetic medium ceases to exist; \(K\)/\(G\) go non-finite and <code>med.converged=false</code> reports it. Only the outer \(K\!\leftrightarrow\!\Sigma\) coupling (below) is iterated.</p>
 
 <h3>1.3 The 1/z self-energy</h3>
 <p>The Matsubara moments of \(K\) weighted by powers of \(g\),</p>
