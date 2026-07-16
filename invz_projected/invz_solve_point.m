@@ -4,15 +4,15 @@ function pt = invz_solve_point(ion, T, Bx, Jnu_flat, opts)
 % Outer loop: EMT K (Task 7) <-> lambda_p (Task 8) <-> Sigma, at fixed single-ion input.
 % Inside the ordered phase the paramagnetic EMT fixed point does not exist; outputs may be non-finite and pt.converged false — invz_critical relies on this as the ordered-phase signal. Always check pt.converged.
 if nargin < 5, opts = struct(); end
-Ecut  = 40;   if isfield(opts,'Ecut'),      Ecut  = opts.Ecut;      end
-hyp   = true; if isfield(opts,'hyp'),       hyp   = opts.hyp;       end
-J0eff = ion.J0eff; if isfield(opts,'J0eff'), J0eff = opts.J0eff;    end
-Jxx0  = ion.Jxx0;  if isfield(opts,'Jxx0'), Jxx0 = opts.Jxx0; end
-tmf   = 'legacy_x'; if isfield(opts,'transverse_mf'), tmf = opts.transverse_mf; end
-mixo  = 0.7;  if isfield(opts,'mix_outer'), mixo  = opts.mix_outer; end
-tolo  = 1e-8; if isfield(opts,'tol_outer'), tolo  = opts.tol_outer; end
-maxo  = 60;   if isfield(opts,'max_outer'), maxo  = opts.max_outer; end
-eopts = struct(); if isfield(opts,'emt'), eopts = opts.emt; end
+Ecut  = getf(opts, 'Ecut', 40);
+hyp   = getf(opts, 'hyp', true);
+J0eff = getf(opts, 'J0eff', ion.J0eff);
+Jxx0  = getf(opts, 'Jxx0', ion.Jxx0);
+tmf   = getf(opts, 'transverse_mf', 'legacy_x');
+mixo  = getf(opts, 'mix_outer', 0.7);
+tolo  = getf(opts, 'tol_outer', 1e-8);
+maxo  = getf(opts, 'max_outer', 60);
+eopts = getf(opts, 'emt', struct());
 Bx = invz_field_vec(Bx);                       % scalar -> [Bx 0 0]; 3-vector passes through
 
 [wn, wts, beta] = invz_matsubara(T, Ecut);

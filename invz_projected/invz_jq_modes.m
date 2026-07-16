@@ -38,8 +38,8 @@ else
     dm_cc = 0;  dm_aa = 0;                             % off: byte-identical to the pre-demag code
 end
 cacheDir = fullfile(fileparts(mfilename('fullpath')), 'cache');
-pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; demag; alpha; 3];   % trailing 3 = cache schema v3 (adds Juni)
-key = sprintf('jq3_%d_%s_%s.mat', dpRng, hash_vec(qvec(:)), hash_vec(pkey));
+pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; demag; alpha; 4];   % trailing 4 = cache schema v4 (adds info.geomD/geomX)
+key = sprintf('jq4_%d_%s_%s.mat', dpRng, hash_vec(qvec(:)), hash_vec(pkey));
 cacheFile = fullfile(cacheDir, key);
 if useCache && exist(cacheFile, 'file')
     S = load(cacheFile);
@@ -64,7 +64,7 @@ for iq = 1:nq
     dip = MF_dipole(q, dpRng, ion.a, ion.tau, geomD);       % [3,3,4,4], Å^-3
     ex  = exchange(q, abs(ion.J12), ion.a, ion.tau, geomX); % [3,3,4,4], carries |J12|
     Jcc = -squeeze(C.gfac*dip(3,3,:,:)) + sign(ion.J12)*squeeze(ex(3,3,:,:));
-    if is_gamma_equiv(q, ion.tau)
+    if invz_is_gamma_equiv(q, ion.tau)
         Jcc = Jcc + lorz;                            % uniform-mode Lorentz cavity (demag-invariant)
     end
     Jcc = (Jcc + Jcc')/2;
@@ -82,14 +82,13 @@ info.Jcc0 = info.Jcc0_dipole + 4*ion.J12;
 info.Jaa0      = info.Jaa0_dipole + 4*ion.J12;   % transverse J(0), demag-aware (meV)
 info.Jshape_cc = 4*dm_cc;                        % strict-uniform observable correction (meV); 0 when demag = 0
 info.dpRng = dpRng;
+info.geomD = geomD;   % q-independent lattice geometry (MF_dipole/exchange 5-arg reuse form),
+info.geomX = geomX;   % exposed so callers (e.g. invz_jq_path's Gamma-limit Greg) can rebuild a
+                       % q=0 dip/ex matrix without re-deriving the geometry (bit-identical either way).
 if useCache
     if ~exist(cacheDir,'dir'), mkdir(cacheDir); end
     save(cacheFile, 'Jnu', 'info', 'Juni', 'pkey', 'qvec');
 end
-end
-
-function tf = is_gamma_equiv(q, tau)
-tf = abs(real(sum(exp(2i*pi*(tau*q.'))))/size(tau,1) - 1) < 1e-9;
 end
 
 function h = hash_vec(v)

@@ -27,7 +27,7 @@ function S = invz_spectra_qpath(ion, T, B, qpath, w, opts)
 %     S.s, S.s_cart        path distance in index (r.l.u.) / Cartesian (Ang^-1) coordinates
 %     S.x, S.xlab          plot coordinate + label (varying Miller component for a single-
 %                          axis path, e.g. h = 1..2, else falls back to S.s)
-%     S.qpath, S.w, S.T, S.B, S.Bvec, S.Bmag, S.info, S.phase (1 = moment-form solve, 2 = strict-PM solve)
+%     S.qpath, S.w, S.T, S.Bvec, S.Bmag, S.info, S.phase (1 = moment-form solve, 2 = strict-PM solve)
 %     S.transverse_mf      resolved MF mode string (echoes opts.solve_opts.transverse_mf,
 %                           default 'legacy_x')
 %
@@ -59,28 +59,18 @@ wmin    = getf(opts, 'peak_wmin', 0.05);
 
 bztol = getf(opts, 'bz_tol', 1e-9);
 sxtra = getf(opts, 'solve_opts', struct());
-if any(isfield(sxtra, {'J0eff', 'Jxx0', 'hyp'}))
-    error('invz:solveOpts', 'solve_opts fields J0eff/Jxx0/hyp are reserved (driver-owned).');
-end
+invz_check_solve_opts(sxtra);
 B = invz_field_vec(B);
 if abs(B(3)) <= bztol, B(3) = 0; end             % same dead band as invz_solve_auto
 
-tmf = getf(sxtra, 'transverse_mf', 'legacy_x');
-if strcmp(tmf, 'legacy_x') && abs(B(2)) > 0
-    error('invz:transverseMF', ['field has a b-axis (y) component but transverse_mf is ' ...
-        '''legacy_x'' (x-only mean field; C4-inconsistent, 17 ueV a/b asymmetry at 4 T). ' ...
-        'Set opts.solve_opts.transverse_mf = ''vector_ab'' (or ''none'' for bare diagnostics).']);
-end
+tmf = invz_check_transverse_mf(sxtra, B(2));
 
 w = w(:);
 
 if isfield(opts, 'Jnu') && isfield(opts, 'info')
     Jnu = opts.Jnu(:);   info = opts.info;
 else
-    [qc, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', grid, 'range', [-0.5 0.5], 'verbose', false);
-    qc = qc(any(abs(qc) > 1e-12, 2), :);
-    [Jnu, info] = invz_jq_modes(ion, qc, struct('dpRng', dpRng, 'cache', true));
-    Jnu = Jnu(:);
+    [Jnu, info, ~] = invz_bz_couplings(ion, struct('grid', grid, 'dpRng', dpRng));
 end
 Jcc0 = info.Jcc0;
 Jaa0 = ion.Jxx0;  if isfield(info, 'Jaa0'), Jaa0 = info.Jaa0; end
@@ -120,8 +110,7 @@ chiz = imag(o.chi_cc_q).';                        % [nw x nq]
 % Under a longitudinal B (|Bz| > bz_tol) invz_solve_auto returns phase 1 or the error
 % above already fired -- the strict-PM else-branch below is only reachable transversely.
 if phase == 1
-    pt0 = struct('alpha', 0, 'alpha_m', 0, 'lambda', [0; 0; 0], 'tl', pt.tl, ...
-                 'K', [], 'is_ordered', true, 'si', pt.si);
+    pt0 = invz_zero_sigma_overlay(pt);
 else
     tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0, 'transverse_mf', tmf));
     pt0 = struct('alpha', 0, 'lambda', [0; 0], 'tl', tl0, 'K', []);
@@ -149,7 +138,7 @@ else
     S.x = P.s;
     S.xlab = sprintf('s along path from Q = [%g %g %g] (index r.l.u.)', qpath(1, :));
 end
-S.w = w;  S.T = T;  S.B = B;  S.Bvec = B;  S.Bmag = norm(B);  S.phase = phase;  S.info = info;  S.Jq = Jq;
+S.w = w;  S.T = T;  S.Bvec = B;  S.Bmag = norm(B);  S.phase = phase;  S.info = info;  S.Jq = Jq;
 S.transverse_mf = tmf;
 S.chiz = chiz;  S.chirpa = chirpa;
 S.Epeak     = invz_peak_energy(chiz,   w, wmin);

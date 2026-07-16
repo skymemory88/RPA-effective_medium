@@ -33,10 +33,7 @@ for im = 1:numel(modes)
 end
 
 % ---- Section B: Sigma=0 scalar-vs-tensor over angle (production couplings) ----
-[qc, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5], 'verbose', false);
-qc = qc(any(abs(qc) > 1e-12, 2), :);
-[~, info] = invz_jq_modes(ion, qc, struct('dpRng', 30, 'cache', true));
-Jaa0 = ion.Jxx0;  if isfield(info, 'Jaa0'), Jaa0 = info.Jaa0; end
+[~, info, Jaa0] = invz_bz_couplings(ion);   % shared BZ-grid coupling branches (Jaa0-aware)
 T_B = 0.1;  fieldsB = [2 4.95 6];  phisB = [0 5 11 15 30 45 60 75 79 90];
 w = (0:0.005:0.6).';  eta = 0.02;
 ropts = struct('Jsel', info.Jcc0, 'Jaa0', Jaa0, 'eta', eta, 'transverse_mf', 'vector_ab');

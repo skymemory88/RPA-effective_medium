@@ -29,7 +29,7 @@ ion = invz_ion();
 %     - the strict-uniform (q = 0) chi''_cc is demag-corrected via info.Jshape_cc (saturates
 %       instead of diverging); q-path spectra omit that transform (finite-q = intrinsic
 %       response) but still see demag through info.Jaa0.
-T = 0.1;                             % K
+T = 0.15;                             % K
 useParallel = true;                  % true -> parfor over fields (Parallel Computing Toolbox)
 eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency INPUTS (w, wq) AND
                                      % the plotted axes. Computation always runs in meV; the driver
@@ -57,7 +57,7 @@ theta_c = 0.0;                         % deg -- tilt of the field OUT of the tra
                                      % range (invz_run_tensor_ref); a longitudinal component
                                      % turns the sharp transition into a rounded crossover.
                                      % Full-tensor propagation: deferred (invz_tensor/). phi_ab: implemented below.
-phi_ab = 0.0;                        % deg -- IN-PLANE rotation of the swept field, a -> b.
+phi_ab = -11.0;                        % deg -- IN-PLANE rotation of the swept field, a -> b.
                                      % phi_ab = -11 deg reproduces the production experimental
                                      % geometry (external stack ion.cfRot(Ho) = -11 deg; SAME
                                      % sign, pinned by test_invz_cfrot_equiv:
@@ -71,9 +71,9 @@ phi_ab = 0.0;                        % deg -- IN-PLANE rotation of the swept fie
                                      % never compare legacy_x and vector_ab runs as if only
                                      % the angle differed. Combined theta_c AND phi_ab is
                                      % NOT validated (tilt bound was measured under legacy_x).
-transverse_mf = 'legacy_x';          % 'legacy_x' | 'none' | 'vector_ab'
+transverse_mf = 'vector_ab';         % 'legacy_x' | 'none' | 'vector_ab'
 
-showPeaks = false;                    % true -> ALSO line-plot chi''_cc peak energy vs field
+showPeaks = true;                    % true -> ALSO line-plot chi''_cc peak energy vs field
                                      % (S.Epeak/S.Epeak_rpa, cf. the q-path E_peak(q) stream)
 
 % ---- q-path view (R 2007 Fig 3 trends): set qpath non-empty to switch views -------------

@@ -24,17 +24,11 @@ set(ax, 'YDir', 'normal', 'Color', [0.8 0.8 0.8], 'Layer', 'top');
 
 pos = chi(finiteMask & chi > 0);
 if ~isempty(pos)
-    hi = robust_pct(pos, 0.995);
+    hi = invz_robust_pct(pos, 0.995);
     lo = hi / 1e3;
     clim(ax, [log10(lo) log10(hi)]);
 end
 colormap(ax, turbo);
 xlabel(ax, '|B| (T)');   ylabel(ax, sprintf('\\omega (%s)', eUnit));   title(ax, ttl);
 cb = colorbar(ax);   cb.Label.String = 'log_{10} \chi''''_{cc}';
-end
-
-function v = robust_pct(x, p)
-%ROBUST_PCT p-quantile of x (p in [0,1]) without the Statistics Toolbox.
-x = sort(x(:));
-v = x(max(1, min(numel(x), ceil(p * numel(x)))));
 end

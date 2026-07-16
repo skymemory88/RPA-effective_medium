@@ -19,13 +19,13 @@ function out = invz_chi_realaxis(ion, T, Bx, pt, w, opts)
 % opts.chi0cc_w           precomputed chi0_cc(w) on this exact grid; when supplied, skips the
 %                         single-ion diagonalization so a field point can share it across evaluations.
 if nargin < 6, opts = struct(); end
-eta   = 5e-3; if isfield(opts,'eta'),   eta   = opts.eta;   end
-npass = 3;    if isfield(opts,'npass'), npass = opts.npass; end
-Jsel  = ion.J0eff; if isfield(opts,'Jsel'), Jsel = opts.Jsel; end
-Jxx0   = ion.Jxx0; if isfield(opts,'Jxx0'),   Jxx0   = opts.Jxx0;   end
-tmf    = 'legacy_x'; if isfield(opts,'transverse_mf'), tmf = opts.transverse_mf; end
-Jshape = 0;        if isfield(opts,'Jshape'), Jshape = opts.Jshape; end
-hyp    = true;     if isfield(opts,'hyp'),    hyp    = opts.hyp;    end
+eta    = getf(opts, 'eta', 5e-3);
+npass  = getf(opts, 'npass', 3);
+Jsel   = getf(opts, 'Jsel', ion.J0eff);
+Jxx0   = getf(opts, 'Jxx0', ion.Jxx0);
+tmf    = getf(opts, 'transverse_mf', 'legacy_x');
+Jshape = getf(opts, 'Jshape', 0);
+hyp    = getf(opts, 'hyp', true);
 ordered = isfield(pt,'is_ordered') && pt.is_ordered;
 
 z  = w(:) + 1i*eta;

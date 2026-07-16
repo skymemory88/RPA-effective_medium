@@ -8,6 +8,15 @@ addpath(fullfile(here, '..'));
 addpath(fullfile(here, '..', '..'));
 end
 
+function E = diag_spectrum(Hcf, B, ion, o)
+% Diagonalize Hcf + Zeeman, sort ascending, shift to the ground state at 0.
+% Shared tail for spec_rotcf/spec_rotfield -- these two are cross-checked bit-for-bit,
+% so a future change to the diagonalization convention must not drift between them.
+C = invz_const();
+H = Hcf - ion.gL*C.muB*(B(1)*o.Jx + B(2)*o.Jy + B(3)*o.Jz);
+E = sort(real(eig((H + H')/2)));  E = E - E(1);
+end
+
 function E = spec_rotcf(ion, r_deg, B)
 % Spectrum with the m=4 CF coefficient pairs rotated by r (cf.m 'coefficient' method).
 % invz_ion has B44s = 0 implicitly; rotation generates it. Build Hcf manually.
@@ -18,19 +27,15 @@ B64c =  c4*ion.B64c + s4*ion.B64s;  B64s = -s4*ion.B64c + c4*ion.B64s;
 assert(isfield(o, 'O44s') && isfield(o, 'O64s'), 'stevens_ops must expose O44s/O64s');
 Hcf = ion.B20*o.O20 + ion.B40*o.O40 + B44c*o.O44 + B44s*o.O44s ...
     + ion.B60*o.O60 + B64c*o.O64c + B64s*o.O64s;
-C = invz_const();
-H = Hcf - ion.gL*C.muB*(B(1)*o.Jx + B(2)*o.Jy + B(3)*o.Jz);
-E = sort(real(eig((H + H')/2)));  E = E - E(1);
+E = diag_spectrum(Hcf, B, ion, o);
 end
 
 function E = spec_rotfield(ion, phi_deg, Bmag)
 o = stevens_ops(ion.J);
 Hcf = ion.B20*o.O20 + ion.B40*o.O40 + ion.B44*o.O44 ...
     + ion.B60*o.O60 + ion.B64c*o.O64c + ion.B64s*o.O64s;
-C = invz_const();
 B = Bmag*[cosd(phi_deg) sind(phi_deg) 0];
-H = Hcf - ion.gL*C.muB*(B(1)*o.Jx + B(2)*o.Jy + B(3)*o.Jz);
-E = sort(real(eig((H + H')/2)));  E = E - E(1);
+E = diag_spectrum(Hcf, B, ion, o);
 end
 
 function test_pin_cfrot_field_mapping(testCase)

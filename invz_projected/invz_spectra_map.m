@@ -65,9 +65,7 @@ wmin     = getf(opts, 'peak_wmin', 0);
 fdir  = getf(opts, 'field_dir', [1 0 0]);
 bztol = getf(opts, 'bz_tol', 1e-9);
 sxtra = getf(opts, 'solve_opts', struct());
-if any(isfield(sxtra, {'J0eff', 'Jxx0', 'hyp'}))
-    error('invz:solveOpts', 'solve_opts fields J0eff/Jxx0/hyp are reserved (driver-owned).');
-end
+invz_check_solve_opts(sxtra);
 if ~isnumeric(fdir) || ~isreal(fdir) || numel(fdir) ~= 3 || ~all(isfinite(fdir)) || norm(fdir(:)) == 0
     error('invz:fieldDir', 'field_dir must be a nonzero finite real 3-vector.');
 end
@@ -82,20 +80,12 @@ nB = numel(fields);     nw = numel(w);
 BvecM = fields(:) * fdir;                        % [nB x 3] actual solve fields
 BvecM(abs(BvecM(:, 3)) <= bztol, 3) = 0;         % dead band: identical rule to invz_solve_auto
 
-tmf = getf(sxtra, 'transverse_mf', 'legacy_x');
-if strcmp(tmf, 'legacy_x') && any(abs(BvecM(:, 2)) > 0)
-    error('invz:transverseMF', ['field has a b-axis (y) component but transverse_mf is ' ...
-        '''legacy_x'' (x-only mean field; C4-inconsistent, 17 ueV a/b asymmetry at 4 T). ' ...
-        'Set opts.solve_opts.transverse_mf = ''vector_ab'' (or ''none'' for bare diagnostics).']);
-end
+tmf = invz_check_transverse_mf(sxtra, BvecM(:, 2));
 
 if isfield(opts, 'Jnu') && isfield(opts, 'info')
     Jnu = opts.Jnu(:);   info = opts.info;
 else
-    [qc, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', grid, 'range', [-0.5 0.5], 'verbose', false);
-    qc = qc(any(abs(qc) > 1e-12, 2), :);
-    [Jnu, info] = invz_jq_modes(ion, qc, struct('dpRng', dpRng, 'cache', true));
-    Jnu = Jnu(:);
+    [Jnu, info, ~] = invz_bz_couplings(ion, struct('grid', grid, 'dpRng', dpRng));
 end
 Jcc0 = info.Jcc0;
 Jaa0   = ion.Jxx0;  if isfield(info, 'Jaa0'),      Jaa0   = info.Jaa0;      end
@@ -151,8 +141,7 @@ copts = struct('Jsel', Jcc0, 'eta', eta, 'Jxx0', Jaa0, 'Jshape', Jshape, 'hyp', 
 if phase == 1                                     % --- moment-form branch (FM or induced) ---
     o  = invz_chi_realaxis(ion, T, B, pt, w, copts);   % reuses pt.si (moment-form eigenstates)
     chiz = imag(o.chi_cc_q(1, :)).';
-    pt0 = struct('alpha', 0, 'alpha_m', 0, 'lambda', [0; 0; 0], 'tl', pt.tl, ...
-                 'K', [], 'is_ordered', true, 'si', pt.si);
+    pt0 = invz_zero_sigma_overlay(pt);
     c0opts = copts;  c0opts.npass = 1;  c0opts.chi0cc_w = o.chi0cc_w;   % share bare cc
     o0  = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
     chirpa = imag(o0.chi_cc_q(1, :)).';
@@ -166,8 +155,7 @@ if abs(B(3)) > bztol
     % failed moment-branch pt still carries valid si/tl, compute the RPA-only overlay
     % from the ordered-style pt0; otherwise leave the whole column masked.
     if ~isempty(pt) && ~isempty(pt.si) && isfield(pt, 'tl') && ~isempty(pt.tl)
-        pt0 = struct('alpha', 0, 'alpha_m', 0, 'lambda', [0; 0; 0], 'tl', pt.tl, ...
-                     'K', [], 'is_ordered', true, 'si', pt.si);
+        pt0 = invz_zero_sigma_overlay(pt);
         c0opts = copts;  c0opts.npass = 1;
         try
             o0 = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);

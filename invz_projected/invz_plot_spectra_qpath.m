@@ -24,8 +24,7 @@ set(ax, 'YDir', 'normal', 'Color', [0.8 0.8 0.8], 'Layer', 'top');
 
 pos = chi(finiteMask & chi > 0);
 if ~isempty(pos)
-    pos = sort(pos(:));
-    hi = pos(max(1, min(numel(pos), ceil(0.995*numel(pos)))));
+    hi = invz_robust_pct(pos, 0.995);
     clim(ax, [log10(hi/1e3) log10(hi)]);
 end
 colormap(ax, turbo);

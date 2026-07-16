@@ -3,9 +3,9 @@ function chi = invz_chi0z(si, T, z, opts)
 % chi(mu,nu,iz) = sum_{a,b inelastic} (p_a-p_b) M_mu(a,b) M_nu(b,a) / (E_b-E_a - z(iz))
 %              [+ elastic beta-term on entries with |z|<ztol].
 if nargin < 4, opts = struct(); end
-degtol = 1e-8;  if isfield(opts,'degtol'), degtol = opts.degtol; end
-ztol   = 1e-12; if isfield(opts,'ztol'),   ztol   = opts.ztol;   end
-elast  = true;  if isfield(opts,'elastic'), elast = opts.elastic; end
+degtol = getf(opts, 'degtol', 1e-8);
+ztol   = getf(opts, 'ztol', 1e-12);
+elast  = getf(opts, 'elastic', true);
 C = invz_const();  beta = 1/(C.kB*T);
 E = si.E;  p = si.P;  n = numel(E);
 dE = E.' - E;                    % dE(a,b) = E(b)-E(a)

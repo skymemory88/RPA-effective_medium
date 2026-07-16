@@ -17,12 +17,12 @@ function bx = invz_critical(ion, T, Jnu_flat, opts)
 % opts.tol       crossing tolerance (T, default 0.02).
 % Remaining opts pass through to invz_solve_point.
 if nargin < 4, opts = struct(); end
-win  = [2 7];  if isfield(opts,'window'),    win  = opts.window;    end
-tol  = 0.02;   if isfield(opts,'tol'),       tol  = opts.tol;       end
-step = 0.20;   if isfield(opts,'fieldstep'), step = opts.fieldstep; end
+win  = getf(opts, 'window',    [2 7]);
+tol  = getf(opts, 'tol',       0.02);
+step = getf(opts, 'fieldstep', 0.20);
 gap_steps = 6;                       % how far below a non-converged patch to hunt
 
-f = @(B) crit_at(ion, T, B, Jnu_flat, opts);
+f = @(B) invz_crit_at(ion, T, B, Jnu_flat, opts);
 
 [cTop, okTop] = f(win(2));
 assert(okTop && cTop > 0, 'invz:bracket', ...
@@ -37,7 +37,7 @@ while B >= win(1) - 1e-9
         Bpara = B;  cpara = c;  B = B - step;  continue;   % descend through paramagnet
     end
     if ok && c <= 0
-        bx = refine_crossing(f, B, c, Bpara, cpara, tol);   % clean converged bracket
+        bx = invz_refine_crossing(f, B, c, Bpara, cpara, tol);   % clean converged bracket
         return;
     end
     % Non-converged at B: hunt a few steps down for a converged verdict so the
@@ -48,7 +48,7 @@ while B >= win(1) - 1e-9
     while Bh >= hardStop - 1e-9
         [ch, okh] = f(Bh);
         if okh && ch <= 0
-            bx = refine_crossing(f, Bh, ch, Bpara, cpara, tol);   % bracket spans the gap
+            bx = invz_refine_crossing(f, Bh, ch, Bpara, cpara, tol);   % bracket spans the gap
             return;
         elseif okh && ch > 0
             Bpara = Bh;  cpara = ch;  B = Bh - step;  found = true;  break;   % non-conv island
@@ -66,38 +66,6 @@ end
 error('invz:bracket', ...
     'T = %.3f K: no ordered/paramagnet crossing in field window [%.2f, %.2f] T.', ...
     T, win(1), win(2));
-end
-
-% ------------------------------------------------------------------------
-function [c, ok] = crit_at(ion, T, B, Jf, opts)
-% crit at (T,B) and whether it is a trustworthy (converged, finite) verdict.
-try
-    pt = invz_solve_point(ion, T, B, Jf, opts);
-    c  = pt.crit;
-    ok = pt.converged && isfinite(c);
-catch
-    c = NaN;  ok = false;                     % e.g. invz:degenerateDoublet
-end
-end
-
-% ------------------------------------------------------------------------
-function bx = refine_crossing(f, Ba, ca, Bb, cb, tol)
-% Regula-falsi between CONVERGED bracket ends (ca<=0 at Ba, cb>0 at Bb, Ba<Bb).
-% A non-converged interior sample is skipped; if the interior will not converge,
-% fall back to linear interpolation across the bracket.
-for r = 1:20
-    if Bb - Ba < tol, break; end
-    Bm = Ba - ca*(Bb - Ba)/(cb - ca);
-    Bm = min(max(Bm, Ba + 0.05*(Bb-Ba)), Bb - 0.05*(Bb-Ba));
-    [cm, okm] = f(Bm);
-    if ~okm
-        Bm = 0.5*(Ba + Bb);
-        [cm, okm] = f(Bm);
-        if ~okm, break; end
-    end
-    if cm <= 0, Ba = Bm; ca = cm; else, Bb = Bm; cb = cm; end
-end
-bx = Ba - ca*(Bb - Ba)/(cb - ca);
 end
 
 % ------------------------------------------------------------------------
