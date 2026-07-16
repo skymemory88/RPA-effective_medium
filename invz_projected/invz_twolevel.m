@@ -2,10 +2,12 @@ function tl = invz_twolevel(ion, T, Bx, opts)
 %INVZ_TWOLEVEL Electronic two-level (split doublet) parameters for the Jensen self-energy.
 % Bx: scalar (transverse, historical) or [Bx By Bz] vector (T).
 % opts.Jxx0 (optional): transverse MF coupling forwarded to invz_single_ion (default ion.Jxx0).
+% opts.transverse_mf (optional): MF model forwarded to invz_single_ion (default 'legacy_x').
 if nargin < 4, opts = struct(); end
 Jxx0 = ion.Jxx0;  if isfield(opts,'Jxx0'), Jxx0 = opts.Jxx0; end
+tmf = 'legacy_x';  if isfield(opts,'transverse_mf'), tmf = opts.transverse_mf; end
 C  = invz_const();
-si = invz_single_ion(ion, T, invz_field_vec(Bx), struct('hyp', false, 'Jxx0', Jxx0));
+si = invz_single_ion(ion, T, invz_field_vec(Bx), struct('hyp', false, 'Jxx0', Jxx0, 'transverse_mf', tmf));
 tl.Delta = si.E(2) - si.E(1);
 if tl.Delta < 1e-4
     error('invz:degenerateDoublet', ...
@@ -18,4 +20,5 @@ if abs(tl.m) > 1e-3
 end
 tl.n01 = tanh(tl.Delta/(2*C.kB*T));
 tl.g0  = 2*tl.n01/tl.Delta;
+tl.transverse_mf = tmf;
 end

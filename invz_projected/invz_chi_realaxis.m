@@ -12,6 +12,7 @@ function out = invz_chi_realaxis(ion, T, Bx, pt, w, opts)
 % alpha_m, lambda1, K(0) come from the converged Matsubara solve (pt).
 %
 % opts.Jxx0   (ion.Jxx0)  transverse MF coupling for the internally built single-ion state.
+% opts.transverse_mf ('legacy_x') MF model forwarded to the internally built single-ion state.
 % opts.hyp    (true)      hyperfine manifold; must match the Matsubara medium's Hilbert space.
 % opts.Jshape (0)         strict-uniform demag correction (info.Jshape_cc), applied to chi_cc_q;
 %                         leave 0 for finite-q (intrinsic) paths.
@@ -22,6 +23,7 @@ eta   = 5e-3; if isfield(opts,'eta'),   eta   = opts.eta;   end
 npass = 3;    if isfield(opts,'npass'), npass = opts.npass; end
 Jsel  = ion.J0eff; if isfield(opts,'Jsel'), Jsel = opts.Jsel; end
 Jxx0   = ion.Jxx0; if isfield(opts,'Jxx0'),   Jxx0   = opts.Jxx0;   end
+tmf    = 'legacy_x'; if isfield(opts,'transverse_mf'), tmf = opts.transverse_mf; end
 Jshape = 0;        if isfield(opts,'Jshape'), Jshape = opts.Jshape; end
 hyp    = true;     if isfield(opts,'hyp'),    hyp    = opts.hyp;    end
 ordered = isfield(pt,'is_ordered') && pt.is_ordered;
@@ -35,7 +37,7 @@ else
     elseif ordered && isfield(pt,'si') && ~isempty(pt.si)
         si = pt.si;                                % ordered eigenstates from the solve
     else
-        si = invz_single_ion(ion, T, invz_field_vec(Bx), struct('hyp', hyp, 'Jxx0', Jxx0));   % paramagnet
+        si = invz_single_ion(ion, T, invz_field_vec(Bx), struct('hyp', hyp, 'Jxx0', Jxx0, 'transverse_mf', tmf));   % paramagnet
     end
     c0 = invz_chi0z(si, T, z, struct('elastic', false));
     G0 = -squeeze(c0(3,3,:));
