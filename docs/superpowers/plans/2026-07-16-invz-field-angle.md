@@ -1290,6 +1290,11 @@ R.eps_spec  = norm(chi_sc - chi_ten, 2) / max(norm(chi_ten, 2), floorv);
 R.Epeak_sc  = invz_peak_energy(chi_sc,  w, wmin);
 R.Epeak_ten = invz_peak_energy(chi_ten, w, wmin);
 R.dE_peak   = abs(R.Epeak_sc - R.Epeak_ten);
+% Peak-observable amplitude error (the GATED intensity metric; L2 lineshape
+% metrics are positional-artifact-dominated for sharp lines -- see spec sec. 7):
+R.amp_sc  = max(chi_sc);
+R.amp_ten = max(chi_ten);
+R.eps_amp = abs(R.amp_sc - R.amp_ten) / max(R.amp_ten, floorv);
 end
 ```
 
@@ -1333,7 +1338,11 @@ Create `invz/invz_run_tensor_ref.m`:
 % Comparison eta = 0.02 meV (4 pts/HWHM on the 0.005 grid): at the production
 % eta = 5e-3 the L2 norm is dominated by sub-linewidth peak misalignment (a
 % metric instability, not physics).
-%   supported(theta > 0) <=> eps_tilt <= 0.05 AND dE_peak <= max(0.02*Epeak_ten, eta)
+% GATE (final, user-approved): peak observables only -- every L2 lineshape
+% metric is dominated by the zero-tilt yz peak-offset artifact (delta0/eta;
+% verified 0.11 vs 2.2/20 at 6T, ~0.28 vs 7.7/20 at 2T). eps_spec/eps_tilt are
+% reported diagnostics; lineshape fidelity is explicitly not claimed.
+%   supported(theta > 0) <=> eps_amp <= 0.10 AND dE_peak <= max(0.02*Epeak_ten, eta)
 %   at EVERY tested field. Copy the printed table into
 %   docs/SESSION-2026-07-16-field-angle.md and the constants of
 %   invz/tests/test_invz_tensor_ref.m (reproducibility assertion).
@@ -1352,7 +1361,7 @@ qc = qc(any(abs(qc) > 1e-12, 2), :);
 Jaa0 = ion.Jxx0;  if isfield(info, 'Jaa0'), Jaa0 = info.Jaa0; end
 ropts = struct('Jsel', info.Jcc0, 'Jaa0', Jaa0, 'eta', eta);
 
-fprintf('%8s %8s %12s %12s %12s %10s %10s\n', 'theta', '|B| (T)', 'eps_spec', 'eps_tilt', 'dE_peak', 'Ep_sc', 'Ep_ten');
+fprintf('%8s %8s %12s %12s %12s %12s %10s %10s\n', 'theta', '|B| (T)', 'eps_spec', 'eps_tilt', 'eps_amp', 'dE_peak', 'Ep_sc', 'Ep_ten');
 supported = true(size(angles));
 for ib = 1:numel(fieldsB)
     B = fieldsB(ib);
@@ -1365,16 +1374,16 @@ for ib = 1:numel(fieldsB)
             R = invz_chi_tensor_ref(ion, T, B*[cosd(a) 0 sind(a)], w, ropts);
             et = invz_tilt_err(R, R0);
         end
-        ok = a == 0 || (et <= 0.05 && ...
+        ok = a == 0 || (R.eps_amp <= 0.10 && ...
              ( (isnan(R.dE_peak) && isnan(R.Epeak_sc) == isnan(R.Epeak_ten)) || ...
                R.dE_peak <= max(0.02*R.Epeak_ten, eta) ));
         if a > 0, supported(ia) = supported(ia) && ok; end
         verdict = {'FAIL', 'ok'};
-        fprintf('%8.2f %8.2f %12.4g %12.4g %12.4g %10.4g %10.4g   %s\n', ...
-                a, B, R.eps_spec, et, R.dE_peak, R.Epeak_sc, R.Epeak_ten, verdict{ok + 1});
+        fprintf('%8.2f %8.2f %12.4g %12.4g %12.4g %12.4g %10.4g %10.4g   %s\n', ...
+                a, B, R.eps_spec, et, R.eps_amp, R.dE_peak, R.Epeak_sc, R.Epeak_ten, verdict{ok + 1});
     end
 end
-fprintf('Supported tilt range (eps_tilt/dE_peak criterion): theta_c <= %.2g deg\n', ...
+fprintf('Supported tilt range (peak-observable criterion): theta_c <= %.2g deg\n', ...
         max([0, angles(supported & angles > 0)]));
 ```
 
@@ -1397,15 +1406,17 @@ assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), 'slow test: set INVZ_SLOW
 ion = invz_ion();
 w = (0:0.005:0.6).';
 o = struct('eta', 0.02);      % default couplings -- must match the logged convention
-pts      = {0.5, 6;  2, 6;  5, 4.95};            % {theta_deg, B} spot checks
-expected = [NaN; NaN; NaN];   % <- REPLACE with the three measured eps_tilt values
-                              %    from the first run BEFORE committing
-                              %    (committing NaNs = task incomplete)
+pts          = {0.5, 6;  2, 6;  5, 4.95};        % {theta_deg, B} spot checks
+expected_amp  = [NaN; NaN; NaN];  % <- REPLACE with measured eps_amp (GATED metric)
+expected_tilt = [NaN; NaN; NaN];  % <- REPLACE with measured eps_tilt (diagnostic)
+                                  %    from the first run BEFORE committing
+                                  %    (committing NaNs = task incomplete)
 for k = 1:size(pts, 1)
     a = pts{k, 1};  B = pts{k, 2};
     R0 = invz_chi_tensor_ref(ion, 0.1, [B 0 0], w, o);
     R  = invz_chi_tensor_ref(ion, 0.1, B*[cosd(a) 0 sind(a)], w, o);
-    verifyEqual(testCase, invz_tilt_err(R, R0), expected(k), 'RelTol', 0.01);
+    verifyEqual(testCase, R.eps_amp, expected_amp(k), 'RelTol', 0.01);
+    verifyEqual(testCase, invz_tilt_err(R, R0), expected_tilt(k), 'RelTol', 0.01);
 end
 end
 ```
