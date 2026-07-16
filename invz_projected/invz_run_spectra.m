@@ -100,6 +100,12 @@ switch eUnit
     otherwise, error('invz_run_spectra:eUnit', 'eUnit must be ''meV'' or ''GHz''.');
 end
 
+if phi_ab ~= 0 && strcmp(transverse_mf, 'legacy_x')
+    error('invz_run_spectra:transverseMF', ...
+        ['phi_ab = %.3g deg needs the vector transverse mean field: set the transverse_mf ' ...
+         'knob above to ''vector_ab'' (or ''none'' for a bare CF+Zeeman diagnostic). ' ...
+         'legacy_x is x-only and C4-inconsistent for rotated fields.'], phi_ab);
+end
 dhat = [cosd(theta_c)*cosd(phi_ab), cosd(theta_c)*sind(phi_ab), sind(theta_c)];  % unit field direction
 tiltStr = '';
 if theta_c ~= 0, tiltStr = sprintf(', \\theta_c = %.2g\\circ', theta_c); end
