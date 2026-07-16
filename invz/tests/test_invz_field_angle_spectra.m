@@ -102,3 +102,17 @@ ax = axes(f);
 invz_plot_spectra_map(ax, S, rand(11, 2), 'ttl');
 verifyEqual(testCase, ax.XLabel.String, '|B| (T)');
 end
+
+function test_pm_bz_mirror_symmetry(testCase)
+% Spec test 4: chi''_cc is even in Bz (Z2). Metric per second-review refinement 2.
+ion = invz_ion();  w = (0:0.02:0.5).';
+fp = fixture();  fp.field_dir = [cosd(1) 0 +sind(1)];
+fm = fixture();  fm.field_dir = [cosd(1) 0 -sind(1)];
+Sp = invz_spectra_map(ion, 0.31, 5.0, w, fp);
+Sm = invz_spectra_map(ion, 0.31, 5.0, w, fm);
+verifyEqual(testCase, Sp.phase, 1);
+verifyEqual(testCase, Sm.phase, 1);
+a = Sp.chiz(:);  b = Sm.chiz(:);
+verifyTrue(testCase, all(isfinite(a)) && all(isfinite(b)));
+verifyLessThan(testCase, max(abs(a - b)) / max(max(abs(a)), 1e-12), 1e-8);
+end
