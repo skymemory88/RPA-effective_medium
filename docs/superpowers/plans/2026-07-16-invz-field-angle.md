@@ -1291,9 +1291,12 @@ R.Epeak_sc  = invz_peak_energy(chi_sc,  w, wmin);
 R.Epeak_ten = invz_peak_energy(chi_ten, w, wmin);
 R.dE_peak   = abs(R.Epeak_sc - R.Epeak_ten);
 % Peak-observable amplitude error (the GATED intensity metric; L2 lineshape
-% metrics are positional-artifact-dominated for sharp lines -- see spec sec. 7):
-R.amp_sc  = max(chi_sc);
-R.amp_ten = max(chi_ten);
+% metrics are positional-artifact-dominated for sharp lines -- see spec sec. 7).
+% Same wmin mask as the peak search: the gate must measure the ELECTRONIC mode,
+% not a sub-wmin hyperfine feature.
+msk = w >= wmin;
+R.amp_sc  = max(chi_sc(msk));
+R.amp_ten = max(chi_ten(msk));
 R.eps_amp = abs(R.amp_sc - R.amp_ten) / max(R.amp_ten, floorv);
 end
 ```
@@ -1334,7 +1337,7 @@ Create `invz/invz_run_tensor_ref.m`:
 %     baseline from the symmetry-allowed yz cross channel (B64s; measured
 %     yz/zz = 0.183 at 6 T even at theta = 0). REPORTED, never gated.
 %   eps_tilt (invz_tilt_err): error in the TILT-INDUCED change, differenced
-%     against the theta = 0 reference at the same field. GATED at 5%.
+%     against the theta = 0 reference at the same field. Diagnostic only.
 % Comparison eta = 0.02 meV (4 pts/HWHM on the 0.005 grid): at the production
 % eta = 5e-3 the L2 norm is dominated by sub-linewidth peak misalignment (a
 % metric instability, not physics).
