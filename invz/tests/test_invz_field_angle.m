@@ -74,3 +74,53 @@ o1 = invz_chi_realaxis(ion, 0.31, 5.5, pt1, w, struct('eta', 1e-3));
 o2 = invz_chi_realaxis(ion, 0.31, [5.5 0 0], pt1, w, struct('eta', 1e-3));
 verifyEqual(testCase, o2, o1);
 end
+
+function test_longitudinal_routing_threshold(testCase)
+% Spec test 7: just below bz_tol -> transverse path (strict-PM two-level);
+% just above -> forced moment-form with machine-readable branch metadata.
+ion = invz_ion();
+Jnu = linspace(-2e-3, 6.0e-3, 24).';
+o   = struct('J0eff', 6.4e-3);
+[ptA, phA] = invz_solve_auto(ion, 0.31, [5.5 0 0.5e-9], Jnu, o);   % |Bz| <= 1e-9: dead band
+verifyEqual(testCase, phA, 2);                                      % strict paramagnet
+verifyEqual(testCase, ptA.tl.m, 0, 'AbsTol', 1e-3);                 % invz_twolevel gate honored
+[ptB, phB] = invz_solve_auto(ion, 0.31, [5.5 0 2e-9], Jnu, o);      % above: moment route
+verifyEqual(testCase, phB, 1);
+verifyEqual(testCase, ptB.moment_branch, 'field_induced');
+verifyTrue(testCase, ptB.is_ordered);                               % moment-form self-energy flag
+end
+
+function test_early_return_struct_completeness(testCase)
+% Spec test 12: every early return of invz_solve_point_ordered carries the full
+% declared field set, so invz_solve_auto / the map never probe a missing member.
+ion  = invz_ion();
+Jnu  = linspace(-2e-3, 6.0e-3, 24).';
+flds = {'m0','is_ordered','converged','Sigma0','crit','si','tl','moment_branch'};
+% (a) spontaneous-mode paramagnetic early return (PM point: no spontaneous moment)
+pta = invz_solve_point_ordered(ion, 1.0, 5.5, Jnu, struct('J0eff', 6.4e-3));
+verifyFalse(testCase, pta.is_ordered);
+verifyEqual(testCase, pta.moment_branch, 'none');
+cellfun(@(f) verifyTrue(testCase, isfield(pta, f), ['missing ' f]), flds);
+% (b) forced_moment with a crippled MF loop -> mf-gate early return
+ws = warning('off', 'invz:mfNotConverged');
+restore = onCleanup(@() warning(ws));
+ptb = invz_solve_point_ordered(ion, 0.31, [2 0 0.01], Jnu, ...
+      struct('J0eff', 6.4e-3, 'forced_moment', true, 'mf_maxit', 1));
+verifyFalse(testCase, ptb.converged);
+verifyEqual(testCase, ptb.moment_branch, 'field_induced');
+cellfun(@(f) verifyTrue(testCase, isfield(ptb, f), ['missing ' f]), flds);
+end
+
+function test_solve_auto_returns_failed_pto(testCase)
+% Second-review finding 2: a failed longitudinal solve returns the pto (with si)
+% so invz_spectra_map can compute its RPA-only overlay -- never pt = [].
+ion = invz_ion();
+Jnu = linspace(-2e-3, 6.0e-3, 24).';
+ws = warning('off', 'invz:mfNotConverged');
+restore = onCleanup(@() warning(ws));
+[ptc, phc] = invz_solve_auto(ion, 0.31, [2 0 0.01], Jnu, ...
+             struct('J0eff', 6.4e-3, 'mf_maxit', 1));
+verifyEqual(testCase, phc, 0);
+verifyFalse(testCase, isempty(ptc));
+verifyFalse(testCase, isempty(ptc.si));
+end
