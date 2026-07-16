@@ -23,4 +23,13 @@ ion.Jxx0  = 3.512e-3;   % meV: fallback J_D*D_aa(0) + 4*J12, transverse MF chann
 % field can still shift through (b).
 ion.demag = 0;          % demag factor (0 = off/intrinsic; 1 = full ellipsoid)
 ion.alpha = 1;          % spheroid aspect ratio a/c for ellipsoid_demagn (1 sphere, 0 c-needle, Inf disk)
+% Off-diagonal dipolar (ODD) knob. odd = 0 (default): the published scalar-cc model, every
+% benchmark bit-identical. odd = 1: DRIVERS (invz_run_phase_diagram) opt in to the ODD-mediated
+% coupling deltaJ^cc (E1/E4/E5, odd_implementation_plan.html Tier 1a): they build the geometric
+% blocks ONCE (invz_odd_blocks), thread opts.odd = true + opts.odd_blocks (and Jnu_flat = [],
+% opts.Tc0 odd-aware) into the solvers/finders; the uniform coupling's explicit -d (E5) is
+% applied exactly once inside the point solvers. LIBRARIES never read ion.odd -- they read
+% opts.odd (invz_jq_modes, invz_solve_point(_ordered), invz_critical_T). Intrinsic-only:
+% the ODD layer requires demag = 0 (invz_odd_blocks errors otherwise).
+ion.odd = 0;            % opt-in ODD switch (0 = off/published; 1 = drivers wire ODD in)
 end

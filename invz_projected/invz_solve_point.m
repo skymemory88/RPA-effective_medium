@@ -3,6 +3,17 @@ function pt = invz_solve_point(ion, T, Bx, Jnu_flat, opts)
 % Bx: scalar (transverse, historical) or [Bx By Bz] vector (T).
 % Outer loop: EMT K (Task 7) <-> lambda_p (Task 8) <-> Sigma, at fixed single-ion input.
 % Inside the ordered phase the paramagnetic EMT fixed point does not exist; outputs may be non-finite and pt.converged false — invz_critical relies on this as the ordered-phase signal. Always check pt.converged.
+%
+% ODD extension (T1.4, opt-in): opts.odd = false (default) | true. When true,
+% opts.odd_blocks = struct('Vca','Vcb','Vcc','Jcc0') (precomputed ONCE by the
+% caller from invz_odd_blocks — P0.4: no disk/cache reads inside solver loops;
+% Jcc0 is the UNSHIFTED Gamma value) is REQUIRED and Jnu_flat MUST be [] (both
+% guarded by error id 'invz:oddArgs'). The cc modes are then rebuilt here from
+% Vcc + deltaJ(T,Bx) (E1/E4 via invz_chiperp + invz_odd_deltaJ, evaluated at the
+% SAME converged single-ion state as the rest of the solve), and the uniform
+% coupling takes the explicit -d (E5): callers keep passing the UNSHIFTED
+% info.Jcc0 as opts.J0eff, the shift is applied HERE exactly once. pt gains
+% pt.odd = struct('d', 'Xp'). Flag off: byte-identical pre-ODD path.
 if nargin < 5, opts = struct(); end
 Ecut  = getf(opts, 'Ecut', 40);
 hyp   = getf(opts, 'hyp', true);
@@ -15,8 +26,50 @@ maxo  = getf(opts, 'max_outer', 60);
 eopts = getf(opts, 'emt', struct());
 Bx = invz_field_vec(Bx);                       % scalar -> [Bx 0 0]; 3-vector passes through
 
+% --- ODD diversion (T1.4): strictly additive and opt-in; everything else in
+% this function is the pre-ODD code path, byte-untouched when the flag is off
+% (regression test test_solve_point_flag_off_bitwise).
+oddOn = isfield(opts, 'odd') && ~isempty(opts.odd) && ~isequal(opts.odd, false);
+if oddOn
+    ob = getf(opts, 'odd_blocks', []);
+    if ~(isstruct(ob) && isscalar(ob) && all(isfield(ob, {'Vca', 'Vcb', 'Vcc', 'Jcc0'})))
+        error('invz:oddArgs', ['opts.odd = true requires opts.odd_blocks = struct(' ...
+            '''Vca'',''Vcb'',''Vcc'',''Jcc0'') precomputed once by the caller from ' ...
+            'invz_odd_blocks (P0.4: no disk/cache reads inside solver loops; Jcc0 UNSHIFTED).']);
+    end
+    if ~isempty(Jnu_flat)
+        error('invz:oddArgs', ['opts.odd = true requires Jnu_flat = []: the cc modes are ' ...
+            'rebuilt here from odd_blocks + deltaJ, and a caller-supplied baseline Jnu ' ...
+            'would silently override the rebuild.']);
+    end
+    % chi_perp at the SAME single-ion options the solve below resolves (T1.2's
+    % same-converged-state requirement); oddXi.si is that state, reused below.
+    [Xp, oddXi] = invz_chiperp(ion, T, Bx, struct('hyp', hyp, 'Jxx0', Jxx0, 'transverse_mf', tmf));
+    [dJ, d] = invz_odd_deltaJ(ob.Vca, ob.Vcb, Xp);
+    nqo = size(ob.Vcc, 3);
+    Jnu_odd = zeros(nqo, 4);
+    for iq = 1:nqo
+        M = ob.Vcc(:,:,iq) + dJ(:,:,iq);
+        M = (M + M')/2;                        % both terms Hermitian; cleans rounding only
+        Jnu_odd(iq,:) = sort(real(eig(M))).';
+    end
+    Jnu_flat = Jnu_odd(:);
+    % E5 uniform shift, applied HERE exactly once (T1.3 bookkeeping rule: the grid
+    % matrices' diagonal already carries -d via E4; J0eff carries the explicit -d;
+    % NO other q = 0 handling). Callers pass the UNSHIFTED info.Jcc0 as opts.J0eff.
+    J0eff = J0eff - d;
+end
+
 [wn, wts, beta] = invz_matsubara(T, Ecut);
+if oddOn
+    % Bit-identical reuse: invz_chiperp built its si with the SAME (ion, T, Bx)
+    % and the SAME (hyp, Jxx0, transverse_mf) options as the call below
+    % (invz_field_vec is idempotent), so this skips one 136-dim diagonalization
+    % without changing any result.
+    si = oddXi.si;
+else
 si  = invz_single_ion(ion, T, Bx, struct('hyp', hyp, 'Jxx0', Jxx0, 'transverse_mf', tmf));
+end
 c0  = invz_chi0z(si, T, 1i*wn, struct('elastic', true));
 G0  = -real(squeeze(c0(3,3,:)));                 % full (electro)nuclear cc Green function
 tl  = invz_twolevel(ion, T, Bx, struct('Jxx0', Jxx0, 'transverse_mf', tmf));   % electronic two-level params for Sigma
@@ -46,4 +99,7 @@ pt.crit = 1 + pt.Sigma0 - J0eff*pt.chi0cc0;
 pt.sumrule_rel = abs(sum(wts.*med.G)/beta + si.JzJz_fluct) / si.JzJz_fluct;
 pt.converged = converged && med.converged;
 pt.outer_iters = outer;
+if oddOn
+    pt.odd = struct('d', d, 'Xp', Xp);         % T1.4 diagnostics (absent when flag off)
+end
 end

@@ -303,7 +303,7 @@ $$ \delta\mathcal J_{ss}(\mathbf q)\;\leftarrow\;\delta\mathcal J_{ss}(\mathbf q
 (v) ordering mode remains the uniform branch: \( \max_{\mathbf q,\nu}\mathcal J_\nu &lt; \) <code>Jcc0</code> − d still holds with ODD on (guards against a spurious q≠0 instability — note the margin shrinks from both sides: finite-q modes gain \( \delta\mathcal J + d \succeq 0 \) while the uniform mode loses d);
 (vi) closure of the decomposition: \( \frac1{N_q}\sum_{\mathbf q}\mathrm{diag}\,\delta\mathcal J(\mathbf q) = -d \) recovered from the assembled output (self-consistency of E4/E5).</div></div>
 
-<div class="task"><div class="task-head"><span class="tid">T1.4</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">T1.4</span><span class="tstatus">[x]</span>
 <span class="ttitle">Wire into the point solve and critical-point finders</span></div>
 <ul>
 <li><code>invz_solve_point</code> / <code>invz_solve_point_ordered</code>: accept <code>opts.odd = true</code>; when set, obtain <code>Xp = invz_chiperp(ion,T,Bx)</code> and rebuild <code>Jnu</code> from the cached geometric blocks (cheap: 4×4 contraction + <code>eig</code> over nq — O(ms) at 16³; the heavy dipole sums stay cached). The rebuilt <code>Jnu</code> feeds K, λ<sub>p</sub>, Σ, and <code>crit</code> unchanged — no formula in the EMT/Σ layer changes.</li>
@@ -494,7 +494,7 @@ Keep in lockstep with the <code>[ ]</code> markers above.</p>
     {"id":"T1.1","phase":"T1","deps":["P0.1","P0.3","P0.4"],"files":["invz/invz_odd_blocks.m","invz/tests/test_odd_blocks.m"],"status":"done"},
     {"id":"T1.2","phase":"T1","deps":["P0.2"],"files":["invz/invz_chiperp.m"],"status":"done"},
     {"id":"T1.3","phase":"T1","deps":["T1.1","T1.2"],"files":["invz/invz_jq_modes.m"],"status":"done"},
-    {"id":"T1.4","phase":"T1","deps":["T1.3"],"files":["invz/invz_solve_point.m","invz/invz_solve_point_ordered.m","invz/invz_critical.m","invz/invz_critical_T.m","invz/invz_critical_T0field.m"],"status":"todo"},
+    {"id":"T1.4","phase":"T1","deps":["T1.3"],"files":["invz/invz_solve_point.m","invz/invz_solve_point_ordered.m","invz/invz_critical.m","invz/invz_critical_T.m","invz/invz_critical_T0field.m"],"status":"done"},
     {"id":"T1.5","phase":"T1","deps":["T1.4"],"files":["docs/ODD-LOG.md","invz/tests/"],"status":"todo"},
     {"id":"T1.6","phase":"T1","deps":["T1.5"],"files":["invz/README.html"],"status":"todo"},
     {"id":"T2.1","phase":"T2","deps":["T1.4"],"files":["invz/invz_chiperp.m","invz/invz_emt_scalar.m"],"status":"todo"},
