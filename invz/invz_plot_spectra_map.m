@@ -29,7 +29,7 @@ if ~isempty(pos)
     clim(ax, [log10(lo) log10(hi)]);
 end
 colormap(ax, turbo);
-xlabel(ax, 'B_x (T)');   ylabel(ax, sprintf('\\omega (%s)', eUnit));   title(ax, ttl);
+xlabel(ax, '|B| (T)');   ylabel(ax, sprintf('\\omega (%s)', eUnit));   title(ax, ttl);
 cb = colorbar(ax);   cb.Label.String = 'log_{10} \chi''''_{cc}';
 end
 
