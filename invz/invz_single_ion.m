@@ -10,13 +10,21 @@ function si = invz_single_ion(ion, T, B, opts)
 %   Fixed longitudinal field (opts.hz_fixed = hz, meV): imposes a FIXED -hz*Jz term (only
 %     hx is iterated), used to give invz_twolevel_ordered the same hz as the full
 %     electronuclear order parameter. Mutually exclusive with opts.order.
+%
+% Returned diagnostics: si.mf_converged/mf_iters/mf_residual (mean-field loop state),
+% si.E0 (unshifted ground energy), si.F_mf (variational MF free energy; NaN with hz_fixed).
+% In order mode the mz_seed default is sign-aware: -1 when B(3) < 0 (aligned branch).
 if nargin < 4, opts = struct(); end
 hyp  = isfield(opts,'hyp') && opts.hyp;
 Jxx0 = ion.Jxx0;    if isfield(opts,'Jxx0'), Jxx0 = opts.Jxx0; end
 order = isfield(opts,'order') && opts.order;
 hzfix = isfield(opts,'hz_fixed');
 J0z  = ion.J0eff;   if isfield(opts,'J0z'),   J0z   = opts.J0z;   end
-mzsd = 1.0;         if isfield(opts,'mz_seed'), mzsd = opts.mz_seed; end
+mzsd = 1.0;         if order && B(3) < 0, mzsd = -1.0; end
+                    % sign-aware default: an explicit longitudinal field selects the
+                    % ALIGNED branch (the +1 seed can trap the metastable mirror state
+                    % below the transition; spec 2026-07-16, review finding 2)
+if isfield(opts,'mz_seed'), mzsd = opts.mz_seed; end
 mix  = 1.0;         if isfield(opts,'mf_mix'), mix = opts.mf_mix; elseif order, mix = 0.6; end
 maxit = 200;        if isfield(opts,'mf_maxit'), maxit = opts.mf_maxit; elseif order, maxit = 800; end
 C   = invz_const();
@@ -81,4 +89,17 @@ si.hx = hx;
 si.hz = hz;
 jz2 = real(diag(V'*(Jz*Jz)*V)).'*p;
 si.JzJz_fluct = jz2 - si.Jexp(3)^2;
+si.mf_converged = converged;
+si.mf_iters     = it;
+si.mf_residual  = dmf;
+si.E0 = E(1);                                  % unshifted ground energy (si.E stays shifted)
+% Variational MF free energy (branch diagnostic, spec SR1): the 0.5*h*<J> terms
+% restore the -1/2 J <J>^2 double counting; equals Fsite + hx^2/(2Jxx0) + hz^2/(2J0z)
+% at a self-consistent point. Undefined (NaN) under hz_fixed: hz is imposed, not a MF.
+Fsite = E(1) - log(sum(exp(-beta*(E - E(1)))))/beta;
+if hzfix
+    si.F_mf = NaN;
+else
+    si.F_mf = Fsite + 0.5*(hx*si.Jexp(1) + hz*si.Jexp(3));
+end
 end
