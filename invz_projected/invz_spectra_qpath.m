@@ -28,12 +28,18 @@ function S = invz_spectra_qpath(ion, T, B, qpath, w, opts)
 %     S.x, S.xlab          plot coordinate + label (varying Miller component for a single-
 %                          axis path, e.g. h = 1..2, else falls back to S.s)
 %     S.qpath, S.w, S.T, S.B, S.Bvec, S.Bmag, S.info, S.phase (1 = moment-form solve, 2 = strict-PM solve)
+%     S.transverse_mf      resolved MF mode string (echoes opts.solve_opts.transverse_mf,
+%                           default 'legacy_x')
 %
 %   opts fields (all optional):
 %     .grid ([16 16 16]), .dpRng (30), .eta (5e-3)   as in invz_spectra_map
 %     .bz_tol (1e-9)     T; longitudinal field threshold for dead band (same as invz_solve_auto)
 %     .solve_opts        struct of reserved-field-checked solver overrides (fields J0eff,
-%                        Jxx0, hyp are driver-owned and will error if present)
+%                        Jxx0, hyp are driver-owned and will error if present). transverse_mf
+%                        ('legacy_x' | 'none' | 'vector_ab', default 'legacy_x') is a legal
+%                        field forwarded to the solvers. Under 'legacy_x' (x-only mean field)
+%                        a nonzero b-axis (y) field component is C4-inconsistent and errors
+%                        invz:transverseMF; use 'vector_ab' for genuine in-plane rotation.
 %     .branch (0)        0 (default) = uniform FM-mode coupling v'*Jcc*v (the physical
 %                        single mode); 1..4 = follow that sorted-eigenvalue branch instead
 %                        (exploratory; sorted index, NOT a tracked mode identity through
@@ -58,6 +64,13 @@ if any(isfield(sxtra, {'J0eff', 'Jxx0', 'hyp'}))
 end
 B = invz_field_vec(B);
 if abs(B(3)) <= bztol, B(3) = 0; end             % same dead band as invz_solve_auto
+
+tmf = getf(sxtra, 'transverse_mf', 'legacy_x');
+if strcmp(tmf, 'legacy_x') && abs(B(2)) > 0
+    error('invz:transverseMF', ['field has a b-axis (y) component but transverse_mf is ' ...
+        '''legacy_x'' (x-only mean field; C4-inconsistent, 17 ueV a/b asymmetry at 4 T). ' ...
+        'Set opts.solve_opts.transverse_mf = ''vector_ab'' (or ''none'' for bare diagnostics).']);
+end
 
 w = w(:);
 
@@ -131,6 +144,7 @@ else
     S.xlab = sprintf('s along path from Q = [%g %g %g] (index r.l.u.)', qpath(1, :));
 end
 S.w = w;  S.T = T;  S.B = B;  S.Bvec = B;  S.Bmag = norm(B);  S.phase = phase;  S.info = info;  S.Jq = Jq;
+S.transverse_mf = tmf;
 S.chiz = chiz;  S.chirpa = chirpa;
 S.Epeak     = invz_peak_energy(chiz,   w, wmin);
 S.Epeak_rpa = invz_peak_energy(chirpa, w, wmin);
