@@ -4,7 +4,7 @@
 %     baseline from the symmetry-allowed yz cross channel (B64s; measured
 %     yz/zz = 0.183 at 6 T even at theta = 0). REPORTED, never gated.
 %   eps_tilt (invz_tilt_err): error in the TILT-INDUCED change, differenced
-%     against the theta = 0 reference at the same field. GATED at 5%.
+%     against the theta = 0 reference at the same field. Diagnostic only.
 % Comparison eta = 0.02 meV (4 pts/HWHM on the 0.005 grid): at the production
 % eta = 5e-3 the L2 norm is dominated by sub-linewidth peak misalignment (a
 % metric instability, not physics).

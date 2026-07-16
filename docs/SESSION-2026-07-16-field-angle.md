@@ -133,10 +133,20 @@ The three spot-check points in
 (`{0.5, 6}`, `{2, 6}`, `{5, 4.95}` degrees/Tesla) use **default couplings**
 (`ion.J0eff`, `ion.Jxx0`, i.e. `opts = struct('eta', 0.02)` with no
 `Jsel`/`Jaa0` override), NOT the live cached-lattice-sum couplings used by
-the table above. The two sets of couplings are close (`Jsel`: 6.421e-3
-default vs 6.42444e-3 live; `Jaa0`: 3.512e-3 default vs 3.51045e-3 live) so
-the resulting `eps_amp`/`eps_tilt` values differ only in the last couple of
-significant figures from the table's live-coupling row at the same
-(angle, field); the logged `expected_amp`/`expected_tilt` constants were
-measured with the default-coupling convention directly, matching the test's
-own calls exactly.
+the table above. The two sets of couplings are close in absolute terms
+(`Jsel`: 6.421e-3 default vs 6.42444e-3 live; `Jaa0`: 3.512e-3 default vs
+3.51045e-3 live), but `eps_amp` and `eps_tilt` do **not** inherit that
+closeness equally: `eps_tilt` (an L2 norm dominated by the tilt-induced
+signal) shifts by only ~0.1% between the two conventions, while `eps_amp` is
+a *small-difference* metric (`|amp_sc - amp_ten|` is only ~1% of `amp_ten`),
+so the same tiny per-spectrum coupling shift is amplified into a much larger
+RELATIVE move -- at `theta = 2` deg, `B = 6` T the live-coupling row's
+`eps_amp = 0.01273` vs. the default-coupling `expected_amp(2) = 0.01135`, a
+~12% relative difference, even though the underlying spectra are nearly
+identical. The logged `expected_amp`/`expected_tilt` constants were measured
+with the default-coupling convention directly, matching the test's own calls
+exactly -- so the test's 1% `RelTol` reproducibility check is sound (it never
+crosses conventions). Cross-convention agreement between this paragraph's
+default-coupling spot checks and the live-coupling table above should be
+read loosely, and only for `eps_tilt`; `eps_amp` is not expected to agree
+closely across the two conventions.

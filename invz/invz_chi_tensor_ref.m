@@ -14,9 +14,11 @@ function R = invz_chi_tensor_ref(ion, T, Bvec, w, opts)
 % R fields: chi_sc, chi_ten [nw x 1] (chi''_cc), eps_spec (floored spectral L2
 % relative error), Epeak_sc/Epeak_ten/dE_peak (invz_peak_energy, opts.peak_wmin
 % default 0.05 meV to skip the hyperfine line), amp_sc/amp_ten/eps_amp (peak
-% amplitude error -- the GATED metric; eps_spec is a reported diagnostic only,
-% since it is dominated by the zero-tilt yz peak-offset artifact for sharp
-% lines, not by lineshape fidelity), w, B.
+% amplitude error over the SAME wmin-masked w range as the peak search, so the
+% gate reads the electronic mode, not a sub-wmin hyperfine feature -- the
+% GATED metric; eps_spec is a reported diagnostic only, since it is dominated
+% by the zero-tilt yz peak-offset artifact for sharp lines, not by lineshape
+% fidelity), w, B.
 if nargin < 5, opts = struct(); end
 eta   = getf(opts, 'eta', 5e-3);
 Jsel  = getf(opts, 'Jsel', ion.J0eff);
@@ -48,7 +50,10 @@ R.Epeak_ten = invz_peak_energy(chi_ten, w, wmin);
 R.dE_peak   = abs(R.Epeak_sc - R.Epeak_ten);
 % Peak-observable amplitude error (the GATED intensity metric; L2 lineshape
 % metrics are positional-artifact-dominated for sharp lines -- see spec sec. 7):
-R.amp_sc  = max(chi_sc);
-R.amp_ten = max(chi_ten);
+% Same wmin mask as the peak search: the gate must measure the ELECTRONIC mode,
+% not a sub-wmin hyperfine feature.
+msk = w >= wmin;
+R.amp_sc  = max(chi_sc(msk));
+R.amp_ten = max(chi_ten(msk));
 R.eps_amp = abs(R.amp_sc - R.amp_ten) / max(R.amp_ten, floorv);
 end
