@@ -1,19 +1,24 @@
 function S = invz_spectra_map(ion, T, fields, w, opts)
-%INVZ_SPECTRA_MAP chi''_cc(omega, B) at the uniform (q=0) mode over a transverse-field sweep.
-%   S = invz_spectra_map(ion, T, fields, w) sweeps the transverse field Bx over `fields`
-%   (Tesla) at fixed temperature T (K) and returns chi''_cc(omega, B) across BOTH phases:
-%   at each field it tries the ordered 1/z solve first, falling back to the paramagnetic
-%   solve, giving a single soft-mode map continuous across the transition.
+%INVZ_SPECTRA_MAP chi''_cc(omega, B) at the uniform (q=0) mode over a field-magnitude sweep.
+%   S = invz_spectra_map(ion, T, fields, w) sweeps the field magnitude |B| over `fields`
+%   (Tesla, nonnegative) along opts.field_dir at fixed temperature T (K) and returns
+%   chi''_cc(omega, B) across BOTH phases: at each field it tries the ordered 1/z solve
+%   first, falling back to the paramagnetic solve, giving a single soft-mode map continuous
+%   across the transition.
 %
 %   Returned maps (columns = fields):
-%     S.chiz   [nw x nB]  1/z-renormalized chi''_cc  (FM below Bc, PM above)
+%     S.chiz   [nw x nB]  1/z-renormalized chi''_cc  (moment-form below Bc, PM above)
 %     S.chirpa [nw x nB]  bare-RPA chi''_cc          (Sigma = 0, matching phase)
 %     With ion.demag ~= 0 both are the demag-corrected MEASURED observable (via
 %     info.Jshape_cc, saturating instead of diverging); demag = 0 gives the intrinsic response.
-%   Per-field diagnostics: S.phase (0 masked/1 FM/2 PM), S.Sigma0, and S.Epeak/S.Epeak_rpa
-%   (censored, parabolic-refined peak energy; NaN at a non-positive or boundary maximum, via
-%   invz_peak_energy, shared with invz_spectra_qpath). Fields with no solution at all (e.g.
-%   the degenerate doublet at Bx -> 0) are left NaN and masked out.
+%   Per-field diagnostics: S.phase (1 = moment-form (spontaneous FM below Bc, or field-induced
+%   under a longitudinal tilt -- a rounded crossover, no sharp Bc), 2 = strict paramagnet,
+%   0 = masked), S.Sigma0, and S.Epeak/S.Epeak_rpa (censored, parabolic-refined peak energy;
+%   NaN at a non-positive or boundary maximum, via invz_peak_energy, shared with
+%   invz_spectra_qpath). Fields with no solution at all (e.g. the degenerate doublet at
+%   Bx -> 0) are left NaN and masked out.
+%   S.field_dir [1x3]  normalized field direction actually used.
+%   S.Bvec      [nB x 3] field vectors actually used (fields(:) * field_dir, dead band applied).
 %
 %   opts fields (all optional):
 %     .hyp       (true)        include the nuclear hyperfine manifold in chi0
@@ -26,6 +31,14 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %     .Jnu, .info              precomputed coupling branches / info struct (skips the
 %                              lattice sum; used by the tests)
 %     .verbose   (true)        print one progress line per field
+%     .field_dir ([1 0 0])     nonzero finite real 3-vector, normalized internally; sets the
+%                              sweep direction of `fields` (|B|). Error invz:fieldDir if
+%                              invalid. A nonzero z-component routes through the longitudinal
+%                              (field-induced moment) solve once |Bz| clears .bz_tol.
+%     .bz_tol    (1e-9)        T; dead band on Bz -- resolved ONCE, applied to the field table
+%                              BEFORE any solve, and forwarded to invz_solve_auto/one_field.
+%     .solve_opts (struct())   merged into the per-field invz_solve_auto opts; fields
+%                              J0eff/Jxx0/hyp are reserved (driver-owned) -> error invz:solveOpts.
 %
 %   Cost is one 1/z solve per field (~15-25 min for a 61-point sweep on a 16^3 grid, single
 %   core). Compute S once, then replot freely (invz_plot_spectra_map / invz_run_spectra).
@@ -39,8 +52,25 @@ verbose  = getf(opts, 'verbose', true);
 parallel = getf(opts, 'parallel', false);
 wmin     = getf(opts, 'peak_wmin', 0);
 
+fdir  = getf(opts, 'field_dir', [1 0 0]);
+bztol = getf(opts, 'bz_tol', 1e-9);
+sxtra = getf(opts, 'solve_opts', struct());
+if any(isfield(sxtra, {'J0eff', 'Jxx0', 'hyp'}))
+    error('invz:solveOpts', 'solve_opts fields J0eff/Jxx0/hyp are reserved (driver-owned).');
+end
+if ~isnumeric(fdir) || ~isreal(fdir) || numel(fdir) ~= 3 || ~all(isfinite(fdir)) || norm(fdir(:)) == 0
+    error('invz:fieldDir', 'field_dir must be a nonzero finite real 3-vector.');
+end
+fdir = reshape(fdir, 1, 3) / norm(fdir);
+if any(fields < 0)
+    error('invz:fields', 'fields are sweep magnitudes |B| and must be nonnegative.');
+end
+
 fields = fields(:).';   w = w(:);
 nB = numel(fields);     nw = numel(w);
+
+BvecM = fields(:) * fdir;                        % [nB x 3] actual solve fields
+BvecM(abs(BvecM(:, 3)) <= bztol, 3) = 0;         % dead band: identical rule to invz_solve_auto
 
 if isfield(opts, 'Jnu') && isfield(opts, 'info')
     Jnu = opts.Jnu(:);   info = opts.info;
@@ -63,17 +93,21 @@ Sig0    = nan(1, nB);    phaseC  = zeros(1, nB);
 nWorkers = 0;
 if parallel && ~isempty(ver('parallel')), nWorkers = Inf; end
 
+sopts = sxtra;
+sopts.hyp = hyp;  sopts.J0eff = Jcc0;  sopts.Jxx0 = Jaa0;  sopts.bz_tol = bztol;
+
 parfor (k = 1:nB, nWorkers)
     [chizM(:, k), chirpaM(:, k), Sig0(k), phaseC(k)] = ...
-        one_field(ion, T, fields(k), Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp);
+        one_field(ion, T, BvecM(k, :), Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol);
     if verbose
-        ph = {'ordered/degenerate (masked)', 'ferromagnet', 'paramagnet'};
-        fprintf('  B = %5.2f T : %-28s Sigma0 = %s\n', fields(k), ph{phaseC(k)+1}, num2str(Sig0(k)));
+        ph = {'masked (no converged solve)', 'moment-form (FM or field-induced)', 'paramagnet'};
+        fprintf('  |B| = %5.2f T : %-34s Sigma0 = %s\n', fields(k), ph{phaseC(k)+1}, num2str(Sig0(k)));
     end
 end
 
 S = struct();
 S.fields = fields;  S.w = w;  S.T = T;  S.info = info;
+S.field_dir = fdir;  S.Bvec = BvecM;
 S.chiz = chizM;  S.chirpa = chirpaM;
 S.Sigma0 = Sig0;  S.phase = phaseC;
 S.Epeak     = invz_peak_energy(chizM,   w, wmin);
@@ -81,19 +115,19 @@ S.Epeak_rpa = invz_peak_energy(chirpaM, w, wmin);
 end
 
 % -------------------------------------------------------------------------------------------
-function [chiz, chirpa, Sigma0, phase] = one_field(ion, T, B, Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp)
+function [chiz, chirpa, Sigma0, phase] = one_field(ion, T, B, Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol)
 %ONE_FIELD chi''_cc(omega) at one field via the shared ordered-first solve
-% (invz_solve_auto); returns phase = 1 (FM), 2 (PM), or 0 (no solution -> NaN columns).
+% (invz_solve_auto); phase = 1 (moment-form: spontaneous FM or field-induced),
+% 2 (strict PM), 0 (no accepted solution -> masked 1/z column).
 % Jsel = Jcc0 is the strict-uniform observable, so the demag correction Jshape applies.
 nw = numel(w);
 chiz = nan(nw, 1);  chirpa = nan(nw, 1);  Sigma0 = NaN;  phase = 0;
-sopts = struct('hyp', hyp, 'J0eff', Jcc0, 'Jxx0', Jaa0);
 copts = struct('Jsel', Jcc0, 'eta', eta, 'Jxx0', Jaa0, 'Jshape', Jshape, 'hyp', hyp);
 
 [pt, phase] = invz_solve_auto(ion, T, B, Jnu, sopts);
 
-if phase == 1                                     % --- ferromagnetic (ordered) branch ---
-    o  = invz_chi_realaxis(ion, T, B, pt, w, copts);   % reuses pt.si (ordered eigenstates)
+if phase == 1                                     % --- moment-form branch (FM or induced) ---
+    o  = invz_chi_realaxis(ion, T, B, pt, w, copts);   % reuses pt.si (moment-form eigenstates)
     chiz = imag(o.chi_cc_q(1, :)).';
     pt0 = struct('alpha', 0, 'alpha_m', 0, 'lambda', [0; 0; 0], 'tl', pt.tl, ...
                  'K', [], 'is_ordered', true, 'si', pt.si);
@@ -104,11 +138,27 @@ if phase == 1                                     % --- ferromagnetic (ordered) 
     return;
 end
 
-% --- paramagnetic side: bare-RPA overlay first (needs only the two-level params), so a
-% non-converged 1/z point still gets its RPA column. invz:degenerateDoublet is the one
-% expected condition here (Bx -> 0); anything else is a defect and propagates.
-% When the 1/z point converged (phase 2) reuse its two-level / single-ion state and the
-% bare chi0cc, so the overlay and the 1/z call don't each rebuild the diagonalization.
+if abs(B(3)) > bztol
+    % --- longitudinal failure: NEVER the strict-paramagnet overlay (its m = 0 gate
+    % would raise invz:orderedPhase and abort the parfor -- review finding 5). If the
+    % failed moment-branch pt still carries valid si/tl, compute the RPA-only overlay
+    % from the ordered-style pt0; otherwise leave the whole column masked.
+    if ~isempty(pt) && ~isempty(pt.si) && isfield(pt, 'tl') && ~isempty(pt.tl)
+        pt0 = struct('alpha', 0, 'alpha_m', 0, 'lambda', [0; 0; 0], 'tl', pt.tl, ...
+                     'K', [], 'is_ordered', true, 'si', pt.si);
+        c0opts = copts;  c0opts.npass = 1;
+        try
+            o0 = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
+            chirpa = imag(o0.chi_cc_q(1, :)).';
+        catch err
+            if ~strncmp(err.identifier, 'invz:', 5), rethrow(err); end
+        end
+    end
+    if ~isempty(pt) && isfield(pt, 'Sigma0'), Sigma0 = pt.Sigma0; end
+    return;
+end
+
+% --- transverse paramagnetic side: unchanged historical logic --------------------------
 if phase == 2 && ~isempty(pt), tl0 = pt.tl;  si0 = pt.si;
 else, tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0));  si0 = []; end
 chi0cc = [];
