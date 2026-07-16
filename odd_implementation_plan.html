@@ -238,7 +238,7 @@ contradicts §1, stop and report.</p>
 
 <h2 id="t1">3 · Phase T1 — Tier 1a: static ODD-mediated coupling <span class="tag">core deliverable</span></h2>
 
-<div class="task"><div class="task-head"><span class="tid">T1.1</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">T1.1</span><span class="tstatus">[x]</span>
 <span class="ttitle">New function <code>invz_odd_blocks.m</code> — geometric ODD lattice sums (cached)</span></div>
 <pre><code>% [Vca, Vcb] = invz_odd_blocks(ion, qvec, opts)
 %   Vca, Vcb : [4,4,nq] complex Hermitian-pair blocks J^{ca}(q), J^{cb}(q)
@@ -491,7 +491,7 @@ Keep in lockstep with the <code>[ ]</code> markers above.</p>
     {"id":"P0.3","phase":"P0","deps":["P0.1"],"files":["invz/tests/exploratory/"],"status":"done"},
     {"id":"P0.4","phase":"P0","deps":[],"files":["invz/invz_jq_modes.m","invz/invz_run_phase_diagram.m"],"status":"done"},
     {"id":"P0.5","phase":"P0","deps":[],"files":["docs/ODD-LOG.md"],"status":"done"},
-    {"id":"T1.1","phase":"T1","deps":["P0.1","P0.3","P0.4"],"files":["invz/invz_odd_blocks.m","invz/tests/test_odd_blocks.m"],"status":"todo"},
+    {"id":"T1.1","phase":"T1","deps":["P0.1","P0.3","P0.4"],"files":["invz/invz_odd_blocks.m","invz/tests/test_odd_blocks.m"],"status":"done"},
     {"id":"T1.2","phase":"T1","deps":["P0.2"],"files":["invz/invz_chiperp.m"],"status":"todo"},
     {"id":"T1.3","phase":"T1","deps":["T1.1","T1.2"],"files":["invz/invz_jq_modes.m"],"status":"todo"},
     {"id":"T1.4","phase":"T1","deps":["T1.3"],"files":["invz/invz_solve_point.m","invz/invz_solve_point_ordered.m","invz/invz_critical.m","invz/invz_critical_T.m","invz/invz_critical_T0field.m"],"status":"todo"},

@@ -200,3 +200,81 @@ Every later task re-verifies its flag-off path against this frozen baseline
 (counts may only rise on Passed; nothing may Fail).
 
 ---
+
+## T1.1 — Geometric ODD lattice sums, cached (`invz_odd_blocks.m`)
+
+**Date:** 2026-07-16 · **Branch:** `invz-1z-lihof4` · **Git (pre-commit):** `cf570de`
+· **Phase:** T1 (first ODD code task). MATLAB R2025a.
+**Created:** `invz_projected/invz_odd_blocks.m`,
+`invz_projected/tests/test_invz_odd_blocks.m`.
+
+### What was implemented
+
+`[Vca, Vcb, Vcc, info] = invz_odd_blocks(ion, qvec, opts)` — the geometric
+foundation every later ODD task consumes. Mirrors `invz_jq_modes`' geometry
+priming (single `MF_dipole`/`exchange` build at q=[0 0 0], reused across the
+q-sweep), per-q loop, Γ handling and cache mechanics.
+
+- **`Vca`/`Vcb`** `[4,4,nq]` complex = `-C.gfac*dip(3,1|2,:,:)` per q —
+  **dipole-only** (exchange is Cartesian-diagonal, Lorentz/demag diagonal → no ODD
+  shape terms). **NOT Hermitized** (`J^{ca}(q)` is not Hermitian); pair identity
+  `J^{ca}(-q) = conj(J^{ca}(q))` is a test gate.
+- **`Vcc`** `[4,4,nq]` = the SAME assembly `invz_jq_modes` eigendecomposes,
+  `-C.gfac*dip(3,3,:,:) + sign(ion.J12)*ex(3,3,:,:)` + `lorz` at Γ-equivalent q,
+  Hermitized per q. Verified bit-for-bit against `invz_jq_modes` by the parity
+  test (eigenvalues to AbsTol 1e-12; `info.Jcc0`/`Jaa0` to RelTol 1e-12).
+- **`info`**: `dpRng`, `Jcc0`, `Jaa0`, `Jcc0_dipole`, `Jaa0_dipole`, `lorz`.
+- **Demag guard**: `error('invz:oddDemag', ...)` if `ion.demag ~= 0` (intrinsic-only
+  layer; demag stays in `invz_jq_modes`).
+- **Cache**: own namespace `odd1_<dpRng>_<hash(qvec)>_<hash(pkey)>.mat`,
+  `pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; 1]` (25 elems), one file
+  stores `Vca,Vcb,Vcc,info,pkey,qvec`; loader `isequal`-verifies **both** pkey and
+  qvec. Never touches `jq4_`.
+
+### Test status (TDD)
+
+- **RED** (undefined function): 4 fast tests errored; `test_ds2023_geometry_sums`
+  (pure-geometry unit guard, calls `MF_dipole` directly) **passed even at RED** —
+  DS2023 Suppl. Table I sums land on 36.73/17.93 · a⁻⁶ (a=5.175 Å) to RelTol 1%
+  with **no systematic factor** (the `{s,1}` lower-triangular indexing for s=1..4
+  covers all four sublattice partners, self-site excluded by the `r2<0.01` cut).
+- **GREEN**: focused file **5 Passed / 0 Failed** (fast); slow-gated Parseval
+  Incomplete when unset. Full fast suite **114 Passed / 0 Failed / 13 Incomplete**
+  (baseline 109/0/12 + 5 new fast + 1 slow-gated). `INVZ_SLOW=1` on this file only:
+  **6 Passed / 0 Failed / 0 Incomplete**.
+
+### T1.1(iv) Parseval (slow test) — headline numbers
+
+n=8 uniform mesh (incl. Γ), dpRng 20, row s=1:
+
+| quantity | value (meV²) |
+|---|---|
+| lhs = ⟨Σ_{s'}|Vca(1,s')|²⟩_BZ | 1.3415735084e-05 |
+| rhs = Σ_s Σ (gfac·Tf(:,3,1))² (real-space) | 1.3455701810e-05 |
+| abs ref = gfac²·36.73/5.175⁶ | 1.3454750450e-05 |
+
+- **residual |lhs−rhs|/rhs = 2.97e-03** (tol 1e-2) ✔
+- **|lhs−abs_ref|/abs_ref = 2.90e-03** (tol 1.5e-2) ✔ — validates gfac placement.
+
+The ~0.3% residual is the expected n=8 superlattice-folding term (r⁻⁶-suppressed),
+well inside tolerance. First block build (cache write) = 1.43 s.
+
+### Cache evidence
+
+`odd1_*.mat` files created under `invz_projected/cache/`:
+`odd1_10_6v_4005c28f_25v_45cc976e.mat` (1.4 kB, from the cache round-trip test),
+`odd1_20_1536v_49041200_25v_45cc976e.mat` (139 kB, from the Parseval mesh). Bitwise
+round-trip verified; a J12 change (distinct pkey) misses and recomputes.
+
+### Concern (escalated, not blocking)
+
+The brief's `test_cache_roundtrip_selfverifying` asserted
+`verifyFalse(isequal(V3a, V1a))` after a 5% `ion.J12` bump. This is **unsatisfiable**:
+`Vca`/`Vcb` are dipole-only per the interface spec, hence J12-independent —
+empirically `isequal(V3a,V1a)=1`, maxdiff = 0 (Vcc changes, maxdiff = 1e-5). The
+assertion contradicts the brief's own interface. Minimal intent-preserving fix
+applied (own new test file only): assert on the **cc** block, which carries the
+exchange (|J12|, sign J12) and is the observable that proves the pkey-miss +
+recompute. Documented inline in the test. No module code or pinned anchor touched.
+
+---
