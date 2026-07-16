@@ -1,5 +1,6 @@
 function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 %INVZ_SOLVE_POINT_ORDERED Self-consistent 1/z solution at one FERROMAGNETIC (T, Bx) point.
+% Bx: scalar (transverse, historical) or [Bx By Bz] vector (T).
 % Ordered-phase counterpart of invz_solve_point: the single-ion problem is solved with the
 % longitudinal ORDERING mean field (spontaneous moment m0 = <Jz>), the self-energy uses the
 % elastic-sector form (invz_sigma_ordered, HTML eqs 37-38), and the whole thing is iterated
@@ -24,6 +25,7 @@ tolo  = 1e-8; if isfield(opts,'tol_outer'), tolo  = opts.tol_outer; end
 maxo  = 80;   if isfield(opts,'max_outer'), maxo  = opts.max_outer; end
 mtol  = 1e-2; if isfield(opts,'m_tol'),     mtol  = opts.m_tol;     end
 eopts = struct(); if isfield(opts,'emt'), eopts = opts.emt; end
+Bx = invz_field_vec(Bx);                       % scalar -> [Bx 0 0]; 3-vector passes through
 
 [wn, wts, beta] = invz_matsubara(T, Ecut);
 
@@ -31,7 +33,7 @@ eopts = struct(); if isfield(opts,'emt'), eopts = opts.emt; end
 % J0z is the SAME cc coupling J(0) used by the criticality (line below) and the RPA/1z
 % denominator (invz_chi_realaxis Jsel), so the mean-field ordering, the 1/z instability, and
 % the RPA soft mode all read one J(0) instead of the hardcoded invz_single_ion default.
-si = invz_single_ion(ion, T, [Bx 0 0], struct('hyp', hyp, 'order', true, 'J0z', J0eff, 'Jxx0', Jxx0));
+si = invz_single_ion(ion, T, Bx, struct('hyp', hyp, 'order', true, 'J0z', J0eff, 'Jxx0', Jxx0));
 m0 = si.Jexp(3);
 pt.m0 = m0;
 pt.is_ordered = abs(m0) > mtol;

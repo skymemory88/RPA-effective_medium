@@ -1,5 +1,6 @@
 function pt = invz_solve_point(ion, T, Bx, Jnu_flat, opts)
 %INVZ_SOLVE_POINT Self-consistent 1/z solution at one paramagnetic (T, Bx) point.
+% Bx: scalar (transverse, historical) or [Bx By Bz] vector (T).
 % Outer loop: EMT K (Task 7) <-> lambda_p (Task 8) <-> Sigma, at fixed single-ion input.
 % Inside the ordered phase the paramagnetic EMT fixed point does not exist; outputs may be non-finite and pt.converged false — invz_critical relies on this as the ordered-phase signal. Always check pt.converged.
 if nargin < 5, opts = struct(); end
@@ -11,9 +12,10 @@ mixo  = 0.7;  if isfield(opts,'mix_outer'), mixo  = opts.mix_outer; end
 tolo  = 1e-8; if isfield(opts,'tol_outer'), tolo  = opts.tol_outer; end
 maxo  = 60;   if isfield(opts,'max_outer'), maxo  = opts.max_outer; end
 eopts = struct(); if isfield(opts,'emt'), eopts = opts.emt; end
+Bx = invz_field_vec(Bx);                       % scalar -> [Bx 0 0]; 3-vector passes through
 
 [wn, wts, beta] = invz_matsubara(T, Ecut);
-si  = invz_single_ion(ion, T, [Bx 0 0], struct('hyp', hyp, 'Jxx0', Jxx0));
+si  = invz_single_ion(ion, T, Bx, struct('hyp', hyp, 'Jxx0', Jxx0));
 c0  = invz_chi0z(si, T, 1i*wn, struct('elastic', true));
 G0  = -real(squeeze(c0(3,3,:)));                 % full (electro)nuclear cc Green function
 tl  = invz_twolevel(ion, T, Bx, struct('Jxx0', Jxx0));   % electronic two-level params for Sigma
