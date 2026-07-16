@@ -58,9 +58,10 @@ theta_c = 0.0;                         % deg -- tilt of the field OUT of the tra
                                      % turns the sharp transition into a rounded crossover.
                                      % Azimuth (phi_ab) + full-tensor propagation: deferred.
 phi_ab = 0.0;                        % deg -- IN-PLANE rotation of the swept field, a -> b.
-                                     % phi_ab ~ 11 deg is the production experimental angle
-                                     % (external stack ion.cfRot(Ho) = -11 deg; the exact
-                                     % sign mapping is pinned in test_invz_cfrot_equiv).
+                                     % phi_ab = -11 deg reproduces the production experimental
+                                     % geometry (external stack ion.cfRot(Ho) = -11 deg; SAME
+                                     % sign, pinned by test_invz_cfrot_equiv:
+                                     % cfRot = -11 deg <=> phi_ab = -11 deg).
                                      % Nonzero phi_ab REQUIRES transverse_mf = 'vector_ab'
                                      % below (the library errors otherwise, by design).
                                      % NOTE: vector_ab shifts even phi_ab = 0 results
