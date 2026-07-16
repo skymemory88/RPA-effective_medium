@@ -150,3 +150,67 @@ crosses conventions). Cross-convention agreement between this paragraph's
 default-coupling spot checks and the live-coupling table above should be
 read loosely, and only for `eps_tilt`; `eps_amp` is not expected to agree
 closely across the two conventions.
+
+## File / function map (Task 10)
+
+Full plan: `docs/superpowers/plans/2026-07-16-invz-field-angle.md` ("File
+Structure"). Design spec: `docs/superpowers/specs/2026-07-16-invz-field-angle-design.md`.
+
+| File | Status | Responsibility |
+|---|---|---|
+| `invz/invz_field_vec.m` | new | scalar/3-vector field normalization (single validation point, `invz:fieldVec`); every solver boundary calls this once |
+| `invz/invz_single_ion.m` | modified | sign-aware `mz_seed`, `mf_converged`/`mf_iters`/`mf_residual`, `E0`, `F_mf` |
+| `invz/invz_twolevel.m`, `invz/invz_twolevel_ordered.m` | modified | accept scalar-or-vector `B` |
+| `invz/invz_solve_point.m` | modified | normalizes `B` via `invz_field_vec` once, passes the vector down |
+| `invz/invz_solve_point_ordered.m` | modified | `opts.forced_moment`, sign-aware seed + mirrored retry, complete early returns, `pt.moment_branch` |
+| `invz/invz_solve_auto.m` | modified | `opts.bz_tol` dead band + longitudinal routing (exclusively through `invz_solve_point_ordered` with `forced_moment = true` once `|Bz| > bz_tol`) |
+| `invz/invz_chi_realaxis.m` | modified | vector-capable paramagnet fallback |
+| `invz/invz_spectra_map.m` | modified | `opts.field_dir`/`bz_tol`/`solve_opts` API, dead-band resolved once before the `parfor`, longitudinal failure contract, `S.field_dir`/`S.Bvec` metadata |
+| `invz/invz_spectra_qpath.m` | modified | vector `B`, `S.Bvec`/`S.Bmag`, `mat2str`-based vector error message, same `opts` contract as `invz_spectra_map` |
+| `invz/invz_run_spectra.m` | modified | `theta_c` knob, `dhat` field direction, tilt-aware plot labels |
+| `invz/invz_plot_spectra_map.m` | modified | axis label `\|B\| (T)` (magnitude, not signed `Bx`) |
+| `invz/invz_chi_tensor_ref.m` | new | Sigma=0 scalar-vs-tensor cross-channel reference at one `(T, Bvec)` |
+| `invz/invz_tilt_err.m` | new | tilt-only metric `eps_tilt`: differences `invz_chi_tensor_ref` against the `theta=0` reference at the same field, to remove the theta-independent `yz` baseline (diagnostic only, see "Round 2" above) |
+| `invz/invz_run_tensor_ref.m` | new | measurement driver: prints the theta/\|B\| table of `eps_spec`/`eps_tilt`/`eps_amp`/`dE_peak` that sets the supported tilt range |
+| `invz/invz_peak_energy.m` | new (factored out) | shared censored, parabolic-refined peak-energy helper used by `invz_spectra_map`, `invz_spectra_qpath`, and `invz_chi_tensor_ref` |
+| `invz/tests/test_invz_field_vec.m` | new | Task 1 tests |
+| `invz/tests/test_invz_field_angle.m` | new | Tasks 2-4 solver-level tests |
+| `invz/tests/test_invz_field_angle_spectra.m` | new | Tasks 5-7 spectra/label tests + fast mirror test |
+| `invz/tests/test_invz_field_angle_slow.m` | new | Task 8 slow tests (`INVZ_SLOW`-gated) |
+| `invz/tests/test_invz_tensor_ref.m` | new | Task 9 reference tests (3 fast structural + 1 slow reproducibility) |
+| `docs/SESSION-2026-07-16-field-angle.md` | new (this file) | measured tensor-reference table + supported angle range |
+| `invz/README.html` | modified | function reference (`invz_field_vec`, `invz_chi_tensor_ref`, `invz_run_tensor_ref`) + `theta_c` knob documentation (`§4`) + scope entries (`§8`) |
+
+## New option / metadata names
+
+| Name | Where | Meaning |
+|---|---|---|
+| `opts.field_dir` | `invz_spectra_map` | nonzero finite real 3-vector, normalized internally; sets the sweep direction of `fields` (`\|B\|`); default `[1 0 0]` (pure transverse, unchanged behaviour); invalid input -> `invz:fieldDir` |
+| `opts.bz_tol` | `invz_spectra_map`, `invz_spectra_qpath`, `invz_solve_auto` | Tesla, default `1e-9`; dead band on the longitudinal component `Bz` -- resolved once per driver call (before the `parfor`/solve), zeroing `Bz` below tolerance so `theta_c = 0` reproduces the pure-transverse benchmark exactly |
+| `opts.solve_opts` | `invz_spectra_map`, `invz_spectra_qpath` | struct merged into the per-field `invz_solve_auto` opts; fields `J0eff`/`Jxx0`/`hyp` are reserved (driver-owned) -> `invz:solveOpts` if set |
+| `opts.forced_moment` | `invz_solve_point_ordered` (set internally by `invz_solve_auto`'s longitudinal route) | when true, bypasses the spontaneous `\|m0\| > m_tol` gate and treats the moment as field-induced; enforces sign-aware seed alignment with the applied `Bz` (one mirrored retry); a non-converged mean-field loop is itself an early-return condition |
+| `pt.moment_branch` | `invz_solve_point_ordered` | `'spontaneous'` \| `'field_induced'` \| `'none'` (`'none'` only on the spontaneous-mode paramagnetic early return); present on every return path, `tl = []` on early returns |
+| `S.field_dir` | `invz_spectra_map` | the normalized field direction actually used (echoes `opts.field_dir`) |
+| `S.Bvec` | `invz_spectra_map` (`[nB x 3]`), `invz_spectra_qpath` (`[1x3]`) | the field vector(s) actually used, dead-band applied |
+| `S.Bmag` | `invz_spectra_qpath` | `norm(S.Bvec)` |
+| `S.phase = 1` | `invz_spectra_map`, `invz_spectra_qpath` | now means "moment-form self-energy" generically -- spontaneous FM below \(B_c\) at `theta_c = 0`, OR field-induced (forced-moment) under a nonzero tilt; `2` = strict paramagnet, `0` = masked/no solution |
+
+## Deferred follow-ups (design spec §8; not implemented here)
+
+1. **Azimuthal field + two-channel transverse MF.** Requires iterating both
+   `hx` and `hy` for every field direction (including the legacy `[Bx 0 0]`,
+   where `B64s` induces `<Jy> != 0`), which changes the default x-field model
+   and demands benchmark revalidation. Do not resurrect the rejected `By != 0`
+   guard (angle-discontinuous, C4-inconsistent) -- see the plan's "Review
+   resolutions" table, finding 1.
+2. **Full-tensor A0(+A1)** (`odd_implementation_plan.html` Appendix A). **A0**:
+   rigorous tensor-RPA layer, `[12,12,nq]` Cartesian x sublattice `J(q)`
+   against the full 3x3 `chi0` from `invz_chi0z`; captures the `chi0_xz`/`yz`
+   cross-channel exactly, superseding this stage's `theta_c <= 5 deg` scalar
+   limit for arbitrary tilt. **A1**: projected 1/z bridge (`chi_tilde0 =
+   chi_dom/(1+Sigma_c) + chi_rest`), still a dominant-transition approximation,
+   not a rigorous tensor 1/z.
+
+Both are out of scope for this feature (scalar stage, c-tilt only); see
+`docs/superpowers/specs/2026-07-16-invz-field-angle-design.md` §8 for the full
+discussion and the design decisions that led to descoping them.
