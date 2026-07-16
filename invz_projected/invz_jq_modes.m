@@ -15,9 +15,27 @@ function [Jnu, info, Juni] = invz_jq_modes(ion, qvec, opts)
 % critical condition per Ronnow, PRB 75, 054426 (2007)); exported separately
 % as info.Jshape_cc and inside info.Jaa0. dpRng=30 is the production default
 % (grid-convergence checked against R2007 targets to <0.3%).
+%
+% ODD extension (T1.3, opt-in): opts.odd = false (default) | struct('Xp', [2x2])
+% with Xp the real symmetric transverse susceptibility block from invz_chiperp
+% (meV^-1). With opts.odd a struct, the cc matrices gain the ODD-mediated
+% coupling deltaJ(q) (invz_odd_deltaJ, E1 + self-site subtraction E4) built
+% from the cached geometric blocks (invz_odd_blocks, odd1_ namespace), and
+% info.Jcc0 carries the explicit uniform shift -d (E5) -- the single line that
+% feeds the DS2023 mean-field mechanism into the MF, the RPA denominator and
+% the 1/z criticality. Diagnostics land in info.odd (see jq_modes_odd below).
+% With opts.odd false/absent the default path below runs untouched (bitwise
+% regression-gated); the ODD path never reads or writes the jq4_ cache.
 if nargin < 3, opts = struct(); end
 dpRng = 30;  if isfield(opts,'dpRng'), dpRng = opts.dpRng; end
 useCache = ~isfield(opts,'cache') || opts.cache;
+% --- ODD diversion (T1.3): strictly additive and opt-in. Everything below this
+% block is the pre-ODD code path, byte-untouched (regression test
+% test_jq_modes_odd_off_bitwise gates isequaln on all three outputs).
+if isfield(opts, 'odd') && ~isempty(opts.odd) && ~isequal(opts.odd, false)
+    [Jnu, info, Juni] = jq_modes_odd(ion, qvec, opts, dpRng, useCache);
+    return
+end
 C = invz_const();
 % Lorentz cavity (+4pi/(3Vc)) is always added at the uniform mode (mandatory
 % split term, not a toggle). Demagnetization (ion.demag/ion.alpha, default
@@ -94,4 +112,102 @@ end
 function h = hash_vec(v)
 h = sprintf('%dv_%08x', numel(v), ...
     typecast(single(sum(v.*(1:numel(v))')), 'uint32'));
+end
+
+function [Jnu, info, Juni] = jq_modes_odd(ion, qvec, opts, dpRng, useCache)
+%JQ_MODES_ODD opts.odd branch of invz_jq_modes (T1.3; E1/E4/E5).
+% Rebuilds the cc channel as M(q) = Vcc(q) + deltaJ(q) from the geometric ODD
+% blocks (invz_odd_blocks; odd1_ cache when useCache) and the supplied
+% transverse susceptibility Xp = opts.odd.Xp, then eigendecomposes per q
+% exactly as the default path does (same sort(real(eig(.))) and uniform-mode
+% Juni = v'*M*v). NEVER reads or writes the jq4_ cache: the ODD Jnu depend on
+% Xp, which is not part of the jq4_ key; the heavy geometric blocks are cached
+% under odd1_ by invz_odd_blocks itself.
+%
+% info mirrors the default path field-for-field:
+%   Jcc0            = infoB.Jcc0 - d  <- THE single line that carries the
+%                     MF-level DS2023 mechanism into the mean field, the RPA
+%                     denominator and the 1/z criticality (single-sourcing).
+%                     Bookkeeping (plan T1.3): the grid matrices carry the
+%                     POST-subtraction deltaJ -- whose diagonal already
+%                     contains -d (E4) -- and Jcc0 carries the explicit -d
+%                     (E5); there is NO other q = 0 handling anywhere.
+%   Jcc0_dipole, Jaa0_dipole, Jaa0, dpRng: from invz_odd_blocks' Gamma info
+%                     block, bit-identical to the default path at demag = 0
+%                     (T1.1 parity test). info.lorz rides along (extra,
+%                     harmless).
+%   Jshape_cc       = 0: the ODD layer is intrinsic-only (demag == 0 enforced
+%                     below), and the default path's 4*dm_cc is 0 at demag = 0.
+%   geomD/geomX     : invz_odd_blocks does not export the primed geometry, so
+%                     it is rebuilt here once (~0.16 s at dpRng 30; MF_dipole's
+%                     documented reuse form is bit-identical either way) to
+%                     keep the info contract whole for callers (invz_jq_path
+%                     reads info.geomD for its Gamma-limit rebuild).
+%   odd             = struct(d, dJ_mean_diag [4,1] pre-subtraction diagonal
+%                     means, dJ_max, uniform_residual, Xp). uniform_residual =
+%                     max |PRE-subtraction deltaJ| element on the smallest-|q|
+%                     (r.l.u.) non-Gamma shell of qvec (E1 recomputed exactly
+%                     on that shell) -- report-only; on-axis c* shells sit at
+%                     machine zero, near-a* shells carry the linear-in-q ODD
+%                     residual (ODD-LOG P0.3/T1.3), and tilted rays keep a
+%                     direction-dependent macroscopic term, so never gate
+%                     small-q decay off-axis.
+odd = opts.odd;
+if ~isstruct(odd) || ~isfield(odd, 'Xp')
+    error('invz:oddXp', ['opts.odd must be false (default) or a struct with a ' ...
+        'field Xp = [2x2] real symmetric chi_perp block (invz_chiperp); got %s.'], ...
+        class(odd));
+end
+Xp = odd.Xp;
+if ~isnumeric(Xp) || ~isequal(size(Xp), [2 2]) || ~isreal(Xp) ...
+        || ~all(isfinite(Xp(:))) || ~issymmetric(Xp)
+    error('invz:oddXp', ['opts.odd.Xp must be a [2 2] real symmetric finite ' ...
+        'matrix (meV^-1, invz_chiperp output).']);
+end
+demag = 0;
+if isfield(ion,'demag')  && ~isempty(ion.demag),  demag = ion.demag;  end
+if isfield(opts,'demag') && ~isempty(opts.demag), demag = opts.demag; end
+if demag ~= 0
+    error('invz:oddDemag', ['the ODD path of invz_jq_modes is intrinsic-only ' ...
+        '(demag must be 0; got %g). Demag handling stays on the default path/' ...
+        'invz_chi_realaxis (R2007: shape term cancels from the critical ' ...
+        'condition).'], demag);
+end
+[Vca, Vcb, Vcc, infoB] = invz_odd_blocks(ion, qvec, ...
+    struct('dpRng', dpRng, 'cache', useCache));
+[dJ, d, dinfo] = invz_odd_deltaJ(Vca, Vcb, Xp);
+nq   = size(qvec, 1);
+v    = ones(4,1)/2;              % uniform (all-sublattices-in-phase) FM mode
+Jnu  = zeros(nq, 4);
+Juni = zeros(nq, 1);
+for iq = 1:nq
+    M = Vcc(:,:,iq) + dJ(:,:,iq);
+    M = (M + M')/2;              % both terms Hermitian; cleans rounding only
+    Jnu(iq,:) = sort(real(eig(M))).';
+    Juni(iq)  = real(v.'*M*v);   % uniform FM-mode coupling (physical dispersion)
+end
+info = infoB;
+info.Jcc0 = infoB.Jcc0 - d;      % E5 explicit uniform shift (see header block)
+info.Jshape_cc = 0;              % demag == 0 enforced above (intrinsic-only)
+% Primed q-independent geometry, mirroring the default path's info contract:
+[~, ~, info.geomD] = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
+[~,    info.geomX] = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau);
+% uniform_residual: E1 recomputed exactly on the smallest-|q| non-Gamma shell.
+qn = sqrt(sum(qvec.^2, 2));
+for iq = 1:nq
+    if invz_is_gamma_equiv(qvec(iq,:), ion.tau), qn(iq) = Inf; end
+end
+qmin = min(qn);
+if isfinite(qmin)
+    ur = 0;
+    for iq = reshape(find(qn <= qmin*(1 + 1e-9)), 1, [])
+        A = Vca(:,:,iq);  B = Vcb(:,:,iq);
+        P = Xp(1,1)*(A*A') + Xp(1,2)*(A*B') + Xp(2,1)*(B*A') + Xp(2,2)*(B*B');
+        ur = max(ur, max(abs(P(:))));
+    end
+else
+    ur = NaN;                    % all-Gamma grid: no finite-q shell to measure
+end
+info.odd = struct('d', d, 'dJ_mean_diag', dinfo.d_per_sublattice, ...
+    'dJ_max', dinfo.dJ_max, 'uniform_residual', ur, 'Xp', Xp);
 end

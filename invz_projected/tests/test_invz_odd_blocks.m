@@ -91,6 +91,61 @@ cdir = fullfile(fileparts(mfilename('fullpath')), '..', 'cache');
 verifyTrue(testCase, ~isempty(dir(fullfile(cdir, 'odd1_*.mat'))));
 end
 
+function test_deltaJ_identities(testCase)
+ion = invz_ion();
+n = 6;  [h, k, l] = ndgrid((0:n-1)/n);  qvec = [h(:) k(:) l(:)];  qvec(1,:) = [];  % driver-style, no Gamma
+[Vca, Vcb] = invz_odd_blocks(ion, qvec, struct('dpRng', 15, 'cache', false));
+Xp = invz_chiperp(ion, 1.53, [0 0 0], struct());
+[dJ, d, dinfo] = invz_odd_deltaJ(Vca, Vcb, Xp);
+verifyGreaterThan(testCase, d, 0);
+verifyEqual(testCase, dinfo.d_per_sublattice, d*ones(4,1), 'RelTol', 1e-10);       % T1.3 assert
+verifyGreaterThan(testCase, dinfo.presub_min_eig, -1e-12*max(1e-30, dinfo.dJ_max)); % PSD pre-sub
+verifyLessThan(testCase, dinfo.postsub_diag_bzavg, 1e-15*max(1e-30, dinfo.dJ_max)); % E4 exact
+for iq = [1, round(size(dJ,3)/2)]
+    verifyLessThan(testCase, norm(dJ(:,:,iq) - dJ(:,:,iq)', 'fro'), 1e-14);         % Hermitian
+    verifyLessThan(testCase, max(abs(imag(eig(dJ(:,:,iq))))), 1e-12);               % real eigs
+end
+% E4/E5 closure (T1.3 acceptance vi): BZ-avg of the pre-subtraction diagonal, as
+% reconstructed from the assembled outputs dJ(s,s,:) + d, recovers d per sublattice.
+verifyEqual(testCase, squeeze(mean(real(dJ(1,1,:)), 3)) + d, d, 'AbsTol', 1e-15*max(1e-30, d)); %#ok<NASGU> % diag avg is 0
+% Xp = 0 -> dJ = 0, d = 0
+[dJ0, d0] = invz_odd_deltaJ(Vca, Vcb, zeros(2));
+verifyEqual(testCase, max(abs(dJ0(:))), 0);  verifyEqual(testCase, d0, 0);
+end
+
+function test_jq_modes_odd_off_bitwise(testCase)
+ion = invz_ion();
+q = [0.25 0 0; 0.31 0.17 0.09; 0 0 0];
+[J1, i1, u1] = invz_jq_modes(ion, q, struct('dpRng', 15, 'cache', false));
+[J2, i2, u2] = invz_jq_modes(ion, q, struct('dpRng', 15, 'cache', false, 'odd', false));
+verifyTrue(testCase, isequaln({J1, i1, u1}, {J2, i2, u2}));                          % regression (i)
+end
+
+function test_jq_modes_odd_zero_Xp_equals_off(testCase)
+ion = invz_ion();
+n = 4;  [h, k, l] = ndgrid((0:n-1)/n);  qvec = [h(:) k(:) l(:)];  qvec(1,:) = [];
+[J1, i1] = invz_jq_modes(ion, qvec, struct('dpRng', 10, 'cache', false));
+[J2, i2] = invz_jq_modes(ion, qvec, struct('dpRng', 10, 'cache', false, 'odd', struct('Xp', zeros(2))));
+verifyEqual(testCase, J2, J1, 'AbsTol', 1e-14);                                      % regression (ii)
+verifyEqual(testCase, i2.Jcc0, i1.Jcc0, 'AbsTol', 1e-18);
+verifyEqual(testCase, i2.odd.d, 0);
+end
+
+function test_jq_modes_odd_on_structure(testCase)
+ion = invz_ion();
+n = 6;  [h, k, l] = ndgrid((0:n-1)/n);  qvec = [h(:) k(:) l(:)];  qvec(1,:) = [];
+Xp = invz_chiperp(ion, 1.53, [0 0 0], struct());
+[J1, i1] = invz_jq_modes(ion, qvec, struct('dpRng', 15, 'cache', false));
+[J2, i2] = invz_jq_modes(ion, qvec, struct('dpRng', 15, 'cache', false, 'odd', struct('Xp', Xp)));
+verifyGreaterThan(testCase, i2.odd.d, 0);
+verifyEqual(testCase, i2.Jcc0, i1.Jcc0 - i2.odd.d, 'AbsTol', 1e-18);                 % E5 shift
+% ordering mode stays the uniform branch (T1.3 acceptance v): margin shrinks
+% from both sides but must remain positive on this grid
+verifyLessThan(testCase, max(J2(:)), i2.Jcc0);
+% finite-q modes gain weight: mean top-branch coupling strictly increases
+verifyGreaterThan(testCase, mean(J2(:,4)), mean(J1(:,4)));
+end
+
 function test_parseval_odd_vs_realspace_slow(testCase)
 % T1.1(iv): BZ-average of the squared ca blocks == real-space squared sum
 % (Parseval), SAME dpRng both sides; 1% tolerance absorbs superlattice folding
