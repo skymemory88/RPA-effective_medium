@@ -153,8 +153,11 @@ q = [0.25 0 0; 0.31 0.17 0.09];
 [V2a, V2b, V2c] = invz_odd_blocks(ion, q, struct('dpRng', 10, 'cache', true));
 verifyEqual(testCase, {V2a, V2b, V2c}, {V1a, V1b, V1c});      % bitwise round-trip
 ion2 = ion;  ion2.J12 = ion.J12 * 1.05;                        % physics change must miss
-V3a = invz_odd_blocks(ion2, q, struct('dpRng', 10, 'cache', true));
-verifyFalse(testCase, isequal(V3a, V1a));
+% AMENDED (Task 2 adjudication): Vca/Vcb are dipole-only, hence J12-INDEPENDENT
+% by this plan's own interface — the miss is observable on the cc block, which
+% carries exchange. A wrong cache HIT would leave V3c == V1c.
+[~, ~, V3c] = invz_odd_blocks(ion2, q, struct('dpRng', 10, 'cache', true));
+verifyFalse(testCase, isequal(V3c, V1c));
 cdir = fullfile(fileparts(mfilename('fullpath')), '..', 'cache');
 verifyTrue(testCase, ~isempty(dir(fullfile(cdir, 'odd1_*.mat'))));
 end
