@@ -278,3 +278,109 @@ exchange (|J12|, sign J12) and is the observable that proves the pkey-miss +
 recompute. Documented inline in the test. No module code or pinned anchor touched.
 
 ---
+
+## T1.3 — ODD-mediated coupling δJ^cc(q): E1/E4/E5 + `invz_jq_modes` `opts.odd`
+
+**Date:** 2026-07-16 · **Branch:** `invz-1z-lihof4` · **Git (pre-commit):** `dbdf0d6`
+· **Phase:** T1. MATLAB R2025a. χ⊥ = `invz_chiperp(ion, 1.53, [0 0 0])`
+(diag 17.63784562 meV⁻¹, the pinned P0.2 anchor).
+**Created:** `invz_projected/invz_odd_deltaJ.m`.
+**Modified:** `invz_projected/invz_jq_modes.m` (strictly additive `opts.odd`
+branch; `git diff` shows 116 insertions, **0 deletions** — the default path is
+byte-untouched), `invz_projected/tests/test_invz_odd_blocks.m` (+4 tests).
+
+### What was implemented
+
+- **`[dJ, d, dinfo] = invz_odd_deltaJ(Vca, Vcb, Xp)`** — E1 contraction per q
+  (`dJpre = Vca·Xp₁₁·Vca' + Vca·Xp₁₂·Vcb' + Vcb·Xp₂₁·Vca' + Vcb·Xp₂₂·Vcb'`,
+  Hermitized; PSD by construction since `dJpre = [Vca Vcb](Xp⊗I₄)[Vca Vcb]'`),
+  E4 self-site subtraction (per-sublattice BZ-mean removed from the **diagonal
+  only**), E5 uniform reduction `d = mean_s mean_q dJpre(s,s,q)` with the S4
+  assert (four per-sublattice means to 1e-10 rel, `invz:oddS4`) and a
+  machine-real assert on the diagonal before `real()` (`invz:oddImag`). Header
+  carries the **no-double-counting comment trail** (plan T1.3/§8): the
+  subtracted on-site constant multiplies (σᶻ)² = 1 in the strict two-level
+  limit — pure energy shift, no Tc content; its physical residue (internal
+  field renormalizing Δ, M², n01) is Tier 2's; grid matrices carry
+  post-subtraction δJ, `Jcc0` carries the explicit −d, exactly once. Caller
+  contract: qvec must be a full uniform BZ mesh; Γ-less driver grids fine
+  (O(1/Nq) difference); never q-paths.
+- **`invz_jq_modes` `opts.odd = false (default) | struct('Xp', [2×2])`** — the
+  odd branch diverts right after dpRng/cache resolution into a new local
+  function `jq_modes_odd`: Xp validated ([2,2] real symmetric finite, error id
+  `invz:oddXp`), demag ≠ 0 rejected (`invz:oddDemag`, intrinsic-only), blocks
+  from `invz_odd_blocks` (odd1_ cache), per q `M = Vcc + dJ` (Hermitized) →
+  `Jnu = sort(real(eig(M)))`, `Juni = v'Mv`. **`info.Jcc0 = infoB.Jcc0 − d`**
+  (E5 — THE line carrying the DS2023 MF mechanism downstream).
+  `info.Jshape_cc = 0` (demag = 0 enforced); `info.geomD/geomX` provided by a
+  one-off priming rebuild (~0.16 s at dpRng 30; `invz_odd_blocks` doesn't
+  export geom) so the info contract stays whole for `invz_jq_path`-style
+  consumers; `info.odd = struct(d, dJ_mean_diag [4,1], dJ_max,
+  uniform_residual, Xp)`. The ODD path **never reads or writes `jq4_`**
+  (verified two ways: code inspection — the branch returns before the jq4_
+  cache block — and empirically: 0 new `jq4_*.mat` after odd calls on both
+  grids below, `cache = true` on 16³).
+
+### Test status (TDD)
+
+- **RED:** `test_deltaJ_identities` (undefined `invz_odd_deltaJ`),
+  `test_jq_modes_odd_zero_Xp_equals_off` + `test_jq_modes_odd_on_structure`
+  (no `info.odd` field) errored; `test_jq_modes_odd_off_bitwise` **passed at
+  RED** as designed (it is the regression gate — `opts.odd = false` was a
+  no-op before and after).
+- **GREEN:** focused file **9 Passed / 0 Failed / 1 Incomplete** (slow-gated
+  Parseval). Full fast suite **122 Passed / 0 Failed / 13 Incomplete** (29.8 s;
+  baseline 118/0/13 + the 4 new tests, nothing fails). Bitwise regression
+  `isequaln({Jnu,info,Juni})` on the default path: PASS.
+
+### Headline numbers (report, not tuned)
+
+χ⊥(1.53 K, 0 T), Γ-less uniform meshes `(0:n−1)/n`:
+
+| quantity | test 6³ / dpRng 15 | production 16³ / dpRng 30 |
+|---|---|---|
+| **d** | **4.7352243883e-04 meV = 0.4735 μeV** | **4.7461418306e-04 meV = 0.4746 μeV** |
+| d per sublattice (rel spread) | 1.1e-16 | 0 (bit-identical) |
+| Jcc0 → Jcc0 − d | 6.4291e-3 → 5.9556e-3 meV | 6.4244e-3 → 5.9498e-3 meV |
+| d / Jcc0 | 7.37% | 7.39% |
+| dJ_max (pre-sub) | 6.189e-4 meV | 6.180e-4 meV |
+| presub_min_eig | +3.9e-35 (PSD exact) | +7.9e-35 |
+| postsub_diag_bzavg | 1.0e-19 | 2.5e-19 |
+| uniform_residual (smallest shell, max over shell) | 1.541e-4 meV = 2.40e-2·Jcc0 (q = 1/6) | 2.633e-5 meV = 4.10e-3·Jcc0 (q = 1/16) |
+| blocks build (cache warm) | 0.4 s | 32.7 s (one-off; `odd1_30_12285v_4c0ca1e0_25v_45cc976e.mat`) |
+
+- **Expected-band verdict: PASS.** d = 0.474–0.475 μeV sits inside (at the top
+  of) the 0.3–0.5 μeV band, grid- and dpRng-stable to 0.23% between the two
+  grids. Cross-check: Parseval estimate d ≈ χ_aa·⟨Σ|Vca|²⟩ + χ_bb·⟨Σ|Vcb|²⟩ =
+  17.638 × 2 × 1.3455e-5 = 4.747e-4 meV — matches to 0.03%. The uniform
+  coupling drops 7.4%, the right neighborhood for DS2023's 5–8% MF Tc effect.
+- **uniform_residual vs the plan's ≤ 1e-4·Jcc0 claim:** holds **on-axis c\***
+  exactly as P0.3 predicted — the c*-shell E1 value is machine zero
+  (2.5e-33 meV = 3.9e-31·Jcc0). The reported `uniform_residual` takes the max
+  over the whole smallest-|q| shell, whose a*/b* members carry the
+  **linear-in-q** ODD residual (P0.3 recalibration): 4.10e-3·Jcc0 at q = 1/16,
+  2.40e-2·Jcc0 at q = 1/6 — grid geometry, not a symmetry violation. The plan's
+  1e-4 figure is met only on the c* axis; off-axis shells follow the P0.3
+  linear-decay law (≈ χ⊥·|Jca(q)|², |Jca| ∝ q).
+
+### Finding (baseline property, not ODD-induced — flagged for T1.5)
+
+The T1.3 acceptance-(v) ordering-margin gate `max Jnu < Jcc0 − d` **passes on
+the 6³ test grid** (margin +3.665e-4 meV odd; +4.279e-4 off). On the
+**production 16³ grid it is violated ALREADY WITH ODD OFF**: the top branch at
+the smallest **transverse** shell q = [0 1/16 0] (= max Juni there too) is
+6.45263e-3 meV > Jcc0 = 6.42444e-3 (excess +2.82e-5 meV, +0.44%), 4/4095
+q-points above. With ODD on the picture is unchanged in kind: the same 4
+points, excess +3.71e-5 meV vs the shifted Jcc0 − d. This is the known
+dipolar q→0 transverse limit (q̂_c = 0 ⇒ no macroscopic suppression; J(q→0⊥)
+approaches the Lorentz-included Γ value, and the O(q²) lattice correction is
+positive along a*/b*) — the c* shell sits far below (−3.22e-3 meV). ODD
+neither creates nor spreads the excess (count 4 → 4; it shrinks slightly in
+relative weight against the finite-q gain). **Consequence:** never gate
+`max(Jnu) < Jcc0` on production-fine Γ-less grids; the physical ordering
+comparison at Γ is `info.Jcc0`/`Juni`-based, and the near-Γ transverse shell
+rides the discontinuous macroscopic limit. T1.5's criticality measurements
+should confirm the RPA instability still lands at the uniform Γ mode through
+the 1/z machinery (which consumes `info.Jcc0`, not grid `max(eig)`).
+
+---
