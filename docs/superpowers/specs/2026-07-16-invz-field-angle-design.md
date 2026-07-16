@@ -1,8 +1,10 @@
 # c-axis field-misalignment (tilt) knob for `invz_run_spectra`
 
 Date: 2026-07-16. Branch: `invz-1z-lihof4`. Status: design approved by user;
-**revised 2026-07-16** after external review (`field-angle-plan-review_by_Codex.md`,
-findings verified against the code — see "Review resolutions" at the end).
+**revised 2026-07-16** after external review, **second revision 2026-07-16**
+after the follow-up review (`field-angle-plan-review_by_Codex.md`, both rounds;
+numerical findings verified against the code — see "Review resolutions" at the
+end).
 Scope: **scalar stage, c-axis tilt only** (`phi_ab = 0`); azimuthal support and
 tensor propagation are deferred follow-ups (§8).
 
@@ -17,9 +19,12 @@ the sharp quantum phase transition into a crossover and is a known source of
 experiment/theory discrepancy. The user wants a field-angle knob in the 1/z
 spectra driver, following the convention of `LiReF4_MF_Yikai.m` (located at
 `/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Programming scripts/
-Matlab/Simulation/Mean Field/LiReF4/LiReF4_MF_Yikai.m`, lines 60-66; its
-`MF_chi.m`/`RPA.m` downstream handling is reported by the user, not verified
-here).
+Matlab/Simulation/Mean Field/LiReF4/LiReF4_MF_Yikai.m`, lines 60-66 — the
+**formula** (`Hx = B·cosθ·cosφ, Hz = B·sinθ`) is authoritative; that file's
+line-60 comment "angle from c-axis" contradicts its own formula and should be
+ignored. Companion files there are `MF_Chi.m` (capital C) and `RPA.m`; the
+reviewer confirmed `RPA.m` inverts the full 3×3 response, with a
+diagonal-projected interaction).
 
 ## Physics background — why longitudinal field is *not* trivial in 1/z
 
@@ -126,6 +131,15 @@ site that currently writes `[Bx 0 0]`.
 - **MF convergence surfaced** (review finding 6): return `si.mf_converged`
   (logical), `si.mf_iters`, `si.mf_residual` (final `dmf`); keep the existing
   warning. No behavior change for existing callers (additive fields).
+- **Energy diagnostics** (second review finding 1): return `si.E0` (the
+  unshifted ground-state energy `E(1)` — `si.E` stays shifted as today) and
+  `si.F_mf`, the **variational** mean-field free energy
+  `F_MF = −kT·ln Tr e^{−βH} + hx²/(2·Jxx0) + hz²/(2·J0z)` (the double-counting
+  correction restores `−½J⟨J⟩²` per interaction channel; use the unshifted
+  spectrum). The naive shifted-spectrum comparison is **wrong**: at
+  `T = 0.31 K`, `B = [2 0 −0.01]` it mis-ranks the branches
+  (−5.15e-8 vs −2.74e-8 meV), while `F_mf` correctly puts the aligned branch
+  lower: −21.47664574 vs −21.46963936 meV (verified; matches review).
 
 ### 3. Field-vector plumbing (the 5 `[Bx 0 0]` leaf sites)
 
@@ -171,6 +185,17 @@ explicitly non-circular, in order):
    strictly as "uses the moment-form self-energy") **plus** new machine-readable
    `pt.moment_branch = 'spontaneous' | 'field_induced'`.
 
+**Return contracts** (second review finding 2 + refinement 4):
+
+- **Every** return path of `invz_solve_point_ordered` — including the early
+  paramagnetic return and the new step-2/3 failures — populates the same field
+  set: `is_ordered`, `converged`, `Sigma0`, `crit`, `si`, `tl` (may be `[]`),
+  `m0`, `moment_branch`. Callers never probe a missing struct member.
+- On a longitudinal failure (`phase = 0`), `invz_solve_auto` returns the failed
+  ordered-style `pto` (not `[]`) whenever it carries valid `si`/`tl`, so the
+  map can implement its RPA-only fallback. `pt = []` only when no usable
+  single-ion state exists.
+
 ### 5. `invz/invz_spectra_map.m` — direction API, failure contract, metadata
 
 **API** (review finding 4 — `fields` already means a list of scalar sweep
@@ -181,9 +206,27 @@ opts.field_dir = [1 0 0];   % unit-normalized internally; nonzero finite real 3-
 ```
 
 `fields` stays a vector of **nonnegative magnitudes** (validated); internally an
-`nB x 3` array `Bvec(k,:) = fields(k)*dhat` is formed once, before the parfor.
-Returned metadata: `S.fields` (magnitudes), `S.field_dir` (normalized),
-`S.Bvec` (actual vectors used).
+`nB x 3` array `Bvec(k,:) = fields(k)*dhat` is formed once, before the parfor,
+**with the dead-band normalization already applied** (`|Bvec(k,3)| <= bz_tol`
+zeroed) so that `S.Bvec` is exactly the vectors the solves use — the same rule
+`invz_solve_auto` applies, resolved from the same option (second review finding
+2; no requested-vs-used ambiguity). Returned metadata: `S.fields` (magnitudes),
+`S.field_dir` (normalized), `S.Bvec` (vectors used).
+
+**Solver-option propagation** (second review finding 2 — today both spectra
+functions build a fresh `sopts` with only `hyp/J0eff/Jxx0`, so the failure-
+injection tests would be unimplementable):
+
+- New `opts.bz_tol` on both spectra functions, resolved **once** and used for
+  (a) the pre-parfor dead-band normalization above, (b) the `sopts` passed to
+  `invz_solve_auto`, and (c) `one_field`'s longitudinal-failure branch. One
+  value, three consumers, no duplicated defaults.
+- New `opts.solve_opts` (struct, default empty) on both spectra functions:
+  merged into `sopts` after the live couplings are set. The fields `J0eff`,
+  `Jxx0`, `hyp` are **reserved** (error `invz:solveOpts` if present — the
+  driver owns them); everything else (`max_outer`, `mf_maxit`, `mix_outer`,
+  `Ecut`, `m_tol`, `mz_seed`, ...) passes through to the point solvers. This is
+  what lets tests force `max_outer = 1` / `mf_maxit = 1` through the map.
 
 **Longitudinal failure contract** (review finding 5 — verified crash path:
 `one_field` line 113 calls `invz_twolevel` *outside* the try block, so a
@@ -200,9 +243,11 @@ label a `Bz ≠ 0` point as FM/PM phases of a sharp transition.
 
 ### 6. `invz/invz_spectra_qpath.m` — vector field + safe formatting
 
-`B` accepts scalar-or-3-vector via `invz_field_vec`; returns `S.Bvec` and
-`S.Bmag`. The `invz:noSolution` error at lines 67-69 currently formats `B` with
-a single `%.3f` — MATLAB recycles the format over a 3-vector, producing a
+`B` accepts scalar-or-3-vector via `invz_field_vec`; returns `S.Bvec` (the
+vector **used**, i.e. after the same `bz_tol` dead-band normalization) and
+`S.Bmag`. Gains the same `opts.bz_tol` / `opts.solve_opts` contract as the map
+(§5). The `invz:noSolution` error at lines 67-69 currently formats `B` with a
+single `%.3f` — MATLAB recycles the format over a 3-vector, producing a
 malformed message; rewrite with `mat2str`-style formatting (review finding 7).
 
 ### 7. Driver `invz/invz_run_spectra.m` + plot labels
@@ -224,13 +269,29 @@ Label sweep (review finding 7): `invz_plot_spectra_map.m:32` and
 `invz_run_spectra.m:134` change `'B_x (T)'` → `'|B| (T)'` (with the direction in
 the title when `theta_c ≠ 0`).
 
-**Σ=0 tensor-reference validation** (review finding 3): a test/driver utility
-builds the full 3×3 Cartesian RPA from `invz_chi0z` (already available) with
-the same diagonal couplings `diag(Jaa0, Jaa0, Jsel)` and compares its `χ_cc`
-against the scalar-chain `Σ=0` result over representative `(B, ω)` at
-`theta_c ∈ {0, 0.5, 1, 2, 5}` deg. The measured cross-channel error vs angle is
-reported and a **supported angle range is stated from the measurement** in the
-README/session log. This does not require the 12×12 A0 build.
+**Σ=0 tensor-reference validation** (review finding 3; metric per second
+review finding 3): a test/driver utility builds the full 3×3 Cartesian RPA from
+`invz_chi0z` (already available) with the same diagonal couplings
+`diag(Jaa0, Jaa0, Jsel)` and compares its `χ''_cc` against the scalar-chain
+`Σ=0` result over representative `(B, ω)` at `theta_c ∈ {0, 0.5, 1, 2, 5}` deg.
+Conditions and metrics are fixed **before** the measurement:
+
+- Reference conditions: `ion.demag = 0` (intrinsic response on both sides);
+  the **full 3×3** inversion — all cross channels retained, including any
+  `yz`/`xy` blocks allowed by `B64s`, not an xz-only sub-block.
+- Spectral metric, per (angle, field):
+  `eps_spec = ||χ''_sc − χ''_ten||₂ / max(||χ''_ten||₂, 1e-12·max|χ''_ten|·√nw)`
+  (L2 over the ω grid — robust at spectral zeros, unlike a pointwise relative
+  max).
+- Peak metric: `dE_peak = |Epeak_sc − Epeak_ten|`, censored peaks compared as
+  in `invz_peak_energy` (both-NaN passes, one-sided NaN fails).
+- **Support criterion** (spec defaults, adjustable at review): an angle is
+  supported when `eps_spec <= 5%` AND `dE_peak <= max(0.02·Epeak_ten, eta)` at
+  every tested field. The resulting supported range is stated in the
+  README/session log; the logged numbers also get a 1% reproducibility
+  assertion (slow test).
+
+This does not require the 12×12 A0 build.
 
 ## Backward compatibility
 
@@ -251,24 +312,31 @@ only with recorded justification:
 
 1. **Regression:** full suite green at defaults; `invz_single_ion` output at
    `(T, [Bx 0 0])` bitwise-unchanged (fields added, values identical).
-2. **Field-vector contract:** scalar `B` vs `[B 0 0]` identical at every public
-   solver boundary (`invz_twolevel`, `invz_solve_point`,
+2. **Field-vector contract:** scalar `B` vs `[B 0 0]` identical at every
+   scalar-accepting boundary (`invz_twolevel`, `invz_solve_point`,
    `invz_solve_point_ordered`, `invz_solve_auto`, `invz_chi_realaxis`,
-   both spectra functions); row vs column 3-vectors identical; NaN/Inf/complex/
-   empty/wrong-length inputs error with `invz:fieldVec`.
-3. **Branch selection (finding 2):** at `T = 0.31 K`, `B = [2 0 ∓0.01]`:
-   `sign(⟨Jz⟩) == sign(Bz)` on both sides; `±Bz` single-ion states exact Z2
-   mirrors (`|⟨Jz⟩(+) + ⟨Jz⟩(−)| < 1e-10`); mean-field free energy
-   `F = E(1) − kT·ln Σ e^{−β(E−E(1))}` of the aligned branch ≤ anti-aligned
-   branch (test-level check of the seeding rule).
+   `invz_spectra_qpath`); for `invz_spectra_map` (whose third argument stays a
+   magnitude list) the equivalent check is default `field_dir` vs explicit
+   `[1 0 0]` (second-review refinement 3); row vs column 3-vectors identical;
+   NaN/Inf/complex/empty/wrong-length inputs error with `invz:fieldVec`.
+3. **Branch selection (finding 2, corrected per second review finding 1):** at
+   `T = 0.31 K`, `B = [2 0 ∓0.01]`: `sign(⟨Jz⟩) == sign(Bz)` on both sides;
+   `±Bz` single-ion states exact Z2 mirrors (`|⟨Jz⟩(+) + ⟨Jz⟩(−)| < 1e-10`);
+   **variational** `si.F_mf` of the aligned branch strictly lower (verified
+   margin at this point: 7.0e-3 meV — the naive shifted-spectrum comparison
+   mis-ranks and must not be used).
 4. **±Bz mirror of spectra:** `χ''_cc` at `θc = ±1°`, `T = 0.31 K`,
-   `B = 5.0 T`, `w = (0:0.02:0.5)'` meV: max relative difference `< 1e-8`.
+   `B = 5.0 T`, `w = (0:0.02:0.5)'` meV; explicit metric (second-review
+   refinement 2): `max|a−b| / max(max|a|, 1e-12) < 1e-8`.
 5. **Crossover continuity:** same `(T, w)`, `θc = 0.5°`, fields
    `4.6:0.05:5.3` T: no NaN `Epeak` in the crossover window, and
    `pt.sumrule_rel < 5e-2` at every field (same order as the existing
    ordered-phase tolerance).
-6. **θc → 0 continuity:** at `T = 0.31 K`, `B = 2 T` (away from criticality),
-   `max_w |χ''(θc=10⁻³ deg) − χ''(0)| / max_w χ''(0) < 1e-6`.
+6. **θc → 0 continuity:** at `T = 0.31 K`,
+   `max_w |χ''(θc=10⁻³ deg) − χ''(0)| / max_w χ''(0) < 1e-6` at **two** fields:
+   `B = 2 T` (spontaneous-ordered at zero tilt: moment-form → moment-form) and
+   `B = 6 T` (paramagnetic at zero tilt: exercises the forced moment-form →
+   strict-PM formula reduction; second-review refinement 1).
 7. **Routing tolerance:** `|Bz|` just below `bz_tol` → transverse path
    (`pt.moment_branch = 'spontaneous'` or PM); just above → moment path
    (`'field_induced'`).
@@ -280,10 +348,14 @@ only with recorded justification:
 10. **Metadata/labels:** `S.field_dir`, `S.Bvec`, `S.Bmag` present and
     consistent; map axis label `|B| (T)`; qpath error message well-formed for
     vector `B`.
-11. **Σ=0 tensor reference (finding 3, slow):** scalar-vs-3×3 `χ_cc` relative
-    deviation reported at the §7 angle grid; test asserts reproducibility of
-    the logged numbers (1%), not their size — the numbers themselves set the
-    documented supported angle range.
+11. **Σ=0 tensor reference (finding 3, slow):** `eps_spec` and `dE_peak` (§7
+    metrics) at the §7 angle grid; test asserts reproducibility of the logged
+    numbers (1%), not their size — the §7 support criterion applied to the
+    numbers sets the documented supported angle range.
+12. **Struct completeness (second-review refinement 4):** force each early
+    return of `invz_solve_point_ordered` (paramagnetic `m0 < mtol`, MF
+    non-convergence, sign-mismatch after retry) and assert the full declared
+    field set is present each time.
 
 ## 8. Deferred follow-ups
 
@@ -314,3 +386,12 @@ only with recorded justification:
 | 7 labels/formatting | Verified (3 sites) | `\|B\| (T)` labels, vector-safe qpath error, crossover wording (§5-§7) |
 | 8 helper/threshold rigor | Accepted | Precise `invz_field_vec` contract; `opts.Jyy0` dropped (moot after descope); single named `bz_tol` rule with dead-band zeroing (§1, §4) |
 | 9 absent sources | Partial pushback | `LiReF4_MF_Yikai.m` exists outside the repo — absolute path now cited; `MF_chi.m`/`RPA.m` marked user-reported |
+
+Second review (same file, top section), all accepted:
+
+| Finding | Status | Resolution |
+|---|---|---|
+| SR1 free-energy formula | Verified digit-for-digit (F_mf −21.4696/−21.4766; naive comparison mis-ranks) | Variational `si.F_mf` + `si.E0` added (§2); test 3 corrected |
+| SR2 option/dead-band propagation | Verified (`sopts` carries only `hyp/J0eff/Jxx0` today) | `opts.bz_tol` single-resolution rule + `opts.solve_opts` pass-through with reserved fields (§5-§6); pre-parfor dead-band normalization makes `S.Bvec` the used vectors; `invz_solve_auto` returns failed `pto` with valid `si`/`tl`; safe early-return field set (§4) |
+| SR3 supported-angle metric | Accepted | `eps_spec` (spectral L2 with floor) + censoring-aware `dE_peak`; support = `eps_spec <= 5%` AND `dE_peak <= max(2%, eta)`; `demag = 0`, full 3×3 incl. `yz` (§7) |
+| Refinements 1-5 | Accepted | `B = 6 T` continuity point (test 6); explicit mirror metric (test 4); map API test via `field_dir` (test 2); struct-completeness test 12; `MF_Chi.m` case + formula-authoritative citation |
