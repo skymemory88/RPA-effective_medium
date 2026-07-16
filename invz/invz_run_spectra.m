@@ -6,6 +6,7 @@
 %       numel(fields) <= sliceMax  ->  1D line-slice overlay          cf. R 2007 Fig 2
 %       numel(fields) >  sliceMax  ->  2D field-vs-frequency colormap cf. R 2007 Fig 2 / Kovacevic Fig 3d
 %     showPeaks = true also plots S.Epeak/S.Epeak_rpa vs field (invz_peak_energy).
+%     theta_c (deg) tilts the swept field toward c to model misalignment; see the knob comment for validity.
 %   qpath = [nq x 3] r.l.u. -- FM-mode q-path view at fixed field(s) Bq (invz_spectra_qpath;
 %     see its header for caveats), reproducing R 2007 Fig 3 TRENDS:
 %       numel(Bq) == 1  ->  2D path-vs-frequency colormaps with censored peak overlay
@@ -43,6 +44,19 @@ eta = 2e-5;                          % real-axis Lorentzian HWHM, ALWAYS in meV 
                                      % sub-6-GHz hyperfine lines); keep eta above the w/wq step
                                      % (converted to meV: step/eScale) or the peaks alias.
 sliceMax = 6;                         % field count at/below which the line-slice view is used
+theta_c = 0;                         % deg -- tilt of the field OUT of the transverse ab-plane
+                                     % toward c (the Ising axis): models experimental field
+                                     % misalignment. The direction is FIXED across the sweep;
+                                     % x-axes stay the total magnitude |B| (the longitudinal
+                                     % component is |B|*sind(theta_c)). theta_c = 0 reproduces
+                                     % the pure transverse benchmark exactly. Convention matches
+                                     % LiReF4_MF_Yikai theta at phi = 0 (spec 2026-07-16).
+                                     % SCALAR-STAGE VALIDITY: Sigma dresses the cc channel only;
+                                     % exact at theta_c = 0, uncontrolled O(theta^2) cross-
+                                     % channel error beyond the tensor-referenced small-tilt
+                                     % range (invz_run_tensor_ref); a longitudinal component
+                                     % turns the sharp transition into a rounded crossover.
+                                     % Azimuth (phi_ab) + full-tensor propagation: deferred.
 
 showPeaks = true;                    % true -> ALSO line-plot chi''_cc peak energy vs field
                                      % (S.Epeak/S.Epeak_rpa, cf. the q-path E_peak(q) stream)
@@ -71,6 +85,10 @@ switch eUnit
     otherwise, error('invz_run_spectra:eUnit', 'eUnit must be ''meV'' or ''GHz''.');
 end
 
+dhat = [cosd(theta_c) 0 sind(theta_c)];          % unit field direction (ac-plane)
+tiltStr = '';
+if theta_c ~= 0, tiltStr = sprintf(', \\theta_c = %.2g\\circ', theta_c); end
+
 % w and wq are given in eUnit; solves run in meV, so convert on the way in (eScale is the
 % meV->eUnit factor) and scale returned grids (S.w, Epeak) back up by eScale for plotting.
 % eta is ALWAYS in meV, independent of eUnit, and passes through unconverted.
@@ -80,20 +98,20 @@ wqMeV  = wq  / eScale;
 if ~isempty(qpath)
     % ---------------- FM-mode q-path view at fixed field(s) ----------------
     if isscalar(Bq)
-        S = invz_spectra_qpath(ion, T, Bq, qpath, wqMeV, struct('eta', eta));
+        S = invz_spectra_qpath(ion, T, Bq*dhat, qpath, wqMeV, struct('eta', eta));
         Splot = S;   % display-only copy; the solve above always ran in meV
         Splot.w = S.w*eScale;  Splot.Epeak = S.Epeak*eScale;  Splot.Epeak_rpa = S.Epeak_rpa*eScale;
         figure('Position', [100 100 1150 460]);
         ax1 = subplot(1, 2, 1);
         invz_plot_spectra_qpath(ax1, Splot, Splot.chiz, Splot.Epeak, ...
-            sprintf('1/z FM-mode \\chi''''_{cc}, T = %.2f K, B = %.2f T', T, Bq), eUnit);
+            sprintf('1/z FM-mode \\chi''''_{cc}, T = %.2f K, B = %.2f T%s', T, Bq, tiltStr), eUnit);
         ax2 = subplot(1, 2, 2);
         invz_plot_spectra_qpath(ax2, Splot, Splot.chirpa, Splot.Epeak_rpa, ...
-            sprintf('RPA FM-mode \\chi''''_{cc}, T = %.2f K, B = %.2f T', T, Bq), eUnit);
+            sprintf('RPA FM-mode \\chi''''_{cc}, T = %.2f K, B = %.2f T%s', T, Bq, tiltStr), eUnit);
     else
         figure; hold on;  co = lines(numel(Bq));
         for k = 1:numel(Bq)
-            Sk = invz_spectra_qpath(ion, T, Bq(k), qpath, wqMeV, struct('eta', eta));
+            Sk = invz_spectra_qpath(ion, T, Bq(k)*dhat, qpath, wqMeV, struct('eta', eta));
             plot(Sk.x, Sk.Epeak*eScale*dispScale,     '-',  'Color', co(k, :), ...
                  'DisplayName', sprintf('1/z, %.2f T', Bq(k)));
             plot(Sk.x, Sk.Epeak_rpa*eScale*dispScale, '--', 'Color', co(k, :), ...
@@ -101,7 +119,7 @@ if ~isempty(qpath)
         end
         xlabel(Sk.xlab);
         ylabel(strrep(eLabel, '\omega', 'E_{peak}'));
-        title(sprintf('FM-mode dispersion, T = %.2f K, dispScale = %.2f', T, dispScale));
+        title(sprintf('FM-mode dispersion, T = %.2f K, dispScale = %.2f%s', T, dispScale, tiltStr));
         legend show;
         % cf. R 2007 Fig 3 TRENDS: the x-axis shows the actual varying Miller component
         % (h = 1..2 for the (1,0,0)->(2,0,0) path); their theory lines are the calculated
@@ -110,7 +128,8 @@ if ~isempty(qpath)
     end
 else
     % ---------------- field-sweep views at the uniform mode ----------------
-    S = invz_spectra_map(ion, T, fields, wMeV, struct('parallel', useParallel, 'eta', eta));
+    S = invz_spectra_map(ion, T, fields, wMeV, ...
+            struct('parallel', useParallel, 'eta', eta, 'field_dir', dhat));
 
     if numel(fields) <= sliceMax
         figure; hold on;  co = lines(numel(fields));
@@ -118,7 +137,7 @@ else
             plot(w, S.chiz(:, k),   '-',  'Color', co(k, :), 'DisplayName', sprintf('1/z, %.2f T', fields(k)));
             plot(w, S.chirpa(:, k), '--', 'Color', co(k, :), 'DisplayName', sprintf('RPA, %.2f T', fields(k)));
         end
-        xlabel(eLabel);  ylabel('\chi''''_{cc}');  title(sprintf('T = %.2f K', T));  legend show;
+        xlabel(eLabel);  ylabel('\chi''''_{cc}');  title(sprintf('T = %.2f K%s', T, tiltStr));  legend show;
     else
         Splot = S;  Splot.w = S.w * eScale;    % display-only copy; solve above always ran in meV
         figure('Position', [100 100 1150 460]);
@@ -131,9 +150,9 @@ else
         figure; hold on;
         plot(S.fields, S.Epeak*eScale,     '-',  'DisplayName', '1/z');
         plot(S.fields, S.Epeak_rpa*eScale, '--', 'DisplayName', 'RPA');
-        xlabel('B_x (T)');
+        xlabel('|B| (T)');
         ylabel(strrep(eLabel, '\omega', 'E_{peak}'));
-        title(sprintf('\\chi''''_{cc} peak energy vs field, T = %.2f K', T));
+        title(sprintf('\\chi''''_{cc} peak energy vs field, T = %.2f K%s', T, tiltStr));
         legend show;
         % Gaps are CENSORED peaks (invz_peak_energy: boundary max or non-positive/non-finite
         % column) -- same convention as the q-path E_peak(q) stream, do not interpolate over them.

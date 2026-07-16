@@ -92,3 +92,13 @@ catch err
     verifyTrue(testCase, contains(err.message, mat2str([0.04 0 0], 4)));
 end
 end
+
+function test_plot_map_axis_label(testCase)
+% Review finding 7: the sweep axis is a magnitude; 'B_x (T)' is wrong under a tilt.
+S = struct('fields', [1 2], 'w', (0:0.1:1).');
+f = figure('Visible', 'off');
+restore = onCleanup(@() close(f));
+ax = axes(f);
+invz_plot_spectra_map(ax, S, rand(11, 2), 'ttl');
+verifyEqual(testCase, ax.XLabel.String, '|B| (T)');
+end
