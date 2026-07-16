@@ -18,7 +18,10 @@ function R = invz_chi_tensor_ref(ion, T, Bvec, w, opts)
 % gate reads the electronic mode, not a sub-wmin hyperfine feature -- the
 % GATED metric; eps_spec is a reported diagnostic only, since it is dominated
 % by the zero-tilt yz peak-offset artifact for sharp lines, not by lineshape
-% fidelity), w, B.
+% fidelity), W_sc/W_ten (trapz of the SAME wmin-masked, non-negative-clipped
+% chi'' over w -- the integrated spectral weight, a lineshape-agnostic
+% companion to the single-bin amp_sc/amp_ten), eps_W (floored relative error
+% of W_sc vs W_ten; reported diagnostic, not gated), w, B.
 % opts.transverse_mf ('legacy_x') MF model forwarded to the internally built single-ion state.
 if nargin < 5, opts = struct(); end
 eta   = getf(opts, 'eta', 5e-3);
@@ -58,4 +61,10 @@ msk = w >= wmin;
 R.amp_sc  = max(chi_sc(msk));
 R.amp_ten = max(chi_ten(msk));
 R.eps_amp = abs(R.amp_sc - R.amp_ten) / max(R.amp_ten, floorv);
+% Integrated spectral weight over the SAME wmin mask (non-negative-clipped:
+% chi_sc/chi_ten are chi'' and should be >= 0, but the clip guards trapz
+% against sign noise at the mask edge / near-zero response).
+R.W_sc  = trapz(w(msk), max(chi_sc(msk), 0));
+R.W_ten = trapz(w(msk), max(chi_ten(msk), 0));
+R.eps_W = abs(R.W_sc - R.W_ten) / max(R.W_ten, floorv);
 end
