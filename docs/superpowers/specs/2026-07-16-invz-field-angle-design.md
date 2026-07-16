@@ -1,9 +1,10 @@
-# 3D field-direction (misalignment) knob for `invz_run_spectra`
+# c-axis field-misalignment (tilt) knob for `invz_run_spectra`
 
-Date: 2026-07-16. Branch: `invz-1z-lihof4`. Status: design approved by user
-(conversation of 2026-07-16). Scope: **scalar stage** (leading-order,
-small-misalignment), with the full-tensor rigorous route deferred and documented
-(see §8).
+Date: 2026-07-16. Branch: `invz-1z-lihof4`. Status: design approved by user;
+**revised 2026-07-16** after external review (`field-angle-plan-review_by_Codex.md`,
+findings verified against the code — see "Review resolutions" at the end).
+Scope: **scalar stage, c-axis tilt only** (`phi_ab = 0`); azimuthal support and
+tensor propagation are deferred follow-ups (§8).
 
 ## Problem
 
@@ -13,22 +14,24 @@ turns the scalar `Bx` into the literal vector `[Bx 0 0]` (ordering axis = **c** 
 z). Real LiHoF4 experiments have a small **misalignment** of the nominally
 transverse field toward **c**; the resulting longitudinal component `Bz` rounds
 the sharp quantum phase transition into a crossover and is a known source of
-experiment/theory discrepancy. The user wants to port the field-angle knob from
-`LiReF4_MF_Yikai.m` (which parametrizes the direction via `theta`/`phi`) into the
-1/z spectra driver so tilted-field spectra can be computed.
+experiment/theory discrepancy. The user wants a field-angle knob in the 1/z
+spectra driver, following the convention of `LiReF4_MF_Yikai.m` (located at
+`/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Programming scripts/
+Matlab/Simulation/Mean Field/LiReF4/LiReF4_MF_Yikai.m`, lines 60-66; its
+`MF_chi.m`/`RPA.m` downstream handling is reported by the user, not verified
+here).
 
 ## Physics background — why longitudinal field is *not* trivial in 1/z
 
-At the **MF** and **RPA** levels a longitudinal field is trivial (as
-`LiReF4_MF_Yikai.m` + `MF_chi.m` + `RPA.m` already do): both are **full-tensor**
-methods. MF just diagonalizes `H(B)` for any `B = [Bx By Bz]` and
-self-consistifies `⟨Jx⟩,⟨Jy⟩,⟨Jz⟩`; RPA builds the full 3×3 `χ0(ω)` from all
-transitions and inverts `χ = [χ0⁻¹ − 𝒥(q)]⁻¹`. A tilt just changes the numbers
-in the same matrices.
+At the **MF** and **RPA** levels a longitudinal field is trivial: both are
+**full-tensor** methods. MF diagonalizes `H(B)` for any `B = [Bx By Bz]` and
+self-consistifies all of `⟨Jx⟩,⟨Jy⟩,⟨Jz⟩`; RPA builds the full 3×3 `χ0(ω)` from
+all transitions and inverts `χ = [χ0⁻¹ − 𝒥(q)]⁻¹`. A tilt just changes the
+numbers in the same matrices.
 
 The **1/z self-energy is a different kind of object.** Jensen's `Σ(ω)` is a
 *scalar* built from one transition — the field-split Ising doublet — and it
-renormalizes **only the cc (c-axis) component**: the code literally computes
+renormalizes **only the cc (c-axis) component**: the code computes
 `χ̃0_cc = χ0_cc/(1+Σ)` and never forms `χ0_xx`, `χ0_xz`, or any off-diagonal.
 Every ingredient (`α`, `γ`, the `λp` Matsubara sums, the ordered `α_m`, the
 elastic sector) is a projection onto the doublet parameters
@@ -37,55 +40,63 @@ elastic sector) is a projection onto the doublet parameters
 Consequences for a tilted field:
 
 - **The moment-carrying machinery is already the general case.** A longitudinal
-  `Bz` adds `−gL·µB·Bz·Jz` to `H0`, inducing `⟨Jz⟩ ≠ 0` at every field. This is
-  structurally identical to how the *ordered* branch already carries a
-  longitudinal molecular field `hz`. And `invz_sigma_ordered` (the m≠0
-  self-energy) **reduces exactly to** `invz_sigma` as `m→0` (`alpha_m → 0`);
-  `invz_chi0z` already folds the induced moment into the elastic term via
-  `Jexp`; the sum rule already uses the *variance* `JzJz_fluct = ⟨Jz²⟩−⟨Jz⟩²`.
-  So the induced-moment case flows through the existing ordered path with no new
-  self-energy — the transverse-only case is its `m=0` special case.
+  `Bz` adds `−gL·µB·Bz·Jz` to `H0`, inducing `⟨Jz⟩ ≠ 0` at every field —
+  structurally identical to the ordered branch's longitudinal molecular field
+  `hz`. `invz_sigma_ordered` (the m≠0 self-energy) reduces exactly to
+  `invz_sigma` as `m→0` (`alpha_m → 0`); `invz_chi0z` already folds the induced
+  moment into the elastic term via `Jexp`; the sum rule already uses the
+  variance `JzJz_fluct = ⟨Jz²⟩−⟨Jz⟩²`. The induced-moment case flows through
+  the existing ordered path with no new self-energy.
 
-- **What the scalar pipeline structurally cannot represent** is the
-  **cross-channel (xz) dressing**. A tilt mixes the eigenstates, so the *true*
-  `χ0` acquires `χ0_xz` cross terms; a full-tensor RPA inversion mixes them
-  (even with diagonal couplings, since `χ0⁻¹` of a full matrix is full). The
-  scalar cc pipeline discards `χ0_xz` entirely. Therefore the scalar treatment
-  captures the **leading** longitudinal effect (transition rounding via the
-  induced moment `m` and the re-split doublet), correct to **O(tilt²)** for a
-  small misalignment, and **omits** the cross-channel correction, which grows
-  with tilt. Genuine rigor for arbitrary tilt requires the full-tensor route
-  (§8).
+- **Accuracy statement (corrected per review).** `χ_cc` is even in the tilt
+  angle, so the entire tilt effect starts at O(θ²) — and the scalar port keeps
+  only *part* of the O(θ²) coefficient (the nonperturbative doublet
+  re-splitting and induced-moment effects) while omitting another same-order
+  part (the `χ_zx·χ_xz` cross-channel contribution that a full tensor inversion
+  would mix in; `χ_xz` is odd in θ and enters `χ_cc` quadratically). The
+  defensible claim is therefore: **exact at zero tilt; uncontrolled relative
+  error in the tilt-induced change, beginning at O(θ²)**. Near the former
+  critical point the response to the conjugate field is non-analytic, so Taylor
+  counting does not apply there at all — the supported angle range must be
+  established **numerically** (see the Σ=0 tensor-reference test, §7), not by
+  power counting. Mitigating expectation (to be measured, not assumed): the
+  omitted cross terms are Van Vleck-scale because `⟨0|Jx|1⟩ ≈ 0` within the
+  Ising doublet.
 
-## Design decisions (resolved with the user)
+## Design decisions (resolved with the user; revised after review)
 
-1. **Scope of the field direction:** support arbitrary direction including the
-   c-tilt (the transition-rounding misalignment), *staged* — see decision 4.
-2. **Knob shape:** full 3D via **two angles** `theta_c` (tilt out of the ab-plane
-   toward c) and `phi_ab` (in-plane azimuth a→b), **plus** adding the transverse
-   `hy` mean-field self-consistency to `invz_single_ion` so the in-plane azimuth
-   is treated rigorously (not just the x-component). Convention matches
-   `LiReF4_MF_Yikai.m`.
+1. **Scope this stage to the c-axis tilt** (`theta_c`), the physically requested
+   experimental misalignment. `phi_ab` support is **descoped** (review finding
+   1): with `B64s ≠ 0` an x-field already induces a small perpendicular
+   `⟨Jy⟩ ≈ −0.069` at 4 T (verified numerically) with no feedback channel, so a
+   "rigorous azimuth" would require a two-channel (hx, hy) transverse mean
+   field that is exactly C4-consistent — and that is **incompatible with a
+   bit-for-bit x-field baseline**. The transverse MF in this stage remains the
+   **legacy x-only approximation**, now documented as such. Two-channel MF +
+   azimuth is a deferred follow-up (§8).
+2. **Longitudinal routing through the moment-form self-energy** with
+   sign-aware branch selection (review finding 2, verified: the default
+   `mz_seed = +1` converges to the metastable anti-aligned branch for
+   `Bz < 0`).
 3. **The ODD extension does not help here.** `odd_implementation_plan.html`
-   Tiers 1–2 are *deliberately scalar-cc* (they fold off-diagonal *dipole*
-   couplings back into the cc channel; orthogonal to an external longitudinal
-   *field*). Only its deferred Appendix A (A0+A1, full-tensor) would make 1/z
-   full-tensor and hence make arbitrary field direction natural.
-4. **Staged delivery:** implement the **scalar port now** (this spec); document
-   the full-tensor **A0+A1** bridge as the rigorous follow-up that would
-   supersede it (§8).
+   Tiers 1-2 are deliberately scalar-cc (orthogonal to an external longitudinal
+   field). Only its Appendix A route is relevant: **A0 is the rigorous
+   tensor-RPA layer; A1 remains a projected, dominant-transition 1/z
+   approximation** (wording per review).
+4. **Staged delivery:** scalar c-tilt now; azimuth/two-channel MF and A0(+A1)
+   tensor propagation later (§8).
 
 ## Solution overview
 
 Thread a full field **vector** through the solve chain in place of the hardcoded
-`[Bx 0 0]`, in a **backward-compatible** way: a tiny helper maps a scalar to
-`[B 0 0]` (today's behavior) and passes a 3-vector through untouched. The driver
-builds the vector from a fixed misalignment direction × the swept magnitude. When
-the field has a longitudinal component, the solve is routed exclusively through
-the moment-carrying (ordered) path with the "is it spontaneous?" gate disabled,
-since the moment is now field-induced. The single-ion mean field gains a `hy`
-channel for the in-plane azimuth. All changes are inert when the field is along
-x, so every existing benchmark and test is preserved.
+`[Bx 0 0]`, backward-compatibly: a helper maps a scalar to `[B 0 0]` and passes
+a 3-vector through. The driver builds `Bvec = |B|·[cosθc 0 sinθc]`. When
+`|Bz|` exceeds a routing tolerance the solve goes exclusively through the
+moment-carrying path with the spontaneous-moment gate bypassed
+(`forced_moment`); below the tolerance the longitudinal component is **zeroed**
+and today's transverse logic runs verbatim. All changes are inert at
+`theta_c = 0`: the existing suite and published benchmarks must reproduce
+bit-for-bit.
 
 ## Components
 
@@ -94,162 +105,212 @@ x, so every existing benchmark and test is preserved.
 ```matlab
 function B = invz_field_vec(B)
 %INVZ_FIELD_VEC Normalize a field argument to a 1x3 row [Bx By Bz] in Tesla.
-%   Scalar b -> [b 0 0] (transverse along a; the historical convention).
-%   3-element vector -> row passthrough. Anything else errors.
 ```
 
-Used at every site that currently writes `[Bx 0 0]`. A scalar still maps to
-`[Bx 0 0]`, so all scalar callers are unchanged.
+Contract (review finding 8): input must be numeric, real, finite, and either a
+scalar (→ `[B 0 0]`, the historical convention) or exactly three elements (row
+or column, normalized to a `1x3` row). Anything else — NaN/Inf, complex, empty,
+wrong length — errors with stable identifier `invz:fieldVec`. Used at every
+site that currently writes `[Bx 0 0]`.
 
-### 2. `invz/invz_single_ion.m` — add the `hy` transverse mean field
+### 2. `invz/invz_single_ion.m` — branch seeding + MF convergence reporting
 
-Currently the MF loop self-consistifies only `hx = Jxx0·⟨Jx⟩`. Add a `hy =
-Jyy0·⟨Jy⟩` channel (`Jyy0 = Jxx0` by tetragonal a≡b symmetry; optional
-`opts.Jyy0` override), **guarded on `B(2) ≠ 0`** so a field with no y-component
-leaves the loop bit-for-bit as today.
+**No `hy` channel** (descoped, decision 1). Changes:
 
-- `H = H0 − hx·Jx − hy·Jy − hz·Jz` inside the fixed-point loop and in the final
-  recompute.
-- `jy = ⟨Jy⟩`, `hy_new = Jyy0·jy`; extend the convergence test to
-  `dmf = max(|hx_new−hx|, |hy_new−hy|, |hz_new−hz|)`.
-- Seed `hy = 0`; mix identically to `hx`.
-- Header note: `hy` active only for an in-plane-azimuthal field; `Jyy0 = Jxx0`
-  (tetragonal).
+- **Sign-aware seed:** in `order` mode, default
+  `mz_seed = sign(B(3))` when `B(3) ≠ 0` (else `+1` as today), so an explicit
+  longitudinal field selects the aligned branch. `opts.mz_seed` still
+  overrides. Verified failure this fixes: `B = [2 0 −0.01]` T, seed `+1` →
+  `⟨Jz⟩ = +4.815` (metastable); seed `−1` → `−4.86686`, the exact Z2 mirror of
+  the `+Bz` result.
+- **MF convergence surfaced** (review finding 6): return `si.mf_converged`
+  (logical), `si.mf_iters`, `si.mf_residual` (final `dmf`); keep the existing
+  warning. No behavior change for existing callers (additive fields).
 
 ### 3. Field-vector plumbing (the 5 `[Bx 0 0]` leaf sites)
 
-Each becomes `invz_field_vec(B)` and accepts a scalar-or-vector `B`:
+Each becomes `invz_field_vec(B)` and accepts scalar-or-vector `B`:
 
-- `invz_twolevel.m:7` — keep the `m=0` gate (it protects the strict-paramagnet
-  path; only reached when `Bz=0`).
-- `invz_twolevel_ordered.m:13` — rebuild the doublet with the **full vector** +
-  the fixed MF `hz`. No double-counting: external `Bz` lives in `H0`, `hz` is
-  the MF piece only, exactly as in the `order` solve.
-- `invz_solve_point.m:16,19` — pass the vector to `invz_single_ion` /
-  `invz_twolevel`.
-- `invz_solve_point_ordered.m:34,45` — pass the vector to `invz_single_ion`
-  (`order`) / `invz_twolevel_ordered`; add `forced_moment` (see §4).
-- `invz_chi_realaxis.m:37` — the paramagnet fallback vector (the ordered path
-  already reuses `pt.si` built with the full vector).
+- `invz_twolevel.m:7` — keep the `m=0` gate (only reached when the longitudinal
+  component has been zeroed by the routing dead band, so `m = 0` holds exactly).
+- `invz_twolevel_ordered.m:13` — rebuild the doublet with the full vector + the
+  fixed MF `hz`. No double-counting (external `Bz` in `H0`; `hz` is the MF
+  piece). The `hz` handed over comes from the sign-selected branch of §2, so
+  branch consistency is automatic.
+- `invz_solve_point.m:16,19`, `invz_solve_point_ordered.m:34,45`,
+  `invz_chi_realaxis.m:37` — pass the vector through.
 
 `invz_critical.m`, `invz_critical_T.m`, `invz_critical_T0field.m`,
-`invz_run_phase_diagram.m` keep passing scalars → `[Bx 0 0]` → unchanged. The
-angle knob is **not** added to the phase-diagram driver (a longitudinal field has
-no sharp `Bc`/`Tc`).
+`invz_run_phase_diagram.m` keep passing scalars → unchanged. The angle knob is
+**not** added to the phase-diagram driver (no sharp boundary under `Bz`).
 
-### 4. `invz/invz_solve_auto.m` + `invz_solve_point_ordered.m` — longitudinal routing
+### 4. Longitudinal routing — `invz_solve_auto.m` + `invz_solve_point_ordered.m`
 
-`invz_solve_auto`:
+**Single routing rule** (review finding 8): named option `opts.bz_tol`
+(default `1e-9` T). In `invz_solve_auto`, after `Bvec = invz_field_vec(B)`:
 
-- Compute `Bvec = invz_field_vec(B)`.
-- **`Bvec(3) == 0`** (transverse, incl. pure in-plane rotation): keep today's
-  logic verbatim — ordered-first (spontaneous moment), paramagnet fallback.
-  In-plane fields keep `⟨Jz⟩ = 0` (a transverse field splits the Ising doublet
-  into `(|+⟩±|−⟩)/√2` combinations, each with zero diagonal `Jz`; only a
-  longitudinal field biases it), so the paramagnet path and its `m=0` gate stay
-  valid.
-- **`Bvec(3) ≠ 0`**: route *exclusively* to `invz_solve_point_ordered` with
-  `opts.forced_moment = true`; `phase = 1` when converged, else `phase = 0`. Do
-  not attempt the strict-paramagnet solver (its `m=0` gate would reject the
-  induced moment).
+- `|Bvec(3)| <= bz_tol`: **zero the component** (`Bvec(3) = 0`) and run today's
+  logic verbatim (ordered-first, paramagnet fallback). The dead band can never
+  reach the strict-paramagnet `m` gate with a material moment because the
+  component is exactly zero.
+- `|Bvec(3)| > bz_tol`: route **exclusively** to `invz_solve_point_ordered`
+  with `opts.forced_moment = true`. Never attempt `invz_solve_point` (its
+  two-level gate rejects `m ≠ 0`).
 
-`invz_solve_point_ordered` gains `opts.forced_moment` (default false): when set,
-`pt.is_ordered = pt.converged` (skip the `|m0| > mtol` spontaneous-moment test),
-because with an explicit `Bz` any moment is physical and the ordered self-energy
-reduces smoothly to the paramagnet form as `m→0`. Routing threshold: treat
-`|Bvec(3)|` above a small absolute tolerance (proposal `1e-9` T) as longitudinal.
+`forced_moment` semantics in `invz_solve_point_ordered` (review finding 6 —
+explicitly non-circular, in order):
 
-### 5. Drivers `invz_spectra_map.m` / `invz_spectra_qpath.m`
+1. Bypass the early `abs(m0) > mtol` paramagnetic return.
+2. Require `si.mf_converged` (else return non-converged immediately).
+3. Assert `sign(si.Jexp(3)) == sign(Bvec(3))`; on mismatch, re-solve once with
+   the mirrored seed and keep the field-aligned solution; if still anti-aligned,
+   return non-converged with a warning.
+4. Run the outer EMT⇆Σ loop as today; final acceptance uses the same
+   finite-`Sigma0` and medium-convergence checks as the existing route.
+5. Only then set the moment-form flags: `pt.is_ordered = true` (documented
+   strictly as "uses the moment-form self-energy") **plus** new machine-readable
+   `pt.moment_branch = 'spontaneous' | 'field_induced'`.
 
-- Accept a field **vector** (or a direction + magnitude) and pass it down. In
-  `invz_spectra_map`, `one_field` builds `Bvec = mag·dhat`; the `parfor` slices
-  over magnitudes as today (x-axis stays the swept `|B|`).
-- Phase labels: under `Bz≠0` the FM/PM "V" is a **rounded crossover** and
-  `phase` is always the moment-carrying branch — update the display strings /
-  header comments accordingly (e.g. "field-induced moment (crossover)" rather
-  than "ferromagnet"). The RPA overlay (`Sigma=0`) already uses the ordered-style
-  `pt0` for `phase==1`, so no overlay-path change is needed.
-- `invz_spectra_qpath` solves the medium once at `Bvec` (magnitude `Bq` ×
-  direction) and is otherwise unchanged.
+### 5. `invz/invz_spectra_map.m` — direction API, failure contract, metadata
 
-### 6. Driver knob `invz/invz_run_spectra.m`
+**API** (review finding 4 — `fields` already means a list of scalar sweep
+values, so a 3-element field input would be ambiguous):
 
-Two scalars near the existing knobs:
+```matlab
+opts.field_dir = [1 0 0];   % unit-normalized internally; nonzero finite real 3-vector
+```
+
+`fields` stays a vector of **nonnegative magnitudes** (validated); internally an
+`nB x 3` array `Bvec(k,:) = fields(k)*dhat` is formed once, before the parfor.
+Returned metadata: `S.fields` (magnitudes), `S.field_dir` (normalized),
+`S.Bvec` (actual vectors used).
+
+**Longitudinal failure contract** (review finding 5 — verified crash path:
+`one_field` line 113 calls `invz_twolevel` *outside* the try block, so a
+`phase = 0` longitudinal point would raise `invz:orderedPhase` and abort the
+parfor): when `|Bz| > bz_tol`, `one_field` never falls through to the
+strict-paramagnet overlay. `phase == 1` → unchanged ordered handling. Otherwise:
+if the failed moment-branch `pt` still carries valid `si`/`tl`, compute the
+RPA-only overlay from the ordered-style `pt0` and leave the 1/z column masked;
+else mask the whole column. `S.phase` stays 0 there.
+
+**Labels/docs** (review finding 7): header and phase strings distinguish
+"spontaneous FM" from "field-induced moment (crossover)"; no code path may
+label a `Bz ≠ 0` point as FM/PM phases of a sharp transition.
+
+### 6. `invz/invz_spectra_qpath.m` — vector field + safe formatting
+
+`B` accepts scalar-or-3-vector via `invz_field_vec`; returns `S.Bvec` and
+`S.Bmag`. The `invz:noSolution` error at lines 67-69 currently formats `B` with
+a single `%.3f` — MATLAB recycles the format over a 3-vector, producing a
+malformed message; rewrite with `mat2str`-style formatting (review finding 7).
+
+### 7. Driver `invz/invz_run_spectra.m` + plot labels
+
+One new knob near the existing ones:
 
 ```matlab
 theta_c = 0;   % deg: tilt of the field OUT of the transverse ab-plane toward c (Ising axis)
-phi_ab  = 0;   % deg: in-plane azimuth from a (x) toward b (y)
 ```
 
-Direction (matches `LiReF4_MF_Yikai.m`):
+`dhat = [cosd(theta_c) 0 sind(theta_c)]`, fixed across the sweep; fed to the
+field-sweep view via `opts.field_dir` and to the q-path view as `Bq*dhat`.
+`theta_c = 0` reproduces today's `[|B| 0 0]` exactly. Header documents: the
+convention (matches `LiReF4_MF_Yikai.m` theta at phi = 0); that the sweep
+x-axis is the total magnitude (c-component `|B|·sinθc`); the legacy x-only
+transverse MF; the corrected accuracy statement; and the deferred follow-ups.
 
-```matlab
-tc = theta_c*pi/180;  pa = phi_ab*pi/180;
-dhat = [cos(tc)*cos(pa), cos(tc)*sin(pa), sin(tc)];   % unit; fixed across the sweep
-```
+Label sweep (review finding 7): `invz_plot_spectra_map.m:32` and
+`invz_run_spectra.m:134` change `'B_x (T)'` → `'|B| (T)'` (with the direction in
+the title when `theta_c ≠ 0`).
 
-Fed to both the field-sweep view (each `fields(k)·dhat`) and the q-path view
-(`Bq·dhat`). `theta_c = phi_ab = 0` reproduces today's `[|B| 0 0]` exactly.
-Header documents: the convention; that the sweep x-axis is the total magnitude
-`|B|` (c-component `|B|·sinθc`); and the O(tilt²) / cc-only validity note with a
-pointer to the deferred full-tensor follow-up (§8).
+**Σ=0 tensor-reference validation** (review finding 3): a test/driver utility
+builds the full 3×3 Cartesian RPA from `invz_chi0z` (already available) with
+the same diagonal couplings `diag(Jaa0, Jaa0, Jsel)` and compares its `χ_cc`
+against the scalar-chain `Σ=0` result over representative `(B, ω)` at
+`theta_c ∈ {0, 0.5, 1, 2, 5}` deg. The measured cross-channel error vs angle is
+reported and a **supported angle range is stated from the measurement** in the
+README/session log. This does not require the 12×12 A0 build.
 
 ## Backward compatibility
 
-- A scalar field anywhere → `[B 0 0]` → identical Hamiltonian, identical path.
-- `hy` guarded on `B(2)≠0` → field-along-x callers unchanged.
-- `Bz=0` → `invz_solve_auto` keeps today's exact branch logic.
+- Scalar field anywhere → `[B 0 0]` → identical Hamiltonian, identical path.
+- `theta_c = 0` → routing dead band zeroes nothing (component already 0) →
+  today's exact branch logic; sign-aware seed inert at `B(3) = 0`.
 - Phase-diagram / critical drivers and all their tests untouched.
 
-**Non-negotiable:** with `theta_c = phi_ab = 0` the full existing test suite and
-every published benchmark (Σc, Tc(0), Hc, soft-mode minimum) must reproduce
-within their current tolerances.
+**Non-negotiable:** with `theta_c = 0` the full existing suite and every
+published benchmark (Σc, Tc(0), Hc, soft-mode minimum) reproduce bit-for-bit
+(no model change remains in this scope — the hy channel was descoped).
 
 ## Testing
 
-New tests under `invz/tests/` (fast unless noted); mostly exact-symmetry:
+New tests under `invz/tests/` (fast unless noted). Explicit grids/tolerances
+(review test-plan items 2-8); values below are the spec's commitments, refined
+only with recorded justification:
 
-1. **Regression:** full suite green with the knob at defaults; a direct check
-   that `invz_single_ion(ion,T,[Bx 0 0])` is unchanged by the `hy` addition.
-2. **hy mean field (C4):** `[0 B 0]` spectrum ≡ `[B 0 0]` spectrum;
-   `⟨Jy⟩|[0 B 0]` ≡ `⟨Jx⟩|[B 0 0]` (a↔b equivalence).
-3. **In-plane azimuth:** `⟨Jz⟩ = 0` for any `Bz=0` field; single-ion spectrum
-   invariant under `phi_ab → phi_ab + 90°`.
-4. **Longitudinal:** ±`Bz` mirror symmetry (Z2) of `χ''_cc`; no NaN masking
-   across the former `Bc`; peak energy stays finite through the crossover;
-   `pt.sumrule_rel` stays small; `theta_c → 0` continuously recovers the
-   transverse result.
-5. **forced_moment:** an induced-moment point at small `Bz` converges with
-   `pt.is_ordered = true` and matches the transverse result as `Bz→0`.
+1. **Regression:** full suite green at defaults; `invz_single_ion` output at
+   `(T, [Bx 0 0])` bitwise-unchanged (fields added, values identical).
+2. **Field-vector contract:** scalar `B` vs `[B 0 0]` identical at every public
+   solver boundary (`invz_twolevel`, `invz_solve_point`,
+   `invz_solve_point_ordered`, `invz_solve_auto`, `invz_chi_realaxis`,
+   both spectra functions); row vs column 3-vectors identical; NaN/Inf/complex/
+   empty/wrong-length inputs error with `invz:fieldVec`.
+3. **Branch selection (finding 2):** at `T = 0.31 K`, `B = [2 0 ∓0.01]`:
+   `sign(⟨Jz⟩) == sign(Bz)` on both sides; `±Bz` single-ion states exact Z2
+   mirrors (`|⟨Jz⟩(+) + ⟨Jz⟩(−)| < 1e-10`); mean-field free energy
+   `F = E(1) − kT·ln Σ e^{−β(E−E(1))}` of the aligned branch ≤ anti-aligned
+   branch (test-level check of the seeding rule).
+4. **±Bz mirror of spectra:** `χ''_cc` at `θc = ±1°`, `T = 0.31 K`,
+   `B = 5.0 T`, `w = (0:0.02:0.5)'` meV: max relative difference `< 1e-8`.
+5. **Crossover continuity:** same `(T, w)`, `θc = 0.5°`, fields
+   `4.6:0.05:5.3` T: no NaN `Epeak` in the crossover window, and
+   `pt.sumrule_rel < 5e-2` at every field (same order as the existing
+   ordered-phase tolerance).
+6. **θc → 0 continuity:** at `T = 0.31 K`, `B = 2 T` (away from criticality),
+   `max_w |χ''(θc=10⁻³ deg) − χ''(0)| / max_w χ''(0) < 1e-6`.
+7. **Routing tolerance:** `|Bz|` just below `bz_tol` → transverse path
+   (`pt.moment_branch = 'spontaneous'` or PM); just above → moment path
+   (`'field_induced'`).
+8. **Longitudinal failure masking (finding 5):** a deliberately non-converged
+   longitudinal map point (e.g. `max_outer = 1`) yields a masked/RPA-only
+   column, `S.phase = 0`, and the parfor completes.
+9. **MF convergence gate:** a forced `mf_maxit = 1` longitudinal point returns
+   non-converged (`si.mf_converged` respected in acceptance).
+10. **Metadata/labels:** `S.field_dir`, `S.Bvec`, `S.Bmag` present and
+    consistent; map axis label `|B| (T)`; qpath error message well-formed for
+    vector `B`.
+11. **Σ=0 tensor reference (finding 3, slow):** scalar-vs-3×3 `χ_cc` relative
+    deviation reported at the §7 angle grid; test asserts reproducibility of
+    the logged numbers (1%), not their size — the numbers themselves set the
+    documented supported angle range.
 
-## 8. Deferred — full-tensor rigorous follow-up (A0+A1)
+## 8. Deferred follow-ups
 
-The scalar stage omits the cross-channel (xz) dressing (see Physics background).
-The rigorous route is the **A0+A1** bridge of
-`odd_implementation_plan.html` Appendix A, with the ODD blocks set to zero
-(ODD is orthogonal to the field-angle need):
+1. **Azimuthal field + two-channel transverse MF.** Requires iterating
+   `hx` AND `hy` for every direction (including `[Bx 0 0]`, where `B64s`
+   induces `⟨Jy⟩ ≠ 0`), which changes the default x-field model and demands
+   benchmark revalidation — exactly-C4 symmetry restored in exchange. Design
+   options recorded in the review; do not resurrect the rejected `By ≠ 0`
+   guard (angle-discontinuous, C4-inconsistent).
+2. **Full-tensor A0(+A1)** (`odd_implementation_plan.html` Appendix A, ODD
+   blocks zeroed): **A0** — rigorous tensor-RPA layer, `[12,12,nq]`
+   Cartesian⊗sublattice `𝒥(q)` against the full 3×3 `χ0` from `invz_chi0z`;
+   captures the `χ0_xz` cross-channel exactly. **A1** — projected 1/z bridge
+   (`χ̃0 = χ_dom/(1+Σ_c) + χ_rest`), still a dominant-transition
+   approximation, not a rigorous tensor 1/z. A0+A1 would supersede this
+   stage's scalar routing for arbitrary tilt and subsume retardation.
 
-- **A0** — full-tensor RPA parity layer: build `𝒥(q)` as `[12,12,nq]`
-  (Cartesian⊗sublattice) and evaluate `χ = [χ0⁻¹ − 𝒥(q)]⁻¹` using the full 3×3
-  `χ0` that `invz_chi0z` already returns. Under a tilt this captures the
-  `χ0_xz` cross-channel response the scalar pipeline drops.
-- **A1** — projected-1/z bridge: keep the full-tensor, all-136-state
-  propagation but apply the scalar `Σ_c` only to the dominant longitudinal
-  sector via a transition mask: `χ̃0 = χ_dom/(1+Σ_c) + χ_rest`, then the full
-  inversion. This is the multilevel "dominant transition renormalized, weak
-  transitions kept at RPA" approximation, and it **supersedes** the scalar port
-  for arbitrary tilt (also subsuming retardation).
+## Review resolutions (field-angle-plan-review_by_Codex.md, 2026-07-16)
 
-This is a research-scale build (new tensor-RPA path, Schur-complement RPA-parity
-tests, convention/double-counting validation) and is intentionally out of scope
-for this spec. When implemented it would make the scalar routing of §4 a special
-case.
-
-## Notes / open items
-
-- The two-level identification uses the lowest two states `E(1),E(2)`. Under a
-  strong tilt a third level can approach the doublet, degrading the two-level
-  approximation — a validity limit of the scalar stage, documented, not
-  code-enforced.
-- `forced_moment` longitudinal threshold (`1e-9` T) is a proposal; final value
-  set during implementation against the routing tests.
+| Finding | Status | Resolution |
+|---|---|---|
+| 1 hy-guard vs C4 | Verified (`⟨Jy⟩ = −0.0690` at `[4 0 0]`, matches review) | Azimuth descoped; legacy x-only MF documented; two-channel MF deferred (§8.1) |
+| 2 negative-Bz branch | Verified digit-for-digit | Sign-aware seed + sign assertion + mirrored retry (§2, §4); free-energy check in tests |
+| 3 O(tilt²) overclaim | Accepted | Accuracy statement corrected; Σ=0 3×3 reference test added (§7); A0/A1 wording fixed |
+| 4 map API ambiguity | Accepted | `opts.field_dir` + `S.field_dir/S.Bvec` (§5) |
+| 5 overlay crash path | Verified (`one_field` line 113 outside try) | Explicit longitudinal `phase = 0` contract, no `invz_twolevel` fallthrough (§5) |
+| 6 forced_moment semantics | Accepted | Non-circular 5-step acceptance; `si.mf_converged`; `pt.moment_branch` (§2, §4) |
+| 7 labels/formatting | Verified (3 sites) | `\|B\| (T)` labels, vector-safe qpath error, crossover wording (§5-§7) |
+| 8 helper/threshold rigor | Accepted | Precise `invz_field_vec` contract; `opts.Jyy0` dropped (moot after descope); single named `bz_tol` rule with dead-band zeroing (§1, §4) |
+| 9 absent sources | Partial pushback | `LiReF4_MF_Yikai.m` exists outside the repo — absolute path now cited; `MF_chi.m`/`RPA.m` marked user-reported |
