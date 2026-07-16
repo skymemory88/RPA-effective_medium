@@ -124,3 +124,15 @@ verifyEqual(testCase, phc, 0);
 verifyFalse(testCase, isempty(ptc));
 verifyFalse(testCase, isempty(ptc.si));
 end
+
+function test_forced_moment_transverse_is_wellformed(testCase)
+% Hardening (task-4 review): forced_moment with Bz = 0 must not trip the
+% sign-alignment retry (sign(0) never equals sign(m)) -- no branchMismatch
+% warning, and the solve is accepted like the spontaneous route.
+ion = invz_ion();
+Jnu = linspace(-2e-3, 6.0e-3, 24).';
+pt = verifyWarningFree(testCase, ...
+    @() invz_solve_point_ordered(ion, 0.31, 2.0, Jnu, struct('J0eff', 6.4e-3, 'forced_moment', true)));
+verifyTrue(testCase, pt.is_ordered);
+verifyEqual(testCase, pt.moment_branch, 'field_induced');
+end
