@@ -19,17 +19,19 @@ function R = invz_chi_tensor_ref(ion, T, Bvec, w, opts)
 % GATED metric; eps_spec is a reported diagnostic only, since it is dominated
 % by the zero-tilt yz peak-offset artifact for sharp lines, not by lineshape
 % fidelity), w, B.
+% opts.transverse_mf ('legacy_x') MF model forwarded to the internally built single-ion state.
 if nargin < 5, opts = struct(); end
 eta   = getf(opts, 'eta', 5e-3);
 Jsel  = getf(opts, 'Jsel', ion.J0eff);
 Jaa0  = getf(opts, 'Jaa0', ion.Jxx0);
 hyp   = getf(opts, 'hyp', true);
+tmf   = getf(opts, 'transverse_mf', 'legacy_x');
 wmin  = getf(opts, 'peak_wmin', 0.05);
 if ion.demag ~= 0
     error('invz:tensorRef', 'reference defined for the intrinsic response (ion.demag = 0).');
 end
 B  = invz_field_vec(Bvec);
-si = invz_single_ion(ion, T, B, struct('hyp', hyp, 'order', true, 'J0z', Jsel, 'Jxx0', Jaa0));
+si = invz_single_ion(ion, T, B, struct('hyp', hyp, 'order', true, 'J0z', Jsel, 'Jxx0', Jaa0, 'transverse_mf', tmf));
 w  = w(:);
 z  = w + 1i*eta;
 c0 = invz_chi0z(si, T, z, struct('elastic', false));

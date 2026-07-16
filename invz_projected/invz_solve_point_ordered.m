@@ -32,6 +32,7 @@ Ecut  = 40;   if isfield(opts,'Ecut'),      Ecut  = opts.Ecut;      end
 hyp   = true; if isfield(opts,'hyp'),       hyp   = opts.hyp;       end
 J0eff = ion.J0eff; if isfield(opts,'J0eff'), J0eff = opts.J0eff;    end
 Jxx0  = ion.Jxx0;  if isfield(opts,'Jxx0'), Jxx0 = opts.Jxx0; end
+tmf   = 'legacy_x'; if isfield(opts,'transverse_mf'), tmf = opts.transverse_mf; end
 mixo  = 0.7;  if isfield(opts,'mix_outer'), mixo  = opts.mix_outer; end
 tolo  = 1e-8; if isfield(opts,'tol_outer'), tolo  = opts.tol_outer; end
 maxo  = 80;   if isfield(opts,'max_outer'), maxo  = opts.max_outer; end
@@ -47,7 +48,7 @@ fmom = isfield(opts,'forced_moment') && opts.forced_moment;
 % forced_moment (spec 2026-07-16): with an explicit longitudinal Bx(3) the moment is
 % field-induced -- the spontaneous |m0| > mtol gate is bypassed and branch alignment
 % with the applied Bz is enforced (sign-aware seed + one mirrored retry).
-siopts = struct('hyp', hyp, 'order', true, 'J0z', J0eff, 'Jxx0', Jxx0);
+siopts = struct('hyp', hyp, 'order', true, 'J0z', J0eff, 'Jxx0', Jxx0, 'transverse_mf', tmf);
 for f = {'mz_seed', 'mf_maxit', 'mf_mix'}                  % diagnostic pass-throughs (tests)
     if isfield(opts, f{1}), siopts.(f{1}) = opts.(f{1}); end
 end
@@ -80,7 +81,7 @@ end
 
 c0  = invz_chi0z(si, T, 1i*wn, struct('elastic', true));
 G0  = -real(squeeze(c0(3,3,:)));               % full electronuclear cc, ordered moment included
-tl  = invz_twolevel_ordered(ion, T, Bx, si.hz, struct('Jxx0', Jxx0));
+tl  = invz_twolevel_ordered(ion, T, Bx, si.hz, struct('Jxx0', Jxx0, 'transverse_mf', tmf));
 g   = real(invz_g(tl, 1i*wn));
 
 Sigma = zeros(size(wn));  K = zeros(size(wn));

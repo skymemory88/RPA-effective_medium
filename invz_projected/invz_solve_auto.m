@@ -14,6 +14,10 @@ function [pt, phase, di] = invz_solve_auto(ion, T, Bx, Jnu_flat, opts)
 % pt = [] only when no usable single-ion state exists.
 %
 % Error policy: only invz:* identifiers are absorbed into di; anything else rethrows.
+%
+% opts.transverse_mf ('legacy_x' | 'none' | 'vector_ab', default 'legacy_x'): no code change
+% here -- opts is forwarded wholesale to invz_solve_point_ordered / invz_solve_point on both
+% routes, so the MF model reaches every invz_single_ion call transitively.
 if nargin < 5, opts = struct(); end
 bz_tol = getf(opts, 'bz_tol', 1e-9);
 B = invz_field_vec(Bx);
