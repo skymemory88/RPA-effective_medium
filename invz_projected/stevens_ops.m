@@ -15,6 +15,7 @@ ops.Jy = (Jplus - Jminus)/(2i);
 ops.O20 = 3*Jz^2 - X*E;
 ops.O40 = 35*Jz^4 - (30*X - 25)*Jz^2 + (3*X^2 - 6*X)*E;
 ops.O44 = 0.5*(Jplus^4 + Jminus^4);
+ops.O44s = -0.5i*(Jplus^4 - Jminus^4);   % = (Jp^4-Jm^4)/(2i), sine partner of O44
 ops.O60 = 231*Jz^6 - (315*X - 735)*Jz^4 + (105*X^2 - 525*X + 294)*Jz^2 ...
           + (-5*X^3 + 40*X^2 - 60*X)*E;
 Cm = 11*Jz^2 - (X + 38)*E;
