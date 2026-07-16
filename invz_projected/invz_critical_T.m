@@ -31,10 +31,11 @@ function tc = invz_critical_T(ion, Bx, Jnu_flat, opts)
 % converge; if the whole window fails to bracket a crossing the function
 % errors rather than guessing.
 if nargin < 4, opts = struct(); end
-width = 0.5;    if isfield(opts,'width'),    width = opts.width;    end
-gstep = 1/30;   if isfield(opts,'gridstep'), gstep = opts.gridstep; end
-tol   = 0.005;  if isfield(opts,'tol'),      tol   = opts.tol;      end
+width = getf(opts, 'width',    0.5);
+gstep = getf(opts, 'gridstep', 1/30);
+tol   = getf(opts, 'tol',      0.005);
 Tmin  = 0.02;                                   % single-ion solve floor
+f = @(T) invz_crit_at(ion, T, Bx, Jnu_flat, opts);
 
 if isfield(opts,'window')
     Tlo = opts.window(1);  Thi = opts.window(2);
@@ -49,7 +50,7 @@ for slide = 0:8
     Tg  = linspace(Tlo, Thi, ng);
     c   = nan(1, ng);  ok = false(1, ng);
     for i = 1:ng
-        [c(i), ok(i)] = crit_at(ion, Tg(i), Bx, Jnu_flat, opts);
+        [c(i), ok(i)] = f(Tg(i));
     end
     Tv = Tg(ok);  cv = c(ok);                   % converged, finite: the voters
     if numel(cv) >= 2
@@ -63,8 +64,7 @@ for slide = 0:8
         up = sc(sign(cv(sc)) < 0 & sign(cv(sc+1)) > 0);   % low-T ordered -> high-T para
         if ~isempty(up)
             k  = up(end);                       % highest-T ordered->para crossing
-            tc = refine_crossing(ion, Bx, Jnu_flat, opts, ...
-                                 Tv(k), cv(k), Tv(k+1), cv(k+1), tol);
+            tc = invz_refine_crossing(f, Tv(k), cv(k), Tv(k+1), cv(k+1), tol);
             return;
         end
     end
@@ -86,44 +86,12 @@ error('invz:bracket', ...
 end
 
 % ------------------------------------------------------------------------
-function [c, ok] = crit_at(ion, T, Bx, Jf, opts)
-% crit at (T,Bx) and whether it is a trustworthy (converged, finite) verdict.
-try
-    pt = invz_solve_point(ion, T, Bx, Jf, opts);
-    c  = pt.crit;
-    ok = pt.converged && isfinite(c);
-catch
-    c = NaN;  ok = false;                       % e.g. invz:degenerateDoublet
-end
-end
-
-% ------------------------------------------------------------------------
-function tc = refine_crossing(ion, Bx, Jf, opts, Ta, ca, Tb, cb, tol)
-% Regula-falsi on CONVERGED crit between bracket ends (ca<0 at Ta, cb>0 at Tb).
-% A non-converged interior sample is skipped (it does not corrupt the bracket);
-% if the interior will not converge, fall back to linear interpolation.
-for r = 1:20
-    if Tb - Ta < tol, break; end
-    Tm = Ta - ca*(Tb - Ta)/(cb - ca);          % false-position estimate
-    Tm = min(max(Tm, Ta + 0.05*(Tb-Ta)), Tb - 0.05*(Tb-Ta));
-    [cm, okm] = crit_at(ion, Tm, Bx, Jf, opts);
-    if ~okm
-        Tm = 0.5*(Ta + Tb);                     % try the midpoint instead
-        [cm, okm] = crit_at(ion, Tm, Bx, Jf, opts);
-        if ~okm, break; end                     % interior won't converge: interpolate
-    end
-    if cm <= 0, Ta = Tm; ca = cm; else, Tb = Tm; cb = cm; end
-end
-tc = Ta - ca*(Tb - Ta)/(cb - ca);              % final linear interpolation
-end
-
-% ------------------------------------------------------------------------
 function Tc0 = adaptive_anchor(ion, Jf, opts)
 % Zero-field Tc used to anchor the adaptive window top.
 if isfield(opts,'Tc0')
     Tc0 = opts.Tc0;  return;
 end
-J0 = ion.J0eff;  if isfield(opts,'J0eff'), J0 = opts.J0eff; end
+J0 = getf(opts, 'J0eff', ion.J0eff);
 Sc = invz_sigma_crit(J0, Jf);
 Tc0 = invz_critical_T0field(ion, Sc, J0);
 end

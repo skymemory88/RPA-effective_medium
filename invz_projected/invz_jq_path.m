@@ -40,7 +40,7 @@ snapfac  = 2.5; if isfield(opts,'snapfac'), snapfac  = opts.snapfac; end
 C  = invz_const();
 nq = size(qpath, 1);
 
-[Jnu, ~, Juni] = invz_jq_modes(ion, qpath, struct('dpRng', dpRng, 'cache', useCache));
+[Jnu, info, Juni] = invz_jq_modes(ion, qpath, struct('dpRng', dpRng, 'cache', useCache));
 
 v     = ones(4, 1) / 2;                     % uniform ferromagnetic mode (see invz_jq_modes)
 Brec  = 2*pi*inv(ion.a).';                 % reciprocal basis rows: k_cart = q_rlu * Brec
@@ -49,7 +49,7 @@ snapped = false(nq, 1);
 Greg = [];                                  % regular Gamma-point matrix, computed lazily once
 for iq = 1:nq
     G = round(qpath(iq, :));
-    if ~is_gamma_equiv(G, ion.tau), continue; end
+    if ~invz_is_gamma_equiv(G, ion.tau), continue; end
     k = (qpath(iq, :) - G) * Brec;
     if norm(k) >= ksnap, continue; end
     if norm(k) < 1e-12                      % exactly at G: use the local path direction
@@ -62,8 +62,11 @@ for iq = 1:nq
     end
     kz2 = (k(3) / norm(k))^2;
     if isempty(Greg)
-        dip0 = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
-        ex0  = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau);
+        % Reuse the q-independent geometry invz_jq_modes already built (info.geomD/geomX)
+        % instead of re-deriving it from scratch: bit-identical (MF_dipole/exchange 5-arg
+        % reuse form), pinned by test_invz_dipole_geometry_reuse.
+        dip0 = MF_dipole([0 0 0], dpRng, ion.a, ion.tau, info.geomD);
+        ex0  = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau, info.geomX);
         Greg = -squeeze(C.gfac*dip0(3,3,:,:)) + sign(ion.J12)*squeeze(ex0(3,3,:,:));
     end
     Jm = Greg + C.gfac*(4*pi/ion.Vc)*(1/3 - kz2);     % directional nonanalytic broadcast
@@ -76,8 +79,4 @@ end
 P.Jnu = Jnu;  P.Juni = Juni(:);  P.snapped = snapped;  P.ksnap = ksnap;
 P.s      = [0 cumsum(vecnorm(diff(qpath, 1, 1),        2, 2)).'];
 P.s_cart = [0 cumsum(vecnorm(diff(qpath, 1, 1) * Brec, 2, 2)).'];
-end
-
-function tf = is_gamma_equiv(q, tau)
-tf = abs(real(sum(exp(2i*pi*(tau*q.'))))/size(tau,1) - 1) < 1e-9;
 end

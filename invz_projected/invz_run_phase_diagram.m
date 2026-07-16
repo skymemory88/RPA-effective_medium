@@ -8,14 +8,10 @@ ion = invz_ion();
 %   Ordering-channel criticality (info.Jcc0/Jnu) and Tc(B=0) are demag-INVARIANT (R2007); Bc(T)
 %   vs APPLIED field can shift via the demag-aware info.Jaa0 (hoisted into Jxx0 below). See
 %   invz_ion.m for the full explanation. demag = 0 (default) matches the R2007 benchmark.
-[qvec, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5], 'verbose', false);
-qvec = qvec(any(abs(qvec) > 1e-12, 2), :);
-[Jnu, info] = invz_jq_modes(ion, qvec, struct('dpRng', 30, 'cache', true));
-Jf = Jnu(:);
+[Jf, info, Jxx0] = invz_bz_couplings(ion);   % shared BZ-grid coupling branches (Jaa0-aware)
 J0 = info.Jcc0;   % scalar hoist: avoids broadcasting the whole info struct to workers
-Jxx0 = ion.Jxx0;  if isfield(info, 'Jaa0'), Jxx0 = info.Jaa0; end   % live transverse J(0)
-% (demag-aware; at demag = 0 it differs from the hardcoded ion.Jxx0 by <0.1% -- the live
-% dipole sum supersedes the pasted constant). Tc0 below needs no Jxx0: at B = 0, <Jx> = 0.
+% Jxx0 is demag-aware; at demag = 0 it differs from the hardcoded ion.Jxx0 by <0.1% -- the live
+% dipole sum supersedes the pasted constant. Tc0 below needs no Jxx0: at B = 0, <Jx> = 0.
 % Zero-field Tc, computed ONCE up front (invz_sigma_crit warns once here rather
 % than in every worker): it anchors the Tc(B) adaptive window and is the B=0
 % endpoint on the plot.

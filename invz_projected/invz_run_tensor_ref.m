@@ -25,10 +25,7 @@ w       = (0:0.005:0.6).';           % meV
 eta     = 0.02;                      % meV comparison broadening (metric stability)
 
 % live couplings, as in the production drivers (cached lattice sum)
-[qc, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5], 'verbose', false);
-qc = qc(any(abs(qc) > 1e-12, 2), :);
-[~, info] = invz_jq_modes(ion, qc, struct('dpRng', 30, 'cache', true));
-Jaa0 = ion.Jxx0;  if isfield(info, 'Jaa0'), Jaa0 = info.Jaa0; end
+[~, info, Jaa0] = invz_bz_couplings(ion);   % shared BZ-grid coupling branches (Jaa0-aware)
 ropts = struct('Jsel', info.Jcc0, 'Jaa0', Jaa0, 'eta', eta);
 
 fprintf('%8s %8s %12s %12s %12s %12s %10s %10s\n', 'theta', '|B| (T)', 'eps_spec', 'eps_tilt', 'eps_amp', 'dE_peak', 'Ep_sc', 'Ep_ten');

@@ -22,18 +22,20 @@ function R = invz_chi_tensor_ref(ion, T, Bvec, w, opts)
 % chi'' over w -- the integrated spectral weight, a lineshape-agnostic
 % companion to the single-bin amp_sc/amp_ten), eps_W (floored relative error
 % of W_sc vs W_ten; reported diagnostic, not gated), w, B.
-% opts.transverse_mf ('legacy_x') MF model forwarded to the internally built single-ion state.
+% opts.transverse_mf ('legacy_x') MF model forwarded to the internally built single-ion state;
+% under 'legacy_x' a nonzero b-axis (y) field component errors invz:transverseMF (same guard
+% as invz_spectra_map/invz_spectra_qpath -- C4-inconsistent, 17 ueV a/b asymmetry at 4 T).
 if nargin < 5, opts = struct(); end
 eta   = getf(opts, 'eta', 5e-3);
 Jsel  = getf(opts, 'Jsel', ion.J0eff);
 Jaa0  = getf(opts, 'Jaa0', ion.Jxx0);
 hyp   = getf(opts, 'hyp', true);
-tmf   = getf(opts, 'transverse_mf', 'legacy_x');
 wmin  = getf(opts, 'peak_wmin', 0.05);
 if ion.demag ~= 0
     error('invz:tensorRef', 'reference defined for the intrinsic response (ion.demag = 0).');
 end
 B  = invz_field_vec(Bvec);
+tmf = invz_check_transverse_mf(opts, B(2));
 si = invz_single_ion(ion, T, B, struct('hyp', hyp, 'order', true, 'J0z', Jsel, 'Jxx0', Jaa0, 'transverse_mf', tmf));
 w  = w(:);
 z  = w + 1i*eta;

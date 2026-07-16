@@ -4,8 +4,8 @@ function tl = invz_twolevel(ion, T, Bx, opts)
 % opts.Jxx0 (optional): transverse MF coupling forwarded to invz_single_ion (default ion.Jxx0).
 % opts.transverse_mf (optional): MF model forwarded to invz_single_ion (default 'legacy_x').
 if nargin < 4, opts = struct(); end
-Jxx0 = ion.Jxx0;  if isfield(opts,'Jxx0'), Jxx0 = opts.Jxx0; end
-tmf = 'legacy_x';  if isfield(opts,'transverse_mf'), tmf = opts.transverse_mf; end
+Jxx0 = getf(opts, 'Jxx0', ion.Jxx0);
+tmf  = getf(opts, 'transverse_mf', 'legacy_x');
 C  = invz_const();
 si = invz_single_ion(ion, T, invz_field_vec(Bx), struct('hyp', false, 'Jxx0', Jxx0, 'transverse_mf', tmf));
 tl.Delta = si.E(2) - si.E(1);
