@@ -35,6 +35,7 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %                              sweep direction of `fields` (|B|). Error invz:fieldDir if
 %                              invalid. A nonzero z-component routes through the longitudinal
 %                              (field-induced moment) solve once |Bz| clears .bz_tol.
+%                              Validated envelope: ac-plane directions [cos(theta) 0 sin(theta)] with theta_c <= 5 deg (see docs/SESSION-2026-07-16-field-angle.md); By ~= 0 runs under the legacy x-only transverse MF and demag ~= 0 with tilt is unvalidated.
 %     .bz_tol    (1e-9)        T; dead band on Bz -- resolved ONCE, applied to the field table
 %                              BEFORE any solve, and forwarded to invz_solve_auto/one_field.
 %     .solve_opts (struct())   merged into the per-field invz_solve_auto opts; fields

@@ -15,8 +15,8 @@ function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 %
 % Returns pt.is_ordered: strictly "this point uses the moment-form self-energy", true for
 % EITHER a spontaneous FM moment (|m0| > m_tol) or a forced_moment field-induced solve; FALSE
-% only for the spontaneous-mode paramagnetic case (no moment at all) -- the caller should then
-% fall back to invz_solve_point (paramagnetic). When ordered, pt carries the same fields as
+% on the spontaneous-mode paramagnetic early return AND on the forced-moment failure paths (MF non-convergence; persistent branch misalignment) -- acceptance always also requires pt.converged.
+% When ordered, pt carries the same fields as
 % invz_solve_point plus pt.m0 (order parameter), pt.alpha_m, pt.si (the ordered single-ion
 % struct), pt.is_ordered = true, and pt.moment_branch ∈ {'spontaneous','field_induced','none'}
 % ('none' only on the spontaneous-mode paramagnetic early return). EVERY return path (early
