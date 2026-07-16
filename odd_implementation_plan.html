@@ -196,7 +196,7 @@ the 1/z treatment is Gaussian in the transverse channel but quantum in the cc ch
 <p>No code changes. Every task produces a short note in <code>docs/ODD-LOG.md</code>. If any finding
 contradicts §1, stop and report.</p>
 
-<div class="task"><div class="task-head"><span class="tid">P0.1</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">P0.1</span><span class="tstatus">[x]</span>
 <span class="ttitle">Confirm the full dipole tensor exists upstream of the cc projection</span></div>
 <ul>
 <li>Read <code>MF_dipole.m</code>: confirm it returns (or can return) the full 3×3 Cartesian dipole tensor per sublattice pair per \( \mathbf q \), including the \(ca\)/\(cb\) off-diagonal components. Record the exact output shape and index convention (which index is sublattice, which Cartesian).</li>
@@ -205,7 +205,7 @@ contradicts §1, stop and report.</p>
 </ul>
 <div class="ok"><b>Done when</b> the log entry states: full-tensor availability (yes/no), tensor units (μeV vs meV — compare against the 6.82 μeV benchmark), index layout, and the projection line numbers. If <code>MF_dipole</code> computes only \(cc\) (and \(aa\)), note the cheapest way to expose the \(c\alpha\) components (usually: return the whole 3×3 it already builds internally).</div></div>
 
-<div class="task"><div class="task-head"><span class="tid">P0.2</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">P0.2</span><span class="tstatus">[x]</span>
 <span class="ttitle">Pin units and dimensional consistency of \( \mathcal J\chi_0 \)</span></div>
 <ul>
 <li>In <code>invz_solve_point.m</code> / <code>invz_chi0z.m</code>, verify: \( \chi_0^{cc} \) in meV<sup>−1</sup> (dimensionless \(J\) operators), <code>Jnu</code>/<code>Jcc0</code> in meV, product dimensionless. Confirm whether the \((g_L\mu_B)^2\) factor lives inside the dipole sum (it must, given the 6.82 μeV benchmark) so that (E1) needs <b>no</b> extra g-factors.</li>
@@ -213,7 +213,7 @@ contradicts §1, stop and report.</p>
 </ul>
 <div class="ok"><b>Done when</b> the log records the χ⊥ matrix and confirms (E1) is dimensionally closed with no additional prefactors.</div></div>
 
-<div class="task"><div class="task-head"><span class="tid">P0.3</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">P0.3</span><span class="tstatus">[x]</span>
 <span class="ttitle">Numerical symmetry check: \( \mathcal J^{c\alpha}(\mathbf q\to\mathbf 0) = 0 \)</span></div>
 <ul>
 <li>Throwaway script (do not commit into the module; keep under <code>invz/tests/exploratory/</code>): build the \(c a\) and \(c b\) 4×4 blocks from <code>MF_dipole</code> at the smallest few \(|\mathbf q|\) on the standard grid and at a sequence \( \mathbf q = (q,0,0),\ q\to0 \). Confirm element-wise decay to 0 (the C<sub>2</sub>-about-c argument of §1) and record the decay rate and the residual scale relative to <code>Jcc0</code>.</li>
@@ -221,7 +221,7 @@ contradicts §1, stop and report.</p>
 </ul>
 <div class="ok"><b>Done when</b> the uniform-limit ODD blocks are confirmed ≤ 10<sup>−6</sup>·<code>Jcc0</code> (or the deviation is explained by grid geometry) and generic-q magnitudes are logged.</div></div>
 
-<div class="task"><div class="task-head"><span class="tid">P0.4</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">P0.4</span><span class="tstatus">[x]</span>
 <span class="ttitle">Cache &amp; parallel audit</span></div>
 <ul>
 <li>Record the <code>invz/cache/</code> key scheme used by <code>invz_jq_modes</code> (what parameters key the cache: grid, <code>dpRng</code>, shape?). The new geometric ODD blocks must get their own key namespace (proposal: suffix <code>_odd</code>) so existing caches never collide.</li>
@@ -229,7 +229,7 @@ contradicts §1, stop and report.</p>
 </ul>
 <div class="ok"><b>Done when</b> the log names the cache key format and the single pre-parfor point where ODD blocks will be built.</div></div>
 
-<div class="task"><div class="task-head"><span class="tid">P0.5</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">P0.5</span><span class="tstatus">[x]</span>
 <span class="ttitle">Baseline freeze</span></div>
 <ul>
 <li>Run the full slow suite on a clean tree; commit nothing. Save the console benchmark table to <code>docs/ODD-LOG.md</code> as the frozen baseline (Σ<sub>c</sub> values, T<sub>c</sub>(0), H<sub>c</sub>(0.31 K), soft-mode minimum, timings).</li>
@@ -486,11 +486,11 @@ Keep in lockstep with the <code>[ ]</code> markers above.</p>
   "version": 1,
   "phases": ["P0", "T1", "T2", "T3", "V4"],
   "tasks": [
-    {"id":"P0.1","phase":"P0","deps":[],"files":["MF_dipole.m","invz/invz_jq_modes.m"],"status":"todo"},
-    {"id":"P0.2","phase":"P0","deps":[],"files":["invz/invz_chi0z.m","invz/invz_solve_point.m"],"status":"todo"},
-    {"id":"P0.3","phase":"P0","deps":["P0.1"],"files":["invz/tests/exploratory/"],"status":"todo"},
-    {"id":"P0.4","phase":"P0","deps":[],"files":["invz/invz_jq_modes.m","invz/invz_run_phase_diagram.m"],"status":"todo"},
-    {"id":"P0.5","phase":"P0","deps":[],"files":["docs/ODD-LOG.md"],"status":"todo"},
+    {"id":"P0.1","phase":"P0","deps":[],"files":["MF_dipole.m","invz/invz_jq_modes.m"],"status":"done"},
+    {"id":"P0.2","phase":"P0","deps":[],"files":["invz/invz_chi0z.m","invz/invz_solve_point.m"],"status":"done"},
+    {"id":"P0.3","phase":"P0","deps":["P0.1"],"files":["invz/tests/exploratory/"],"status":"done"},
+    {"id":"P0.4","phase":"P0","deps":[],"files":["invz/invz_jq_modes.m","invz/invz_run_phase_diagram.m"],"status":"done"},
+    {"id":"P0.5","phase":"P0","deps":[],"files":["docs/ODD-LOG.md"],"status":"done"},
     {"id":"T1.1","phase":"T1","deps":["P0.1","P0.3","P0.4"],"files":["invz/invz_odd_blocks.m","invz/tests/test_odd_blocks.m"],"status":"todo"},
     {"id":"T1.2","phase":"T1","deps":["P0.2"],"files":["invz/invz_chiperp.m"],"status":"todo"},
     {"id":"T1.3","phase":"T1","deps":["T1.1","T1.2"],"files":["invz/invz_jq_modes.m"],"status":"todo"},
