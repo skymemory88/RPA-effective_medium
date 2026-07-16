@@ -37,14 +37,14 @@ eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency 
                                      % meV (below), independent of eUnit.
 
 % fields = [3.6 4.2 4.8 5.4 6.0];       % few -> slices;  many -> colormap
-fields = linspace(0,9,601);
+fields = linspace(0,9,301);
 w = (0:0.005:6).';                  % eUnit -- field-sweep frequency grid (0-108 GHz ~ 0-0.45 meV)
 eta = 2e-5;                          % real-axis Lorentzian HWHM, ALWAYS in meV (1e-3 meV ~ 0.24 GHz),
                                      % independent of eUnit. Lower -> sharper peaks (resolves the
                                      % sub-6-GHz hyperfine lines); keep eta above the w/wq step
                                      % (converted to meV: step/eScale) or the peaks alias.
 sliceMax = 6;                         % field count at/below which the line-slice view is used
-theta_c = 0;                         % deg -- tilt of the field OUT of the transverse ab-plane
+theta_c = 0.0;                         % deg -- tilt of the field OUT of the transverse ab-plane
                                      % toward c (the Ising axis): models experimental field
                                      % misalignment. The direction is FIXED across the sweep;
                                      % x-axes stay the total magnitude |B| (the longitudinal
@@ -57,8 +57,20 @@ theta_c = 0;                         % deg -- tilt of the field OUT of the trans
                                      % range (invz_run_tensor_ref); a longitudinal component
                                      % turns the sharp transition into a rounded crossover.
                                      % Azimuth (phi_ab) + full-tensor propagation: deferred.
+phi_ab = 0.0;                        % deg -- IN-PLANE rotation of the swept field, a -> b.
+                                     % phi_ab ~ 11 deg is the production experimental angle
+                                     % (external stack ion.cfRot(Ho) = -11 deg; the exact
+                                     % sign mapping is pinned in test_invz_cfrot_equiv).
+                                     % Nonzero phi_ab REQUIRES transverse_mf = 'vector_ab'
+                                     % below (the library errors otherwise, by design).
+                                     % NOTE: vector_ab shifts even phi_ab = 0 results
+                                     % slightly (~0.04 ueV at 4 T; grows at low field) --
+                                     % never compare legacy_x and vector_ab runs as if only
+                                     % the angle differed. Combined theta_c AND phi_ab is
+                                     % NOT validated (tilt bound was measured under legacy_x).
+transverse_mf = 'legacy_x';          % 'legacy_x' | 'none' | 'vector_ab'
 
-showPeaks = true;                    % true -> ALSO line-plot chi''_cc peak energy vs field
+showPeaks = false;                    % true -> ALSO line-plot chi''_cc peak energy vs field
                                      % (S.Epeak/S.Epeak_rpa, cf. the q-path E_peak(q) stream)
 
 % ---- q-path view (R 2007 Fig 3 trends): set qpath non-empty to switch views -------------
@@ -85,9 +97,13 @@ switch eUnit
     otherwise, error('invz_run_spectra:eUnit', 'eUnit must be ''meV'' or ''GHz''.');
 end
 
-dhat = [cosd(theta_c) 0 sind(theta_c)];          % unit field direction (ac-plane)
+dhat = [cosd(theta_c)*cosd(phi_ab), cosd(theta_c)*sind(phi_ab), sind(theta_c)];  % unit field direction
 tiltStr = '';
 if theta_c ~= 0, tiltStr = sprintf(', \\theta_c = %.2g\\circ', theta_c); end
+if phi_ab  ~= 0, tiltStr = [tiltStr sprintf(', \\phi_{ab} = %.2g\\circ', phi_ab)]; end
+if ~strcmp(transverse_mf, 'legacy_x'), tiltStr = [tiltStr sprintf(', %s', transverse_mf)]; end
+
+solve_opts = struct('transverse_mf', transverse_mf);   % merged into every spectra call below
 
 % w and wq are given in eUnit; solves run in meV, so convert on the way in (eScale is the
 % meV->eUnit factor) and scale returned grids (S.w, Epeak) back up by eScale for plotting.
@@ -98,7 +114,7 @@ wqMeV  = wq  / eScale;
 if ~isempty(qpath)
     % ---------------- FM-mode q-path view at fixed field(s) ----------------
     if isscalar(Bq)
-        S = invz_spectra_qpath(ion, T, Bq*dhat, qpath, wqMeV, struct('eta', eta));
+        S = invz_spectra_qpath(ion, T, Bq*dhat, qpath, wqMeV, struct('eta', eta, 'solve_opts', solve_opts));
         Splot = S;   % display-only copy; the solve above always ran in meV
         Splot.w = S.w*eScale;  Splot.Epeak = S.Epeak*eScale;  Splot.Epeak_rpa = S.Epeak_rpa*eScale;
         figure('Position', [100 100 1150 460]);
@@ -111,7 +127,7 @@ if ~isempty(qpath)
     else
         figure; hold on;  co = lines(numel(Bq));
         for k = 1:numel(Bq)
-            Sk = invz_spectra_qpath(ion, T, Bq(k)*dhat, qpath, wqMeV, struct('eta', eta));
+            Sk = invz_spectra_qpath(ion, T, Bq(k)*dhat, qpath, wqMeV, struct('eta', eta, 'solve_opts', solve_opts));
             plot(Sk.x, Sk.Epeak*eScale*dispScale,     '-',  'Color', co(k, :), ...
                  'DisplayName', sprintf('1/z, %.2f T', Bq(k)));
             plot(Sk.x, Sk.Epeak_rpa*eScale*dispScale, '--', 'Color', co(k, :), ...
@@ -129,7 +145,7 @@ if ~isempty(qpath)
 else
     % ---------------- field-sweep views at the uniform mode ----------------
     S = invz_spectra_map(ion, T, fields, wMeV, ...
-            struct('parallel', useParallel, 'eta', eta, 'field_dir', dhat));
+            struct('parallel', useParallel, 'eta', eta, 'field_dir', dhat, 'solve_opts', solve_opts));
 
     if numel(fields) <= sliceMax
         figure; hold on;  co = lines(numel(fields));

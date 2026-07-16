@@ -40,6 +40,15 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %                              BEFORE any solve, and forwarded to invz_solve_auto/one_field.
 %     .solve_opts (struct())   merged into the per-field invz_solve_auto opts; fields
 %                              J0eff/Jxx0/hyp are reserved (driver-owned) -> error invz:solveOpts.
+%                              transverse_mf ('legacy_x' | 'none' | 'vector_ab', default
+%                              'legacy_x') is a legal solve_opts field forwarded to the
+%                              solvers. Under 'legacy_x' (x-only mean field) a nonzero
+%                              b-axis (y) field component is C4-inconsistent and errors
+%                              invz:transverseMF; use 'vector_ab' for genuine in-plane
+%                              rotation.
+%
+%   Returns S.transverse_mf: the resolved MF mode string (echoes opts.solve_opts.transverse_mf,
+%   default 'legacy_x').
 %
 %   Cost is one 1/z solve per field (~15-25 min for a 61-point sweep on a 16^3 grid, single
 %   core). Compute S once, then replot freely (invz_plot_spectra_map / invz_run_spectra).
@@ -72,6 +81,13 @@ nB = numel(fields);     nw = numel(w);
 
 BvecM = fields(:) * fdir;                        % [nB x 3] actual solve fields
 BvecM(abs(BvecM(:, 3)) <= bztol, 3) = 0;         % dead band: identical rule to invz_solve_auto
+
+tmf = getf(sxtra, 'transverse_mf', 'legacy_x');
+if strcmp(tmf, 'legacy_x') && any(abs(BvecM(:, 2)) > 0)
+    error('invz:transverseMF', ['field has a b-axis (y) component but transverse_mf is ' ...
+        '''legacy_x'' (x-only mean field; C4-inconsistent, 17 ueV a/b asymmetry at 4 T). ' ...
+        'Set opts.solve_opts.transverse_mf = ''vector_ab'' (or ''none'' for bare diagnostics).']);
+end
 
 if isfield(opts, 'Jnu') && isfield(opts, 'info')
     Jnu = opts.Jnu(:);   info = opts.info;
@@ -108,7 +124,7 @@ end
 
 S = struct();
 S.fields = fields;  S.w = w;  S.T = T;  S.info = info;
-S.field_dir = fdir;  S.Bvec = BvecM;
+S.field_dir = fdir;  S.Bvec = BvecM;  S.transverse_mf = tmf;
 S.chiz = chizM;  S.chirpa = chirpaM;
 S.Sigma0 = Sig0;  S.phase = phaseC;
 S.Epeak     = invz_peak_energy(chizM,   w, wmin);
