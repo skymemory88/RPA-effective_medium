@@ -91,6 +91,17 @@ function Tc0 = adaptive_anchor(ion, Jf, opts)
 if isfield(opts,'Tc0')
     Tc0 = opts.Tc0;  return;
 end
+% ODD guard (T1.4): with opts.odd on and no opts.Tc0, the fallback below would
+% silently anchor at the NO-ODD zero-field Tc (Jf is [] and the Sc/J0 here know
+% nothing of deltaJ/-d). Require the caller to supply the odd-aware anchor
+% (drivers compute it via the T-dependent-handle form of invz_critical_T0field;
+% invz_odd_zero_field owns it from T1.5). Checked BEFORE any expensive work.
+if isfield(opts, 'odd') && ~isempty(opts.odd) && ~isequal(opts.odd, false)
+    error('invz:oddTc0', ['invz_critical_T with opts.odd requires an explicit ' ...
+        'opts.Tc0 (odd-aware zero-field anchor): the adaptive-window fallback ' ...
+        'would silently use the no-ODD Tc0. Compute it via invz_odd_zero_field ' ...
+        '(T1.5) or the handle form of invz_critical_T0field.']);
+end
 J0 = getf(opts, 'J0eff', ion.J0eff);
 Sc = invz_sigma_crit(J0, Jf);
 Tc0 = invz_critical_T0field(ion, Sc, J0);

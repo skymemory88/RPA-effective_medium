@@ -27,6 +27,17 @@ function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 % (the applied-field/H_MF self-consistency of HTML eqs 41-43 is deferred), so it onsets at the
 % mean-field boundary, slightly above the true 1/z boundary; the gap matters only near B_c,
 % not deep in the ordered phase.
+%
+% ODD extension (T1.4, opt-in): same contract as invz_solve_point — opts.odd = true
+% requires opts.odd_blocks (Vca/Vcb/Vcc/Jcc0 UNSHIFTED, from invz_odd_blocks) and
+% Jnu_flat = [] ('invz:oddArgs' otherwise). The cc modes are rebuilt from
+% Vcc + deltaJ(T,Bx) and the explicit -d (E5) is applied ONCE to J0eff below, which
+% here feeds BOTH the single-ion ordering mean field (siopts.J0z) and pt.crit: the
+% shifted value is the physical uniform coupling, so both uses receive it. chi_perp
+% is evaluated at the PARAMAGNETIC-MF single-ion state by design (T1.2: Van Vleck
+% dominated, insensitive to the cc order parameter — never solved self-consistently
+% with the moment). pt gains pt.odd = struct('d','Xp') on the full solve path only
+% (early returns keep their fixed field set). Flag off: byte-identical pre-ODD path.
 if nargin < 5, opts = struct(); end
 Ecut  = getf(opts, 'Ecut', 40);
 hyp   = getf(opts, 'hyp', true);
@@ -40,6 +51,42 @@ mtol  = getf(opts, 'm_tol', 1e-2);
 eopts = getf(opts, 'emt', struct());
 Bx = invz_field_vec(Bx);                       % scalar -> [Bx 0 0]; 3-vector passes through
 fmom = getf(opts, 'forced_moment', false);
+
+% --- ODD diversion (T1.4): strictly additive and opt-in; everything else in
+% this function is the pre-ODD code path, byte-untouched when the flag is off.
+oddOn = isfield(opts, 'odd') && ~isempty(opts.odd) && ~isequal(opts.odd, false);
+if oddOn
+    ob = getf(opts, 'odd_blocks', []);
+    if ~(isstruct(ob) && isscalar(ob) && all(isfield(ob, {'Vca', 'Vcb', 'Vcc', 'Jcc0'})))
+        error('invz:oddArgs', ['opts.odd = true requires opts.odd_blocks = struct(' ...
+            '''Vca'',''Vcb'',''Vcc'',''Jcc0'') precomputed once by the caller from ' ...
+            'invz_odd_blocks (P0.4: no disk/cache reads inside solver loops; Jcc0 UNSHIFTED).']);
+    end
+    if ~isempty(Jnu_flat)
+        error('invz:oddArgs', ['opts.odd = true requires Jnu_flat = []: the cc modes are ' ...
+            'rebuilt here from odd_blocks + deltaJ, and a caller-supplied baseline Jnu ' ...
+            'would silently override the rebuild.']);
+    end
+    % chi_perp at the shared single-ion option set (T1.2); its si is the
+    % PARAMAGNETIC-MF state and is NOT reused here (the ordered solve below
+    % needs the ordering-MF state, a different siopts).
+    Xp = invz_chiperp(ion, T, Bx, struct('hyp', hyp, 'Jxx0', Jxx0, 'transverse_mf', tmf));
+    [dJ, d] = invz_odd_deltaJ(ob.Vca, ob.Vcb, Xp);
+    nqo = size(ob.Vcc, 3);
+    Jnu_odd = zeros(nqo, 4);
+    for iq = 1:nqo
+        M = ob.Vcc(:,:,iq) + dJ(:,:,iq);
+        M = (M + M')/2;                        % both terms Hermitian; cleans rounding only
+        Jnu_odd(iq,:) = sort(real(eig(M))).';
+    end
+    Jnu_flat = Jnu_odd(:);
+    % E5 uniform shift, applied HERE exactly once (T1.3 bookkeeping rule: the grid
+    % matrices' diagonal already carries -d via E4; J0eff carries the explicit -d;
+    % NO other q = 0 handling). Callers pass the UNSHIFTED info.Jcc0 as opts.J0eff.
+    % The shifted J0eff is the physical uniform coupling: it seeds siopts.J0z AND
+    % enters pt.crit below (both uses receive the same single shift).
+    J0eff = J0eff - d;
+end
 
 [wn, wts, beta] = invz_matsubara(T, Ecut);
 
@@ -104,6 +151,9 @@ pt.sumrule_rel = abs(sum(wts.*med.G)/beta + si.JzJz_fluct) / max(abs(si.JzJz_flu
 pt.converged = converged && med.converged;
 pt.outer_iters = outer;
 pt.moment_branch = branch;
+if oddOn
+    pt.odd = struct('d', d, 'Xp', Xp);         % T1.4 diagnostics (absent when flag off)
+end
 end
 
 % -------------------------------------------------------------------------------------------

@@ -384,3 +384,81 @@ should confirm the RPA instability still lands at the uniform Γ mode through
 the 1/z machinery (which consumes `info.Jcc0`, not grid `max(eig)`).
 
 ---
+
+## T1.4 — ODD wiring: point solvers, critical finders, T0field handles, driver switch
+
+**Date:** 2026-07-17 · **Task:** main-body plan Task 5 (T1.4) · **Commit:** (this commit)
+
+### What was implemented
+
+- **`invz_solve_point` / `invz_solve_point_ordered` `opts.odd`** (false default):
+  requires `opts.odd_blocks = struct(Vca,Vcb,Vcc,Jcc0-UNSHIFTED)` from
+  `invz_odd_blocks` AND `Jnu_flat = []` (both guarded, `invz:oddArgs`). When on:
+  `Xp = invz_chiperp(ion,T,Bx, {hyp,Jxx0,transverse_mf})` with the SAME resolved
+  option values as the solver's own single-ion call (T1.2 same-converged-state);
+  `[dJ,d] = invz_odd_deltaJ`; modes rebuilt per q from `Vcc + dJ` (Hermitize,
+  `sort(real(eig(·)))`); **`J0eff ← J0eff − d` applied exactly once in the
+  solver** (T1.3 bookkeeping: grid diagonal already carries −d via E4, J0eff the
+  explicit −d via E5, no other q = 0 handling; callers keep passing UNSHIFTED
+  `info.Jcc0`). In the ordered solver the shifted J0eff feeds BOTH `siopts.J0z`
+  and `pt.crit` (single shift, two uses — it is the physical uniform coupling).
+  `pt.odd = struct(d, Xp)` on full solve paths. Paramagnetic solver reuses
+  `chiperp` `info.si` for its own si (bit-identical option set — saves one
+  136-dim diagonalization; ordered solver does NOT reuse, it needs the
+  ordering-MF state; χ⊥ stays paramagnetic-MF by T1.2 design).
+- **`invz_crit_at`**: opts/Jf already forward verbatim → zero threading changes.
+  One safety addition: `invz:odd*` errors are STRUCTURAL misuse and now rethrow
+  from the classifying catch instead of being absorbed as an "ordered-phase"
+  verdict (can only fire with the flag on; flag-off catch behavior unchanged).
+- **`invz_critical`**: untouched (opts reach the solver unfiltered via crit_at).
+- **`invz_critical_T`**: `invz:oddTc0` guard at the top of `adaptive_anchor`
+  (after the explicit-`opts.Tc0` early return, before any solve) — with
+  `opts.odd` on the adaptive window must not silently anchor at the no-ODD Tc0.
+  Explicit `opts.window` or `opts.Tc0` paths never hit the guard.
+- **`invz_critical_T0field(ion, Sc, J0eff)`**: `Sc`/`J0eff` now numeric OR
+  `function_handle` of T; numerics wrapped as constant handles → identical
+  arithmetic/floats/bisection path (exact-equality regression-gated).
+- **`invz_ion`**: `ion.odd = 0` documented default (drivers read ion.odd,
+  libraries read opts.odd; intrinsic-only, demag = 0).
+- **`invz_run_phase_diagram`**: `ion.odd` branch builds the blocks ONCE
+  pre-parfor on the same 16³ Γ-less grid (P0.4); finder calls get
+  `Jnu_flat = []` + `odd/odd_blocks` + UNSHIFTED `J0eff`. **Anchor choice:
+  inline-handles route** — Tc0 from the generalized `invz_critical_T0field`
+  with script-local `J0T(T) = J0 − d(T)`, `ScT(T) = Σc(J0 − d(T), modes(Vcc + dJ(T)))`
+  (the `invz_odd_zero_field` mode-'full' algebra; clearly marked SEAM to be
+  replaced when T1.5 lands). Known 16³ `invz:sigmaCritExcluded` wrinkle
+  (ODD-LOG §T1.3, pre-existing without ODD) is surfaced ONCE by a probe call,
+  then silenced for the ~31 bisection repeats (warning state restored after).
+
+### Test status (TDD)
+
+- **RED:** `test_invz_odd_solve.m` — args-guard, pm-point, T0field-handles and
+  oddTc0 tests failed/errored as expected; `test_solve_point_flag_off_bitwise`
+  passed at RED by design (it is the regression gate: `odd = false` was an
+  ignored unknown opt before, and must stay a no-op path after).
+- **GREEN:** focused file **5 Passed / 0 Failed**. Full fast suite
+  **127 Passed / 0 Failed / 13 Incomplete** (30.3 s; baseline 122/0/13 + 5 new,
+  nothing fails). File-scoped heavy regressions (brief Step 4):
+  `test_invz_solve_point` 5/0/0 and `test_invz_critical` 0/0/5
+  (all slow-gated/filtered) — identical outcomes to baseline.
+- Smoke (non-suite): ordered-solver odd path at (1.30 K, 0 T) converges,
+  m0 5.0948 → 4.9373 (ODD weakens the moment), d = 0.475 μeV, guards fire;
+  driver `checkcode` clean (one pre-existing parfor-broadcast advisory).
+
+### Headline numbers (report, not tuned; 8³/dpRng-15 test grid, cache warm)
+
+- **Overhead** (pm-point gate, 1.80 K, 0.1 T): ODD-on solve 0.08 s vs 0.06 s
+  off — gate `t_on < 1.2·t_off + 0.5 s` passes with wide margin (the si reuse
+  leaves only the χ⊥ chi0z evaluations + δJ contraction + 511 4×4 eigs as
+  overhead, ~0.02 s).
+- **Sign contract** at the PM gate point: crit 0.0249 → 0.0967 (increases),
+  d = 0.473 μeV.
+- **Plan report point (1.60 K, 0.1 T), both flags, no gate:** ODD-off does NOT
+  converge (ordered side, crit = −0.2339); **ODD-on converges paramagnetic,
+  crit = +0.0342** — i.e. on this test grid the ODD shift moves the (1.60 K,
+  0.1 T) point across the boundary, the T1.4 Tc-suppression signal in raw form.
+- **Anchor seam check** (same grid, handle route): Tc0 = 1.6736 K (off) →
+  1.4351 K (odd), ΔTc = 0.238 K, d(Tc0_odd) = 0.4746 μeV. Production-grid
+  zero-field numbers (12³/24³ Richardson) are T1.5's measurement — not run here.
+
+---

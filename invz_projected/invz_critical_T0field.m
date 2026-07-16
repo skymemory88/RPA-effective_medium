@@ -1,7 +1,15 @@
 function Tc = invz_critical_T0field(ion, Sc, J0eff)
-%INVZ_CRITICAL_T0FIELD Zero-field Tc from 1 + Sigma_c = J(0)*chi0_cc(0;T).
+%INVZ_CRITICAL_T0FIELD Zero-field Tc from 1 + Sigma_c(T) = J(0;T)*chi0_cc(0;T).
 % Sc is the closed-form critical self-energy (invz_sigma_crit); Sc=0 gives the MF-RPA Tc.
-f = @(T) J0eff*static_chi_cc(ion, T) - (1 + Sc);
+% Sc and J0eff may each be a NUMERIC (the published, T-independent route) or a
+% FUNCTION_HANDLE of T (T1.4: the ODD path's T-dependent Sc(T)/J0(T), e.g. from
+% chi_perp(T)-dependent deltaJ). Numerics are wrapped as constant handles below,
+% so the numeric case evaluates the IDENTICAL arithmetic in the identical order
+% (same f(T) floats, same bisection path) as the pre-T1.4 code -- exact-equality
+% regression-gated by test_t0field_handles_backcompat.
+if isa(Sc,    'function_handle'), ScT = Sc;    else, ScT = @(T) Sc;    end
+if isa(J0eff, 'function_handle'), J0T = J0eff; else, J0T = @(T) J0eff; end
+f = @(T) J0T(T)*static_chi_cc(ion, T) - (1 + ScT(T));
 Tlo = 0.8;  Thi = 3.0;
 assert(f(Tlo) > 0 && f(Thi) < 0, 'invz:bracket', 'Tc not bracketed in [0.8, 3.0] K');
 tol = 1e-9;                                     % bracket width (K); ~31 bisections vs the old fixed 60
