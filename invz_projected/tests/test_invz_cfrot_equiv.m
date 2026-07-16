@@ -55,3 +55,21 @@ dm = max(abs(spec_rotfield(ion, -r, Bmag) - Erot));
 verifyLessThan(testCase, dp, 1e-10);
 verifyGreaterThan(testCase, dm, 1e-6);
 end
+
+function test_pipeline_cfrot_equals_field_rot(testCase)
+% End-to-end covariance: rotated CF (invz_cfrot) + field along a must equal the
+% unrotated CF + rotated field (phi_ab route) through the FULL 1/z spectra
+% pipeline. Requires vector_ab: the cc channel and hyperfine are rotation-
+% invariant about c and the vector transverse MF is in-plane isotropic, so the
+% CF is the only in-plane-anisotropic ingredient. Catches any hard-wired x-axis
+% assumption anywhere in the chain (legacy_x fails this by construction).
+ion = invz_ion();  r = -11;  w = (0.05:0.05:0.6).';
+fx = struct('Jnu', linspace(-2e-3, 6.0e-3, 24).', 'info', struct('Jcc0', 6.4e-3), ...
+            'verbose', false, 'solve_opts', struct('transverse_mf', 'vector_ab'));
+fxA = fx;  fxA.field_dir = [cosd(r) sind(r) 0];          % rotated field, plain CF
+SA = invz_spectra_map(ion, 0.31, [3 5.5], w, fxA);
+fxB = fx;  fxB.field_dir = [1 0 0];                      % rotated CF, field along a
+SB = invz_spectra_map(invz_cfrot(ion, r), 0.31, [3 5.5], w, fxB);
+verifyEqual(testCase, SB.chiz,   SA.chiz,   'AbsTol', 1e-8);
+verifyEqual(testCase, SB.chirpa, SA.chirpa, 'AbsTol', 1e-8);
+end
