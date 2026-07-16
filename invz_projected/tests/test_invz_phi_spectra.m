@@ -53,3 +53,16 @@ fx.field_dir = [cosd(110) sind(110) 0];
 S2 = invz_spectra_map(ion, 0.31, 3.0, w, fx);
 verifyEqual(testCase, S2.chiz, S1.chiz, 'AbsTol', 1e-8);
 end
+
+function test_qpath_c4_phi_plus_90(testCase)
+% C1 regression: the 1/z q-path chi0 must follow transverse_mf (a legacy_x
+% rebuild at a rotated field breaks C4 between phi and phi+90).
+ion = invz_ion();  T = 0.31;  Bmag = 5.5;  w = (0.05:0.05:0.6).';
+fx = fixture();  fx.dpRng = 10;
+fx.solve_opts = struct('transverse_mf', 'vector_ab');
+qp = [1 0 0; 2 0 0];
+S1 = invz_spectra_qpath(ion, T, Bmag*[cosd(20)  sind(20)  0], qp, w, fx);
+S2 = invz_spectra_qpath(ion, T, Bmag*[cosd(110) sind(110) 0], qp, w, fx);
+verifyEqual(testCase, S1.phase, 2);   % strict-PM: phase==2 branch under test
+verifyEqual(testCase, S2.chiz, S1.chiz, 'AbsTol', 1e-8);
+end

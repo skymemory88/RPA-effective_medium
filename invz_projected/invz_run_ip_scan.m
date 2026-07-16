@@ -1,13 +1,13 @@
 %INVZ_RUN_IP_SCAN In-plane rotation diagnostics (IP0) + Sigma=0 tensor reference (IP3).
 % Section A -- single-ion angular scans at T = 0.31 K, hyp = false, B = [2 4 6] T,
-%   phi_ab = [0:5:90 union 11] deg, for the three transverse-MF models
+%   phi_ab = [0:5:90 union 11 union 79] deg, for the three transverse-MF models
 %   ('none' = bare CF+Zeeman, 'legacy_x', 'vector_ab'):
 %   Delta(phi) = E2-E1 and its C4 harmonic fit (invz_c4fit), span (max-min)/mean,
 %   principal-axis angle phi0. The legacy_x rows exist to display the C4 violation,
 %   never for production.
 % Section B -- Sigma=0 scalar-vs-tensor cc comparison (invz_chi_tensor_ref,
 %   transverse_mf = 'vector_ab') at T = 0.1 K, fields [2 4.95 6] T,
-%   phi_ab = [0 5 11 15 30 45 60 75 90] deg, w = (0:0.005:0.6), eta = 0.02:
+%   phi_ab = [0 5 11 15 30 45 60 75 79 90] deg, w = (0:0.005:0.6), eta = 0.02:
 %   per row dE_peak, eps_amp, eps_W, Epeak_sc/ten; gate per the tilt criterion
 %   (eps_amp <= 0.10 AND dE_peak <= max(0.02*Epeak_ten, eta)).
 % Copy both printed tables into docs/SESSION-2026-07-16-inplane-rotation.md.
@@ -15,7 +15,7 @@ addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename
 ion = invz_ion();
 
 % ---- Section A: single-ion angular scans ----
-T_A   = 0.31;  fieldsA = [2 4 6];  phis = unique([0:5:90, 11]);
+T_A   = 0.31;  fieldsA = [2 4 6];  phis = unique([0:5:90, 11, 79]);
 modes = {'none', 'legacy_x', 'vector_ab'};
 fprintf('%10s %6s %10s %10s %10s %8s\n', 'model', 'B(T)', 'span(%)', 'A4/A0(%)', 'A8/A0(%)', 'phi0');
 for im = 1:numel(modes)
@@ -37,7 +37,7 @@ end
 qc = qc(any(abs(qc) > 1e-12, 2), :);
 [~, info] = invz_jq_modes(ion, qc, struct('dpRng', 30, 'cache', true));
 Jaa0 = ion.Jxx0;  if isfield(info, 'Jaa0'), Jaa0 = info.Jaa0; end
-T_B = 0.1;  fieldsB = [2 4.95 6];  phisB = [0 5 11 15 30 45 60 75 90];
+T_B = 0.1;  fieldsB = [2 4.95 6];  phisB = [0 5 11 15 30 45 60 75 79 90];
 w = (0:0.005:0.6).';  eta = 0.02;
 ropts = struct('Jsel', info.Jcc0, 'Jaa0', Jaa0, 'eta', eta, 'transverse_mf', 'vector_ab');
 fprintf('\n%8s %8s %12s %12s %12s %10s %10s %5s\n', 'phi', '|B| (T)', 'dE_peak', 'eps_amp', 'eps_W', 'Ep_sc', 'Ep_ten', 'ok');

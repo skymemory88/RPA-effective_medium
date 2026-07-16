@@ -35,7 +35,7 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %                              sweep direction of `fields` (|B|). Error invz:fieldDir if
 %                              invalid. A nonzero z-component routes through the longitudinal
 %                              (field-induced moment) solve once |Bz| clears .bz_tol.
-%                              Validated envelope: ac-plane directions [cos(theta) 0 sin(theta)] with theta_c <= 5 deg (see docs/SESSION-2026-07-16-field-angle.md); By ~= 0 runs under the legacy x-only transverse MF and demag ~= 0 with tilt is unvalidated.
+%                              Validated envelope: ac-plane directions [cos(theta) 0 sin(theta)] with theta_c <= 5 deg (see docs/SESSION-2026-07-16-field-angle.md); By ~= 0 now errors under the legacy x-only transverse MF (invz:transverseMF) and is validated under vector_ab (peak observables, all tested in-plane angles; see docs/SESSION-2026-07-16-inplane-rotation.md); demag ~= 0 with tilt is unvalidated.
 %     .bz_tol    (1e-9)        T; dead band on Bz -- resolved ONCE, applied to the field table
 %                              BEFORE any solve, and forwarded to invz_solve_auto/one_field.
 %     .solve_opts (struct())   merged into the per-field invz_solve_auto opts; fields
@@ -139,7 +139,12 @@ function [chiz, chirpa, Sigma0, phase] = one_field(ion, T, B, Jnu, Jcc0, Jaa0, J
 % Jsel = Jcc0 is the strict-uniform observable, so the demag correction Jshape applies.
 nw = numel(w);
 chiz = nan(nw, 1);  chirpa = nan(nw, 1);  Sigma0 = NaN;  phase = 0;
-copts = struct('Jsel', Jcc0, 'eta', eta, 'Jxx0', Jaa0, 'Jshape', Jshape, 'hyp', hyp);
+tmf = getf(sopts, 'transverse_mf', 'legacy_x');
+% transverse_mf here so any fallback single-ion rebuild inside invz_chi_realaxis (when a
+% branch below can't supply si) uses the SAME MF model as the solve, not the 'legacy_x'
+% default (review finding I1; the C1 companion bug in invz_spectra_qpath.m).
+copts = struct('Jsel', Jcc0, 'eta', eta, 'Jxx0', Jaa0, 'Jshape', Jshape, 'hyp', hyp, ...
+               'transverse_mf', tmf);
 
 [pt, phase] = invz_solve_auto(ion, T, B, Jnu, sopts);
 
@@ -177,7 +182,7 @@ end
 
 % --- transverse paramagnetic side: unchanged historical logic --------------------------
 if phase == 2 && ~isempty(pt), tl0 = pt.tl;  si0 = pt.si;
-else, tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0));  si0 = []; end
+else, tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0, 'transverse_mf', tmf));  si0 = []; end
 chi0cc = [];
 try
     pt0 = struct('alpha', 0, 'lambda', [0; 0], 'tl', tl0, 'K', []);
@@ -190,9 +195,9 @@ catch err
 end
 if ~isempty(pt) && isfield(pt, 'Sigma0'), Sigma0 = pt.Sigma0; end
 if phase == 2                                     % --- converged paramagnetic 1/z ---
-    copts1 = copts;
-    if ~isempty(chi0cc), copts1.chi0cc_w = chi0cc; end
-    o = invz_chi_realaxis(ion, T, B, pt, w, copts1);
+    copts1 = copts;  copts1.si = pt.si;           % reuse the solve's si (C1 companion: pt is
+    if ~isempty(chi0cc), copts1.chi0cc_w = chi0cc; end   % not is_ordered, so without si this
+    o = invz_chi_realaxis(ion, T, B, pt, w, copts1);     % would silently rebuild at 'legacy_x'
     chiz = imag(o.chi_cc_q(1, :)).';
 end
 end

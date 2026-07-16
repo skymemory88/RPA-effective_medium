@@ -107,7 +107,13 @@ end
 
 % path spectra from ONE real-axis evaluation each: Jsel is vectorized over q, and the
 % single-site chit(w) is q-independent. Intrinsic: no Jshape here (see header).
-copts = struct('Jsel', Jq, 'eta', eta, 'Jxx0', Jaa0, 'hyp', true);
+% transverse_mf + si: without these, invz_chi_realaxis's strict-PM (phase==2) fallback
+% rebuilds the single-ion state at the default 'legacy_x' MF model regardless of what
+% the solve above actually used, breaking C4 between a field and its +90 deg rotation
+% (review finding C1). si is redundant with the ordered-phase branch (which already
+% resolves to pt.si on its own) but harmless there, so pass both unconditionally.
+copts = struct('Jsel', Jq, 'eta', eta, 'Jxx0', Jaa0, 'hyp', true, ...
+               'transverse_mf', tmf, 'si', pt.si);
 o = invz_chi_realaxis(ion, T, B, pt, w, copts);
 chiz = imag(o.chi_cc_q).';                        % [nw x nq]
 
@@ -117,7 +123,7 @@ if phase == 1
     pt0 = struct('alpha', 0, 'alpha_m', 0, 'lambda', [0; 0; 0], 'tl', pt.tl, ...
                  'K', [], 'is_ordered', true, 'si', pt.si);
 else
-    tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0));
+    tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0, 'transverse_mf', tmf));
     pt0 = struct('alpha', 0, 'lambda', [0; 0], 'tl', tl0, 'K', []);
 end
 c0opts = copts;  c0opts.npass = 1;  c0opts.chi0cc_w = o.chi0cc_w;   % share bare cc from the 1/z call

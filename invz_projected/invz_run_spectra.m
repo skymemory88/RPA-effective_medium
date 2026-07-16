@@ -56,14 +56,16 @@ theta_c = 0.0;                         % deg -- tilt of the field OUT of the tra
                                      % channel error beyond the tensor-referenced small-tilt
                                      % range (invz_run_tensor_ref); a longitudinal component
                                      % turns the sharp transition into a rounded crossover.
-                                     % Azimuth (phi_ab) + full-tensor propagation: deferred.
+                                     % Full-tensor propagation: deferred (invz_tensor/). phi_ab: implemented below.
 phi_ab = 0.0;                        % deg -- IN-PLANE rotation of the swept field, a -> b.
                                      % phi_ab = -11 deg reproduces the production experimental
                                      % geometry (external stack ion.cfRot(Ho) = -11 deg; SAME
                                      % sign, pinned by test_invz_cfrot_equiv:
                                      % cfRot = -11 deg <=> phi_ab = -11 deg).
                                      % Nonzero phi_ab REQUIRES transverse_mf = 'vector_ab'
-                                     % below (the library errors otherwise, by design).
+                                     % below ('none' also passes, as a bare CF+Zeeman
+                                     % diagnostic; the library errors only under
+                                     % 'legacy_x', by design).
                                      % NOTE: vector_ab shifts even phi_ab = 0 results
                                      % slightly (~0.04 ueV at 4 T; grows at low field) --
                                      % never compare legacy_x and vector_ab runs as if only

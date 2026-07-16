@@ -28,30 +28,32 @@ the spectra drivers):
 The driver knob is `phi_ab` (deg) in `invz_run_spectra.m`, the in-plane
 rotation of the swept field from `a` toward `b`: `dhat = [cosd(theta_c)*cosd(phi_ab),
 cosd(theta_c)*sind(phi_ab), sind(theta_c)]`. A guard enforces
-`transverse_mf = 'vector_ab'` whenever `phi_ab != 0` — the library errors
-rather than silently returning C4-broken `legacy_x` output for a rotated
-field.
+`transverse_mf = 'vector_ab'` whenever `phi_ab != 0` (`'none'` also passes,
+as a bare CF+Zeeman diagnostic) — the library errors rather than silently
+returning C4-broken `legacy_x` output for a rotated field.
 
 ## Table 1 (Section A) — single-ion angular scans
 
 `invz_run_ip_scan.m`, Section A: `T = 0.31` K, `hyp = false`,
-`B in {2, 4, 6}` T, `phi_ab in {0:5:90} union {11}` deg, for the three
-transverse-MF models. `span(%) = 100*(max(d)-min(d))/mean(d)` of the doublet
-splitting `d = E(2)-E(1)` over the angle scan; `A4/A0`, `A8/A0` are the C4/C8
-harmonic amplitude ratios and `phi0` the principal-axis angle from
-`invz_c4fit`.
+`B in {2, 4, 6}` T, `phi_ab in {0:5:90} union {11, 79}` deg, for the three
+transverse-MF models (`79` added by finding M5: it is the C4-equivalent
+mirror of the production angle `-11` deg — see "Pinned cfRot mapping" and
+the supported-regime note below). `span(%) = 100*(max(d)-min(d))/mean(d)` of
+the doublet splitting `d = E(2)-E(1)` over the angle scan; `A4/A0`, `A8/A0`
+are the C4/C8 harmonic amplitude ratios and `phi0` the principal-axis angle
+from `invz_c4fit`.
 
 ```
      model   B(T)    span(%)   A4/A0(%)   A8/A0(%)     phi0
-      none    2.0      5.275      2.649      0.011   -28.48
-      none    4.0      6.986      3.488      0.007   -29.71
-      none    6.0      8.256      4.128      0.008   -29.47
-  legacy_x    2.0     10.013      2.016      0.041    29.14
-  legacy_x    4.0      6.433      1.978      0.036   -35.73
-  legacy_x    6.0      6.668      3.232      0.045   -31.12
- vector_ab    2.0      5.611      2.809      0.014   -28.95
- vector_ab    4.0      7.293      3.641      0.005   -30.06
- vector_ab    6.0      8.470      4.234      0.013   -29.67
+      none    2.0      5.272      2.649      0.011   -28.48
+      none    4.0      6.982      3.490      0.006   -29.69
+      none    6.0      8.250      4.132      0.008   -29.44
+  legacy_x    2.0     10.031      2.173      0.028    29.37
+  legacy_x    4.0      6.435      1.982      0.030   -36.24
+  legacy_x    6.0      6.666      3.224      0.043   -31.24
+ vector_ab    2.0      5.608      2.810      0.014   -28.94
+ vector_ab    4.0      7.289      3.643      0.005   -30.04
+ vector_ab    6.0      8.464      4.239      0.014   -29.63
 ```
 
 Matches the expected shape from the reviewed Codex diagnostics: `none` and
@@ -59,8 +61,8 @@ Matches the expected shape from the reviewed Codex diagnostics: `none` and
 and ~5.6% -> ~8.5%) with a stable principal axis clustered tightly at
 `phi0 ~ -29` to `-30` deg across all three fields. `legacy_x` is visibly
 C4-broken by comparison: span is *non-monotonic* in field (10.0% -> 6.4% ->
-6.7%) and `phi0` swings from +29.1 deg at 2 T to -35.7 deg at 4 T to -31.1
-deg at 6 T — a ~65 deg jump between the first two fields, including a sign
+6.7%) and `phi0` swings from +29.4 deg at 2 T to -36.2 deg at 4 T to -31.2
+deg at 6 T — a ~66 deg jump between the first two fields, including a sign
 flip, that `none`/`vector_ab` do not show. `legacy_x` rows exist to display
 this C4 violation; they are never used in production.
 
@@ -69,11 +71,18 @@ this C4 violation; they are never used in production.
 `invz_run_ip_scan.m`, Section B: `invz_chi_tensor_ref` with
 `transverse_mf = 'vector_ab'` (production couplings from the live
 16^3/dpRng=30 cached lattice sum), `T = 0.1` K, `B in {2, 4.95, 6}` T,
-`phi_ab in {0, 5, 11, 15, 30, 45, 60, 75, 90}` deg, `w = (0:0.005:0.6)` meV,
-comparison `eta = 0.02` meV. Gate (same tilt criterion as the theta_c
-reference, `docs/SESSION-2026-07-16-field-angle.md`): `eps_amp <= 0.10 AND
-dE_peak <= max(0.02*Epeak_ten, eta)` (censoring rule: both-sided NaN passes).
-Energies (`dE_peak`, `Ep_sc`, `Ep_ten`) are in meV.
+`phi_ab in {0, 5, 11, 15, 30, 45, 60, 75, 79, 90}` deg, `w = (0:0.005:0.6)`
+meV, comparison `eta = 0.02` meV. `phi_ab = 79` deg was added by finding M5:
+the production geometry is `phi_ab = -11` deg (see "Pinned cfRot mapping"
+below), and `-11` deg is **not** C4-equivalent to the already-tested `+11`
+deg (the mirror symmetry that would make them equal is broken by the
+non-axial `B64s` crystal-field term) — it is equivalent only to `+79` deg,
+its image under the C4 (90 deg) rotation period. The `phi = 79` deg row
+below is therefore the first direct validation of the production-relevant
+mirror point. Gate (same tilt criterion as the theta_c reference,
+`docs/SESSION-2026-07-16-field-angle.md`): `eps_amp <= 0.10 AND dE_peak <=
+max(0.02*Epeak_ten, eta)` (censoring rule: both-sided NaN passes). Energies
+(`dE_peak`, `Ep_sc`, `Ep_ten`) are in meV.
 
 ```
      phi  |B| (T)      dE_peak      eps_amp        eps_W      Ep_sc     Ep_ten    ok
@@ -85,6 +94,7 @@ Energies (`dE_peak`, `Ep_sc`, `Ep_ten`) are in meV.
     45.0     2.00     0.007254      0.02505      0.00357     0.4464     0.4391     1
     60.0     2.00     0.007103      0.02436     0.003791     0.4459     0.4388     1
     75.0     2.00     0.007317      0.02595     0.003507     0.4469     0.4396     1
+    79.0     2.00     0.007427       0.0266     0.003365     0.4473     0.4399     1
     90.0     2.00     0.007721      0.02356     0.002941     0.4484     0.4407     1
      0.0     4.95     0.002152      0.02309     0.008456     0.2547     0.2525     1
      5.0     4.95     0.002347     0.002007     0.008644     0.2579     0.2556     1
@@ -94,6 +104,7 @@ Energies (`dE_peak`, `Ep_sc`, `Ep_ten`) are in meV.
     45.0     4.95     0.001595     0.009794     0.006159     0.2754     0.2738     1
     60.0     4.95     0.001583      0.01108     0.005849     0.2852     0.2836     1
     75.0     4.95     0.001777      0.01079     0.006818     0.2755     0.2737     1
+    79.0     4.95     0.001882      0.01538     0.007247     0.2701     0.2682     1
     90.0     4.95     0.002152      0.02309     0.008456     0.2547     0.2525     1
      0.0     6.00     0.002196      0.01168     0.006596     0.3457     0.3435     1
      5.0     6.00     0.002466     0.002206     0.006965     0.3384     0.3359     1
@@ -103,24 +114,31 @@ Energies (`dE_peak`, `Ep_sc`, `Ep_ten`) are in meV.
     45.0     6.00     0.001555      0.01129     0.004286     0.3699     0.3684     1
     60.0     6.00     0.001566     0.005636     0.004056     0.3820     0.3804     1
     75.0     6.00     0.001809     0.000631     0.004997     0.3715     0.3697     1
+    79.0     6.00     0.001931      0.01272     0.005412     0.3653     0.3633     1
     90.0     6.00     0.002196      0.01168     0.006596     0.3457     0.3435     1
 
-supported in-plane angles (all fields): [0 5 11 15 30 45 60 75 90] deg
+supported in-plane angles (all fields): [0 5 11 15 30 45 60 75 79 90] deg
 ```
 
 (A handful of rows at the un-converged tail of the mean-field loop print a
 `Mean field not converged after 800 iterations` warning with residual
-`|dmf|` between `1e-11` and `1e-6` meV — six to nine orders of magnitude
-below the `1e-12` convergence tolerance's next significant digit and below
-any threshold in the gate; harmless diagnostic noise, not a solve failure.)
+`|dmf|` between `1e-11` and `1e-6` meV — these sit ABOVE the `1e-12`
+convergence tolerance (hence the warning) but four to nine orders of
+magnitude BELOW the 20 ueV gate scale; adjudicated as critical slowing down
+near `Bc(0.1 K) ~ 4.95` T, not a solve failure. No Section-B row is
+affected.)
 
 ## Supported-regime statement
 
-**All nine tested in-plane angles (0, 5, 11, 15, 30, 45, 60, 75, 90 deg) are
-supported at all three tested fields (2, 4.95, 6 T)** under the peak-observable
-gate `eps_amp <= 0.10 AND dE_peak <= max(0.02*Epeak_ten, eta=0.02 meV)`.
-Worst-case `eps_amp = 2.60%` (phi = 75 deg, 2 T), an order of magnitude under
-the 10% ceiling. Worst-case `dE_peak = 7.87 ueV` (phi = 15 deg, 2 T) against
+**All ten tested in-plane angles (0, 5, 11, 15, 30, 45, 60, 75, 79, 90 deg)
+are supported at all three tested fields (2, 4.95, 6 T)** under the
+peak-observable gate `eps_amp <= 0.10 AND dE_peak <= max(0.02*Epeak_ten,
+eta=0.02 meV)`. The added `phi = 79` deg point (M5: the C4-equivalent mirror
+of the production angle `-11` deg) passes cleanly at all three fields —
+`eps_amp` = 2.66% / 1.54% / 1.27% and `dE_peak` = 7.43 / 1.88 / 1.93 ueV at
+2 / 4.95 / 6 T respectively, none close to its gate threshold. Worst-case
+`eps_amp = 2.66%` (phi = 79 deg, 2 T), an order of magnitude under the 10%
+ceiling. Worst-case `dE_peak = 7.87 ueV` (phi = 15 deg, 2 T) against
 a threshold there of `max(0.02*0.441, 0.02) = 20 ueV` — comfortably inside.
 At 6 T, `dE_peak` peaks at 2.47 ueV (phi = 5 deg), matching the previously
 Codex-measured ~2.45 ueV tensor-induced peak shift at 6 T almost exactly.
