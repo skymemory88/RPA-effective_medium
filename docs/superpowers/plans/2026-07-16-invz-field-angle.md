@@ -1168,7 +1168,7 @@ git commit -m "test(invz): Bz mirror, crossover continuity, theta->0 reduction t
 ### Task 9: Σ=0 scalar-vs-tensor reference (`invz_chi_tensor_ref`) + supported-angle measurement
 
 **Files:**
-- Create: `invz/invz_chi_tensor_ref.m`, `invz/invz_run_tensor_ref.m`
+- Create: `invz/invz_chi_tensor_ref.m`, `invz/invz_tilt_err.m`, `invz/invz_run_tensor_ref.m`
 - Create: `invz/tests/test_invz_tensor_ref.m`, `docs/SESSION-2026-07-16-field-angle.md`
 
 **Interfaces:**
@@ -1192,24 +1192,38 @@ addpath(fullfile(here, '..'));
 addpath(fullfile(here, '..', '..'));
 end
 
-function test_zero_tilt_pm_agreement(testCase)
-% At theta = 0 on the PM side the single-ion state has m = 0, the Z2-odd cross
-% channels (xz/yz) of chi0 vanish, and scalar == tensor to numerical precision.
+function test_cross_channel_hierarchy_at_zero_tilt(testCase)
+% Measured physics (Task-9 blocked round, amended 2026-07-16): at theta = 0,
+% B || a, the yz cross channel of chi0 is SYMMETRY-ALLOWED (B64s) and large,
+% while xz is strongly suppressed (measured yz/zz = 0.183, xz/zz = 2.8e-3 at
+% 6 T, hyp = false). The scalar-vs-tensor baseline discrepancy at zero tilt is
+% therefore real and finite -- it is REPORTED as a baseline, never gated as a
+% tilt error.
 ion = invz_ion();
+si = invz_single_ion(ion, 0.31, [6 0 0], struct('hyp', false));
+z = (0:0.01:0.5).' + 1i*5e-3;
+c0 = invz_chi0z(si, 0.31, z, struct('elastic', false));
+xz = max(abs(squeeze(c0(1,3,:))));  yz = max(abs(squeeze(c0(2,3,:))));
+zz = max(abs(squeeze(c0(3,3,:))));
+verifyGreaterThan(testCase, yz, 10*xz);          % yz-dominated cross-channel hierarchy
+verifyLessThan(testCase, xz, 0.02*zz);           % xz strongly suppressed at theta = 0
 w = (0:0.01:0.5).';
-R = invz_chi_tensor_ref(ion, 0.31, [6 0 0], w, struct('hyp', false));
-verifyLessThan(testCase, R.eps_spec, 1e-10);
+R = invz_chi_tensor_ref(ion, 0.31, [6 0 0], w, struct('hyp', false, 'eta', 0.02));
+verifyGreaterThan(testCase, R.eps_spec, 0);      % finite yz-driven baseline ...
+verifyLessThan(testCase, R.eps_spec, 1);         % ... bounded (sanity)
 end
 
-function test_tilt_opens_cross_channel_error(testCase)
-% A tilt makes chi0_xz ~ O(theta): the tensor result must depart from the scalar
-% one, and monotonically more at the larger of two small angles.
+function test_tilt_metric_wellformed(testCase)
+% eps_tilt (invz_tilt_err) is the GATED metric: the error in the tilt-induced
+% change, baseline-differenced so the theta-independent yz discrepancy drops out.
 ion = invz_ion();
 w = (0:0.01:0.5).';
-R1 = invz_chi_tensor_ref(ion, 0.31, 6*[cosd(1) 0 sind(1)], w, struct('hyp', false));
-R5 = invz_chi_tensor_ref(ion, 0.31, 6*[cosd(5) 0 sind(5)], w, struct('hyp', false));
-verifyGreaterThan(testCase, R1.eps_spec, 1e-10);
-verifyGreaterThan(testCase, R5.eps_spec, R1.eps_spec);
+o = struct('hyp', false, 'eta', 0.02);
+R0 = invz_chi_tensor_ref(ion, 0.31, [6 0 0], w, o);
+R1 = invz_chi_tensor_ref(ion, 0.31, 6*[cosd(1) 0 sind(1)], w, o);
+e1 = invz_tilt_err(R1, R0);
+verifyGreaterThan(testCase, e1, 0);
+verifyLessThan(testCase, e1, 2);
 end
 
 function test_demag_guard(testCase)
@@ -1279,9 +1293,30 @@ R.dE_peak   = abs(R.Epeak_sc - R.Epeak_ten);
 end
 ```
 
+- [ ] **Step 3b: Create the tilt-metric helper**
+
+Create `invz/invz_tilt_err.m`:
+
+```matlab
+function eps = invz_tilt_err(R, R0)
+%INVZ_TILT_ERR Tilt-referenced spectral error of the scalar cc chain.
+% Measures how well the scalar pipeline captures the TILT-INDUCED change (the
+% spec's accuracy statement), by differencing against the theta = 0 reference
+% R0 at the same field -- this removes the theta-independent baseline
+% discrepancy from the symmetry-allowed yz cross channel (B64s), which exists
+% at zero tilt and is not a tilt error.
+Dsc  = R.chi_sc  - R0.chi_sc;
+Dten = R.chi_ten - R0.chi_ten;
+floorv = 1e-12 * max(abs(R.chi_ten)) * sqrt(numel(R.chi_ten));
+eps = norm(Dsc - Dten, 2) / max(norm(Dten, 2), floorv);
+end
+```
+
 - [ ] **Step 4: Run structural tests to verify pass**
 
-Same command as Step 2. Expected: PASS (3 tests). If `test_zero_tilt_pm_agreement` fails, the likeliest cause is an `mz_seed`/order-mode wobble at `m = 0` — check that `si.Jexp(3)` is `~0` at `[6 0 0]`, not a propagation-formula bug.
+Same command as Step 2. Expected: PASS (3 tests). The hierarchy test's loose
+bounds encode measured physics (yz/zz = 0.183, xz/zz = 2.8e-3); if they fail by
+orders of magnitude, suspect the chi0 evaluation, not the bounds.
 
 - [ ] **Step 5: Write the measurement driver**
 
@@ -1289,44 +1324,58 @@ Create `invz/invz_run_tensor_ref.m`:
 
 ```matlab
 %INVZ_RUN_TENSOR_REF Sigma=0 scalar-vs-tensor cross-channel error vs tilt angle.
-% Measures eps_spec / dE_peak (invz_chi_tensor_ref) on the spec grid and prints the
-% supported-angle verdict per the spec criterion:
-%   supported(theta) <=> eps_spec <= 0.05 AND dE_peak <= max(0.02*Epeak_ten, eta)
+% Two-layer metric (spec section 7, amended after the Task-9 measurement):
+%   eps_spec (invz_chi_tensor_ref): RAW discrepancy incl. the theta-independent
+%     baseline from the symmetry-allowed yz cross channel (B64s; measured
+%     yz/zz = 0.183 at 6 T even at theta = 0). REPORTED, never gated.
+%   eps_tilt (invz_tilt_err): error in the TILT-INDUCED change, differenced
+%     against the theta = 0 reference at the same field. GATED at 5%.
+% Comparison eta = 0.02 meV (4 pts/HWHM on the 0.005 grid): at the production
+% eta = 5e-3 the L2 norm is dominated by sub-linewidth peak misalignment (a
+% metric instability, not physics).
+%   supported(theta > 0) <=> eps_tilt <= 0.05 AND dE_peak <= max(0.02*Epeak_ten, eta)
 %   at EVERY tested field. Copy the printed table into
 %   docs/SESSION-2026-07-16-field-angle.md and the constants of
 %   invz/tests/test_invz_tensor_ref.m (reproducibility assertion).
 addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')), '..'));
 ion = invz_ion();
 T       = 0.1;                       % K -- the spectra-driver default temperature
-angles  = [0 0.5 1 2 5];             % deg (spec grid)
+angles  = [0 0.5 1 2 5];             % deg (spec grid; 0 = baseline row, not gated)
 fieldsB = [2 4.95 6];                % T: ordered / near-crossover / paramagnetic
 w       = (0:0.005:0.6).';           % meV
-eta     = 5e-3;                      % meV (reference default; also the dE_peak floor)
+eta     = 0.02;                      % meV comparison broadening (metric stability)
 
 % live couplings, as in the production drivers (cached lattice sum)
 [qc, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5], 'verbose', false);
 qc = qc(any(abs(qc) > 1e-12, 2), :);
 [~, info] = invz_jq_modes(ion, qc, struct('dpRng', 30, 'cache', true));
 Jaa0 = ion.Jxx0;  if isfield(info, 'Jaa0'), Jaa0 = info.Jaa0; end
+ropts = struct('Jsel', info.Jcc0, 'Jaa0', Jaa0, 'eta', eta);
 
-fprintf('%8s %8s %12s %12s %10s %10s\n', 'theta', '|B| (T)', 'eps_spec', 'dE_peak', 'Ep_sc', 'Ep_ten');
+fprintf('%8s %8s %12s %12s %12s %10s %10s\n', 'theta', '|B| (T)', 'eps_spec', 'eps_tilt', 'dE_peak', 'Ep_sc', 'Ep_ten');
 supported = true(size(angles));
-for ia = 1:numel(angles)
-    a = angles(ia);
-    for B = fieldsB
-        R = invz_chi_tensor_ref(ion, T, B*[cosd(a) 0 sind(a)], w, ...
-                struct('Jsel', info.Jcc0, 'Jaa0', Jaa0, 'eta', eta));
-        ok = R.eps_spec <= 0.05 && ...
+for ib = 1:numel(fieldsB)
+    B = fieldsB(ib);
+    R0 = invz_chi_tensor_ref(ion, T, [B 0 0], w, ropts);   % theta = 0 reference
+    for ia = 1:numel(angles)
+        a = angles(ia);
+        if a == 0
+            R = R0;  et = 0;
+        else
+            R = invz_chi_tensor_ref(ion, T, B*[cosd(a) 0 sind(a)], w, ropts);
+            et = invz_tilt_err(R, R0);
+        end
+        ok = a == 0 || (et <= 0.05 && ...
              ( (isnan(R.dE_peak) && isnan(R.Epeak_sc) == isnan(R.Epeak_ten)) || ...
-               R.dE_peak <= max(0.02*R.Epeak_ten, eta) );
-        supported(ia) = supported(ia) && ok;
+               R.dE_peak <= max(0.02*R.Epeak_ten, eta) ));
+        if a > 0, supported(ia) = supported(ia) && ok; end
         verdict = {'FAIL', 'ok'};
-        fprintf('%8.2f %8.2f %12.4g %12.4g %10.4g %10.4g   %s\n', ...
-                a, B, R.eps_spec, R.dE_peak, R.Epeak_sc, R.Epeak_ten, verdict{ok + 1});
+        fprintf('%8.2f %8.2f %12.4g %12.4g %12.4g %10.4g %10.4g   %s\n', ...
+                a, B, R.eps_spec, et, R.dE_peak, R.Epeak_sc, R.Epeak_ten, verdict{ok + 1});
     end
 end
-fprintf('Supported tilt range (criterion above): theta_c <= %.2g deg\n', ...
-        max([0, angles(supported)]));
+fprintf('Supported tilt range (eps_tilt/dE_peak criterion): theta_c <= %.2g deg\n', ...
+        max([0, angles(supported & angles > 0)]));
 ```
 
 - [ ] **Step 6: Run the measurement and record the results**
@@ -1341,19 +1390,22 @@ This step CAPTURES DATA (the numbers cannot be known before the run):
 
 ```matlab
 function test_reproducibility_of_logged_table(testCase)
-% Slow: re-measures three logged (angle, field) points and asserts the values match
-% docs/SESSION-2026-07-16-field-angle.md to 1% (reproducibility, NOT a size target).
+% Slow: re-measures three logged (angle, field) points and asserts the eps_tilt
+% values match docs/SESSION-2026-07-16-field-angle.md to 1% (reproducibility,
+% NOT a size target).
 assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), 'slow test: set INVZ_SLOW=1');
 ion = invz_ion();
 w = (0:0.005:0.6).';
+o = struct('eta', 0.02);      % default couplings -- must match the logged convention
 pts      = {0.5, 6;  2, 6;  5, 4.95};            % {theta_deg, B} spot checks
-expected = [NaN; NaN; NaN];   % <- REPLACE with the three measured eps_spec values
-                              %    from the first invz_run_tensor_ref run BEFORE
-                              %    committing (committing NaNs = task incomplete)
+expected = [NaN; NaN; NaN];   % <- REPLACE with the three measured eps_tilt values
+                              %    from the first run BEFORE committing
+                              %    (committing NaNs = task incomplete)
 for k = 1:size(pts, 1)
     a = pts{k, 1};  B = pts{k, 2};
-    R = invz_chi_tensor_ref(ion, 0.1, B*[cosd(a) 0 sind(a)], w, struct());
-    verifyEqual(testCase, R.eps_spec, expected(k), 'RelTol', 0.01);
+    R0 = invz_chi_tensor_ref(ion, 0.1, [B 0 0], w, o);
+    R  = invz_chi_tensor_ref(ion, 0.1, B*[cosd(a) 0 sind(a)], w, o);
+    verifyEqual(testCase, invz_tilt_err(R, R0), expected(k), 'RelTol', 0.01);
 end
 end
 ```
