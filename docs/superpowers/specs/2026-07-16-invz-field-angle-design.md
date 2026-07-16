@@ -301,11 +301,22 @@ amended 2026-07-16 after the Task-9 measurement, recorded justification below):
   shift) — a metric instability, not physics.
 - Peak metric: `dE_peak = |Epeak_sc − Epeak_ten|`, censored peaks compared as
   in `invz_peak_energy` (both-NaN passes, one-sided NaN fails).
-- **Support criterion** (spec defaults, adjustable at review): an angle θ > 0
-  is supported when `eps_tilt <= 5%` AND `dE_peak <= max(0.02·Epeak_ten, eta)`
-  at every tested field. The θ = 0 row reports the `eps_spec` baseline only.
-  The resulting supported range is stated in the README/session log; the
-  logged numbers also get a 1% reproducibility assertion (slow test).
+- **Support criterion** (final form, user-approved 2026-07-16 after the full
+  measurement): the Task-9 run showed that EVERY L2 lineshape metric — raw or
+  tilt-differenced — is dominated by the zero-tilt yz-induced peak-position
+  offset δ₀ leaking through at the δ₀/η scale (verified quantitatively:
+  eps_tilt ≈ 0.11 vs δ₀/η = 2.2/20 µeV at 6 T; ≈ 0.28 vs 7.7/20 µeV at 2 T,
+  and DECREASING with angle as the denominator grows). For sharp lines L2
+  cannot read below that artifact, while the peak observables the driver
+  actually plots track to µeV. The gate is therefore on **peak observables**:
+  an angle θ > 0 is supported when, at every tested field,
+  `dE_peak <= max(0.02·Epeak_ten, eta)` (censoring rule: both-NaN passes,
+  one-sided NaN fails) AND `eps_amp = |max_w χ''_sc − max_w χ''_ten| /
+  max_w χ''_ten <= 10%`. `eps_spec`/`eps_tilt` remain REPORTED diagnostic
+  columns with the artifact explanation; **lineshape fidelity is explicitly
+  not claimed** for the scalar stage. The θ = 0 row reports baselines only.
+  The supported range is stated in the README/session log; the logged gated
+  numbers also get a 1% reproducibility assertion (slow test).
 
 This does not require the 12×12 A0 build.
 
