@@ -141,8 +141,8 @@ else
     else
         Splot = S;  Splot.w = S.w * eScale;    % display-only copy; solve above always ran in meV
         figure('Position', [100 100 1150 460]);
-        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z, T = %.2f K', T), eUnit);
-        ax2 = subplot(1, 2, 2);  invz_plot_spectra_map(ax2, Splot, Splot.chirpa, sprintf('RPA, T = %.2f K', T), eUnit);
+        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z, T = %.2f K%s', T, tiltStr), eUnit);
+        ax2 = subplot(1, 2, 2);  invz_plot_spectra_map(ax2, Splot, Splot.chirpa, sprintf('RPA, T = %.2f K%s', T, tiltStr), eUnit);
     end
 
     if showPeaks

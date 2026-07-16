@@ -48,9 +48,9 @@ for ib = 1:numel(fieldsB)
              ( (isnan(R.dE_peak) && isnan(R.Epeak_sc) == isnan(R.Epeak_ten)) || ...
                R.dE_peak <= max(0.02*R.Epeak_ten, eta) ));
         if a > 0, supported(ia) = supported(ia) && ok; end
-        verdict = {'FAIL', 'ok'};
+        if a == 0, vs = 'base'; elseif ok, vs = 'ok'; else, vs = 'FAIL'; end
         fprintf('%8.2f %8.2f %12.4g %12.4g %12.4g %12.4g %10.4g %10.4g   %s\n', ...
-                a, B, R.eps_spec, et, R.eps_amp, R.dE_peak, R.Epeak_sc, R.Epeak_ten, verdict{ok + 1});
+                a, B, R.eps_spec, et, R.eps_amp, R.dE_peak, R.Epeak_sc, R.Epeak_ten, vs);
     end
 end
 fprintf('Supported tilt range (peak-observable criterion): theta_c <= %.2g deg\n', ...

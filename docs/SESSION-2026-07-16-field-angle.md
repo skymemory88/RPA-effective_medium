@@ -91,6 +91,8 @@ fails). The `theta = 0` row is baseline-only and not gated. `eps_spec` /
 (`Jsel = info.Jcc0 = 6.42444e-3` meV, `Jaa0 = 3.51045e-3` meV — close to the
 `invz_ion()` fallback constants `J0eff = 6.421e-3`, `Jxx0 = 3.512e-3` meV).
 
+> Provenance: this table was captured at commit 4938c8f, before (a) the wmin mask on the amp fields (ea7ca89) and (b) the "base" label for the ungated theta = 0 rows. The mask is verified immaterial here -- the slow reproducibility test re-measured the extreme cells against the masked code to 1%, and masked == unmasked max was confirmed directly at several points (the electronic peak dominates everywhere tested); theta = 0 rows in this capture read "ok" but are report-only baselines.
+
 ```
    theta  |B| (T)     eps_spec     eps_tilt      eps_amp      dE_peak      Ep_sc     Ep_ten
     0.00     2.00       0.1291            0      0.02356     0.007721     0.4484     0.4407   ok
