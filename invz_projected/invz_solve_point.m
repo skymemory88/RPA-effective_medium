@@ -32,7 +32,7 @@ Bx = invz_field_vec(Bx);                       % scalar -> [Bx 0 0]; 3-vector pa
 oddOn = isfield(opts, 'odd') && ~isempty(opts.odd) && ~isequal(opts.odd, false);
 if oddOn
     ob = getf(opts, 'odd_blocks', []);
-    if ~(isstruct(ob) && isscalar(ob) && all(isfield(ob, {'Vca', 'Vcb', 'Vcc', 'Jcc0'})))
+    if ~(isstruct(ob) && isscalar(ob) && all(isfield(ob, {'Vca', 'Vcb', 'Vcc', 'Jcc0'})))   % Jcc0: contract/audit field, required for caller-side consistency; unused here (J0eff comes via opts)
         error('invz:oddArgs', ['opts.odd = true requires opts.odd_blocks = struct(' ...
             '''Vca'',''Vcb'',''Vcc'',''Jcc0'') precomputed once by the caller from ' ...
             'invz_odd_blocks (P0.4: no disk/cache reads inside solver loops; Jcc0 UNSHIFTED).']);
@@ -57,6 +57,9 @@ if oddOn
     % E5 uniform shift, applied HERE exactly once (T1.3 bookkeeping rule: the grid
     % matrices' diagonal already carries -d via E4; J0eff carries the explicit -d;
     % NO other q = 0 handling). Callers pass the UNSHIFTED info.Jcc0 as opts.J0eff.
+    % That unshifted value comes from invz_odd_blocks' infoB.Jcc0 (or the flag-off
+    % invz_jq_modes info.Jcc0) -- NOT from invz_jq_modes' opts.odd path, whose
+    % exported info.Jcc0 is ALREADY shifted by -d.
     J0eff = J0eff - d;
 end
 

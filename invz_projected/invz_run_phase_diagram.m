@@ -38,7 +38,12 @@ if ion.odd
     ScT(2.0);   % probe: surfaces the known 16^3 invz:sigmaCritExcluded warning ONCE (ODD-LOG T1.3:
                 % a few near-Gamma transverse-shell modes exceed J0 already without ODD)
     wsOdd = warning('off', 'invz:sigmaCritExcluded');   % silence the same known warning inside the bisection
-    Tc0 = invz_critical_T0field(ion, ScT, J0T);
+    try
+        Tc0 = invz_critical_T0field(ion, ScT, J0T);
+    catch errOdd
+        warning(wsOdd);   % restore even on error (invz:bracket etc.) -- else the warning
+        rethrow(errOdd);  % stays OFF for the rest of the MATLAB session
+    end
     warning(wsOdd);
 else
 Tc0 = invz_critical_T0field(ion, invz_sigma_crit(J0, Jf), J0);
