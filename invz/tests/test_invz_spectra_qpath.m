@@ -9,12 +9,10 @@ addpath(fullfile(here, '..', '..'));
 end
 
 function test_gamma_approach_regression(testCase)
-% Review finding (blocker): the sharply truncated MF_dipole sum collapses on the
-% approach to the Gamma-equivalent (2,0,0) (max branch fell to ~0.0016 meV at
-% h = 1.999, dpRng 30, vs the correct ~0.0064) and then jumped at the endpoint.
-% The direction-aware snap must give a smooth, cutoff-stable approach: for this
-% in-plane path (khat_z = 0) the directional limit is the uniform-mode Lorentz
-% value, so the endpoint equals info.Jcc0 by construction.
+% Regression: the truncated MF_dipole sum used to collapse and jump when approaching
+% the Gamma-equivalent point (2,0,0). The direction-aware snap must give a smooth,
+% cutoff-stable approach; for this in-plane path (khat_z=0) the directional limit is
+% the uniform-mode Lorentz value, so the endpoint equals info.Jcc0 by construction.
 ion = invz_ion();
 hs = [1.90 1.96 1.98 1.99 1.999 2.0].';
 qpath = [hs zeros(numel(hs), 2)];
@@ -37,12 +35,9 @@ end
 
 function test_qpath_structure_and_gamma_limit(testCase)
 % Structural contract + physics anchors of the q-path spectrum (default = uniform FM mode):
-%  - shapes [nw x nq]; index path coordinate starts at 0;
-%  - (2,0,0) IS Gamma-equivalent for the 4-site basis (structure factor 4): the uniform-mode
-%    coupling S.Jq there equals info.Jcc0 of the same dpRng;
-%  - the uniform-mode coupling GROWS monotonically toward (2,0,0) (~-5.2 -> +6.4 ueV), so the
-%    mode softens monotonically along h = 1 -> 2 (R 2007 Fig 3). The zone-edge (1,0,0) mode is
-%    the HIGHEST in energy, so the frequency window must reach ~0.9 meV to keep it in view.
+% shapes are [nw x nq]; (2,0,0) is Gamma-equivalent so S.Jq there equals info.Jcc0; and the
+% uniform-mode coupling grows monotonically h=1->2, so Epeak softens monotonically toward
+% Gamma (R 2007 Fig 3). Window must reach ~0.9 meV since the zone-edge (1,0,0) mode is highest.
 ion = invz_ion();
 T = 0.31;  B = 5.5;                        % paramagnetic side: fast, well-converged
 w = (0.02:0.02:0.9).';
@@ -123,13 +118,10 @@ verifyTrue(testCase, startsWith(S.xlab, 's along path'));
 end
 
 function test_qpath_fm_mode_monotonic(testCase)
-% R 2007 Fig 3: along (1,0,0)->(2,0,0) the ferromagnetic-mode coupling rises
-% MONOTONICALLY (the mode softens ~0.6 -> 0.2 meV toward the (2,0,0) zone centre).
-% The physical dispersion is the UNIFORM FM-mode projection v'*Jcc*v -- identical to
-% MF_RPA_Yikai.m's sum(sum(J_int))/4 and to info.Jcc0 at q=0 -- exposed as P.Juni.
-% The max-eigenvalue branch P.Jnu(:,4) instead MIRRORS about h=1.5 (it selects the
-% wrong sublattice branch for h<1.5); that was the "[-1,1]-looking" artifact. This
-% test is the regression guard against reverting the default to that branch.
+% R 2007 Fig 3: along (1,0,0)->(2,0,0) the FM-mode coupling rises MONOTONICALLY as the
+% mode softens toward the zone centre. The physical dispersion is the UNIFORM FM-mode
+% projection v'*Jcc*v (P.Juni), not the max-eigenvalue branch P.Jnu(:,4), which instead
+% mirrors about h=1.5 (wrong sublattice branch for h<1.5) -- the regression this guards against.
 ion = invz_ion();
 hs = linspace(1, 2, 21).';                     % 0.05 steps: hits 1.90,1.95,2.00 (avoids the
 qpath = [hs zeros(numel(hs), 2)];              % lone h=1.96 truncation wiggle in the raw sum)
@@ -149,12 +141,10 @@ verifyLessThan(testCase, min(diff(P.Jnu(:,4))), -1e-4);
 end
 
 function test_qpath_out_of_plane_gamma_limit(testCase)
-% The direction-aware guard is ANISOTROPIC: approaching a Gamma-equivalent point
-% along c (khat_z = 1, e.g. (0,0,4-)) the nonanalytic broadcast is
-% gfac*(4pi/Vc)*(1/3 - 1), so the uniform branch sits 4*gfac*(4pi/Vc) BELOW the
-% in-plane limit while the three non-uniform branches are unchanged (a scalar
-% sublattice broadcast only moves the uniform mode). Pins the kz2 coefficient
-% and its sign -- the in-plane tests alone cannot see them.
+% The direction-aware guard is ANISOTROPIC: approaching Gamma along c (khat_z=1) the
+% nonanalytic broadcast shifts the uniform branch by 4*gfac*(4pi/Vc) BELOW the in-plane
+% limit, leaving the three non-uniform branches unchanged. Pins the kz2 coefficient and
+% its sign, which the in-plane tests alone cannot see.
 ion = invz_ion();  C = invz_const();
 Px = invz_jq_path(ion, [1.99 0 0], struct('dpRng', 10, 'cache', false));  % in-plane, snapped
 Pz = invz_jq_path(ion, [0 0 3.99], struct('dpRng', 10, 'cache', false));  % along c, snapped

@@ -1,16 +1,12 @@
 function invz_plot_spectra_qpath(ax, S, chi, Epeak, ttl, eUnit)
 %INVZ_PLOT_SPECTRA_QPATH Render one branch chi''(q, omega) colormap panel (exploratory).
 %   invz_plot_spectra_qpath(ax, S, chi, Epeak, ttl, eUnit) draws `chi` ([nw x nq], e.g.
-%   S.chiz or S.chirpa) against the plot coordinate S.x (the actual varying Miller
-%   component for a single-axis path, e.g. h = 1..2 on the R2007 Fig-3 path; the
-%   distance-from-start S.s otherwise) and frequency
-%   S.w (y), and overlays the censored peak dispersion `Epeak` (pass S.Epeak or
-%   S.Epeak_rpa) in white; censored (NaN) peak points simply leave gaps. This is a BRANCH
-%   susceptibility, not neutron intensity (no structure-factor/form-factor weights).
-%   Colour conventions match invz_plot_spectra_map: log10 scale spanning three decades
-%   below the robust (99.5th-percentile) peak; NaN transparent on grey; present-but-
-%   negative chi'' floored into the darkest colour. As there, the caller pre-scales S.w
-%   and Epeak when plotting in GHz (see invz_run_spectra's eUnit knob).
+%   S.chiz or S.chirpa) against the plot coordinate S.x (varying Miller component for a
+%   single-axis path, e.g. h = 1..2 on the R2007 Fig-3 path, else S.s) and frequency S.w
+%   (y), overlaying the censored peak dispersion `Epeak` (S.Epeak or S.Epeak_rpa) in white;
+%   NaN peak points leave gaps. This is a BRANCH susceptibility, not neutron intensity.
+%   Colour conventions match invz_plot_spectra_map (log10 scale, NaN transparent, negative
+%   chi'' floored). The caller pre-scales S.w and Epeak when plotting in GHz.
 if nargin < 5, ttl = ''; end
 if nargin < 6, eUnit = 'meV'; end
 

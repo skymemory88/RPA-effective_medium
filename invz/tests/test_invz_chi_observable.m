@@ -24,15 +24,10 @@ verifyGreaterThan(testCase, min(imag(out.chi_cc_q(2,:))), -1e-10);  % chi'' >= 0
 end
 
 function test_soft_mode_near_criticality(testCase)
-% R 2007 Fig 2: at T=0.31 K, H~Hc the lowest mode bottoms at ~0.19 meV (calc), never zero. SLOW.
-%
-% Controller adaptation: the brief calls invz_critical(ion, 0.31, ...) to locate
-% Hc before solving; that bisection re-solves invz_solve_point O(log2((7-2)/0.02))
-% ~ 8 times at full 16^3-grid EMT cost and takes ~10-20 minutes. To keep this test
-% bounded while still self-contained, we use the fixed field Bx = 4.3 T instead
-% (published Hc(0.31 K) ~ 42.4-43 kOe = 4.24-4.3 T, R 2007), which is within the
-% bisection tolerance of the true critical field. The assert's peak-position band
-% [0.10, 0.28] meV absorbs the resulting small mistuning.
+% R 2007 Fig 2: at T=0.31 K near Hc the lowest mode bottoms at ~0.19 meV (calc),
+% never zero. Uses a fixed field Bx = 4.3 T (published Hc(0.31 K) ~ 4.24-4.3 T)
+% instead of bisecting invz_critical (too slow at full grid cost); the wide
+% [0.10, 0.28] meV band absorbs the resulting mistuning. SLOW.
 assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), 'Set INVZ_SLOW=1 for slow tests');
 ion = invz_ion();
 cmd = "qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5])";

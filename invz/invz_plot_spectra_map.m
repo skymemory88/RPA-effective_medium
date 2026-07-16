@@ -4,21 +4,15 @@ function invz_plot_spectra_map(ax, S, chi, ttl, eUnit)
 %   S.chirpa) on axes `ax` against field S.fields (x) and frequency S.w (y).
 %
 %   invz_plot_spectra_map(ax, S, chi, ttl, eUnit) labels the y-axis with eUnit ('meV',
-%   default, or 'GHz') instead. This only changes the label text -- S.w is plotted as-is,
-%   so the caller is responsible for pre-scaling S.w to match eUnit (invz_run_spectra does
-%   this via its eUnit knob).
+%   default, or 'GHz') instead; this only changes the label text, so the caller must
+%   pre-scale S.w to match (invz_run_spectra does this via its eUnit knob).
 %
-%   The colour is log10(chi'') because a soft mode near criticality spans several decades;
-%   the scale spans three decades below the (99.5th-percentile) peak so the dispersing mode
-%   stays visible at every field.
-%
-%   Two greys, kept distinct on purpose:
-%     - transparent (grey background) = NO paramagnetic solution (NaN): the ordered /
-%       degenerate-doublet columns, so the phase boundary reads off as the mask edge;
-%     - the darkest colour (floored) = present but negligible/negative chi''. On the real
-%       axis the single-shot 1/z continuation can dip slightly negative just above the
-%       mode (a causality artifact of npass=1, not missing data), so it is floored into
-%       the map rather than punched out as a hole.
+%   Colour is log10(chi'') spanning three decades below the 99.5th-percentile peak, so the
+%   dispersing mode stays visible at every field. Two greys are kept distinct on purpose:
+%   transparent = NO solution (NaN, phase boundary reads off as the mask edge); darkest
+%   colour (floored) = present but negligible/negative chi'' (the single-shot real-axis
+%   continuation can dip slightly negative just above the mode -- a causality artifact,
+%   not missing data).
 if nargin < 4, ttl = ''; end
 if nargin < 5, eUnit = 'meV'; end
 

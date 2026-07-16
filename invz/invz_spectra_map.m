@@ -1,37 +1,34 @@
 function S = invz_spectra_map(ion, T, fields, w, opts)
 %INVZ_SPECTRA_MAP chi''_cc(omega, B) at the uniform (q=0) mode over a transverse-field sweep.
 %   S = invz_spectra_map(ion, T, fields, w) sweeps the transverse field Bx over `fields`
-%   (Tesla) at fixed temperature T (K) and returns the dissipative susceptibility on the
-%   (omega, B) grid -- covering BOTH phases. At each field it first tries the ferromagnetic
-%   (ordered) 1/z solve; if the point has a spontaneous moment it uses that, otherwise it
-%   falls back to the paramagnetic solve. The result is a single soft-mode map continuous
-%   across the transition (imagesc(S.fields, S.w, S.chiz)).
+%   (Tesla) at fixed temperature T (K) and returns chi''_cc(omega, B) across BOTH phases:
+%   at each field it tries the ordered 1/z solve first, falling back to the paramagnetic
+%   solve, giving a single soft-mode map continuous across the transition.
 %
-%   Each column is one field. Returned maps:
+%   Returned maps (columns = fields):
 %     S.chiz   [nw x nB]  1/z-renormalized chi''_cc  (FM below Bc, PM above)
 %     S.chirpa [nw x nB]  bare-RPA chi''_cc          (Sigma = 0, matching phase)
-%     When ion.demag ~= 0, both maps are the strict-uniform MEASURED observable
-%     (demag-corrected via info.Jshape_cc; the soft mode saturates at 1/Jshape_cc
-%     instead of diverging); with demag = 0 they are the intrinsic response.
-%   Per-field diagnostics:
-%     S.phase  [1 x nB]   0 = no solution (masked), 1 = ferromagnet, 2 = paramagnet
-%     S.Sigma0 [1 x nB]   static self-energy at that field
-%   Columns with no solution at all (e.g. the degenerate doublet at Bx -> 0, where the
-%   two-level treatment breaks down in BOTH phases) are left NaN and masked out.
+%     With ion.demag ~= 0 both are the demag-corrected MEASURED observable (via
+%     info.Jshape_cc, saturating instead of diverging); demag = 0 gives the intrinsic response.
+%   Per-field diagnostics: S.phase (0 masked/1 FM/2 PM), S.Sigma0, and S.Epeak/S.Epeak_rpa
+%   (censored, parabolic-refined peak energy; NaN at a non-positive or boundary maximum, via
+%   invz_peak_energy, shared with invz_spectra_qpath). Fields with no solution at all (e.g.
+%   the degenerate doublet at Bx -> 0) are left NaN and masked out.
 %
 %   opts fields (all optional):
-%     .hyp      (true)        include the nuclear hyperfine manifold in chi0
-%     .grid     ([16 16 16])  q-grid for the effective-medium lattice sum
-%     .dpRng    (30)          real-space dipole cutoff for invz_jq_modes
-%     .eta      (5e-3)        real-axis broadening (meV) passed to invz_chi_realaxis
-%     .parallel (false)       distribute the field points over a parallel pool (parfor)
-%     .Jnu, .info             precomputed coupling branches / info struct (skips the
-%                             qVec_generator + invz_jq_modes step; used by the tests)
-%     .verbose  (true)        print one progress line per field
+%     .hyp       (true)        include the nuclear hyperfine manifold in chi0
+%     .grid      ([16 16 16])  q-grid for the effective-medium lattice sum
+%     .dpRng     (30)          real-space dipole cutoff for invz_jq_modes
+%     .eta       (5e-3)        real-axis broadening (meV) passed to invz_chi_realaxis
+%     .parallel  (false)       distribute the field points over a parallel pool (parfor)
+%     .peak_wmin (0)           meV; excludes a known low-frequency line (e.g. hyperfine
+%                              pole) from the peak search; default is no exclusion
+%     .Jnu, .info              precomputed coupling branches / info struct (skips the
+%                              lattice sum; used by the tests)
+%     .verbose   (true)        print one progress line per field
 %
-%   Cost is one 1/z solve per field (~15-25 min for a full 61-point sweep on the 16^3 grid,
-%   single core; roughly 2x that near/below Bc where the FM solve runs). Compute S once, then
-%   replot as many times as you like (see invz_plot_spectra_map / invz_run_spectra).
+%   Cost is one 1/z solve per field (~15-25 min for a 61-point sweep on a 16^3 grid, single
+%   core). Compute S once, then replot freely (invz_plot_spectra_map / invz_run_spectra).
 
 if nargin < 5, opts = struct(); end
 hyp      = getf(opts, 'hyp', true);
@@ -40,6 +37,7 @@ dpRng    = getf(opts, 'dpRng', 30);
 eta      = getf(opts, 'eta', 5e-3);
 verbose  = getf(opts, 'verbose', true);
 parallel = getf(opts, 'parallel', false);
+wmin     = getf(opts, 'peak_wmin', 0);
 
 fields = fields(:).';   w = w(:);
 nB = numel(fields);     nw = numel(w);
@@ -78,6 +76,8 @@ S = struct();
 S.fields = fields;  S.w = w;  S.T = T;  S.info = info;
 S.chiz = chizM;  S.chirpa = chirpaM;
 S.Sigma0 = Sig0;  S.phase = phaseC;
+S.Epeak     = invz_peak_energy(chizM,   w, wmin);
+S.Epeak_rpa = invz_peak_energy(chirpaM, w, wmin);
 end
 
 % -------------------------------------------------------------------------------------------

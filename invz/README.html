@@ -46,7 +46,9 @@ window.MathJax = {
   pre{background:var(--code-bg); border:1px solid var(--rule); border-radius:8px; padding:.8rem 1rem; overflow-x:auto; font-size:.82rem; line-height:1.45;}
   pre code{background:none; padding:0;}
   table{border-collapse:collapse; width:100%; margin:1rem 0; font-size:.9rem;}
-  th,td{border:1px solid var(--rule); padding:.4rem .6rem; text-align:left; vertical-align:top;}
+  th,td{border:1px solid var(--rule); padding:.4rem .6rem; text-align:left; vertical-align:top; overflow-wrap:anywhere;}
+  table.ref-table th:nth-child(1), table.ref-table td:nth-child(1){white-space:nowrap; width:1%;}
+  table.ref-table th:nth-child(2), table.ref-table td:nth-child(2){width:34%;}
   th{background:var(--accent-bg); color:var(--accent); font-weight:600;}
   tbody tr:nth-child(even){background:#faf8f3;}
   .lead{font-size:1.06rem; color:#3a352d;}
@@ -352,7 +354,7 @@ plot(out.chi_cc_q(1,:));   % chi(q=0, omega)</code></pre>
 <div class="callout caution"><span class="tag">Boundary speckle</span> Right at the marginal phase boundary a field/temperature point can fail to converge and come back masked, next to converged neighbours. That is the para fixed point going marginal (not a bug). Widen <code>max_outer</code> / soften mixing there, or accept a couple of masked edge points.</div>
 
 <h2 id="reference">6 · Function reference</h2>
-<table>
+<table class="ref-table">
 <thead><tr><th>Function</th><th>Signature</th><th>Produces</th></tr></thead>
 <tbody>
 <tr><td><code>invz_ion</code></td><td><code>ion = invz_ion()</code></td><td>LiHoF4 CF/exchange/lattice parameters (R 2007 Table I); shape defaults <code>demag=0</code>, <code>alpha=1</code></td></tr>

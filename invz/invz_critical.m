@@ -5,17 +5,11 @@ function bx = invz_critical(ion, T, Jnu_flat, opts)
 % ordered side (low B) is where the paramagnetic EMT fixed point ceases to
 % exist and invz_solve_point returns non-finite / non-converged crit.
 %
-% Classify from CONVERGED points only (the fixed-T mirror of the invz_critical_T
-% fix). Near the boundary the paramagnetic self-consistency suffers critical
-% slowing down: within a band of B the outer loop does not reach tolerance and
-% the soft-mode Dyson denominator blows up to NaN.  The old classifier
-% ~isfinite(crit)||crit<=0 read every such FAILURE as "ordered", so a bisection
-% could latch onto spurious sign flips.  Instead we scan the field DOWN from the
-% paramagnet (window top) toward the boundary, take the first ordered/paramagnet
-% crossing between CONVERGED points, and interpolate; non-converged points get
-% no vote.  Scanning from the top is cheap where it matters: at low T the
-% boundary Bc ~ 5 T sits just under the window top, so few of the expensive
-% (many-Matsubara) low-T solves are needed.
+% Classify from CONVERGED points only: near the boundary the paramagnetic
+% self-consistency suffers critical slowing down and can return non-finite
+% crit that would otherwise look like a false ordered/paramagnet crossing.
+% Scans the field DOWN from the window top, taking the first ordered/paramagnet
+% crossing between converged points; non-converged points get no vote.
 %
 % opts.window = [Blo Bhi] (T, default [2 7]): Bhi must be a converged paramagnet
 %   (crit>0) at this T; Blo the low-field floor of the search.

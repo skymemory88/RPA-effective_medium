@@ -5,21 +5,14 @@ function tc = invz_critical_T(ion, Bx, Jnu_flat, opts)
 % boundary; inside the ordered phase (low T) the paramagnetic EMT fixed point
 % does not exist and invz_solve_point returns non-finite / non-converged crit.
 % Use where the boundary is nearly parallel to the field axis (T near the
-% zero-field Tc0: ~1.74 K Richardson-extrapolated, ~1.78 K on a raw 16^3 grid):
-% a fixed-B cut crosses it transversally, exactly where the fixed-T cut of
-% invz_critical is ill-conditioned.
+% zero-field Tc0, ~1.74-1.78 K): a fixed-B cut crosses it transversally, where
+% the fixed-T cut of invz_critical is ill-conditioned.
 %
-% Classify from CONVERGED points only.  Near the boundary the paramagnetic
-% self-consistency suffers critical slowing down: within a ~0.3 K band the
-% outer loop does not reach tolerance and the soft-mode Dyson denominator
-% blows up to NaN, so crit(T) is non-finite / non-monotone there.  The old
-% classifier ~isfinite(crit)||crit<=0 read every such FAILURE as "ordered",
-% and a bisection on that non-monotone predicate latched onto spurious sign
-% flips -- scattering Tc(B) by ~0.1-0.4 K (a rugged high-T boundary, one
-% field even Tc > Tc0).  Instead we sample crit on a grid across the window,
-% keep only converged, finite points, take the highest-T sign change among
-% them, and interpolate.  Non-converged points get NO vote (they neither
-% bracket nor bias); the surviving crit is smooth and single-valued.
+% Classify from CONVERGED points only: near the boundary the solver suffers
+% critical slowing down and returns non-finite/non-monotone crit that a naive
+% classifier would misread as ordered. Samples crit on a grid across the
+% window, keeps only converged/finite points, and interpolates the highest-T
+% sign change among them.
 %
 % opts.window = [Tlo Thi] (K): explicit search window.  If omitted, an
 %   adaptive window is used: top anchored at Tc0+0.05 (Tc0 from opts.Tc0 or
@@ -31,16 +24,12 @@ function tc = invz_critical_T(ion, Bx, Jnu_flat, opts)
 % opts.tol    crossing refinement tolerance (K, default 0.005).
 % Remaining opts pass through to invz_solve_point.
 %
-% Re-entrance: if more than one converged sign change is found in the window
-% (a candidate hyperfine-driven re-entrant nose), invz:multipleCrossings is
-% raised and the highest-T crossing is returned.
+% Re-entrance: if more than one converged sign change is found, invz:multipleCrossings
+% is raised and the highest-T crossing is returned.
 %
-% Small-B caveat: below ~0.5 T the doublet is near-degenerate (invz_twolevel
-% raises invz:degenerateDoublet as Bx -> 0) and few points converge; those T
-% simply do not vote, and if the whole window fails to bracket the function
-% errors rather than guessing.  The 0 < B < 0.5 T segment spans only ~4 mK
-% below Tc0 and is better represented by the closed-form invz_critical_T0field
-% endpoint.
+% Small-B caveat: below ~0.5 T the doublet is near-degenerate and few points
+% converge; if the whole window fails to bracket a crossing the function
+% errors rather than guessing.
 if nargin < 4, opts = struct(); end
 width = 0.5;    if isfield(opts,'width'),    width = opts.width;    end
 gstep = 1/30;   if isfield(opts,'gridstep'), gstep = opts.gridstep; end
