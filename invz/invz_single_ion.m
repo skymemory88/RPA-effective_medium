@@ -2,17 +2,14 @@ function si = invz_single_ion(ion, T, B, opts)
 %INVZ_SINGLE_ION Exact single-ion diagonalization with mean field(s).
 % B = [Bx By Bz] in T. opts.hyp: include nuclear I=7/2 (dim 136).
 %
-% Two mean-field modes:
-%   Paramagnetic (default): only the transverse mean field hx = Jxx0*<Jx> is solved; the
-%     longitudinal moment stays <Jz> = 0 (caller may check si.Jexp(3) ~ 0).
-%   Ordered (opts.order = true): additionally solve the longitudinal ORDERING mean field
-%     hz = J0z*<Jz> (J0z defaults to ion.J0eff = Jcc(0)) for its symmetry-broken branch,
-%     seeded by opts.mz_seed. This is the ferromagnetic phase: si.Jexp(3) = <Jz> = m0 is the
-%     order parameter, and it relaxes back to ~0 if the (T,Bx) point is not actually ordered.
-%   Fixed longitudinal field (opts.hz_fixed = hz, meV): apply a FIXED -hz*Jz term without
-%     self-solving it (only hx is iterated). Used to impose the full-space ordering mean field
-%     on the electronic-doublet solve (invz_twolevel) so the two-level Sigma params see the
-%     same hz as the full electronuclear order parameter. Mutually exclusive with opts.order.
+% Three mean-field modes:
+%   Paramagnetic (default): solves transverse hx = Jxx0*<Jx> only; <Jz> stays 0.
+%   Ordered (opts.order = true): also solves longitudinal hz = J0z*<Jz> (J0z default
+%     ion.J0eff), seeded by opts.mz_seed. si.Jexp(3) = <Jz> is the FM order parameter,
+%     relaxing to ~0 if (T,Bx) is not actually ordered.
+%   Fixed longitudinal field (opts.hz_fixed = hz, meV): imposes a FIXED -hz*Jz term (only
+%     hx is iterated), used to give invz_twolevel_ordered the same hz as the full
+%     electronuclear order parameter. Mutually exclusive with opts.order.
 if nargin < 4, opts = struct(); end
 hyp  = isfield(opts,'hyp') && opts.hyp;
 Jxx0 = ion.Jxx0;    if isfield(opts,'Jxx0'), Jxx0 = opts.Jxx0; end

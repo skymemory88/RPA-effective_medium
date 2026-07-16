@@ -56,14 +56,10 @@ verifyEqual(testCase, pt.Sigma0, 0.0932, 'AbsTol', 0.02);
 end
 
 function test_tc_small_field(testCase)
-% Small-field limit of the fixed-B temperature cut: Tc(0.5 T) must sit just
-% below the closed-form Tc0 evaluated on the SAME 16^3 q-grid (1.7795 K; the
-% Richardson-extrapolated benchmark 1.74 K is a different baseline). The
-% undershoot direction is R 2007's small-Bx caveat. B = 0.5 T is a sensible
-% low-field floor: below it the doublet is near-degenerate and few points
-% converge. Passing an explicit window [1.0 2.0] exercises invz_critical_T's
-% grid+interpolate path over a fixed bracket (rather than the adaptive one). SLOW.
-% Upper bound 1.79 leaves margin below Tc0 = 1.7795 K for the small-Bx undershoot.
+% Small-field limit of the fixed-B temperature cut: Tc(0.5 T) must sit just below
+% the closed-form Tc0 on the SAME 16^3 q-grid (1.7795 K), reflecting R 2007's
+% small-Bx undershoot caveat. Uses an explicit window [1.0 2.0] to exercise the
+% grid+interpolate path of invz_critical_T. SLOW.
 assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), 'Set INVZ_SLOW=1 for slow tests');
 ion = invz_ion();
 [Jf, J0] = lihof4_couplings();
@@ -87,19 +83,10 @@ verifyEqual(testCase, tc, Tstar, 'AbsTol', 0.05);
 end
 
 function test_tc_boundary_is_smooth(testCase)
-% Regression for the rugged high-T boundary. The old classifier
-% (~isfinite(crit) || crit<=0) counted the paramagnetic solve's
-% critical-slowing-down FAILURES (NaN / non-converged crit) as "ordered",
-% so the fixed-B bisection latched onto spurious sign flips and Tc(B)
-% scattered by ~0.1-0.4 K -- one field even returned Tc > Tc0, which is
-% unphysical. The fix must classify from CONVERGED points only.
-%
-% We assert SMOOTHNESS (low curvature), NOT monotonicity: a genuine
-% hyperfine-driven re-entrant "nose" is smooth on this field grid and must
-% be allowed to survive. The RMS discrete second difference is the
-% artifact detector -- numerical jitter has high curvature, both a monotone
-% and a gently re-entrant physical boundary have low curvature. Measured
-% RMS(d2) with the old code ~0.14 K; a smooth boundary is <~0.01 K. SLOW.
+% Regression: the boundary classifier must count only CONVERGED points, or
+% critical-slowing-down failures near the boundary get misread as "ordered"
+% and Tc(B) becomes non-smooth. Asserted via RMS discrete second difference
+% (SMOOTHNESS, not monotonicity, since a genuine re-entrant nose is allowed). SLOW.
 assumeTrue(testCase, strcmp(getenv('INVZ_SLOW'), '1'), 'Set INVZ_SLOW=1 for slow tests');
 ion = invz_ion();
 [Jf, J0] = lihof4_couplings();

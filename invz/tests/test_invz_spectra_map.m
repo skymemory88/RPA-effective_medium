@@ -33,4 +33,14 @@ verifyGreaterThanOrEqual(testCase, min(S.chirpa(finite2, 2)), -1e-9);
 % and a genuine resonance peak in the 1/z spectrum somewhere on the grid
 verifyTrue(testCase, any(isfinite(S.chiz(:))));
 verifyGreaterThan(testCase, max(S.chiz(isfinite(S.chiz))), 0);
+
+% per-field peak energy (invz_peak_energy, shared with invz_spectra_qpath): right shape,
+% and any censored-survivor is a genuine in-window frequency, not a fabricated edge value.
+verifySize(testCase, S.Epeak,     [1 numel(fields)]);
+verifySize(testCase, S.Epeak_rpa, [1 numel(fields)]);
+finiteEpeak = S.Epeak(isfinite(S.Epeak));
+if ~isempty(finiteEpeak)
+    verifyGreaterThanOrEqual(testCase, min(finiteEpeak), min(w));
+    verifyLessThanOrEqual(testCase, max(finiteEpeak), max(w));
+end
 end

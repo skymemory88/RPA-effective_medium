@@ -1,56 +1,44 @@
 function S = invz_spectra_qpath(ion, T, B, qpath, w, opts)
 %INVZ_SPECTRA_QPATH Ferromagnetic-mode chi''_cc(q, omega) along a q-path at fixed (T, B).
 %   The default dispersion follows the UNIFORM ferromagnetic-mode coupling J(q) = v'*Jcc*v
-%   (invz_jq_path P.Juni) -- the same effective coupling MF_RPA_Yikai.m uses and the mode
-%   whose energy TRENDS reproduce R 2007 Fig 3 (along (1,0,0)->(2,0,0) the mode softens
-%   monotonically toward the (2,0,0) zone centre). It is NOT neutron scattering intensity
-%   (no eigenvector/sublattice-interference weights, no polarization factor, no magnetic
-%   form factor), and it inherits the known open issues of the medium solve (closed-grid BZ
-%   quadrature, the real-axis continuation's possible negative weight, and the bare-MF
-%   FM/PM handoff of invz_solve_auto); quantitative reproduction is not claimed.
+%   (invz_jq_path P.Juni) -- the same effective coupling MF_RPA_Yikai.m uses, whose energy
+%   TRENDS reproduce R 2007 Fig 3 (mode softens monotonically along (1,0,0)->(2,0,0)). This
+%   is NOT neutron scattering intensity (no eigenvector/form-factor weights); quantitative
+%   reproduction is not claimed.
 %
 %   S = invz_spectra_qpath(ion, T, B, qpath, w) computes chi''_cc along qpath (nq x 3,
-%   r.l.u.) at fixed T (K) and transverse field B (T), for the 1/z and bare-RPA theories.
-%   The 1/z medium (Sigma, K, lambda) is solved ONCE at (T, B) on the BZ-integration grid
-%   (ordered-first via invz_solve_auto); the path susceptibility then follows from the same
-%   single-site response chit(w) via chi(q, w) = chit/(1 - J(q) chit), with J(q) from
-%   invz_jq_path (direction-aware Gamma-limit guard; see its header).
+%   r.l.u.) at fixed T (K) and field B (T), for the 1/z and bare-RPA theories. The 1/z
+%   medium (Sigma, K, lambda) is solved ONCE at (T, B) on the BZ-integration grid
+%   (ordered-first via invz_solve_auto); the path susceptibility follows from the single-
+%   site response chit(w) via chi(q, w) = chit/(1 - J(q) chit), J(q) from invz_jq_path.
 %
-%   Demag semantics (canonical): the strict-uniform Jshape_cc transform is NOT applied
-%   here -- a finite-q probe measures the intrinsic longitudinal response, and at Gamma-
-%   equivalent path points the relevant limit is q -> 0+ where the demagnetizing field
-%   cancels (R 2007). The spectra CAN still change with ion.demag through the transverse
-%   applied/internal-field relation (demag-aware info.Jaa0 -> solver Jxx0).
+%   Demag semantics: the strict-uniform Jshape_cc transform is NOT applied here -- a
+%   finite-q probe measures the intrinsic response, and Gamma-equivalent path points use
+%   the q -> 0+ limit where the demagnetizing field cancels (R 2007). Spectra can still
+%   shift with ion.demag through the transverse applied/internal-field relation (info.Jaa0).
 %
 %   Returns:
 %     S.chiz, S.chirpa     [nw x nq]  1/z and bare-RPA chi''_cc(q, w)
-%     S.Epeak, S.Epeak_rpa [1 x nq]   censored, parabolic-refined peak energy per q (NaN
-%                                     when the maximum is non-positive/non-finite or sits
-%                                     in the first/last usable bin -- i.e. the true peak
-%                                     lies outside the sampled window)
-%     S.Jq      [1 x nq]   selected coupling along the path (meV): the uniform FM-mode
+%     S.Epeak, S.Epeak_rpa [1 x nq]   censored, parabolic-refined peak energy per q (NaN at
+%                                     a non-positive or boundary maximum)
+%     S.Jq      [1 x nq]   selected coupling along the path (meV): uniform FM-mode
 %                          projection by default, or a sorted branch if opts.branch is set
 %     S.snapped [1 x nq]   true where invz_jq_path replaced the raw truncated sum
-%     S.s       [1 x nq]   path distance in INDEX (r.l.u.) coordinates
-%     S.s_cart  [1 x nq]   path distance in Cartesian reciprocal Ang^-1
-%     S.x, S.xlab          plot coordinate + label: the varying Miller component for a
-%                          monotonic single-axis path (Fig-3 style, e.g. h = 1..2),
-%                          else falls back to S.s
+%     S.s, S.s_cart        path distance in index (r.l.u.) / Cartesian (Ang^-1) coordinates
+%     S.x, S.xlab          plot coordinate + label (varying Miller component for a single-
+%                          axis path, e.g. h = 1..2, else falls back to S.s)
 %     S.qpath, S.w, S.T, S.B, S.info, S.phase (1 = FM, 2 = PM solve used)
 %
 %   opts fields (all optional):
 %     .grid ([16 16 16]), .dpRng (30), .eta (5e-3)   as in invz_spectra_map
-%     .branch (0)        0 (default) = uniform ferromagnetic-mode coupling v'*Jcc*v (the
-%                        physical single mode, matches MF_RPA_Yikai / R 2007 Fig 3);
-%                        1..4 = follow that ascending-sorted eigenvalue branch instead
+%     .branch (0)        0 (default) = uniform FM-mode coupling v'*Jcc*v (the physical
+%                        single mode); 1..4 = follow that sorted-eigenvalue branch instead
 %                        (exploratory; sorted index, NOT a tracked mode identity through
-%                        crossings -- max(eig) mirrors the (1,0,0)->(2,0,0) dispersion)
+%                        crossings)
 %     .snapfac (2.5)     Gamma-limit trust-radius factor (see invz_jq_path)
-%     .peak_wmin (0.05)  meV; excludes the low-frequency hyperfine pole (R 2007 Fig 2)
-%                        from the peak search so Epeak tracks the doublet mode
+%     .peak_wmin (0.05)  meV; excludes the low-frequency hyperfine pole from the peak search
 %     .Jnu, .info        precomputed BZ-grid branches / info (skips the lattice sum; tests)
-%   The hyperfine manifold is always included (electronuclear solve + matching real-axis
-%   state); there is deliberately no .hyp option on this API.
+%   The hyperfine manifold is always included; there is deliberately no .hyp option here.
 
 if nargin < 6, opts = struct(); end
 grid    = getf(opts, 'grid', [16 16 16]);
@@ -128,27 +116,6 @@ else
 end
 S.w = w;  S.T = T;  S.B = B;  S.phase = phase;  S.info = info;  S.Jq = Jq;
 S.chiz = chiz;  S.chirpa = chirpa;
-S.Epeak     = peak_energy(chiz,   w, wmin);
-S.Epeak_rpa = peak_energy(chirpa, w, wmin);
-end
-
-% -------------------------------------------------------------------------------------------
-function E = peak_energy(chi, w, wmin)
-%PEAK_ENERGY per-column peak of chi''(w) at w >= wmin, parabolic-refined; CENSORED (NaN)
-% when the maximum is non-positive/non-finite or sits in the first/last usable bin (a
-% boundary maximum means the true peak lies outside the sampled window -- reporting the
-% grid edge would fabricate a flat dispersion). Assumes uniform w spacing.
-E = nan(1, size(chi, 2));
-mask = w >= wmin;
-wm = w(mask);
-if numel(wm) < 3, return; end
-dw = wm(2) - wm(1);
-for k = 1:size(chi, 2)
-    c = chi(mask, k);
-    [cmax, i] = max(c);
-    if ~isfinite(cmax) || cmax <= 0 || i == 1 || i == numel(c), continue; end
-    d = (c(i-1) - c(i+1)) / (2*(c(i-1) - 2*c(i) + c(i+1)));   % parabolic vertex offset
-    if ~isfinite(d) || abs(d) > 1, d = 0; end
-    E(k) = wm(i) + d*dw;
-end
+S.Epeak     = invz_peak_energy(chiz,   w, wmin);
+S.Epeak_rpa = invz_peak_energy(chirpa, w, wmin);
 end

@@ -1,13 +1,11 @@
 function tl = invz_twolevel_ordered(ion, T, Bx, hz, opts)
 %INVZ_TWOLEVEL_ORDERED Electronic two-level (split doublet) params in the ordered phase.
-% Like invz_twolevel, but the electronic doublet is solved with a FIXED longitudinal mean
-% field hz (meV) imposed -- the same hz that the full electronuclear order parameter produced
-% (invz_single_ion(...,'order',true).hz). The diagonal moment tl.m is nonzero here (that is
-% the whole point of the ordered phase), so unlike invz_twolevel this does NOT error on m~=0.
-%
+% Like invz_twolevel, but solves the doublet with a FIXED longitudinal mean field hz (meV) --
+% the same hz produced by invz_single_ion(...,'order',true).hz. tl.m is nonzero here (that is
+% the point of the ordered phase), so unlike invz_twolevel this does NOT error on m~=0.
 % Returns, in addition to the paramagnetic fields:
-%   tl.h0 = beta*(1 - n01^2)   the static elastic (Curie) weight h(0); exponentially small at
-%                              low T, where the elastic (m^2 h) sector of Sigma is negligible.
+%   tl.h0 = beta*(1 - n01^2)  the static elastic (Curie) weight h(0); exponentially small at
+%                             low T, where the elastic (m^2 h) sector of Sigma is negligible.
 % opts.Jxx0 (optional): transverse MF coupling forwarded to invz_single_ion (default ion.Jxx0).
 if nargin < 5, opts = struct(); end
 Jxx0 = ion.Jxx0;  if isfield(opts,'Jxx0'), Jxx0 = opts.Jxx0; end

@@ -1,39 +1,32 @@
 %INVZ_RUN_SPECTRA chi''_cc spectra vs transverse field (uniform mode) or along a q-path.
 %
-% One driver, three views:
-%   qpath = []  (default)  -- field sweep at the uniform mode (q = 0):
-%     numel(fields) <= sliceMax  ->  1D line-slice overlay (1/z solid, RPA dashed, one
-%                                    colour per field)                      cf. R 2007 Fig 2
-%     numel(fields) >  sliceMax  ->  2D field-vs-frequency colormap, 1/z and RPA panels
-%                                                            cf. R 2007 Fig 2 / Kovacevic Fig 3d
-%   qpath = [nq x 3] r.l.u.  -- ferromagnetic-mode q-path view at fixed field(s) Bq,
-%     reproducing the energy TRENDS in R 2007 Fig 3 (uniform FM-mode susceptibility, not
-%     neutron intensity; see invz_spectra_qpath header for the inherited caveats). Along
-%     (1,0,0)->(2,0,0) the mode softens monotonically toward the (2,0,0) zone centre:
-%     numel(Bq) == 1  ->  2D path-vs-frequency colormaps (1/z + RPA), censored peak overlay
-%     numel(Bq) >  1  ->  E_peak(q) dispersion overlay, one colour per field
+% One driver, three views, selected by qpath/fields/Bq below:
+%   qpath = []  (default) -- field sweep at q = 0 (invz_spectra_map; S.phase labels each
+%     field 1=FM/2=PM/0=masked):
+%       numel(fields) <= sliceMax  ->  1D line-slice overlay          cf. R 2007 Fig 2
+%       numel(fields) >  sliceMax  ->  2D field-vs-frequency colormap cf. R 2007 Fig 2 / Kovacevic Fig 3d
+%     showPeaks = true also plots S.Epeak/S.Epeak_rpa vs field (invz_peak_energy).
+%   qpath = [nq x 3] r.l.u. -- FM-mode q-path view at fixed field(s) Bq (invz_spectra_qpath;
+%     see its header for caveats), reproducing R 2007 Fig 3 TRENDS:
+%       numel(Bq) == 1  ->  2D path-vs-frequency colormaps with censored peak overlay
+%       numel(Bq) >  1  ->  E_peak(q) dispersion overlay, one colour per field
 %
-% The field sweep is done by invz_spectra_map (both phases: FM below Bc, PM above; S.phase
-% labels each field 1=FM/2=PM/0=masked); the q-path by invz_spectra_qpath (one 1/z medium
-% solve per field, then the pole formula along the guarded path couplings). Both result
-% structs replot for free, e.g. invz_plot_spectra_map(gca, S, S.chiz, '1/z').
+% Both result structs replot for free, e.g. invz_plot_spectra_map(gca, S, S.chiz, '1/z').
 % Save with:  print(gcf, 'spectra.png', '-dpng', '-r150');
 
 addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')), '..'));
 
 ion = invz_ion();
 % ion.demag = 1; ion.alpha = 0.5;    % OPTIONAL sample-shape (demagnetization) knob; default off.
-%   demag = 0 (default): intrinsic response -- the R 2007 benchmark. demag ~= 0 with spheroid
-%   aspect ratio alpha (1 sphere, 0 c-needle, Inf disk) adds the sample shape as follows:
-%     - info.Jcc0, Jnu, and the ordering-channel contribution to criticality are
-%       demag-INVARIANT (R 2007: the demagnetizing field cancels from the critical
-%       condition; ordering occurs at q -> 0+, not strict q = 0);
-%     - Tc(B = 0) is EXACTLY demag-invariant (the transverse moment vanishes there);
-%     - Bc(T) vs APPLIED transverse field CAN shift through the demag-aware transverse
-%       coupling info.Jaa0 (internal-vs-applied field relation);
-%     - the strict-uniform (q = 0) observable chi''_cc is demag-corrected via info.Jshape_cc
-%       (chi_meas = chi/(1 + Jshape*chi)): the soft mode saturates instead of diverging;
-%     - q-path spectra omit the Jshape_cc transform (finite-q probe = intrinsic longitudinal
+%   demag = 0 (default): intrinsic response, the R 2007 benchmark. demag ~= 0 with spheroid
+%   aspect ratio alpha (1 sphere, 0 c-needle, Inf disk) adds the sample shape:
+%     - info.Jcc0, Jnu, and the ordering-channel criticality are demag-INVARIANT (R 2007:
+%       the demagnetizing field cancels from the critical condition; ordering occurs at
+%       q -> 0+, not strict q = 0); Tc(B = 0) is exactly demag-invariant too.
+%     - Bc(T) vs APPLIED transverse field can shift through demag-aware info.Jaa0
+%       (internal-vs-applied field relation).
+%     - the strict-uniform (q = 0) chi''_cc is demag-corrected via info.Jshape_cc (saturates
+%       instead of diverging); q-path spectra omit that transform (finite-q = intrinsic
 %       response) but still see demag through info.Jaa0.
 T = 0.1;                             % K
 useParallel = true;                  % true -> parfor over fields (Parallel Computing Toolbox)
@@ -43,26 +36,29 @@ eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency 
                                      % meV (below), independent of eUnit.
 
 % fields = [3.6 4.2 4.8 5.4 6.0];       % few -> slices;  many -> colormap
-fields = linspace(3,6.5,151);
-w = (0:0.02:6).';                  % eUnit -- field-sweep frequency grid (0-108 GHz ~ 0-0.45 meV)
-eta = 1e-3;                          % real-axis Lorentzian HWHM, ALWAYS in meV (1e-3 meV ~ 0.24 GHz),
+fields = linspace(0,9,601);
+w = (0:0.005:6).';                  % eUnit -- field-sweep frequency grid (0-108 GHz ~ 0-0.45 meV)
+eta = 2e-5;                          % real-axis Lorentzian HWHM, ALWAYS in meV (1e-3 meV ~ 0.24 GHz),
                                      % independent of eUnit. Lower -> sharper peaks (resolves the
                                      % sub-6-GHz hyperfine lines); keep eta above the w/wq step
                                      % (converted to meV: step/eScale) or the peaks alias.
 sliceMax = 6;                         % field count at/below which the line-slice view is used
 
-% ---- q-path view (R 2007 Fig 3 trends): set qpath non-empty to switch views -------------
-% qpath = [];                          % [] = field-sweep views; [nq x 3] r.l.u. = q-path view
+showPeaks = true;                    % true -> ALSO line-plot chi''_cc peak energy vs field
+                                     % (S.Epeak/S.Epeak_rpa, cf. the q-path E_peak(q) stream)
 
-qh = linspace(0, 1, 101).';  
-qpath = [qh zeros(numel(qh), 2)];  % (h0,0,0)->(h1,0,0)
+% ---- q-path view (R 2007 Fig 3 trends): set qpath non-empty to switch views -------------
+qpath = [];                          % [] = field-sweep views; [nq x 3] r.l.u. = q-path view
+
+% qh = linspace(0, 1, 101).';  
+% qpath = [qh zeros(numel(qh), 2)];  % (h0,0,0)->(h1,0,0)
 % qpath = [zeros(numel(qh), 1) qh zeros(numel(qh), 1)];  % (0,h0,0)->(0,h1,0)
 % qpath = [zeros(numel(qh), 2) qh];  % (0,0,h0)->(0,0,h1) problematic
 
 Bq = 4.95;                           % field(s), T, for the q-path view. One value -> colormaps;
 % Bq = [4.75 4.85 4.95 5.05];
 % Bq = [3.6 4.24 6.0];           % several -> E_peak(q) overlay (R 2007 Fig 3: [3.6 4.24 6.0])
-wq = (0:0.025:6).';                 % eUnit -- q-path frequency grid (0-6 GHz ~ 0-0.025 meV). The
+wq = (0:0.02:6).';                 % eUnit -- q-path frequency grid (0-6 GHz ~ 0-0.025 meV). The
                                      % Fig-3 mode reaches ~0.75 meV (~180 GHz) at 60 kOe; keep the
                                      % top above the mode or the censoring peak picker NaNs it.
 dispScale = 1;                       % dispersion display scale factor; R 2007 scales the
@@ -75,12 +71,9 @@ switch eUnit
     otherwise, error('invz_run_spectra:eUnit', 'eUnit must be ''meV'' or ''GHz''.');
 end
 
-% The frequency-axis inputs w and wq are given in eUnit; the solves run in meV, so convert
-% on the way in. eScale is the meV->eUnit factor, hence eUnit->meV divides by it. With
-% eUnit = 'meV' (eScale = 1) these are exact no-ops. eta is ALREADY in meV and passes through
-% unconverted. The plots below scale the returned meV grids (S.w, Epeak) back up by eScale,
-% so every axis ends up in eUnit consistently -- e.g. eUnit = 'GHz' with wq = (0:0.05:6).'
-% gives a 0-6 GHz q-path axis.
+% w and wq are given in eUnit; solves run in meV, so convert on the way in (eScale is the
+% meV->eUnit factor) and scale returned grids (S.w, Epeak) back up by eScale for plotting.
+% eta is ALWAYS in meV, independent of eUnit, and passes through unconverted.
 wMeV   = w   / eScale;
 wqMeV  = wq  / eScale;
 
@@ -131,5 +124,18 @@ else
         figure('Position', [100 100 1150 460]);
         ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z, T = %.2f K', T), eUnit);
         ax2 = subplot(1, 2, 2);  invz_plot_spectra_map(ax2, Splot, Splot.chirpa, sprintf('RPA, T = %.2f K', T), eUnit);
+    end
+
+    if showPeaks
+        % ---- susceptibility peak energy vs field (toggle) --------------------------------
+        figure; hold on;
+        plot(S.fields, S.Epeak*eScale,     '-',  'DisplayName', '1/z');
+        plot(S.fields, S.Epeak_rpa*eScale, '--', 'DisplayName', 'RPA');
+        xlabel('B_x (T)');
+        ylabel(strrep(eLabel, '\omega', 'E_{peak}'));
+        title(sprintf('\\chi''''_{cc} peak energy vs field, T = %.2f K', T));
+        legend show;
+        % Gaps are CENSORED peaks (invz_peak_energy: boundary max or non-positive/non-finite
+        % column) -- same convention as the q-path E_peak(q) stream, do not interpolate over them.
     end
 end

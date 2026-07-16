@@ -2,24 +2,20 @@ function out = invz_chi_realaxis(ion, T, Bx, pt, w, opts)
 %INVZ_CHI_REALAXIS 1/z-renormalized cc susceptibility on the real axis.
 % Paramagnet (HTML eqs 22-23, 29-30):
 %   Sigma(w) = alpha + (M2/n01^2)[lambda1 - (1-n01^2)K(w)] g(w)
-% Ordered phase (pt.is_ordered = true; HTML eq 37):
-%   Sigma(w) = (alpha - alpha_m) + [gamma(w) - (2 m^2/M^2) gamma(0)] g(w)
-% with gamma(w) = (M2/n01^2)[lambda1 - (1-n01^2)K(w)], gamma(0) at the static Matsubara K(0).
-% Then chi~0(w) = chi0_cc(w)/(1+Sigma(w));  chi(q,nu,w) = chi~0/(1 - J_nu chi~0)  (HTML eq 29-30).
+% Ordered phase (pt.is_ordered = true; HTML eq 37), with gamma(w) as above:
+%   Sigma(w) = (alpha - alpha_m) + [gamma(w) - (2 m^2/M^2) gamma(0)] g(w), gamma(0) at static Matsubara K(0)
+% chi~0(w) = chi0_cc(w)/(1+Sigma(w));  chi(q,nu,w) = chi~0/(1 - J_nu chi~0)  (HTML eq 29-30).
 %
-% For an ordered point the single-ion response must come from the ORDERED eigenstates: pass
-% opts.si (or rely on pt.si), so chi0_cc is evaluated in the symmetry-broken state. alpha, alpha_m,
-% lambda1 and K(0) are fixed by the converged Matsubara solve (pt).
+% For an ordered point the single-ion response must come from the ORDERED eigenstates
+% (pass opts.si or rely on pt.si) so chi0_cc matches the symmetry-broken state; alpha,
+% alpha_m, lambda1, K(0) come from the converged Matsubara solve (pt).
 %
 % opts.Jxx0   (ion.Jxx0)  transverse MF coupling for the internally built single-ion state.
-% opts.hyp    (true)      hyperfine manifold for that internal state; pass the caller's hyp so
-%                         the real-axis chi0 matches the Matsubara medium's Hilbert space.
-% opts.Jshape (0)         strict-uniform demag observable correction (use info.Jshape_cc);
-%                         applied in place to chi_cc_q. Leave 0 for finite-q (intrinsic) paths.
-% opts.chi0cc_w           precomputed bare chi0_cc(w) on this exact z grid (= a prior call's
-%                         out.chi0cc_w). When supplied, the single-ion diagonalization and
-%                         invz_chi0z are skipped and this value is used directly, so a field
-%                         point can share one chi0cc between its RPA and 1/z evaluations.
+% opts.hyp    (true)      hyperfine manifold; must match the Matsubara medium's Hilbert space.
+% opts.Jshape (0)         strict-uniform demag correction (info.Jshape_cc), applied to chi_cc_q;
+%                         leave 0 for finite-q (intrinsic) paths.
+% opts.chi0cc_w           precomputed chi0_cc(w) on this exact grid; when supplied, skips the
+%                         single-ion diagonalization so a field point can share it across evaluations.
 if nargin < 6, opts = struct(); end
 eta   = 5e-3; if isfield(opts,'eta'),   eta   = opts.eta;   end
 npass = 3;    if isfield(opts,'npass'), npass = opts.npass; end

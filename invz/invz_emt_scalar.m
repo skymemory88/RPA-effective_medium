@@ -1,17 +1,12 @@
 function med = invz_emt_scalar(G0, Sigma, Jnu_flat, opts)
 %INVZ_EMT_SCALAR Scalar effective-medium fixed point at fixed self-energy.
-% G  = G0./(1 + Sigma + K.*G0)            (Dyson, R eq 9)
-% Gq = G ./ (1 + (J_nu - K).*G)           (R eq 7)
-% K  = (1/N) sum_{q,nu} J_nu.*Gq ./ G     (R eq 8)
-%
-% Closed form: K cancels out of Gq, so the fixed point of R eqs 7-9 at fixed
-% Sigma is solved directly instead of iterated. With D = 1 + Sigma,
-%   Gq = G0./(D + J.*G0)                       (K-free: substitute G into Gq)
-%   A  = (1/N) sum_q  J ./ (D + J.*G0)         (K-independent)
-%   K  = A.*D ./ (1 - A.*G0)                   (linear in K -> exact)
-%   G  = G0./(D + K.*G0)
-% At this fixed point R eq 8 also gives mean_q Gq = G exactly, so the closure
-% diagnostic is machine-zero when a solution exists.
+% Solves the scalar effective-medium equations (R eqs 7-9):
+%   G  = G0./(1 + Sigma + K.*G0)            (Dyson, eq 9)
+%   Gq = G ./ (1 + (J_nu - K).*G)           (eq 7)
+%   K  = (1/N) sum_{q,nu} J_nu.*Gq ./ G     (eq 8)
+% K cancels out of Gq algebraically, so the fixed point is solved in closed
+% form (see code) rather than iterated; consequently R eq 8's closure
+% (mean_q Gq = G) is machine-zero whenever a solution exists.
 if nargin < 4, opts = struct(); end
 % tol/max_iter/mix/K0 are accepted for backward compatibility but unused: the
 % solve is direct, so there is nothing to iterate, seed, or damp.

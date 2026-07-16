@@ -1,18 +1,16 @@
 function P = invz_jq_path(ion, qpath, opts)
 %INVZ_JQ_PATH Coupling branches along a q-path with a direction-aware Gamma-limit guard.
-%   P = invz_jq_path(ion, qpath) evaluates the 4 cc coupling branches (invz_jq_modes
-%   convention, ascending sort) at each row of qpath (r.l.u.), then REPLACES values inside
-%   a trust radius of any Gamma-equivalent point G by the exact directional long-wavelength
-%   limit. Rationale: MF_dipole's sharp real-space cutoff cannot resolve |q - G| below
-%   ~1/(dpRng*a) -- the raw branch collapses on approach to G and then jumps at the exact
-%   endpoint where the Lorentz term is added (verified: max branch 0.0016 meV at h = 1.999
-%   vs the correct 0.0064 at dpRng 30). The directional limit is
+%   Evaluates the 4 cc coupling branches (invz_jq_modes convention, ascending sort) at
+%   each row of qpath (r.l.u.), then REPLACES values inside a trust radius of any
+%   Gamma-equivalent point G by the exact directional long-wavelength limit
 %       eig( J_reg(Gamma) + gfac*(4*pi/Vc)*(1/3 - khat_z^2) )   [scalar sublattice broadcast]
-%   with khat the Cartesian direction of q - G (Cohen-Keffer nonanalytic term). For any
-%   in-plane approach (khat_z = 0, e.g. the (h,0,0) R2007 Fig-3 path) this equals the
-%   uniform-mode Lorentz value, i.e. the info.Jcc0 convention -- continuous endpoint by
-%   construction. Points at exactly G use the LOCAL PATH DIRECTION; a single-point path
-%   at G defaults to the in-plane (uniform-mode) convention.
+%   with khat the Cartesian direction of q - G (Cohen-Keffer nonanalytic term). This
+%   avoids the raw branch collapsing on approach to G and jumping at the exact endpoint,
+%   since MF_dipole's real-space cutoff cannot resolve |q - G| below ~1/(dpRng*a). For
+%   in-plane approach (khat_z = 0, e.g. the (h,0,0) R2007 Fig-3 path) the limit equals the
+%   uniform-mode Lorentz value (info.Jcc0 convention), giving a continuous endpoint.
+%   Points at exactly G use the LOCAL PATH DIRECTION; a single-point path at G defaults
+%   to the in-plane (uniform-mode) convention.
 %
 %   Scope: the guard covers Gamma-EQUIVALENT points only. Near non-Gamma-equivalent
 %   integer points (e.g. (1,0,0), structure factor 0) the branches retain truncated-sum
@@ -20,11 +18,10 @@ function P = invz_jq_path(ion, qpath, opts)
 %   tracked through crossings.
 %
 %   P.Juni is the PHYSICAL single-mode dispersion: the uniform ferromagnetic-mode
-%   projection v'*Jcc(q)*v (see invz_jq_modes), guard applied. Along (1,0,0)->(2,0,0) it
-%   rises monotonically (R 2007 Fig 3: the mode softens toward the (2,0,0) zone centre),
-%   matching MF_RPA_Yikai.m. Prefer it over any P.Jnu column for a q-path dispersion:
-%   max(eig) selects the wrong sublattice branch for h < 1.5 and mirrors the curve about
-%   h = 1.5. The four P.Jnu branches remain available for exploratory branch-resolved views.
+%   projection v'*Jcc(q)*v (see invz_jq_modes), guard applied. Prefer it over any P.Jnu
+%   column for a q-path dispersion: max(eig) selects the wrong sublattice branch for
+%   h < 1.5 and mirrors the curve about h = 1.5. The four P.Jnu branches remain
+%   available for exploratory branch-resolved views.
 %
 %   Returns:
 %     P.Juni    [nq x 1]  uniform FM-mode coupling (meV), guard applied -- physical mode

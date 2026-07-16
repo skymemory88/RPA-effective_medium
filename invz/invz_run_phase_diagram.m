@@ -1,22 +1,13 @@
 %INVZ_RUN_PHASE_DIAGRAM Reproduce R 2007 Fig 1 (paramagnetic-side boundary).
-%
-% Two-regime search:
-%   Bc search:  find the critical field Bc(T) at each fixed T in Ts
-%           (invz_critical, vertical cuts);
-%   Tc search: find the critical temperature Tc(B) at each fixed B in Bs
-%           (invz_critical_T, horizontal cuts, self-adapting window).
+% Two-regime search: Bc(T) at each fixed T in Ts (invz_critical, vertical field cuts), and
+% Tc(B) at each fixed B in Bs (invz_critical_T, horizontal temperature cuts, self-adapting window).
 
 addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')),'..'));
 ion = invz_ion();
 % ion.demag = 1;  ion.alpha = 0.25;  % OPTIONAL sample-shape (demagnetization) knob; default off.
-%   - info.Jcc0, Jnu, and the ordering-channel contribution to criticality are demag-
-%     INVARIANT (R 2007: the demagnetizing field cancels from the critical condition,
-%     since ordering occurs at q -> 0+, not strict q = 0).
-%   - Tc(B = 0) is EXACTLY demag-invariant: the transverse moment vanishes there.
-%   - Bc(T) vs APPLIED transverse field CAN shift through the demag-aware transverse
-%     coupling info.Jaa0 (hoisted into Jxx0 below): internal-vs-applied field relation.
-%   demag = 0 (default) is the intrinsic / internal-field boundary matching the R 2007
-%   benchmark.
+%   Ordering-channel criticality (info.Jcc0/Jnu) and Tc(B=0) are demag-INVARIANT (R2007); Bc(T)
+%   vs APPLIED field can shift via the demag-aware info.Jaa0 (hoisted into Jxx0 below). See
+%   invz_ion.m for the full explanation. demag = 0 (default) matches the R2007 benchmark.
 [qvec, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5], 'verbose', false);
 qvec = qvec(any(abs(qvec) > 1e-12, 2), :);
 [Jnu, info] = invz_jq_modes(ion, qvec, struct('dpRng', 30, 'cache', true));
@@ -30,12 +21,9 @@ Jxx0 = ion.Jxx0;  if isfield(info, 'Jaa0'), Jxx0 = info.Jaa0; end   % live trans
 % endpoint on the plot.
 Tc0 = invz_critical_T0field(ion, invz_sigma_crit(J0, Jf), J0);
 
-% ---- knobs --------------------------------------------------------------
-% -------------------------------------------------------------------------
-% Tc(B) search window: invz_critical_T now self-adapts per field -- it anchors
-% the window top at Tc0+0.05 K, spans 0.5 K down, samples crit on a grid,
-% classifies from CONVERGED points only, and interpolates the highest-T
-% crossing (see invz_critical_T header). 
+% ---- knobs ----------------------------------------------------------------
+% Tc(B) search window is not set here: invz_critical_T self-adapts per field
+% (anchors at Tc0+0.05 K, spans 0.5 K down; see its header for details).
 
 Ts = linspace(0.05, 1.95, 28);   % low-T regime: Bc(T) points
 Bs = [];   % high-T regime: Tc(B) points

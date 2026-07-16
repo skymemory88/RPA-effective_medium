@@ -8,13 +8,12 @@ function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 % Returns pt.is_ordered: FALSE if the (T,Bx) point has no spontaneous moment (|m0| < m_tol) --
 % the caller should then fall back to invz_solve_point (paramagnetic). When ordered, pt carries
 % the same fields as invz_solve_point plus pt.m0 (order parameter), pt.alpha_m, pt.si (the
-% ordered single-ion struct, for the real-axis continuation), and pt.is_ordered = true.
+% ordered single-ion struct), and pt.is_ordered = true.
 %
-% SCOPE NOTE (Option A): the moment is the bare mean-field order parameter (the applied-field /
-% H_MF self-consistency of HTML eqs 41-43 is deferred), so m0 onsets at the MEAN-FIELD boundary,
-% which sits slightly above the 1/z boundary. Near B_c the two boundaries differ by a small band;
-% deep in the ordered phase the result is unaffected. The elastic (m^2 h) sector is exponentially
-% small at low T, so the eq-39 static correction reduces to the ordinary Dyson form used here.
+% SCOPE NOTE (Option A): m0 is the bare mean-field order parameter (the applied-field/H_MF
+% self-consistency of HTML eqs 41-43 is deferred), so it onsets at the mean-field boundary,
+% slightly above the true 1/z boundary; the gap matters only near B_c, not deep in the
+% ordered phase.
 if nargin < 5, opts = struct(); end
 Ecut  = 40;   if isfield(opts,'Ecut'),      Ecut  = opts.Ecut;      end
 hyp   = true; if isfield(opts,'hyp'),       hyp   = opts.hyp;       end

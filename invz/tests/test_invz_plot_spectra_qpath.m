@@ -9,13 +9,10 @@ addpath(fullfile(here, '..', '..'));
 end
 
 function test_line_xdata_matches_qaxis_not_color_scratch(testCase)
-% Regression: the percentile/color-limit block used to reuse the variable name `x` as
-% scratch space for sorting finite positive chi values (an array whose length is the
-% number of finite chi'' samples, NOT the number of q-points). Once the q-axis coordinate
-% was also bound to a persistent `x`, that scratch reuse silently clobbered it before the
-% peak-overlay plot() call consumed it, so plot() saw mismatched vector lengths and
-% errored (or, for accidentally-matching lengths, would have plotted the wrong x-data
-% silently). Pin that the plotted line's XData is exactly S.x, not some other length.
+% Regression: a percentile/color-limit block reused the variable name `x` as scratch
+% space for sorted chi values, clobbering the q-axis coordinate also named `x` before
+% the peak-overlay plot() call consumed it. Pins that the plotted line's XData is
+% exactly S.x (length nq), not the clobbered scratch array.
 ion = invz_ion();
 info = struct('Jcc0', 6.4e-3);
 Jnu  = linspace(-2e-3, 6.0e-3, 24).';

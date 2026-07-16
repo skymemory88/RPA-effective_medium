@@ -17,13 +17,9 @@ K = 2e-3 ./ (1 + (wn/0.5).^2);          % synthetic even K decaying like wn^-2
 end
 
 function test_lambda_analytic(testCase)
-% With K = const = c: lambda_1 = c*(1/beta)*sum g = c;  lambda_2 = c*(1/2)[g0+beta(1-n01^2)].
-% NOTE: the (1/beta)*sum g = 1 sum rule is exact only for the infinite Matsubara
-% sum; at Ecut_factor=400 the truncated-grid tail leaves a 1.49e-3 relative
-% residual (just over the 1e-3 RelTol, a <3x overshoot). Per the task-8 brief's
-% documented-deviation allowance, the grid factor is raised 400->800 here,
-% which brings the residual to 7.5e-4 (comfortably under tolerance) without
-% touching invz_lambdas.m/invz_sigma.m.
+% With K = const = c: lambda_1 = c*(1/beta)*sum g = c; lambda_2 = c*(1/2)[g0+beta(1-n01^2)].
+% The (1/beta)*sum g = 1 sum rule is only exact for the infinite Matsubara sum, so
+% Ecut_factor=800 (not 400) is needed to bring the truncation residual under the 1e-3 RelTol.
 [tl, ~, wts, beta, g, ~] = fixture(800);
 c = 3.7e-3;
 lam = invz_lambdas(c*ones(size(g)), g, wts, beta, [1 2]);

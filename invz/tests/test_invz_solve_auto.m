@@ -9,13 +9,10 @@ addpath(fullfile(here, '..', '..'));
 end
 
 function test_expected_invz_errors_become_phase0(testCase)
-% Known numerical conditions (invz:* identifiers) are absorbed as "no solution"
-% with the identifier preserved in the diagnostic. T = 1.9 K, Bx = 0.04 T: the
-% mean-field ordered branch does not converge to a self-consistent 1/z solution
-% here (Option-A caveat: the bare mean-field boundary sits above the 1/z one, so
-% invz_solve_point_ordered.is_ordered can be true while .converged is false; no
-% error is raised), so invz_solve_auto falls through to the paramagnetic solve,
-% whose two-level helper raises invz:degenerateDoublet at this small a field.
+% Known numerical conditions (invz:* identifiers) are absorbed as "no solution" with
+% the identifier preserved in the diagnostic. At T=1.9 K, Bx=0.04 T the ordered branch
+% does not converge, so invz_solve_auto falls through to the paramagnetic solve, whose
+% two-level helper raises invz:degenerateDoublet at this small field.
 ion = invz_ion();
 Jnu = linspace(-2e-3, 6.0e-3, 24).';
 [pt, phase, di] = invz_solve_auto(ion, 1.9, 0.04, Jnu, struct('J0eff', 6.4e-3));
