@@ -72,5 +72,5 @@ verifyEqual(testCase, pa2, pa1);
 w = (0.1:0.1:0.4).';
 o1 = invz_chi_realaxis(ion, 0.31, 5.5, pt1, w, struct('eta', 1e-3));
 o2 = invz_chi_realaxis(ion, 0.31, [5.5 0 0], pt1, w, struct('eta', 1e-3));
-verifyEqual(testCase, o2.chi_cc_q, o1.chi_cc_q);
+verifyEqual(testCase, o2, o1);
 end
