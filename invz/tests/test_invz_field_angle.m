@@ -52,3 +52,25 @@ sf = invz_single_ion(ion, 0.31, [2 0 0], struct('hyp', false, 'hz_fixed', 5e-3))
 verifyTrue(testCase, isnan(sf.F_mf));
 verifyTrue(testCase, isfinite(sf.E0));
 end
+
+function test_scalar_vs_vector_boundaries(testCase)
+% Spec test 2: scalar B and [B 0 0] are literally the same solve at every
+% scalar-accepting boundary (struct-exact equality: identical code path).
+ion = invz_ion();
+Jnu = linspace(-2e-3, 6.0e-3, 24).';       % synthetic branch fixture (fast, no lattice sum)
+o   = struct('J0eff', 6.4e-3);
+verifyEqual(testCase, invz_twolevel(ion, 0.31, [5.5 0 0]), invz_twolevel(ion, 0.31, 5.5));
+verifyEqual(testCase, invz_twolevel_ordered(ion, 0.31, [2 0 0], 5e-3), ...
+                      invz_twolevel_ordered(ion, 0.31, 2, 5e-3));
+pt1 = invz_solve_point(ion, 0.31, 5.5, Jnu, o);
+pt2 = invz_solve_point(ion, 0.31, [5.5 0 0], Jnu, o);
+verifyEqual(testCase, pt2, pt1);
+[pa1, ph1] = invz_solve_auto(ion, 0.31, 5.5, Jnu, o);
+[pa2, ph2] = invz_solve_auto(ion, 0.31, [5.5; 0; 0], Jnu, o);   % column form too
+verifyEqual(testCase, ph2, ph1);
+verifyEqual(testCase, pa2, pa1);
+w = (0.1:0.1:0.4).';
+o1 = invz_chi_realaxis(ion, 0.31, 5.5, pt1, w, struct('eta', 1e-3));
+o2 = invz_chi_realaxis(ion, 0.31, [5.5 0 0], pt1, w, struct('eta', 1e-3));
+verifyEqual(testCase, o2.chi_cc_q, o1.chi_cc_q);
+end

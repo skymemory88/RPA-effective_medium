@@ -1,5 +1,6 @@
 function out = invz_chi_realaxis(ion, T, Bx, pt, w, opts)
 %INVZ_CHI_REALAXIS 1/z-renormalized cc susceptibility on the real axis.
+% Bx: scalar (transverse, historical) or [Bx By Bz] vector (T).
 % Paramagnet (HTML eqs 22-23, 29-30):
 %   Sigma(w) = alpha + (M2/n01^2)[lambda1 - (1-n01^2)K(w)] g(w)
 % Ordered phase (pt.is_ordered = true; HTML eq 37), with gamma(w) as above:
@@ -34,7 +35,7 @@ else
     elseif ordered && isfield(pt,'si') && ~isempty(pt.si)
         si = pt.si;                                % ordered eigenstates from the solve
     else
-        si = invz_single_ion(ion, T, [Bx 0 0], struct('hyp', hyp, 'Jxx0', Jxx0));   % paramagnet
+        si = invz_single_ion(ion, T, invz_field_vec(Bx), struct('hyp', hyp, 'Jxx0', Jxx0));   % paramagnet
     end
     c0 = invz_chi0z(si, T, z, struct('elastic', false));
     G0 = -squeeze(c0(3,3,:));
