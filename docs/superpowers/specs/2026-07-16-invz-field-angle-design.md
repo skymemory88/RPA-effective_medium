@@ -2,7 +2,7 @@
 
 Date: 2026-07-16. Branch: `invz-1z-lihof4`. Status: design approved by user;
 **revised 2026-07-16** after external review, **second revision 2026-07-16**
-after the follow-up review (`field-angle-plan-review_by_Codex.md`, both rounds;
+after the follow-up review (`IP-field-rotation_plan_byCodex.md`, both rounds;
 numerical findings verified against the code — see "Review resolutions" at the
 end).
 Scope: **scalar stage, c-axis tilt only** (`phi_ab = 0`); azimuthal support and
@@ -332,11 +332,24 @@ only with recorded justification:
    `4.6:0.05:5.3` T: no NaN `Epeak` in the crossover window, and
    `pt.sumrule_rel < 5e-2` at every field (same order as the existing
    ordered-phase tolerance).
-6. **θc → 0 continuity:** at `T = 0.31 K`,
-   `max_w |χ''(θc=10⁻³ deg) − χ''(0)| / max_w χ''(0) < 1e-6` at **two** fields:
-   `B = 2 T` (spontaneous-ordered at zero tilt: moment-form → moment-form) and
-   `B = 6 T` (paramagnetic at zero tilt: exercises the forced moment-form →
-   strict-PM formula reduction; second-review refinement 1).
+6. **θc → 0 continuity** (amended 2026-07-16 during implementation, recorded
+   justification): at `T = 0.31 K`, two fields with DIFFERENT metrics:
+   - `B = 6 T` (paramagnetic at zero tilt: forced moment-form → strict-PM
+     formula reduction; second-review refinement 1): flat bound
+     `max_w |χ''(θc=10⁻³ deg) − χ''(0)| / max_w χ''(0) < 1e-6` (measured
+     4.2e-7 — χ_cc is even in Bz in the unbroken phase).
+   - `B = 3 T` (spontaneous FM at zero tilt): the original `B = 2 T` point sits
+     in a fixture-specific non-convergence island (`B ∈ [1, 2]` T at 0.31 K
+     with the synthetic test couplings; discovered in Task 8, pre-existing —
+     the historical map test never asserted convergence there). More
+     fundamentally, a flat 1e-6 bound is the WRONG physics on the FM side: the
+     solver follows a single domain, which breaks Z2, so χ'' responds
+     **linearly** in Bz with a soft-mode-amplified coefficient (δ/η; measured
+     7.7e-3 at 10⁻³ deg, matching the a-priori estimate 2·gμB·Bz·m0/η). The
+     continuity assertion is therefore **linear scaling**: rel-diff(10⁻³ deg)
+     < 3e-2 AND rel-diff(10⁻³)/rel-diff(10⁻⁴) ∈ [6, 15] (pure linear → 10; an
+     O(1) jump at the spontaneous→forced routing boundary would break the
+     ratio, which is the regression this test exists to catch).
 7. **Routing tolerance:** `|Bz|` just below `bz_tol` → transverse path
    (`pt.moment_branch = 'spontaneous'` or PM); just above → moment path
    (`'field_induced'`).
@@ -373,7 +386,7 @@ only with recorded justification:
    approximation, not a rigorous tensor 1/z. A0+A1 would supersede this
    stage's scalar routing for arbitrary tilt and subsume retardation.
 
-## Review resolutions (field-angle-plan-review_by_Codex.md, 2026-07-16)
+## Review resolutions (`IP-field-rotation_plan_byCodex.md`, 2026-07-16)
 
 | Finding | Status | Resolution |
 |---|---|---|
