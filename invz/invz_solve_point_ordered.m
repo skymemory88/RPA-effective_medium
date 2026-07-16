@@ -10,6 +10,7 @@ function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 % longitudinal route) the moment is treated as FIELD-INDUCED rather than spontaneous -- the
 % |m0| > m_tol gate is bypassed, a sign-aware seed/one mirrored retry enforces alignment with
 % the applied Bz, and a non-converged mean-field loop is itself an early-return condition.
+% forced_moment with Bx(3) = 0 skips the alignment check (no field sign to align to).
 % opts.mz_seed / opts.mf_maxit / opts.mf_mix forward to invz_single_ion (diagnostics/tests).
 %
 % Returns pt.is_ordered: strictly "this point uses the moment-form self-energy", true for
@@ -52,7 +53,7 @@ for f = {'mz_seed', 'mf_maxit', 'mf_mix'}                  % diagnostic pass-thr
 end
 si = invz_single_ion(ion, T, Bx, siopts);
 branch = 'spontaneous';  if fmom, branch = 'field_induced'; end
-if fmom && si.mf_converged && abs(si.Jexp(3)) > 1e-10 && sign(si.Jexp(3)) ~= sign(Bx(3))
+if fmom && Bx(3) ~= 0 && si.mf_converged && abs(si.Jexp(3)) > 1e-10 && sign(si.Jexp(3)) ~= sign(Bx(3))
     % converged onto the metastable anti-aligned branch: one mirrored retry
     siopts.mz_seed = -sign(si.Jexp(3));
     si2 = invz_single_ion(ion, T, Bx, siopts);
