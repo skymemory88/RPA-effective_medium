@@ -64,3 +64,31 @@ verifyEqual(testCase, S.phase, 0);
 verifyTrue(testCase, all(~isfinite(S.chiz(:))));   % 1/z column masked
 verifyTrue(testCase, any(isfinite(S.chirpa(:))));  % RPA overlay from the failed pto
 end
+
+function test_qpath_scalar_vs_vector_and_metadata(testCase)
+ion = invz_ion();  w = (0.1:0.1:0.5).';
+qp  = [1 0 0; 1.5 0 0; 2 0 0];
+fx  = fixture();  fx.dpRng = 8;                    % small real-space cutoff: fast path sums
+S1 = invz_spectra_qpath(ion, 0.31, 5.5, qp, w, fx);
+S2 = invz_spectra_qpath(ion, 0.31, [5.5 0 0], qp, w, fx);
+verifyEqual(testCase, S2.chiz, S1.chiz);
+verifyEqual(testCase, S2.Epeak, S1.Epeak);
+verifyEqual(testCase, S1.Bvec, [5.5 0 0]);
+verifyEqual(testCase, S1.Bmag, 5.5);
+end
+
+function test_qpath_error_message_wellformed_for_vector(testCase)
+% Review finding 7: a 3-vector B through a scalar %.3f recycles the format string;
+% the message must instead carry one mat2str-rendered vector.
+ion = invz_ion();  w = (0.1:0.1:0.5).';
+qp  = [1 0 0; 2 0 0];
+% (1.9 K, 0.04 T): PM two-level raises invz:degenerateDoublet -> phase 0 -> noSolution,
+% thrown BEFORE any path lattice sum (cheap).
+try
+    invz_spectra_qpath(ion, 1.9, [0.04 0 0], qp, w, fixture());
+    verifyTrue(testCase, false, 'expected invz:noSolution');
+catch err
+    verifyEqual(testCase, err.identifier, 'invz:noSolution');
+    verifyTrue(testCase, contains(err.message, mat2str([0.04 0 0], 4)));
+end
+end

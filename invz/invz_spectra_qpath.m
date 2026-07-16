@@ -7,7 +7,7 @@ function S = invz_spectra_qpath(ion, T, B, qpath, w, opts)
 %   reproduction is not claimed.
 %
 %   S = invz_spectra_qpath(ion, T, B, qpath, w) computes chi''_cc along qpath (nq x 3,
-%   r.l.u.) at fixed T (K) and field B (T), for the 1/z and bare-RPA theories. The 1/z
+%   r.l.u.) at fixed T (K) and field B (scalar or 1x3 vector, T), for the 1/z and bare-RPA theories. The 1/z
 %   medium (Sigma, K, lambda) is solved ONCE at (T, B) on the BZ-integration grid
 %   (ordered-first via invz_solve_auto); the path susceptibility follows from the single-
 %   site response chit(w) via chi(q, w) = chit/(1 - J(q) chit), J(q) from invz_jq_path.
@@ -27,10 +27,13 @@ function S = invz_spectra_qpath(ion, T, B, qpath, w, opts)
 %     S.s, S.s_cart        path distance in index (r.l.u.) / Cartesian (Ang^-1) coordinates
 %     S.x, S.xlab          plot coordinate + label (varying Miller component for a single-
 %                          axis path, e.g. h = 1..2, else falls back to S.s)
-%     S.qpath, S.w, S.T, S.B, S.info, S.phase (1 = FM, 2 = PM solve used)
+%     S.qpath, S.w, S.T, S.B, S.Bvec, S.Bmag, S.info, S.phase (1 = moment-form solve, 2 = strict-PM solve)
 %
 %   opts fields (all optional):
 %     .grid ([16 16 16]), .dpRng (30), .eta (5e-3)   as in invz_spectra_map
+%     .bz_tol (1e-9)     T; longitudinal field threshold for dead band (same as invz_solve_auto)
+%     .solve_opts        struct of reserved-field-checked solver overrides (fields J0eff,
+%                        Jxx0, hyp are driver-owned and will error if present)
 %     .branch (0)        0 (default) = uniform FM-mode coupling v'*Jcc*v (the physical
 %                        single mode); 1..4 = follow that sorted-eigenvalue branch instead
 %                        (exploratory; sorted index, NOT a tracked mode identity through
@@ -48,6 +51,14 @@ branch  = getf(opts, 'branch', 0);   % 0 = uniform FM mode (default); 1..4 = sor
 snapfac = getf(opts, 'snapfac', 2.5);
 wmin    = getf(opts, 'peak_wmin', 0.05);
 
+bztol = getf(opts, 'bz_tol', 1e-9);
+sxtra = getf(opts, 'solve_opts', struct());
+if any(isfield(sxtra, {'J0eff', 'Jxx0', 'hyp'}))
+    error('invz:solveOpts', 'solve_opts fields J0eff/Jxx0/hyp are reserved (driver-owned).');
+end
+B = invz_field_vec(B);
+if abs(B(3)) <= bztol, B(3) = 0; end             % same dead band as invz_solve_auto
+
 w = w(:);
 
 if isfield(opts, 'Jnu') && isfield(opts, 'info')
@@ -62,11 +73,14 @@ Jcc0 = info.Jcc0;
 Jaa0 = ion.Jxx0;  if isfield(info, 'Jaa0'), Jaa0 = info.Jaa0; end
 
 % one medium solve at (T, B) -- FM below the (bare-MF) boundary, PM above
-[pt, phase] = invz_solve_auto(ion, T, B, Jnu, struct('hyp', true, 'J0eff', Jcc0, 'Jxx0', Jaa0));
+sopts = sxtra;
+sopts.hyp = true;  sopts.J0eff = Jcc0;  sopts.Jxx0 = Jaa0;  sopts.bz_tol = bztol;
+[pt, phase] = invz_solve_auto(ion, T, B, Jnu, sopts);
 if phase == 0
     error('invz:noSolution', ...
-        ['No converged 1/z solution at T = %.3f K, B = %.3f T ' ...
-         '(near-degenerate doublet or critical band).'], T, B);
+        ['No converged 1/z solution at T = %.3f K, B = %s T ' ...
+         '(near-degenerate doublet, critical band, or non-converged moment branch).'], ...
+        T, mat2str(B, 4));
 end
 
 % guarded coupling along the path: physical uniform FM mode by default (P.Juni),
@@ -84,6 +98,8 @@ copts = struct('Jsel', Jq, 'eta', eta, 'Jxx0', Jaa0, 'hyp', true);
 o = invz_chi_realaxis(ion, T, B, pt, w, copts);
 chiz = imag(o.chi_cc_q).';                        % [nw x nq]
 
+% Under a longitudinal B (|Bz| > bz_tol) invz_solve_auto returns phase 1 or the error
+% above already fired -- the strict-PM else-branch below is only reachable transversely.
 if phase == 1
     pt0 = struct('alpha', 0, 'alpha_m', 0, 'lambda', [0; 0; 0], 'tl', pt.tl, ...
                  'K', [], 'is_ordered', true, 'si', pt.si);
@@ -114,7 +130,7 @@ else
     S.x = P.s;
     S.xlab = sprintf('s along path from Q = [%g %g %g] (index r.l.u.)', qpath(1, :));
 end
-S.w = w;  S.T = T;  S.B = B;  S.phase = phase;  S.info = info;  S.Jq = Jq;
+S.w = w;  S.T = T;  S.B = B;  S.Bvec = B;  S.Bmag = norm(B);  S.phase = phase;  S.info = info;  S.Jq = Jq;
 S.chiz = chiz;  S.chirpa = chirpa;
 S.Epeak     = invz_peak_energy(chiz,   w, wmin);
 S.Epeak_rpa = invz_peak_energy(chirpa, w, wmin);
