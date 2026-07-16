@@ -21,8 +21,10 @@ function si = invz_single_ion(ion, T, B, opts)
 %     with the pre-existing single-axis code path).
 %   'none': both transverse channels are forced to zero (hx = hy = 0) regardless of Jxx0,
 %     i.e. the bare CF + Zeeman problem (equivalent to opts.Jxx0 = 0).
-%   'vector_ab': solves both hx = Jxx0*<Jx> and hy = Jxx0*<Jy> self-consistently, for
-%     in-plane fields away from the a/b axes where B64s couples <Jy> ~= 0.
+%   'vector_ab': solves both hx = Jxx0*<Jx> and hy = Jxx0*<Jy> self-consistently. Needed
+%     for any in-plane field, including along the a/b axes: the B64s crystal-field term
+%     breaks the mirror symmetry that would otherwise force <Jy> = 0, so <Jy> ~= 0 even
+%     for a field applied purely along x.
 % si.hy (meV) is the converged transverse-b mean field (0 unless 'vector_ab' finds
 % <Jy> ~= 0); si.transverse_mf echoes the resolved mode string. si.F_mf includes the
 % matching 0.5*hy*si.Jexp(2) term.
