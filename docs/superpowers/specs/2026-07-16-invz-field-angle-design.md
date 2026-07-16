@@ -312,7 +312,9 @@ amended 2026-07-16 after the Task-9 measurement, recorded justification below):
   an angle θ > 0 is supported when, at every tested field,
   `dE_peak <= max(0.02·Epeak_ten, eta)` (censoring rule: both-NaN passes,
   one-sided NaN fails) AND `eps_amp = |max_w χ''_sc − max_w χ''_ten| /
-  max_w χ''_ten <= 10%`. `eps_spec`/`eps_tilt` remain REPORTED diagnostic
+  max_w χ''_ten <= 10%`, where every `max_w` runs over `w >= peak_wmin` (the
+  same hyperfine-line exclusion the peak search uses — the amplitude gate must
+  measure the electronic mode, not a sub-0.05-meV hyperfine feature). `eps_spec`/`eps_tilt` remain REPORTED diagnostic
   columns with the artifact explanation; **lineshape fidelity is explicitly
   not claimed** for the scalar stage. The θ = 0 row reports baselines only.
   The supported range is stated in the README/session log; the logged gated
