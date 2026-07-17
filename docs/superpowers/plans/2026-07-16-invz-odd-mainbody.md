@@ -852,10 +852,13 @@ fprintf('T3.3 IR: |C| at Bc+0.5/0.2/0.05 T = %.3g / %.3g / %.3g meV^2\n', Cn);
 end
 
 function test_tier2_combined_measurement_slow(testCase)
-% Combined dTc and the Tier1 : Tier2 split (REPORT). Tc via invz_critical_T at
-% Bx = 0.5 T — NOT lower: below ~0.5 T the doublet is near-degenerate and the
-% boundary suffers the known small-B non-convergence speckle (plan SS8 +
-% invz_critical_T header); 0.5 T is the established reliable floor.
+% Combined dTc and the Tier1 : Tier2 split (REPORT), at the Bx = 0.5 T proxy
+% (NOT lower: small-B speckle, plan SS8). AMENDED (Task-7 finding, 2026-07-17):
+% invz_critical_T cannot bracket with ODD on — no metastable converged-PM
+% window below the boundary — so Tc here uses the deterministic PM-side
+% crit(T)-extrapolation estimator introduced in test_invz_odd_retarded.m
+% (T2.2 leg): same estimator for all three configurations, so the
+% off/T1/T1+T2 DIFFERENCES are meaningful (common bias cancels).
 assumeTrue(testCase, ~isempty(getenv('INVZ_SLOW')), 'INVZ_SLOW only');
 ion = invz_ion();
 n = 16;  [h, k, l] = ndgrid((0:n-1)/n);  qvec = [h(:) k(:) l(:)];  qvec(1,:) = [];
@@ -865,11 +868,11 @@ Jnu0 = zeros(size(Vcc,3), 4);
 for iq = 1:size(Vcc,3), Jnu0(iq,:) = sort(real(eig(Vcc(:,:,iq)))).'; end
 Tc0f = invz_odd_zero_field(ion, struct('mode', 'off'));
 o0 = struct('J0eff', infoB.Jcc0, 'Jxx0', infoB.Jaa0, 'Tc0', Tc0f);
-t_off = invz_critical_T(ion, 0.5, Jnu0(:), o0);
-o1 = o0;  o1.odd = true;  o1.odd_blocks = S;  o1.Tc0 = invz_odd_zero_field(ion, struct('mode', 'full'));
-t_t1 = invz_critical_T(ion, 0.5, [], o1);
-o2 = o1;  o2.odd_tier2 = true;
-t_t12 = invz_critical_T(ion, 0.5, [], o2);
+t_off = odd_tc_extrap(ion, 0.5, Jnu0(:), o0);    % local helper: the T2.2-leg PM-side
+o1 = o0;  o1.odd = true;  o1.odd_blocks = S;     % crit(T)-extrapolation estimator,
+t_t1 = odd_tc_extrap(ion, 0.5, [], o1);          % copied/adapted from
+o2 = o1;  o2.odd_tier2 = true;                   % test_invz_odd_retarded.m
+t_t12 = odd_tc_extrap(ion, 0.5, [], o2);
 fprintf('T3.3 combined (0.5 T): Tc off %.4f, +T1 %.4f, +T1+T2 %.4f K; split %.1f%% : %.1f%%\n', ...
     t_off, t_t1, t_t12, 100*(t_off - t_t1)/max(t_off - t_t12, 1e-9), ...
     100*(t_t1 - t_t12)/max(t_off - t_t12, 1e-9));
