@@ -393,15 +393,16 @@ once. This is the least rigorous step of the whole plan — flag it in the READM
 <div class="ok"><b>Acceptance</b>: C=0 reproduces <code>invz_twolevel</code> bitwise; averaged \( \Delta_{\rm eff} \ge \Delta \) (level repulsion) and \( M^2_{\rm eff} \le M^2_0 - m^2 \) monotonically in ‖C‖ on a ray.
 <em>AMENDED at Task-9 adjudication (b691b35): the M² leg is REFUTED at the 2 T fixture — bare M²(B<sub>x</sub>) is convex there (M²''(2 T) = +0.751/T², quenched average rises by ½M²''σ²; plan-compliant at 1 T) — the gate is the averaged static two-level χ(0) = M²<sub>eff</sub>·2n<sub>01,eff</sub>/Δ<sub>eff</sub>, monotonically suppressed; M² direction reported (ODD-LOG §T3.2).</em></div></div>
 
-<div class="task"><div class="task-head"><span class="tid">T3.3</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">T3.3</span><span class="tstatus">[x]</span>
 <span class="ttitle">Outer self-consistency and wiring</span></div>
 <ul>
 <li><code>invz_solve_point</code> with <code>opts.odd_tier2=true</code>: after the T1 point solve converges, compute C (T3.1), re-solve with averaged doublet (T3.2), iterate. χ<sub>cc</sub> feedback is stabilizing (suppression reduces S<sub>cc</sub>); 2–4 outer iterations expected — cap at 8, mix at 0.5, mask on non-convergence exactly like the EMT loop.</li>
 <li>Near the boundary S<sub>cc</sub>(q→0) grows; C stays finite because the ODD blocks vanish at q=0 — assert C remains bounded as <code>crit → 0</code> at fixed T (this is the mechanism’s built-in infrared safety and a strong correctness check).</li>
 </ul>
-<div class="ok"><b>Acceptance</b>: converged Tier1+Tier2 point at (1.55 K, 0 T → use 0.05 T to dodge the degenerate-doublet guard, plus the zero-field closed-form route); log combined ΔT<sub>c</sub>(0) and the Tier1 : Tier2 split.</div></div>
+<div class="ok"><b>Acceptance</b>: converged Tier1+Tier2 point at (1.55 K, 0 T → use 0.05 T to dodge the degenerate-doublet guard, plus the zero-field closed-form route); log combined ΔT<sub>c</sub>(0) and the Tier1 : Tier2 split.
+<em>AMENDED (Task-10 brief, 2026-07-17): the convergence GATE sits at the guaranteed-PM point (1.80 K, 0.05 T) with the (1.55 K, 0.05 T) point REPORTED (measured: converged PM on both tiers, crit +0.0054 → +0.0084); and the combined-T<sub>c</sub> measurement uses the T2.2 PM-side crit(T)-extrapolation estimator at the 0.5 T proxy (amendment 2728672: <code>invz_critical_T</code> cannot bracket with ODD on). Measured: T<sub>c</sub>* 1.7008 (off) → 1.4865 (+T1) → 1.4802 K (+T1+T2), split 97.2% : 2.8%; IR safety ‖C‖ flat to 0.2% as crit falls 3×; ODD-LOG §T3.3.</em></div></div>
 
-<div class="task"><div class="task-head"><span class="tid">T3.4</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">T3.4</span><span class="tstatus">[x]</span>
 <span class="ttitle">Small-B<sub>x</sub> interaction with the hyperfine scale</span></div>
 <ul>
 <li>Tier 2 injects a transverse field spread even at \(B_x=0\), where the bare doublet is degenerate and the README’s small-B<sub>x</sub> caveat (hyperfine \(A\approx3.36\,\mu\)eV) already applies. Verify the averaged doublet no longer trips <code>invz:degenerateDoublet</code> at B<sub>x</sub>=0 (the internal field lifts the degeneracy node-wise except at the origin node — handle the origin node by its \(h\to0\) limit). Document whether zero-field results move from “directional only” to quantitative, or the caveat stands.</li>
@@ -502,8 +503,8 @@ Keep in lockstep with the <code>[ ]</code> markers above.</p>
     {"id":"T2.2","phase":"T2","deps":["T2.1"],"files":["docs/ODD-LOG.md"],"status":"done"},
     {"id":"T3.1","phase":"T3","deps":["T1.4"],"files":["invz/invz_odd_fieldvar.m"],"status":"done"},
     {"id":"T3.2","phase":"T3","deps":[],"files":["invz/invz_twolevel_avg.m"],"status":"done"},
-    {"id":"T3.3","phase":"T3","deps":["T3.1","T3.2"],"files":["invz/invz_solve_point.m"],"status":"todo"},
-    {"id":"T3.4","phase":"T3","deps":["T3.3"],"files":["docs/ODD-LOG.md"],"status":"todo"},
+    {"id":"T3.3","phase":"T3","deps":["T3.1","T3.2"],"files":["invz/invz_solve_point.m"],"status":"done"},
+    {"id":"T3.4","phase":"T3","deps":["T3.3"],"files":["docs/ODD-LOG.md"],"status":"done"},
     {"id":"V4.1","phase":"V4","deps":["T2.2","T3.3"],"files":["invz/invz_run_phase_diagram.m"],"status":"todo"},
     {"id":"V4.2","phase":"V4","deps":["V4.1"],"files":["docs/ODD-LOG.md"],"status":"todo"},
     {"id":"V4.3","phase":"V4","deps":["V4.2"],"files":["invz/tests/","docs/"],"status":"todo"}

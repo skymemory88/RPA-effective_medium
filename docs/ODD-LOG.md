@@ -914,3 +914,181 @@ Two-level-only averaged call (ngh 7, 49 nodes, no G0): ~0.05–0.1 s. With
 (2.42 s at the B = 0 fixture pre-gating). Fast-suite addition: **+0.95 s**.
 
 ---
+
+## T3.3 — Tier-2 outer self-consistency in `invz_solve_point` + T3.4 small-Bx characterization (2026-07-17)
+
+`opts.odd_tier2 = true` (requires `opts.odd`; `invz:oddArgs` otherwise) closes
+Dollberg's variable-moments loop. After the Tier-1 solve converges: seed
+`C = invz_odd_fieldvar(ion, pt, blocks, T)` from the CONVERGED Tier-1 point →
+`[tla, avg] = invz_twolevel_avg(..., C, 'G0', true)` (GH-dressed doublet +
+disorder-averaged FULL electronuclear cc propagator) → re-run the inner
+EMT↔Σ loop with `tl = tla`, `g = invz_g(tla)`, `G0 = avg.G0` (previous Σ as
+warm seed — the plan's warm-start economy) → re-evaluate C, mix with damping
+0.5, repeat until `max|dC| < opts.tol_tier2` (1e-3 relative; cap
+`opts.max_tier2` = 8). Non-convergence (inner OR outer₂) is masked EXACTLY
+like the EMT loop: `pt.converged = false` — the ordered-phase signal the
+critical finders rely on. New fields (only when the flag is on): `pt.C`
+(final mixed covariance; NaN(2) when Tier 1 never converged),
+`pt.tier2_iters`, `pt.tla` (final dressed params; `pt.tl == pt.tla` on a
+completed Tier-2 solve), `pt.tier2_resid`.
+
+**What Tier 2 swaps and what it does NOT (design, per plan):** the dressed
+doublet enters Σ (tl, g) and the local propagator (G0), so `pt.chi0cc0` and
+`pt.crit = 1 + Σ0 − J0eff·χ̄0cc(0)` carry the DRESSED χ̄0cc — that is the
+variable-moments suppression channel. The LATTICE geometric side (the δJ
+rebuild from Vcc + deltaJ and the −d on J0eff) stays at the Tier-1 static
+χ⊥ (`pt.odd.Xp`) — χ⊥ is Van-Vleck-dominated and is NOT re-dressed (the
+χ⊥-held-fixed design decision, README §1.9). `pt.si` stays the bare
+single-ion state and `pt.sumrule_rel` keeps the bare `si.JzJz_fluct`
+reference (documented O(C) diagnostic offset: 0.0564 → 0.0582 at the gate).
+
+**Loop placement (implementation note):** the flag-off inner Σ loop is
+textually untouched (bit-for-bit non-negotiable); the Tier-2 path re-enters
+the loop through `local_sigma_loop`, a verbatim mirror local function used
+ONLY by the outer₂ iteration and cross-referenced in both places.
+
+**Retarded × Tier-2 decision:** `opts.odd_tier2` combined with
+`opts.odd_retarded(_exact)` errors `invz:oddArgs` ("not yet validated") — a
+real coupling subtlety, not caution theatre: `invz_odd_fieldvar` assembles
+the equal-time Scc (E3) from the STATIC mode spectrum `eig(Vcc + dJ)` with
+this solve's G/K, while a retarded solve's lattice propagator carries
+per-frequency modes `Jnu_n(q,ν)`; E3 has no validated retarded counterpart.
+The static default (T2.2, |dTc| = 0.022 mK) makes the combination unused in
+practice.
+
+### Headline numbers (report, not tuned)
+
+**Convergence gate (1.80 K, 0.05 T; 6³/dpRng 10 warm) — the plan's (1.55 K,
+0.05 T) point is REPORTED below (brief amendment: the gate must sit at a
+guaranteed-PM point):**
+
+| quantity | Tier 1 | Tier 1+2 |
+|---|---|---|
+| converged | 1 | 1 (tier2_iters = **2**, resid 7.6e-4) |
+| crit | 0.091270 | **0.094680** (increases: suppression ✓) |
+| Δ (meV) | 1.3033e-4 | **1.1789e-2** (level repulsion ✓, ×90: the internal field, not the 50 mT applied field, sets the dressed splitting) |
+| Σ0 | 0.259103 | 0.255571 (falls — but the dressed χ0cc0 drop wins) |
+| χ0cc0 (meV⁻¹) | 195.7178 | 194.5543 (−0.59%; J0eff·Δχ ≈ +0.0070 on crit vs ΔΣ0 = −0.0035) |
+| point-solve time | 0.14 s | 5.2 s (dominated by the 49-node electronuclear Ḡ0 average, ~2.4 s/outer₂ iter) |
+
+**C evolution across outer₂ iterations at the gate (max_tier2 sweep):** seed
+(Tier-1 covariance) C_aa = 4.574e-4 → k=1: C_new rel step 1.51e-3, mixed
+4.5708e-4 → k=2: rel step **7.56e-4 < 1e-3 converged**, final C_aa =
+4.5690e-4 meV² (C_ab ~ −3e-10). Monotone contraction, no oscillation — the
+χcc feedback is stabilizing exactly as the plan argued (dressing suppresses
+Scc, which shrinks C by ~0.2% total); mixing 0.5 never stressed. Expected
+2–4 iterations: measured 2 (1.80 K) and 1 (1.55 K).
+
+**Plan point (1.55 K, 0.05 T), REPORTED:** Tier 1 converged PM crit =
++0.005426 (1.55 K sits above Tc_ODD(0) = 1.509 K — already paramagnetic at
+Tier 1); Tier 1+2 converged PM, crit = **+0.008431**, tier2_iters = 1, C_aa
+= 4.4449e-4 meV², Δ_eff = 0.011488 meV. The point lands on the PM side of
+BOTH the Tier-1 and the Tier-1+2 boundaries.
+
+**IR safety (1.2 K, 16³/dpRng 30; slow gate):** Bc(1.2 K) = 2.4187 T
+(para-edge estimate — the `invz:orderedSideNoConverge` warning is the
+EXPECTED pre-existing T2.2 behaviour: the ordered side never converges with
+ODD on; the value matches T2.2's 2.4187 T exactly). Approaching the boundary
+from above:
+
+| B | crit | ‖C‖ (meV²) |
+|---|---|---|
+| Bc + 0.5 T | 0.0823 | 4.25e-4 |
+| Bc + 0.2 T | 0.0425 | 4.25e-4 |
+| Bc + 0.05 T | 0.0264 | 4.24e-4 |
+
+crit falls 3× while ‖C‖ is FLAT to 0.2% (gate ‖C‖(+0.05)/‖C‖(+0.5) < 20
+passes with margin ~0.998): the ODD blocks vanish at q → 0, so the softening
+uniform mode never feeds C — the mechanism's built-in infrared safety,
+measured even stronger than the "grows but saturates" expectation.
+
+**Combined ΔTc at the 0.5 T proxy (16³/dpRng 30; PM-side crit(T)
+extrapolation estimator — brief amendment: `invz_critical_T` cannot bracket
+with ODD on, T2.2 finding — common grid 1.30:1/30:1.90 K; top raised from
+1.80 during TDD: the off-config PM-side slowing band at 0.5 T is ~0.06 K
+wide (1.7333/1.7667 non-converged, first converged PM point 1.8000, crit
++0.0253), so a 1.80 top left a single converged point):**
+
+| config | extrapolated from T (K) | crit at those points | Tc* (K) | distance flag |
+|---|---|---|---|---|
+| off | [1.8000, 1.8333] | [0.02526, 0.03375] | **1.7008** | 3.0 grid steps |
+| +Tier 1 | [1.6000, 1.6333] | [0.03408, 0.04408] | **1.4865** | 3.4 grid steps |
+| +Tier 1+2 | [1.6000, 1.6333] | [0.03701, 0.04731] | **1.4802** | 3.6 grid steps |
+
+- Combined suppression 0.2206 K; split **Tier 1 : Tier 2 = 97.2% : 2.8%**
+  (0.2143 K : 0.0063 K). Tier 2 is a small, correctly-signed addition
+  (t_t12 ≤ t_t1 ≤ t_off gates pass); consistent with Tier 1's zero-field
+  0.234 K (T1.5) — the 0.5 T proxy reads slightly lower, as expected off
+  axis.
+- Estimator adaptation (documented in the test helper): T2.2's cross-run
+  same-grid-points guard compared two nearly identical configs; here the
+  three configs' Tc differ by ~0.2 K, so each extrapolates near ITS own
+  boundary with per-config internal guards (≥2 converged PM points, crit >
+  0, PM-side monotonicity) and the points used are REPORTED. The two ODD
+  configs happen to use IDENTICAL points [1.6000, 1.6333], so the Tier-2 leg
+  IS a pure dressed-crit readout; the off leg sits on its own points. All
+  three distance flags fired at ~3 grid steps — the estimator's common
+  PM-side extrapolation bias (the crit = 0 crossing hides inside the
+  non-convergent band, T2.2 fixture finding); it cancels in the differences.
+
+### T3.4 — small-Bx / B = 0 characterization (report)
+
+- **Exact B = [0 0 0]:** both Tier-1 and Tier-1+2 solves throw
+  `invz:degenerateDoublet` ("Doublet splitting 1.07e-14 meV too small: Bx=0
+  limit needs the closed-form Sigma_c") from the BARE `invz_twolevel`
+  scaffold in the Tier-1 path — the error fires before any Tier-2 machinery
+  runs. **The guard is deliberate, not accidental:** the Σ machinery needs a
+  finite bare doublet to seed the solve; the sanctioned zero-field route
+  remains the closed form (`invz_sigma_crit` / `invz_critical_T0field` /
+  `invz_odd_zero_field`), and the 0.05 T proxy is the practical small-field
+  route (plan T3.3).
+- **The Tier-2 dressing machinery itself is B = 0-capable** (Task 9's
+  degenerate-node limit): `invz_twolevel_avg(1.55 K, B = 0, C(1.55 K))`
+  returns Δ_eff = 0.011313 meV with n_degenerate = 1/49 (origin node only;
+  the internal field lifts the other 48), fit_resid = 3.1e-7, n01_eff =
+  0.0423. So a hypothetical B = 0 Tier-2 entry point would only need a
+  dressed (not bare) scaffold — noted as a Tier-3/V4 design option, not
+  implemented (YAGNI: the closed form owns B = 0).
+- **Quantitative vs directional verdict: the hyperfine caveat STANDS.** The
+  dressed splitting at the 0.05 T proxy is Δ_eff ≈ 11.5–11.8 μeV — only
+  ~3.4× the hyperfine scale A ≈ 3.36 μeV. The quenched-Gaussian dressing
+  acts on the ELECTRONIC doublet (hyperfine enters only through the full-χ0
+  node average in Ḡ0), and the single-pole recompression is the plan's
+  flagged least rigorous step — at scales where Δ_eff ~ A the electronuclear
+  ladder structure matters. Zero-field/small-Bx Tier-2 results are therefore
+  DIRECTIONAL (sign and rough magnitude of the suppression), not
+  quantitative.
+- **Task-9 WATCH item (n01_eff > 1 at low T/large spread): NOT triggered.**
+  Along the whole characterization: n01_eff = 0.0380 (1.80 K), 0.0430
+  (1.55 K), 0.0423 (1.55 K, B = 0); fit_resid 2.0e-7–3.3e-7 (fit gate 1e-3);
+  n_degenerate 0/49 at Bx = 0.05 T (the applied field lifts every node),
+  1/49 at exact B = 0; node_Delta spread 1.3e-4–0.105 meV at 1.55 K.
+
+### Test status (TDD)
+
+- **RED:** `test_invz_odd_tier2.m` written first — flag-off test FAILED on
+  the structural guards (unknown opts are ignored, so the isequaln leg
+  passes trivially pre-implementation; the verifyError legs are what bite),
+  convergence-gate test ERRORED (`pt.tier2_iters` undefined); slow pair
+  filtered.
+- **GREEN (fast, 2 tests, 7.8 s):** flag-off isequaln + three `invz:oddArgs`
+  guards (requires-odd, ×retarded, ×retarded_exact) ✓; convergence gate +
+  suppression/level-repulsion directions + the 1.55 K report point ✓. Full
+  fast suite **143 passed / 0 failed / 19 incomplete** (baseline 141/0/17 +
+  2 new fast + 2 new slow-gated).
+- **GREEN (slow, INVZ_SLOW=1 file-scoped): 4/4 in 56 s** (warm odd1 caches;
+  the 30–60 min budget was pessimistic — non-converged grid votes fail
+  fast). One amendment during the slow TDD loop, documented in the test:
+  combined-grid top 1.80 → 1.90 K (off-config slowing band, measured above);
+  the IR fprintf widened to report crit alongside ‖C‖.
+
+### Timings
+
+Tier-2 point solve: 5.2 s at 6³ (vs 0.14 s Tier 1; ~2.4 s per outer₂
+iteration is the 49-node electronuclear Ḡ0 average — mesh-independent), ~8 s
+at 16³ near the boundary. Slow file 56 s total (IR leg: one `invz_critical`
++ 3 point solves + 3 fieldvar; combined leg: 19-point grid × 3 configs).
+Fast-suite addition +7.9 s (one Tier-2 solve at the gate + the 1.55 K
+report point dominate).
+
+---
