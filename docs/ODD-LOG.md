@@ -1171,6 +1171,10 @@ precedent).
   of Tc(0) (the Richardson (12,24) correction remains valid for the ODD route).
 - ΔTc(0) is remarkably grid-stable (0.23589 → 0.23499 → 0.23410): the two per-grid
   Tc bars (~0.023–0.024 K) are strongly correlated and **cancel in the difference**.
+- (d-value definition note: this table's d column is evaluated at each grid's
+  own Tc — 12³ 0.4912, 24³ 0.4830 μeV — whereas §T1.5 quoted d at Tc_rich for
+  both grids (12³ 0.4914, 24³-at-Tc_rich 0.4832 μeV); same physics, different
+  evaluation temperature, hence the small digit drift between the two tables.)
 
 **(ii) dpRng sensitivity of d (16³, dpRng 20/30/40, d at 1.53 K):**
 
@@ -1201,7 +1205,7 @@ precedent).
 | **ΔTc(0)** | **0.2341 K** (13.4 %) | ± 0.001 K (grid; the Tc bars cancel) | V4.2(i) |
 | gap closed vs exp (1.53 K) | ≈ **111 %** (21 mK overshoot: 1.509 vs 1.53) | — | §T1.5 |
 | **ΔΣc(0)** | **+0.091** (0.298 → 0.389) | ± 0.005 (grid) | V4.2(i) |
-| **d(Tc)** | **0.483 μeV** | ± 2e-5 % (dpRng); ± 0.004 μeV (grid) | V4.2(ii) |
+| **d(Tc)** | **0.483 μeV** | ± 0.0023% (2.3e-5 fractional) (dpRng); ± 0.004 μeV (grid) | V4.2(ii) |
 | GH quadrature (Δ_eff) | converged | ± 1.2e-10 (negligible) | §T3.2 |
 
 **Bc(T) shifts (16³ ndgrid, §T1.5 canonical table):** all negative
