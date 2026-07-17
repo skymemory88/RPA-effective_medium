@@ -73,4 +73,16 @@ A.odd_generic_q_max = 0.0040909010697032459;
 % 6.821e-3 (here 6.8244e-3), Jaa0_dipole 3.912e-3 (here 3.9104e-3). [meV]
 A.jcc0 = 0.0064244356557014957;
 A.jaa0 = 0.0035104462050649012;
+
+% --- T1.5: zero-field ODD headline (invz_odd_zero_field, mode = 'full') -------
+% Richardson(12^3, 24^3, dpRng 30) on the Sigma_c-benchmark generator mesh
+% (qVec_generator range [-0.5 0.5], Gamma-excluded), GOVERNING condition/Sigma-space
+% split (controller adjudication 2026-07-17). Measured 2026-07-17 on branch
+% invz-1z-lihof4. Tc(0) 1.743 K (off) -> 1.50937 K (ODD): dTc(0) = 0.2341 K (13.4%);
+% Sigma_c(0) 0.29798 (off) -> 0.38880 (ODD); d(Tc) = 0.483 ueV (in the 0.3-0.5 ueV
+% report band). Full-precision doubles emitted by invz_odd_zero_field; the headline
+% slow test test_odd_headline_slow reproduces these at RelTol 1%. [K, meV, -]
+A.odd_Tc_rich  = 1.509370677196421;       % Richardson Tc(0) with ODD (mode 'full')
+A.odd_d_at_Tc  = 0.00048311966308299265;  % E5 uniform reduction d at Tc_rich (meV)
+A.odd_Sc_rich  = 0.38879543801229982;     % Richardson Sigma_c(0) with ODD
 end

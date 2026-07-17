@@ -29,22 +29,14 @@ if ion.odd
     qodd = qodd(any(abs(qodd) > 1e-12, 2), :);
     [VcaO, VcbO, VccO, infoO] = invz_odd_blocks(ion, qodd, struct('dpRng', 30, 'cache', true));
     Sodd = struct('Vca', VcaO, 'Vcb', VcbO, 'Vcc', VccO, 'Jcc0', infoO.Jcc0);   % Jcc0 UNSHIFTED
-    % Odd-aware zero-field anchor -- T1.4 SEAM: T-dependent Sc(T)/J0(T) handles through the
-    % generalized invz_critical_T0field (same algebra as invz_odd_zero_field mode 'full';
-    % replace this block with a call there once T1.5 lands). invz_critical_T refuses to
-    % anchor adaptively with opts.odd on (invz:oddTc0), so Tc0 MUST be odd-aware here.
-    J0T = @(T) J0 - odd_d_at(ion, Sodd, Jxx0, T);
-    ScT = @(T) odd_Sc_at(ion, Sodd, J0, Jxx0, T);
-    ScT(2.0);   % probe: surfaces the known 16^3 invz:sigmaCritExcluded warning ONCE (ODD-LOG T1.3:
-                % a few near-Gamma transverse-shell modes exceed J0 already without ODD)
-    wsOdd = warning('off', 'invz:sigmaCritExcluded');   % silence the same known warning inside the bisection
-    try
-        Tc0 = invz_critical_T0field(ion, ScT, J0T);
-    catch errOdd
-        warning(wsOdd);   % restore even on error (invz:bracket etc.) -- else the warning
-        rethrow(errOdd);  % stays OFF for the rest of the MATLAB session
-    end
-    warning(wsOdd);
+    % Odd-aware zero-field anchor (T1.5): invz_odd_zero_field REPLACES the old inline-handle
+    % SEAM -- identical mode-'full' governing algebra (Sc(J0-d, modes(Vcc+dJ)), J0(T)=Jcc0-d(T)),
+    % here on the SINGLE driver grid (16^3) so the adaptive-window anchor matches the parfor
+    % solves' mesh (not the {12,24} Richardson production value). invz_critical_T refuses to
+    % anchor adaptively with opts.odd on (invz:oddTc0), so Tc0 MUST be odd-aware. The engine
+    % suppresses the known 16^3 invz:sigmaCritExcluded warning internally (ODD-LOG T1.3), so no
+    % wrapper is needed here.
+    Tc0 = invz_odd_zero_field(ion, struct('mode', 'full', 'grids', {{16}}, 'dpRng', 30, 'cache', true));
 else
 Tc0 = invz_critical_T0field(ion, invz_sigma_crit(J0, Jf), J0);
 end
@@ -128,26 +120,7 @@ title('LiHoF_4 1/z phase boundary (paramagnetic side)');
 legend({'B_c(T): fixed-T field cut', 'T_c(B): fixed-B temperature cut', 'closed-form T_c(B=0)'}, 'Location', 'southwest');
 
 % ---------------------------------------------------------------------------
-% ODD anchor helpers (ion.odd = 1 only; T1.4 seam, superseded by
-% invz_odd_zero_field once T1.5 lands). Script-local functions: only reached
-% via the handles built in the ion.odd branch above.
-function d = odd_d_at(ion, S, Jxx0, T)
-%ODD_D_AT E5 uniform reduction d(T) at B = 0 (chi_perp-mediated).
-Xp = invz_chiperp(ion, T, [0 0 0], struct('Jxx0', Jxx0));
-[~, d] = invz_odd_deltaJ(S.Vca, S.Vcb, Xp);
-end
-
-function Sc = odd_Sc_at(ion, S, J0, Jxx0, T)
-%ODD_SC_AT Critical self-energy Sc(T) on the ODD-rebuilt modes with the shifted J(0)
-% (invz_odd_zero_field mode 'full' algebra: modes of Vcc + deltaJ, J0(T) = J0 - d(T)).
-Xp = invz_chiperp(ion, T, [0 0 0], struct('Jxx0', Jxx0));
-[dJ, d] = invz_odd_deltaJ(S.Vca, S.Vcb, Xp);
-nq = size(S.Vcc, 3);
-Jnu = zeros(nq, 4);
-for iq = 1:nq
-    M = S.Vcc(:,:,iq) + dJ(:,:,iq);
-    M = (M + M')/2;                            % both terms Hermitian; cleans rounding only
-    Jnu(iq,:) = sort(real(eig(M))).';
-end
-Sc = invz_sigma_crit(J0 - d, Jnu(:));
-end
+% (The T1.4 ODD anchor helpers odd_d_at / odd_Sc_at were removed at T1.5: the
+% odd-aware zero-field anchor Tc0 above is now produced by invz_odd_zero_field
+% (mode 'full', single 16^3 grid), which owns that mode-'full' governing algebra
+% and its own invz:sigmaCritExcluded suppression.)

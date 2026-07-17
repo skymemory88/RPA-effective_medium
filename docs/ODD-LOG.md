@@ -462,3 +462,132 @@ the 1/z machinery (which consumes `info.Jcc0`, not grid `max(eig)`).
   zero-field numbers (12³/24³ Richardson) are T1.5's measurement — not run here.
 
 ---
+
+## T1.5 — Zero-field ODD measurement engine (`invz_odd_zero_field.m`) + T1.6 README §1.9
+
+**Date:** 2026-07-17 · **Branch:** `invz-1z-lihof4` · MATLAB R2025a. Production grids
+**12³/24³, dpRng 30**, Σc-benchmark generator mesh (`qVec_generator` range `[-0.5 0.5]`,
+Γ-excluded — `test_invz_sigma_crit.m` lines 41–42), linear O(1/n) Richardson
+`X_rich = 2·X₂ − X₁` (line 46). Physics numbers **reported, never tuned**.
+
+### What was implemented
+
+- `invz_odd_zero_field(ion, opts)` — grids `{12,24}`, dpRng 30, cache, mode ∈
+  `off | full | uniform_only | qstruct_only`. Blocks built ONCE per grid outside every
+  root find (P0.4); χ⊥(T)/δJ(T)/d(T) rebuilt inside via memoized (Sc,J0) handles fed to
+  the generalized `invz_critical_T0field`. Excluded-mode counts taken explicitly (`nex`),
+  `invz:sigmaCritExcluded` suppressed with the error-safe house pattern.
+- **SEAM replacement:** the T1.4 inline-handle block in `invz_run_phase_diagram.m` (and its
+  `odd_d_at`/`odd_Sc_at` helpers) is replaced by
+  `Tc0 = invz_odd_zero_field(ion, struct('mode','full','grids',{{16}},'dpRng',30,'cache',true))`
+  — same mode-'full' governing algebra, on the driver's single 16³ grid (not the {12,24}
+  Richardson value), so the adaptive-window anchor matches the parfor solves' mesh. Flag-off
+  path byte-identical; the engine's internal warning suppression makes the wrapper moot.
+
+### Decomposition — controller adjudication (2026-07-17), after the Task-6 BLOCKED round
+
+The source-plan ΔTc-space split was ill-posed (measured on 12³/24³ Richardson):
+
+- **c1≡a THEOREM (E4/E5 validation).** Literal (c) = modes(Vcc+δJ+d·I), J0=Jcc0 is a
+  *simultaneous uniform +d shift* of (a)'s couplings AND J0; R2007 criticality depends only
+  on J0−Jν (invariant) plus a d-order numerator shift, so **Tc_c1 ≡ Tc_a to numerical
+  precision** (1.50937 both, |Δ|<1e-14). This is a closed-form theorem: it independently
+  validates that the E4 self-site subtraction and the E5 −d reduction are the *same*
+  constant d, applied once — the bookkeeping is consistent.
+- **naive-(b) invalid regime (DS2023's naive-MF inconsistency).** Source-plan (b) =
+  modes(Vcc), J0=Jcc0−d drives J0 below the **peak finite-q Vcc mode**: at 24³,
+  max(eig Vcc)=0.006143 > Jcc0−d=0.005941, so 96 modes are excluded (`nex.b_naive` = 0/96
+  at 12³/24³) and the "uniform mode is critical" assumption is violated (ordering would move
+  to finite q). This is exactly DS2023's naive-MF limit. The full-ODD (a) avoids it because
+  δJ (from the same χ⊥) **lowers the peak**, 0.006143 → 0.005727 at 24³, keeping the uniform
+  mode critical. Kept as a reported diagnostic with its exclusion counts.
+- **GOVERNING split = sequential condition/Σ-space factorial** (neither leg enters the
+  invalid regime): (b) condition-level `(Jcc0−d)·χ0cc = 1+Sc_off` with `Sc_off` FROZEN at the
+  no-ODD value (no exclusions possible); (c) Σ-level `Jcc0·χ0cc = 1+Sc_odd(T)` with
+  `Sc_odd(T)=Σc(Jcc0−d, modes(Vcc+δJ))` (the full ODD Σc at its own consistent config).
+  closure_defect = (a) − [(b)+(c) − off] is REPORTED, never gated.
+
+### Headline numbers (Richardson 12³/24³, dpRng 30 — report, not tuned)
+
+| variant | J0 | Σ source | Tc (K) | ΔTc from off | nex 12/24 |
+|---|---|---|---|---|---|
+| off (published route) | Jcc0 | Σc(Jcc0, Vcc) | **1.74347** | — | 0 / 0 |
+| **(a) full** | Jcc0−d | Σc(Jcc0−d, Vcc+δJ) | **1.50937** | **0.2341** | 0 / 0 |
+| (b) condition-level | Jcc0−d | **Sc_off (frozen)** | 1.61514 | 0.1283 | 0 / 0 |
+| (c) Σ-level | Jcc0 | Sc_odd | 1.62968 | 0.1138 | 0 / 0 |
+| — b_naive (diagnostic) | Jcc0−d | Σc(Jcc0−d, Vcc) | 1.28269 | 0.4608 | 0 / **96** |
+| — c1_literal (theorem) | Jcc0 | Σc(Jcc0, Vcc+δJ+d·I) | 1.50937 | 0.2341 | 0 / 0 |
+| — c_factorial (diagnostic) | Jcc0 | Σc(Jcc0, Vcc+δJ) | 1.79430 | −0.0508 | 0 / 0 |
+
+- **Off route reproduces the published anchors:** Σc(0) 12³/24³ = 0.26388/0.28093 →
+  Richardson **0.29798** (published 0.3004, target 0.2980, AbsTol 0.006 ✓); Tc per-grid
+  1.79094/1.76720 → Richardson **1.74347** (target 1.743, AbsTol 0.006 ✓).
+- **ΔTc(0) = 0.234 K (13.4%): Tc(0) 1.743 K → 1.509 K.** per-grid Tc(a) 1.55505/1.53221.
+- **ΔΣc(0) = +0.0908:** Σc(0) 0.29798 (off) → 0.38880 (ODD).
+- **d(Tc) = 0.483 μeV** (12³ 0.4914, 24³-at-Tc_rich 0.4832) — inside the 0.3–0.5 μeV report
+  band; χ⊥-flat ⇒ d(T) nearly T-independent. 7.5% of Jcc0_dipole = 6.42 μeV.
+- **GOVERNING split closes:** closure_defect = **+0.00802 K** — only 3.4% of the 0.234 K
+  effect (source-plan literal split gave 0.461 K; the governing legs are additive to ~3%).
+  Directionality: (a),(b),(c) all < off; (a) the largest suppression.
+- **Physics context (report, models differ — plan §8):** the no-ODD 1/z baseline missed
+  ≈0.21 K vs experiment (1.74 → exp 1.53 K). Tier-1 ODD alone delivers 0.234 K, landing at
+  1.509 K — closing essentially the whole gap (a hair below 1.53 K). This is **more**
+  suppression than DS2023's 3-state MF (5%, 2.27→2.18 K) because the 1/z fluctuation channel
+  amplifies the ODD coupling's q-structure; the comparison is qualitative (their spin-½ MC
+  Tc = 1.6295 K; different CF treatment, Gaussian-vs-non-Gaussian statistics). **Never** import
+  their 0.805 longitudinal rescaling or perturbative hyperfine (plan §8).
+
+### Excluded-mode reconciliation (controller ask — characterize, don't chase)
+
+Two apparently-conflicting numbers, resolved by mesh convention:
+
+- **T1.3 ledger:** on the **16³ ndgrid** mesh (`(0:n-1)/n`, Γ-dropped, 4095 pts), the top
+  Vcc mode exceeds Jcc0 by **+2.82e-5 at 4/4095 points** (axis-aligned near-Γ shell).
+- **T1.5 here:** on the **24³ Σc-benchmark generator** mesh (`linspace(-0.5,0.5,24)`, no Γ
+  node, 13824 pts), **max(eig Vcc) = 0.006143 < Jcc0 = 0.006424** — off-route nex = 0.
+
+The cc mode's q→0 limit is **direction-dependent** (non-analytic macroscopic dipolar term
+∝ q̂_c q̂_c, the plan's "q=0 pitfall"). The two meshes sample different smallest-|q|
+directions: the ndgrid axis-aligned shell hits a direction where the top mode marginally
+overshoots Jcc0; the generator's offset (tilted, Γ-free) shell stays just below it. Neither
+affects the governing legs: (b) freezes Σc at the consistent no-ODD config, and (a)/(c) use
+δJ, which lowers the peak below Jcc0−d. The naive-b 96 exclusions at 24³ are the *reduced* J0
+(Jcc0−d = 0.005941) dropping below the same 0.006143 top Vcc mode — a different threshold
+than Jcc0, and exactly the DS2023 inconsistency the diagnostic exists to expose.
+
+### Bc(T) boundary shifts (16³ ndgrid, dpRng 30; `invz_critical`, window [0.1 7] T)
+
+| T (K) | Bc off (T) | Bc on (T) | shift (T) |
+|---|---|---|---|
+| 0.31 | 4.0552 | 3.9187 | **−0.1365** |
+| 0.80 | 3.3687 | 3.1562 | **−0.2125** |
+| 1.20 | 2.7812 | 2.4187 | **−0.3625** |
+| 1.50 | 2.0687 | 1.2187 | **−0.8500** |
+
+All shifts **negative** (ODD suppresses ordering — the sign contract). **Attenuation pattern:**
+the shift magnitude GROWS as Bc drops below the DS2023 ≈3.5 T crossover (−0.14 → −0.21 →
+−0.36 → −0.85) — i.e. ODD is attenuated toward high Bx/low T (Bc > 3.5 T) and strongest near
+the boundary's high-T foot, consistent with DS2023 (qualitative). The 1.5 K row sits only 9 mK
+below the ODD Tc(0)=1.509 K, so Bc_on collapses toward B≈0; the finder window floor was lowered
+from the default 2 T to 0.1 T to locate it (gate unchanged — sign only).
+
+### Test status (TDD)
+
+- **RED → GREEN:** `test_invz_odd_physics.m`. Fast structural gate (8³/dpRng15) AMENDED per the
+  controller adjudication: directionality only (ODD lowers Tc; b_cond, c_sig < off; d>0; the
+  c1≡a theorem at AbsTol 2e-3; naive/factorial finite) — magnitudes/closure REPORTED not gated.
+- **Fast:** `test_zero_field_structure_fast` passes (8³/dpRng15: off 1.816, a 1.580, b_cond 1.676,
+  c_sig 1.713, closure +0.0076, c1_lit≡a).
+- **Slow (INVZ_SLOW=1, 45 s warm):** `test_zero_field_off_matches_published` ✓,
+  `test_odd_headline` ✓ (reproducibility gate ACTIVE against pinned anchors, RelTol 1%),
+  `test_boundary_shift` ✓ — **3 slow + 1 fast = 4/4 pass**.
+- **Anchors pinned** (`invz_odd_anchors.m`, full precision): `odd_Tc_rich = 1.509370677196421`,
+  `odd_d_at_Tc = 0.00048311966308299265`, `odd_Sc_rich = 0.38879543801229982`. Headline slow test
+  re-run after pinning → reproducibility gate passes.
+
+### Timings
+
+Warm-cache `odd1_` (qVec_generator 12³/24³ dpRng 30): 13.9 s / 109.8 s one-off build (24³ the long
+pole). Warm mode='full' {12,24} run = 10.6 s. Full slow file (off + headline + Bc-table) = 45 s.
+
+---
