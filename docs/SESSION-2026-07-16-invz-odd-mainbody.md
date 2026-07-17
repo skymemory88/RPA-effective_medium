@@ -5,8 +5,9 @@ Branch: `invz-1z-lihof4`. This is the handoff for the **ODD main-body feature**
 — phases P0 → T1 → T2 → T3 → V4, Tasks 1–11. The off-diagonal dipolar (ODD)
 mechanism is a **strictly additive, opt-in** extension of the scalar-cc 1/z
 theory: with the flags off the module is bit-for-bit the published Rönnow-2007
-route (fast baseline **143 / 0 / 19**, frozen at `5f4ff92`, re-verified every
-task). The running measurement log with every headline number is
+route (fast baseline **109 / 0 / 12**, frozen at `5f4ff92`, re-verified every
+task; the branch-tip fast suite is **143 / 0 / 19**, including the 34 new ODD
+tests). The running measurement log with every headline number is
 `docs/ODD-LOG.md` (§P0 … §V4). The physics rationale and the equation set
 (E1)–(E5) live in README §1.9. This note is the module map + design-decision
 index.
@@ -59,10 +60,10 @@ directional/qualitative only.
 - **Drivers:** `ion.odd` (0). Intrinsic-only, requires `ion.demag = 0`. `overlay_quick` (script-local, V4.1 quick overlay).
 - **Point solve:** `opts.odd` (false) + `opts.odd_blocks = struct('Vca','Vcb','Vcc','Jcc0'(unshifted))` + `Jnu_flat = []`.
 - **Retardation (T2, static frozen as default):** `opts.odd_retarded` (requires odd), `opts.odd_retarded_exact` (full per-(q,n) eig cross-check, wins when both set), `opts.odd_rn_override` (scalar or [nwn,1] test hook).
-- **Tier 2 (variable moments):** `opts.odd_tier2` (requires odd; errors `invz:oddArgs` if combined with `odd_retarded(_exact)`), `opts.tol_tier2` (1e-3 rel), `opts.max_tier2` (8).
+- **Tier 2 (variable moments):** `opts.odd_tier2` (requires odd; errors `invz:oddArgs` if combined with `odd_retarded(_exact)`), `opts.tol_tier2` (1e-3 rel), `opts.max_tier2` (8), `opts.tier2 = struct('ngh','avg')` (solve_point passthrough to `invz_twolevel_avg`'s quadrature order / 'response' vs 'params' averaging).
 - **`invz_chiperp` opts:** `transverse_mf` ('legacy_x'), `hyp` (true), `Jxx0`, plus `z = iωn` (Matsubara).
 - **`invz_odd_fieldvar` opts:** `Ecut` (40, must match the solve's grid), `static_approx` (false; never silent — `info.static_approx`).
-- **`invz_twolevel_avg` opts:** `avg` ('response' default | 'params'), `ngh` (7; machine-converged), `G0` (false; opt-in, 49 electronuclear diagonalizations), `wn`, `Ecut`.
+- **`invz_twolevel_avg` opts:** `avg` ('response' default | 'params'), `ngh` (7; machine-converged), `G0` (false; opt-in, 49 electronuclear diagonalizations), `wn`.
 - **Zero-field engine opts:** `grids` ({12,24}), `dpRng` (30), `cache` (true), `mode` ('full').
 
 ## Cache keys
