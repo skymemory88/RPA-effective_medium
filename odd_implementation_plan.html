@@ -340,7 +340,7 @@ at \(T_c \approx 1.53\) K the first Matsubara frequency is \( \omega_1 = 0.828 \
 the \(n\neq0\) channels of the mediated coupling. Mitigation: criticality is controlled by the elastic
 (\(n=0\)) sector, where χ⊥(0) is exact — this phase measures how much the \(n\neq0\) error matters.</p>
 
-<div class="task"><div class="task-head"><span class="tid">T2.1</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">T2.1</span><span class="tstatus">[x]</span>
 <span class="ttitle">Retarded mediated coupling \( \delta\mathcal J(\mathbf q, i\omega_n) \)</span></div>
 <ul>
 <li>Evaluate <code>invz_chiperp</code> on the Matsubara grid (χ<sub>0</sub> at \(z=i\omega_n\) — <code>invz_chi0z</code> already accepts complex z); build \( \delta\mathcal J(\mathbf q,i\omega_n) \) per (E1) with \( X = \chi_\perp(i\omega_n) \); apply (E4) per frequency.</li>
@@ -349,7 +349,7 @@ the \(n\neq0\) channels of the mediated coupling. Mitigation: criticality is con
 </ul>
 <div class="ok"><b>Acceptance</b>: with \(r_n\equiv1\), bitwise agreement with T1 output (regression); sum-rule residual of the point solve unchanged at the 10<sup>−6</sup> level.</div></div>
 
-<div class="task"><div class="task-head"><span class="tid">T2.2</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">T2.2</span><span class="tstatus">[x]</span>
 <span class="ttitle">Decision measurement</span></div>
 <ul>
 <li>Report \( T_c(0) \) and \( B_c(1.2\,\mathrm K) \) static vs retarded.</li>
@@ -497,8 +497,8 @@ Keep in lockstep with the <code>[ ]</code> markers above.</p>
     {"id":"T1.4","phase":"T1","deps":["T1.3"],"files":["invz/invz_solve_point.m","invz/invz_solve_point_ordered.m","invz/invz_critical.m","invz/invz_critical_T.m","invz/invz_critical_T0field.m"],"status":"done"},
     {"id":"T1.5","phase":"T1","deps":["T1.4"],"files":["docs/ODD-LOG.md","invz/tests/"],"status":"done"},
     {"id":"T1.6","phase":"T1","deps":["T1.5"],"files":["invz/README.html"],"status":"done"},
-    {"id":"T2.1","phase":"T2","deps":["T1.4"],"files":["invz/invz_chiperp.m","invz/invz_emt_scalar.m"],"status":"todo"},
-    {"id":"T2.2","phase":"T2","deps":["T2.1"],"files":["docs/ODD-LOG.md"],"status":"todo"},
+    {"id":"T2.1","phase":"T2","deps":["T1.4"],"files":["invz/invz_chiperp.m","invz/invz_emt_scalar.m"],"status":"done"},
+    {"id":"T2.2","phase":"T2","deps":["T2.1"],"files":["docs/ODD-LOG.md"],"status":"done"},
     {"id":"T3.1","phase":"T3","deps":["T1.4"],"files":["invz/invz_odd_fieldvar.m"],"status":"todo"},
     {"id":"T3.2","phase":"T3","deps":[],"files":["invz/invz_twolevel_avg.m"],"status":"todo"},
     {"id":"T3.3","phase":"T3","deps":["T3.1","T3.2"],"files":["invz/invz_solve_point.m"],"status":"todo"},

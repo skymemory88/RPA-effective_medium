@@ -592,3 +592,125 @@ Warm-cache `odd1_` (qVec_generator 12³/24³ dpRng 30): 13.9 s / 109.8 s one-off
 pole). Warm mode='full' {12,24} run = 10.6 s. Full slow file (off + headline + Bc-table) = 45 s.
 
 ---
+
+## T2 — Tier 1b: retardation sensitivity (T2.1 retarded δJ(q, iωn) + T2.2 decision)
+
+**Date:** 2026-07-17 · **Task:** main-body plan Task 7 (T2.1 + T2.2) · **Branch:**
+`invz-1z-lihof4` · **Commit:** (this commit) · MATLAB R2025a.
+
+### What was implemented
+
+- **`invz_emt_scalar` generalized** (T2.1 plumbing): `Jnu_flat` may now be `[nJ, nw]`
+  (per-frequency mode spectra; column n pairs with the caller's Matsubara grid, wn(1) = 0
+  first). Any vector input takes the ORIGINAL code path with its expressions textually
+  unchanged; a matrix with identical columns is **bitwise-equal** to the vector path
+  (elementwise multiply/divide only, no accumulation-order differences — regression-gated
+  by `test_emt_matrix_column_constant_bitwise`). The `opts.debug` closure block got the
+  same `[nJ,nw]` branch; shape-mismatched matrices error (`invz:emtJnu`).
+- **`invz_solve_point` `opts.odd_retarded`** (requires `opts.odd`, else `invz:oddArgs`):
+  evaluates `invz_chiperp` at z = iωn on the solve's own `(T, Ecut)` Matsubara grid,
+  forms the scalar surrogate `r_n = Xpn(1,1,n)/Xpn(1,1,1)` (asserted: r_1 = 1 to 1e-12,
+  finite, 0 < r_n ≤ 1 + 1e-12, monotone non-increasing — error id `invz:oddRn`), and
+  builds the per-frequency spectra by **first-order eigenvalue perturbation** around the
+  static-ODD modes: `Jnu_n(q,ν) = Jnu_static(q,ν) + (r_n − 1)·u_ν'·δJ(q)·u_ν`, with the
+  eigvec weights captured during the static rebuild from a SEPARATE `eig(M,'vector')`
+  call so the values-only static spectrum stays bitwise-identical. Flattening is the
+  static path's own `(:)` column-major order (all q at ν=1, then ν=2, …) for every
+  column. `pt.odd` gains `r_n`, `ab_ratio_max`, `bb_aa_dev_max`, `retarded_exact`.
+- **Key linearity fact (documented in the solver header):** E1 and E4 are linear in
+  χ⊥, so under the scalar surrogate `Xp_n = r_n·Xp_0` the retarded coupling matrix is
+  `δJ_n = r_n·δJ_0` **exactly** (and `d_n = r_n·d`) — the surrogate is exact in the
+  MATRIX; only the eigenvalue map is approximated to first order. The exact cross-check
+  path `opts.odd_retarded_exact` therefore does the full per-(q,n) eig of
+  `Vcc + r_n·δJ` (test/diagnostic only, wins over `odd_retarded` when both set).
+- **J0eff keeps the STATIC −d**: criticality (`pt.crit`) sits in the elastic n = 0
+  sector where r_1 = 1 exactly and χ⊥(0) is exact; the n-dependent d_n = r_n·d never
+  enters the uniform q = 0 bookkeeping (this is also why `invz_critical_T0field`'s
+  closed form — and hence Tc(0) — is intrinsically static; plan §4 mitigation).
+- **`opts.odd_rn_override`** (test hook): scalar or [nwn,1] replacing the computed r_n;
+  skips the χ⊥(iωn) solve. With override = 1 the perturbation term is exactly 0·w and
+  the EMT receives constant columns → bitwise-static (gated).
+
+### r_n profile (χ⊥(iωn)/χ⊥(0), full 136-state electronuclear χ0)
+
+At the plan §4 benchmark point **(1.53 K, 0 T)**, Ecut 40 meV (nwn = 50):
+
+| n | ωn (meV) | r_n |
+|---|---|---|
+| 0 | 0 | 1.000000 |
+| 1 | 0.8284 | **0.679424** |
+| 2 | 1.6568 | 0.425389 |
+| 3 | 2.4852 | 0.303567 |
+| 4 | 3.3136 | 0.233259 |
+
+r(ω₁ = 0.828 meV) = **0.679** vs the plan §4 two-level estimate ε₁²/(ε₁²+ω₁²) = 0.558:
+the measured decay is SLOWER because the full CF + hyperfine χ⊥ carries Van-Vleck weight
+at higher-lying poles (ε ≫ ε₁), which retard more weakly than the single-gap estimate.
+Monotone to r_49 = 0.0062; χ_aa(0) = 17.64 meV⁻¹ (T1.2 anchor band). At the PM test
+fixture (1.8 K, 0.5 T): r = [1, 0.6114, 0.3721, 0.2622, …].
+
+**Scalar-surrogate smallness logs** (justify treating χ⊥(iωn) as r_n·χ⊥(0)):
+max_n |χ_ab|/χ_aa = 9.5e-16 and max_n |χ_bb − χ_aa|/χ_aa = 2.4e-15 at (1.53 K, 0 T)
+(machine zero — C4 unbroken at B = 0); 2.17e-3 and 2.79e-2 at (1.8 K, 0.5 T). The
+residual matrix error from the aa/bb split at finite B is folded into the
+surrogate-vs-exact gate below.
+
+### Surrogate vs exact (per-(q,n) eig) — (1.8 K, 0.5 T), 6³/dpRng 10
+
+Σ0: static 0.253803 → retarded 0.253803 (Δ = **3.9e-9**, retarded LOWER — the expected
+direction: the static form overweights the n ≠ 0 channels). Surrogate-vs-exact
+|ΔΣ0| = **1.76e-11** (gate 1e-3 — first-order perturbation is more than adequate;
+per-n eig stays a test-only path). The retardation itself is NOT small in the channels:
+K(n=1) shifts −6.6%, K(n_max) −9.0%, max_n |ΔΣ(n)| = 1.1e-5 — it is the elastic-sector
+dominance of the λ-sums that makes Σ0 nearly immune. Sum-rule residual unchanged at the
+1e-6 level (T2.1 acceptance; gated).
+
+### T2.2 decision measurement (16³ ndgrid, dpRng 30, warm `odd1_` cache)
+
+**Fixture finding (Tc leg amended — measured, pre-existing):** with ODD on, the ordered
+side of the boundary NEVER converges to a paramagnetic fixed point — probed at
+Bx = 0.1/0.3/0.5/2/2.5/3 T across each boundary: converged points exist only ≥ ~50–80 mK
+ABOVE the crossing, none below (at 0.1 T even the PM side within the adaptive window
+fails: the near-degenerate-doublet small-B caveat in `invz_critical_T`'s own header).
+`invz_critical_T`'s converged-sign-change bracket is therefore structurally unreachable
+at ANY field with ODD on — `invz_critical` survives only through its `para_edge`
+fallback, which the T-cut finder lacks. **Flagged for V4.1** (ODD phase-diagram T-cuts
+will hit this; fixing `invz_critical_T` is outside this task's file scope). The brief's
+Tc(0.1 T) leg was replaced by a deterministic PM-side estimator at the healthy 2 T
+proxy: crit(T) sampled on the house 1/30 K grid (converged votes only, identical grid
+for both flags), two lowest converged PM points extrapolated to crit = 0 — the
+static-vs-retarded DIFFERENCE is then a pure crit-shift readout with the estimator's
+own PM-side bias cancelling.
+
+| quantity | static | retarded | shift |
+|---|---|---|---|
+| Tc*(2 T) PM-extrapolated (K) | 1.259129 | 1.259151 | **+0.022 mK** |
+| Bc(1.2 K) (T) | 2.4187 | 2.4187 | **0** (< 0.02 T tol) |
+| Tc(0) closed form (K) | 1.509 | ≡ static | **0 by construction** (elastic sector) |
+
+**Verdict (10 mK rule): |ΔTc| = 0.022 mK ≪ 10 mK → the STATIC form is frozen as the
+default.** The retarded path stays available behind `opts.odd_retarded` (exact
+cross-check behind `opts.odd_retarded_exact`). T1.5's headline numbers stand — no
+re-measurement needed. README §1.9 documents the decision.
+
+### Test status (TDD)
+
+- **RED → GREEN:** `test_invz_odd_retarded.m`. Pre-implementation: EMT matrix test
+  FAILED (bitwise mismatch through the old `Jnu_flat(:)` flatten), physics test ERRORED
+  (`pt.odd.r_n` absent); the r_n-unity test passes trivially pre-implementation (unknown
+  opts ignored) — its value is as the post-implementation bitwise regression gate, and
+  it stays green with the branch live.
+- **Fast (3 tests, 0.7 s):** EMT constant-column bitwise ✓; r_n ≡ 1 override bitwise-
+  static ✓ (matrix route, no hidden vector short-circuit needed); physics + surrogate
+  gate ✓. Full fast suite **131 passed / 0 failed / 17 incomplete** (baseline 128/0/16 +
+  3 new + 1 new slow-gated).
+- **Slow (INVZ_SLOW=1):** decision measurement ✓ (4/4 in the file).
+
+### Timings
+
+Fast trio 0.7 s. Slow decision leg 10 s warm (2 × 10-point Tc scans + 2 × Bc finders;
+the retarded solve adds one 136-dim diagonalization + a ~50-point χ0(iωn) sweep + one
+eigvec pass per point — ~25% overhead at 16³). Probe sweeps (0.1–3 T convergence
+census): ~7 min total, one-off.
+
+---
