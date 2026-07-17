@@ -1092,3 +1092,162 @@ Fast-suite addition +7.9 s (one Tier-2 solve at the gate + the 1.55 K
 report point dominate).
 
 ---
+
+## V4 — Headline overlay, robustness error bars, consolidation, handoff (V4.1–V4.3)
+
+**Date:** 2026-07-17 · **Task:** main-body plan Task 11 (V4.1–V4.3) · **Branch:**
+`invz-1z-lihof4` · MATLAB R2025a. The LAST main-body task: driver overlay,
+robustness sweeps, suite consolidation, handoff. All numbers **reported, not tuned.**
+
+### V4.1 — Quick ODD overlay (`invz_run_phase_diagram`, `overlay_quick` block)
+
+The driver gained an opt-in `overlay_quick` block (default false → the standard
+sweep is byte-identical). It draws the headline overlay with **B-CUT points
+ONLY** (`invz_critical`), at three temperatures below Tc_ODD(0) = 1.509 K, plus
+the closed-form zero-field endpoints and R2007 Fig.1 experimental anchors, with
+a second Σ(0) panel. **The T-cut wall binds (ODD-LOG T2.2):** `invz_critical_T`
+CANNOT bracket with ODD on (no metastable PM window below the boundary; it lacks
+the `para_edge` fallback), so the near-Tc0 T-cut region of the ODD curves is
+LEFT BLANK — the missing para_edge analog for the T-cut finder is flagged as a
+V4-scope item (not fixed here). B-cuts survive because `invz_critical`'s
+`para_edge` fallback returns the paramagnet-edge estimate when the ordered side
+won't reconverge.
+
+**Figure:** `Data/Phase_ODD_overlay_quick.fig` (saved, 18.5 kB). All five overlay
+elements present + the Σ(0) panel + closed-form endpoints:
+
+| element | present | detail |
+|---|---|---|
+| 1/z baseline (ODD off) | ✔ | B-cut crossing + closed-form Tc(0) endpoint |
+| 1/z + Tier-1 ODD | ✔ | B-cut para_edge + closed-form Tc(0) endpoint |
+| 1/z + Tier-1+2 ODD | ✔ | finite-B only (Tier-2 Tc* unavailable at B=0 — legend/caption say so) |
+| mean field (Σ=0) | ✔ | crit_MF = 1 − J0·χ0cc0; MF Tc(0) = 2.259 K (README "MF 2.26 K" ✓) |
+| experimental anchors | ✔ | R2007 Fig.1 (Bitko 1996 / Babkevich 2016): Tc(0)=1.53 K, Hc(T→0)≈4.95 T |
+| Σ(0) 2nd panel | ✔ | critical self-energy along the boundary, off vs ODD, B=0 endpoints Richardson |
+
+**Overlay B-cut boundary (generator-16³, dpRng 30, para_edge for ODD):**
+
+| T (K) | Bc off (T) | Bc +T1 (T) | Bc +T1+2 (T) | Bc MF (T) | Σ0 off / T1 / T1+2 |
+|---|---|---|---|---|---|
+| 0.80 | 3.3257 | 3.1037 | 3.1086 | 3.8596 | 0.1703 / 0.2037 / 0.2064 |
+| 1.20 | 2.7319 | 2.3280 | 2.3081 | 3.5203 | 0.2254 / 0.2884 / 0.2903 |
+| 1.40 | 2.2884 | 1.6074 | 1.5466 | 3.2672 | 0.2466 / 0.3300 / 0.3321 |
+
+- **Sign contract holds everywhere:** Tier-1 ODD lowers Bc at every T; Σ0
+  INCREASES with ODD (fluctuation weight gained). MF boundary sits well ABOVE
+  the 1/z boundary (it needs χ0cc0 = 1/J0 < (1+Σc)/J0). Consistent with the
+  §T1.5 ndgrid Bc table (0.80 K: −0.222 T here vs −0.2125 there; mesh + para_edge
+  differences account for the ~few-mT offset).
+- **Tier-2 is tiny and sign-noisy at the low-T foot:** +T1→+T1+2 shifts −0.5 mT
+  (0.80 K, an inversion within the finder's 0.02 T tolerance), −19.9 mT (1.20 K),
+  −60.8 mT (1.40 K) — i.e. Tier-2 grows toward the high-T foot and stays ≤ ~4–5%
+  of the Tier-1 shift, matching the 97.2:2.8 split at the 0.5 T proxy (§T3.3). The
+  0.80 K wobble is genuine smallness, not a bug (ODD is attenuated at low T /
+  high field, §T1.5). Tier-2 B-cuts finished within the 15 min budget (no drop).
+- **Closed-form endpoints (Richardson 12/24):** Tc(0) MF 2.259 / off 1.74347 /
+  Tier-1 ODD 1.50937 K; Σc(0) off 0.29798 → ODD 0.38880.
+
+The **production sweep** (dense T grid, full para-edge boundary, hours, one run
+per config) is documented in the driver header and LEFT TO THE USER (repo
+precedent).
+
+### V4.2 — Robustness sweeps (each ONE logged point) + error bars
+
+**(i) Grid convergence — Tc(0), Σc(0), d at 12³/16³/24³ + Richardson (mode 'full', dpRng 30):**
+
+| n | Tc_off (K) | Σc_off | Tc_ODD (K) | Σc_ODD | d (μeV) | ΔTc (K) |
+|---|---|---|---|---|---|---|
+| 12³ | 1.79094 | 0.26388 | 1.55505 | 0.34489 | 0.4912 | 0.23589 |
+| 16³ | 1.77945 | 0.27208 | 1.54424 | 0.35525 | 0.4871 | 0.23521 |
+| 24³ | 1.76720 | 0.28093 | 1.53221 | 0.36684 | 0.4830 | 0.23499 |
+| **Rich (12,24)** | **1.74347** | **0.29798** | **1.50937** | **0.38880** | **0.4831** | **0.23410** |
+
+- **Monotone in n** (Tc(12) > Tc(16) > Tc(24) > Tc_rich, both off and ODD) — no
+  erratic behavior, no escalation.
+- **ODD is NOT slower-converging than the baseline Σc.** The discretization
+  errors |Tc(n) − Tc_rich| are **off [0.0475, 0.0360, 0.0237]** vs
+  **ODD [0.0457, 0.0349, 0.0228]** — nearly identical, ODD marginally *faster*.
+  So δJ shifting weight to finite q does NOT degrade the O(1/n) grid convergence
+  of Tc(0) (the Richardson (12,24) correction remains valid for the ODD route).
+- ΔTc(0) is remarkably grid-stable (0.23589 → 0.23499 → 0.23410): the two per-grid
+  Tc bars (~0.023–0.024 K) are strongly correlated and **cancel in the difference**.
+
+**(ii) dpRng sensitivity of d (16³, dpRng 20/30/40, d at 1.53 K):**
+
+| dpRng | d (meV) | d (μeV) |
+|---|---|---|
+| 20 | 4.871794e-04 | 0.487179 |
+| 30 | 4.871684e-04 | 0.487168 |
+| 40 | 4.871722e-04 | 0.487172 |
+
+- **Spread max−min = 1.11e-08 meV = 0.0023 % of d(30)** → d is dpRng-flat.
+  This **confirms the effective r⁻⁶ short-rangedness**: contracting two r⁻³ ODD
+  kernels through χ⊥ gives an r⁻⁶ mediated coupling whose uniform reduction d is
+  fully captured by dpRng 20 (the dpRng error bar on d is negligible). The
+  smallest ODD-block shell itself is the P0.3(iv)/§T1.3 near-a*-axis shell
+  (~0.178·Jcc0 at the 16³ ndgrid [1/16 0 0]; the c*-axis shell is machine-zero);
+  the contracted observable d washes out that geometry entirely.
+
+**(iii) Gauss–Hermite node count (copied from §T3.2, machine-converged):**
+Δ_eff(ngh 5/7/9) = 0.153887502443 / 0.153887502321 / 0.153887502321 meV,
+|Δ(5→7)| = 1.2e-10, |Δ(7→9)| < 1e-12 → **GH error bar NEGLIGIBLE** (ngh 7 default).
+
+**FINAL HEADLINE TABLE (each number + error bar):**
+
+| quantity | value | error bar | source |
+|---|---|---|---|
+| Tc(0), 1/z baseline (off) | 1.74347 K | ± 0.024 K (grid: \|Tc(24)−rich\|) | V4.2(i) |
+| Tc(0), 1/z + Tier-1 ODD | **1.50937 K** | ± 0.023 K (grid) | V4.2(i) |
+| **ΔTc(0)** | **0.2341 K** (13.4 %) | ± 0.001 K (grid; the Tc bars cancel) | V4.2(i) |
+| gap closed vs exp (1.53 K) | ≈ **111 %** (21 mK overshoot: 1.509 vs 1.53) | — | §T1.5 |
+| **ΔΣc(0)** | **+0.091** (0.298 → 0.389) | ± 0.005 (grid) | V4.2(i) |
+| **d(Tc)** | **0.483 μeV** | ± 2e-5 % (dpRng); ± 0.004 μeV (grid) | V4.2(ii) |
+| GH quadrature (Δ_eff) | converged | ± 1.2e-10 (negligible) | §T3.2 |
+
+**Bc(T) shifts (16³ ndgrid, §T1.5 canonical table):** all negative
+(−0.1365 / −0.2125 / −0.3625 / −0.8500 T at 0.31 / 0.80 / 1.20 / 1.50 K), worst
+−0.850 T at 1.50 K; **attenuation toward high field** — the shift magnitude GROWS
+as Bc drops below the DS2023 ≈ 3.5 T crossover (ODD strongest at the high-T foot,
+attenuated at high Bx / low T). The V4.1 overlay B-cuts corroborate the pattern.
+
+### V4.3 — Consolidation
+
+- **ODD fast-test additions: 22.35 s** across the 8 ODD test files (file-scoped,
+  fast): chiperp 1.65 / odd_blocks 2.30 / odd_fieldvar 0.62 / odd_physics 6.42 /
+  odd_retarded 0.83 / odd_solve 1.27 / odd_tier2 8.18 / twolevel_avg 1.07 s
+  (34 Passed / 0 Failed / 7 Incomplete). **Under the 30 s budget → NO INVZ_SLOW
+  demotion needed** (heaviest = odd_tier2 8.2 s, odd_physics 6.4 s; both stay
+  fast).
+- **FAST suite: 143 Passed / 0 Failed / 19 Incomplete** (53.1 s) — matches the
+  frozen baseline exactly (P0.5: 109/0/12 at `5f4ff92`; +34 ODD passes, +7
+  slow-gated, **0 failed**).
+- **SLOW suite (`INVZ_SLOW=1`, everything): 162 Passed / 0 Failed / 0 Incomplete**
+  (191.4 s, `SLOW_EXIT=0`) — green (P0.5 baseline: 121/0/0 at `360dfab`; +41 ODD
+  passes as the slow gates un-skip).
+- **Flag-off parity:** 0 failed in BOTH suites is the gate; the frozen benchmark
+  digits (Σc(0) Richardson 0.2980, `info.Jcc0` 6.421e-3 meV, Tc(0) 1.74 K,
+  `pt.Sigma0` 0.0932; P0.5 table) are asserted internally by the pre-existing
+  tests and all stayed green — the ODD extension is bit-for-bit additive vs the
+  `5f4ff92` frozen baseline.
+
+### Handoff, README, plan state
+
+- **Handoff:** `docs/SESSION-2026-07-16-invz-odd-mainbody.md` (module map of every
+  new function/flag/cache key; adjudication history; T2.2 decision; T3.4 verdict;
+  open Tier-3 items + deferred Appendix-A/`invz_tensor` pointer; production runs
+  left to the user).
+- **README §7:** one row (Tc(0) 1/z+ODD reproducibility anchor) + a pointer to
+  §1.9 and the pinned anchors / slow reproducibility test.
+- **Anchors:** `invz_odd_anchors.m` already pins `odd_Tc_rich` / `odd_d_at_Tc` /
+  `odd_Sc_rich` (used by the headline slow test); no new pins needed (YAGNI — the
+  V4.2 error bars are reported, not asserted).
+- **Plan HTML:** V4.1/V4.2/V4.3 flipped to `[x]` + manifest `done`; **all 20
+  main-body tasks now show `[x]` (grep: 20 `[x]`, 0 `[ ]`, 0 `todo`).**
+
+### Timings
+
+V4.2 grid sweep ~1.5 min (warm 12/24, 16³-generator build 40 s); dpRng sweep
+~1.2 min (dpRng-20 build 10 s, dpRng-40 build 61 s, dpRng-30 warm); overlay
+~4 min (Tier-2 B-cuts the pole, within budget). Fast suite 53 s; slow suite 191 s.
+
+---

@@ -18,6 +18,131 @@ ion = invz_ion();
 J0 = info.Jcc0;   % scalar hoist: avoids broadcasting the whole info struct to workers
 % Jxx0 is demag-aware; at demag = 0 it differs from the hardcoded ion.Jxx0 by <0.1% -- the live
 % dipole sum supersedes the pasted constant. Tc0 below needs no Jxx0: at B = 0, <Jx> = 0.
+
+% ===========================================================================
+% V4.1 -- QUICK ODD OVERLAY (opt-in; the standard path below is byte-identical
+% when overlay_quick is unset/false). Set `overlay_quick = true` in the base
+% workspace before running this script to build the headline ODD phase-boundary
+% overlay instead of the single-curve sweep. It draws FOUR boundary curves --
+% 1/z baseline, 1/z + Tier-1 ODD, 1/z + Tier-1+2 ODD, and mean-field (RPA) --
+% plus the closed-form zero-field endpoints (invz_odd_zero_field, Richardson
+% 12/24) and the R 2007 Fig. 1 experimental anchors, with a second panel of the
+% critical self-energy Sigma(0) along the boundary with/without ODD.
+%
+% Method (ODD-LOG V4.1): B-CUT points ONLY (invz_critical), at a few temperatures
+% below Tc_ODD(0) = 1.509 K. invz_critical survives with ODD on through its
+% `para_edge` fallback (the ordered side never re-converges with ODD on, ODD-LOG
+% T2.2); invz_critical_T CANNOT bracket with ODD on (no metastable PM window
+% below the boundary -> it lacks the para_edge fallback), so the near-Tc0 T-cut
+% region of the ODD curves is LEFT BLANK here -- the missing `para_edge` analog
+% for the T-cut finder is a documented V4-scope item (ODD-LOG T2), not fixed
+% here. Runs in-session on warm caches (~5-15 min; the Tier-2 B-cuts are the
+% slow pole -- if they exceed a ~15 min budget the remaining Tier-2 points are
+% dropped and noted). The PRODUCTION sweep (dense T grid, full para-edge
+% boundary, hours) is LEFT TO THE USER: keep overlay_quick = false, set
+% ion.odd = 1 (and/or opts.odd_tier2), widen Ts, and run the standard parfor
+% path once per config -- repo precedent for hours-long sweeps.
+if ~exist('overlay_quick', 'var'), overlay_quick = false; end
+if overlay_quick
+    assert(ion.demag == 0, 'invz:oddDemag', 'ODD overlay is intrinsic-only (requires demag = 0).');
+    Tq  = [0.8 1.2 1.4];              % B-cut temperatures (all < Tc_ODD(0) = 1.509 K)
+    win = [0.1 6];                    % base field window; top (6 T) is PM at every Tq
+    t12_budget_s = 15*60;            % Tier-2 wall-clock guard (drop remaining pts if over)
+
+    % --- ODD geometric blocks ONCE, pre-loop (P0.4), on the 16^3 driver grid ----
+    [qodd, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5], 'verbose', false);
+    qodd = qodd(any(abs(qodd) > 1e-12, 2), :);
+    [VcaO, VcbO, VccO, infoO] = invz_odd_blocks(ion, qodd, struct('dpRng', 30, 'cache', true));
+    Sodd  = struct('Vca', VcaO, 'Vcb', VcbO, 'Vcc', VccO, 'Jcc0', infoO.Jcc0);   % Jcc0 UNSHIFTED
+    oOff  = struct('J0eff', J0, 'Jxx0', Jxx0);                        % 1/z baseline solver opts
+    oT1   = struct('J0eff', J0, 'Jxx0', Jxx0, 'odd', true, 'odd_blocks', Sodd);
+    oT12  = oT1;  oT12.odd_tier2 = true;
+
+    nT = numel(Tq);
+    Bc_off = nan(1, nT);  Bc_t1 = nan(1, nT);  Bc_t12 = nan(1, nT);  Bc_mf = nan(1, nT);
+    Sg_off = nan(1, nT);  Sg_t1 = nan(1, nT);  Sg_t12 = nan(1, nT);
+    t12_used = 0;  t12_drop = false;
+    for it = 1:nT
+        T = Tq(it);
+        % 1/z baseline (real ordered/PM crossing).
+        Bc_off(it) = try_bc(@() invz_critical(ion, T, Jf, setwin(oOff, win)));
+        Sg_off(it) = sigma_at(ion, T, Bc_off(it), Jf, oOff);
+        % 1/z + Tier-1 ODD (para_edge fallback). Narrow the window around the off
+        % boundary to bound the coarse scan (T1 boundary < off boundary).
+        wT1 = [max(win(1), Bc_off(it) - 1.4), Bc_off(it) + 0.3];
+        Bc_t1(it) = try_bc(@() invz_critical(ion, T, [], setwin(oT1, wT1)));
+        Sg_t1(it) = sigma_at(ion, T, Bc_t1(it), [], oT1);
+        % Mean-field boundary: crit_MF = 1 - J0*chi0cc0 = pt.crit - pt.Sigma0.
+        Bc_mf(it) = mf_boundary(ion, T, Jf, oOff, J0, win(2), Bc_off(it));
+        % 1/z + Tier-1+2 ODD -- the slow pole. Tight window around the Tier-1
+        % boundary (Tier-2 boundary sits at/just below Tier-1, ~97:3 split).
+        if ~t12_drop && isfinite(Bc_t1(it))
+            tt = tic;
+            wT12 = [max(win(1), Bc_t1(it) - 0.4), Bc_t1(it) + 0.6];
+            oT12w = setwin(oT12, wT12);  oT12w.fieldstep = 0.15;
+            Bc_t12(it) = try_bc(@() invz_critical(ion, T, [], oT12w));
+            Sg_t12(it) = sigma_at(ion, T, Bc_t12(it), [], oT12);
+            t12_used = t12_used + toc(tt);
+            if t12_used > t12_budget_s && it < nT
+                t12_drop = true;
+                warning('invz:oddOverlayT2Budget', ...
+                    ['Tier-2 B-cuts used %.1f min after %d point(s) (> %.0f min budget); ' ...
+                     'dropping the remaining Tier-2 points (ODD-LOG V4.1).'], t12_used/60, it, t12_budget_s/60);
+            end
+        end
+        fprintf('  overlay T = %.2f K: Bc off/T1/T12/MF = %.3f / %.3f / %.3f / %.3f T\n', ...
+                T, Bc_off(it), Bc_t1(it), Bc_t12(it), Bc_mf(it));
+    end
+
+    % --- closed-form zero-field endpoints (Richardson 12/24, ODD-LOG T1.5) ------
+    [Tc0_off,  zOff]  = invz_odd_zero_field(ion, struct('mode', 'off'));
+    [Tc0_full, zFull] = invz_odd_zero_field(ion, struct('mode', 'full'));
+    Tc0_mf = invz_critical_T0field(ion, 0, J0);        % mean-field Tc(0) (Sc = 0) ~ 2.26 K
+    Sc0_off = zOff.Sc_rich;  Sc0_full = zFull.Sc_rich; % Sigma_c(0): 0.298 (off) / 0.389 (ODD)
+
+    % --- R 2007 Fig. 1 experimental anchors (Bitko 1996 / Babkevich 2016, as cited
+    % in Rönnow 2007 Fig. 1): Tc(0) = 1.53 K; Hc(T -> 0) ~ 4.9-5.0 T. Two anchor
+    % points only (the module ships no digitized experimental curve). --------------
+    exp_pts = [1.53 0; 0.10 4.95];                     % [T(K) Hc(T)]
+
+    fig = figure('Color', 'w', 'Position', [100 100 760 780]);
+    % Panel 1: phase boundary B_c(T).
+    ax1 = subplot(2, 1, 1);  hold(ax1, 'on');  box(ax1, 'on');
+    plot(ax1, [Tq Tc0_mf],   [Bc_mf   0], 'k:',  'LineWidth', 1.2, 'DisplayName', 'mean field (\Sigma=0), T_c(0)=2.26 K');
+    plot(ax1, [Tq Tc0_off],  [Bc_off  0], 'o-',  'Color', [0 0.45 0.74], 'LineWidth', 1.4, 'DisplayName', '1/z baseline (ODD off)');
+    plot(ax1, [Tq Tc0_full], [Bc_t1   0], 's-',  'Color', [0.85 0.33 0.10], 'LineWidth', 1.4, 'DisplayName', '1/z + Tier-1 ODD');
+    plot(ax1, Tq,            Bc_t12,      '^--', 'Color', [0.49 0.18 0.56], 'LineWidth', 1.4, 'DisplayName', '1/z + Tier-1+2 ODD (finite B only)');
+    plot(ax1, exp_pts(:,1),  exp_pts(:,2), 'kp', 'MarkerFaceColor', 'y', 'MarkerSize', 11, 'DisplayName', 'exp. anchors (R2007 Fig.1)');
+    xlabel(ax1, 'T (K)');  ylabel(ax1, 'B_c (T)');
+    title(ax1, 'LiHoF_4 phase boundary: ODD overlay (quick, B-cuts + closed-form endpoints)');
+    legend(ax1, 'Location', 'northeast');  xlim(ax1, [0 2.4]);  ylim(ax1, [0 6]);
+    text(ax1, 0.05, 0.05, {'Near-T_c(0) T-cut region left blank for ODD curves', ...
+        '(invz\_critical\_T cannot bracket with ODD on; ODD-LOG T2/V4.1).'}, ...
+        'Units', 'normalized', 'VerticalAlignment', 'bottom', 'FontSize', 8, 'Color', [0.3 0.3 0.3]);
+    % Panel 2: critical self-energy Sigma(0) along the boundary.
+    ax2 = subplot(2, 1, 2);  hold(ax2, 'on');  box(ax2, 'on');
+    plot(ax2, [Tq Tc0_off],  [Sg_off  Sc0_off],  'o-', 'Color', [0 0.45 0.74],  'LineWidth', 1.4, 'DisplayName', '\Sigma(0), ODD off');
+    plot(ax2, [Tq Tc0_full], [Sg_t1   Sc0_full], 's-', 'Color', [0.85 0.33 0.10], 'LineWidth', 1.4, 'DisplayName', '\Sigma(0), Tier-1 ODD');
+    plot(ax2, Tq,            Sg_t12,             '^--', 'Color', [0.49 0.18 0.56], 'LineWidth', 1.4, 'DisplayName', '\Sigma(0), Tier-1+2 ODD');
+    xlabel(ax2, 'T (K)');  ylabel(ax2, '\Sigma(0) at the boundary');
+    title(ax2, 'Critical self-energy along the boundary (B=0 endpoints: Richardson 12/24)');
+    legend(ax2, 'Location', 'northwest');  xlim(ax2, [0 2.4]);
+
+    figpath = fullfile(fileparts(mfilename('fullpath')), '..', 'Data', 'Phase_ODD_overlay_quick.fig');
+    savefig(fig, figpath);
+    fprintf('\n==== V4.1 ODD overlay (quick) ====\n');
+    fprintf('  Tc(0): MF %.3f K | off %.5f K | Tier-1 ODD %.5f K  (dTc = %.4f K)\n', ...
+            Tc0_mf, Tc0_off, Tc0_full, Tc0_off - Tc0_full);
+    fprintf('  Sigma_c(0): off %.5f -> Tier-1 ODD %.5f  (dSc = %+.4f)\n', Sc0_off, Sc0_full, Sc0_full - Sc0_off);
+    for it = 1:nT
+        fprintf('  T = %.2f K: Bc off %.4f | T1 %.4f | T1+2 %.4f | MF %.4f T | Sigma0 off/T1/T12 %.4f/%.4f/%.4f\n', ...
+                Tq(it), Bc_off(it), Bc_t1(it), Bc_t12(it), Bc_mf(it), Sg_off(it), Sg_t1(it), Sg_t12(it));
+    end
+    if t12_drop, fprintf('  NOTE: Tier-2 points dropped past the 15 min budget (see warning above).\n'); end
+    fprintf('  Figure saved: %s\n', figpath);
+    return;
+end
+% ===========================================================================
 % Zero-field Tc, computed ONCE up front (invz_sigma_crit warns once here rather
 % than in every worker): it anchors the Tc(B) adaptive window and is the B=0
 % endpoint on the plot.
@@ -124,3 +249,56 @@ legend({'B_c(T): fixed-T field cut', 'T_c(B): fixed-B temperature cut', 'closed-
 % odd-aware zero-field anchor Tc0 above is now produced by invz_odd_zero_field
 % (mode 'full', single 16^3 grid), which owns that mode-'full' governing algebra
 % and its own invz:sigmaCritExcluded suppression.)
+
+% ===========================================================================
+% V4.1 overlay helpers (used only when overlay_quick is true; local functions of
+% this script). Each is defensive -- a single finder failure returns NaN and the
+% overlay still renders every element that DID resolve.
+function bx = try_bc(fn)
+% Run a boundary finder, returning NaN on any error (incl. invz:bracket).
+try
+    bx = fn();
+catch
+    bx = NaN;
+end
+end
+
+function o = setwin(o, w)
+o.window = w;
+end
+
+function s = sigma_at(ion, T, B, Jf, opts)
+% Critical self-energy Sigma(0) at (T, B): re-solve and read pt.Sigma0.
+if ~isfinite(B), s = NaN; return; end
+try
+    pt = invz_solve_point(ion, T, B, Jf, opts);
+    s  = pt.Sigma0;
+catch
+    s = NaN;
+end
+end
+
+function bx = mf_boundary(ion, T, Jf, opts, J0, Bhi, Bc1z)
+% Mean-field (RPA) boundary Bc(T): root of crit_MF = 1 - J0*chi0cc0 (Sigma = 0)
+% over field, using the SAME converged single-ion cc propagator (pt.chi0cc0) as
+% the 1/z solve, so crit_MF == pt.crit - pt.Sigma0 exactly. The MF boundary sits
+% ABOVE the 1/z boundary (it needs chi0cc0 = 1/J0 < (1+Sigma_c)/J0), so bracket
+% just above the 1/z crossing up to the PM window top.
+if ~isfinite(Bc1z), bx = NaN; return; end
+g = @(B) mf_crit(ion, T, B, Jf, opts, J0);
+try
+    bx = fzero(g, [Bc1z + 0.05, Bhi]);
+catch
+    bx = NaN;
+end
+end
+
+function c = mf_crit(ion, T, B, Jf, opts, J0)
+pt = invz_solve_point(ion, T, B, Jf, opts);
+if pt.converged && isfinite(pt.chi0cc0)
+    c = 1 - J0*pt.chi0cc0;            % == pt.crit - pt.Sigma0
+else
+    c = NaN;
+end
+end
+% ===========================================================================

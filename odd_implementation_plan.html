@@ -411,7 +411,7 @@ once. This is the least rigorous step of the whole plan — flag it in the READM
 
 <h2 id="v4">6 · Phase V4 — validation &amp; reporting</h2>
 
-<div class="task"><div class="task-head"><span class="tid">V4.1</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">V4.1</span><span class="tstatus">[x]</span>
 <span class="ttitle">Headline comparison figure</span></div>
 <ul>
 <li>Extend <code>invz_run_phase_diagram</code> (new flag) to overlay: 1/z baseline, 1/z+Tier1, 1/z+Tier1+2, MF, and the experimental points already used for README §7 (Bitko 1996 / Babkevich 2016 values as in R 2007 Fig. 1). Zero-field endpoints from the closed-form route.</li>
@@ -420,7 +420,7 @@ once. This is the least rigorous step of the whole plan — flag it in the READM
 <div class="ok"><b>Done when</b> the figure script is committed and the log states the final numbers:
 \(T_c(0)\) [1/z: 1.74 K → 1/z+ODD: <em>x</em> K vs exp 1.53 K], and the fraction of the 0.21 K gap closed.</div></div>
 
-<div class="task"><div class="task-head"><span class="tid">V4.2</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">V4.2</span><span class="tstatus">[x]</span>
 <span class="ttitle">Robustness sweeps</span></div>
 <ul>
 <li>Grid convergence: ΔT<sub>c</sub>(0) at 12³/16³/24³ (+ Richardson) — δ𝒥 shifts weight to finite q, so convergence may be slower than the baseline Σ<sub>c</sub>; report.</li>
@@ -429,7 +429,7 @@ once. This is the least rigorous step of the whole plan — flag it in the READM
 </ul>
 <div class="ok"><b>Done when</b> all reported numbers carry a numerical-error bar from these sweeps.</div></div>
 
-<div class="task"><div class="task-head"><span class="tid">V4.3</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">V4.3</span><span class="tstatus">[x]</span>
 <span class="ttitle">Test-suite consolidation &amp; handoff</span></div>
 <ul>
 <li>Fast suite additions from T1/T2/T3 total &lt; 30 s; slow suite gains the reproducibility assertions of T1.5/T3.3. Flag-off path re-verified against the P0.5 frozen baseline.</li>
@@ -505,9 +505,9 @@ Keep in lockstep with the <code>[ ]</code> markers above.</p>
     {"id":"T3.2","phase":"T3","deps":[],"files":["invz/invz_twolevel_avg.m"],"status":"done"},
     {"id":"T3.3","phase":"T3","deps":["T3.1","T3.2"],"files":["invz/invz_solve_point.m"],"status":"done"},
     {"id":"T3.4","phase":"T3","deps":["T3.3"],"files":["docs/ODD-LOG.md"],"status":"done"},
-    {"id":"V4.1","phase":"V4","deps":["T2.2","T3.3"],"files":["invz/invz_run_phase_diagram.m"],"status":"todo"},
-    {"id":"V4.2","phase":"V4","deps":["V4.1"],"files":["docs/ODD-LOG.md"],"status":"todo"},
-    {"id":"V4.3","phase":"V4","deps":["V4.2"],"files":["invz/tests/","docs/"],"status":"todo"}
+    {"id":"V4.1","phase":"V4","deps":["T2.2","T3.3"],"files":["invz/invz_run_phase_diagram.m"],"status":"done"},
+    {"id":"V4.2","phase":"V4","deps":["V4.1"],"files":["docs/ODD-LOG.md"],"status":"done"},
+    {"id":"V4.3","phase":"V4","deps":["V4.2"],"files":["invz/tests/","docs/"],"status":"done"}
   ]
 }
 </script>
