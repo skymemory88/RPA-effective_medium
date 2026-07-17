@@ -714,3 +714,84 @@ eigvec pass per point — ~25% overhead at 16³). Probe sweeps (0.1–3 T conver
 census): ~7 min total, one-off.
 
 ---
+
+## T3.1 — Tier-2 internal-field covariance C (E3): `invz_odd_fieldvar.m` (2026-07-17)
+
+Opens Phase T3 (Dollberg's variable-moments mechanism). `[C, info] =
+invz_odd_fieldvar(ion, pt, S, T, opts)` evaluates E3 at a CONVERGED 1/z ODD point
+solve: the 2×2 covariance of the internal transverse field seen by the doublet,
+
+    C_ab = (1/(4·Nq)) Σ_q tr[ V_ac(q) · Scc(q) · V_cb(q) ]        (meV²)
+
+with `V_ac = Vca(:,:,iq)'`, `Scc(q) = Σ_ν u_ν S_ν(q) u_ν'`, and the equal-time
+per-mode structure factor from the converged EMT lattice propagator (framework
+eq 7, identical form to `invz_emt_scalar`): `Gq_ν = G./(1 + (Jν_odd − K).*G)`,
+`S_ν(q) = −(1/β)·Σ_n wts_n·Gq_ν(iω_n)`. **Sign convention** mirrors the solver's
+sum rule `sum(wts.*pt.G)/β = −si.JzJz_fluct` (χ = −G): S_ν ≥ 0 for physical
+modes at a converged PM point, making every per-(q,ν) term PSD. Modes/eigvecs
+from `eig(Vcc + dJ)` per q (Hermitized, sorted ascending with U permuted in
+lockstep — the T2.1 `w_odd` pattern); dJ is rebuilt from `pt.odd.Xp` via
+`invz_odd_deltaJ`, so C sits at the SAME converged state as the solve
+(deterministic rebuild). Guards: `invz:fieldvarArgs` (pt lacks ODD fields / not
+converged / malformed S), `invz:fieldvarGrid` (`numel(pt.G)` vs the (T, Ecut)
+Matsubara grid — pt must be solved with the SAME Ecut, default 40).
+
+**Basis choice (plan T3.1 "document the choice"):** contraction in the MODE
+basis — with y_α(ν) = Vc_α' u_ν, cyclic invariance gives per q
+tr[V_ac·Scc·V_cb] = Σ_ν S_ν · (y_b(ν)' y_a(ν)) — note the CONJUGATE ORDER: the
+(a,b) element carries y_b'y_a, so C_ba(q) = conj(C_ab(q)) and each per-q term
+is exactly Hermitian (PSD when S_ν ≥ 0). Costs two extra 4×4 products per q on
+top of the eig that is recomputed anyway; Scc is never formed in production.
+The explicit-Scc sublattice-basis route is the brute-force cross-check inside
+`test_fieldvar_structure` (on-axis q AND generic q = [1/3 1/6 1/6], AbsTol
+1e-14·scale — both bases agree to machine precision). The assembled C is
+asserted real symmetric to 1e-10 relative and defensively symmetrized
+(`invz:fieldvarHerm`); ±q imaginary cancellation measured resid ~1e-21 meV².
+
+**Measured symmetry finding:** on the 6³ mesh the per-q E3 integrand is REAL at
+EVERY q (max rel imag ~1.5e-16; inversion symmetry) — the ±q cancellation is
+trivially satisfied per point, while the per-q off-diagonal (rel ~0.25 of the
+diagonal) cancels to ~0 only in the q-sum. Consequence: a conjugate-order slip
+would be numerically invisible on this lattice; the order is fixed by the
+header algebra + the two-basis cross-check.
+
+### Headline numbers (6³ ndgrid − Γ, dpRng 10 warm cache, Ecut 40 → nwn = 43; report, not tuned)
+
+| fixture (T, Bx) | C_aa (meV²) | C_bb (meV²) | C_ab (meV²) | heq (T) | tail_share | S_ν min |
+|---|---|---|---|---|---|---|
+| (1.8 K, 0.50 T) | 4.560e-4 | 4.565e-4 | −3.1e-8 | **0.2953** | 7.7e-4 | 12.0 |
+| (1.8 K, 0.05 T) | 4.574e-4 | 4.574e-4 | −3.4e-10 | **0.2956** | 7.7e-4 | 11.9 |
+
+- heq ≈ **0.30 T** vs Dollberg's distribution width h ≈ 0.4 T (their Fig. 4) —
+  same order, qualitative comparator only (log-only, never asserted). C in the
+  expected O(1e-4–1e-3) meV² band (d ≈ 0.47 μeV, S_cc ~ O(12–30)).
+- C4: C_aa = C_bb to 9.8e-6 relative at Bx = 0.05 T (1.0e-3 at 0.5 T); the
+  off-diagonal is 4 orders below the diagonal and shrinks with Bx → 0.
+- Static approx (`opts.static_approx`, gated, NEVER silent — `info.
+  static_approx`): S_ν ≈ kBT·χ_ν(q,0) keeps only the n = 0 Matsubara term →
+  static C is LOWER, rel diff ‖Cs−Cf‖/‖Cf‖ = **0.062** at 0.5 T (0.057 at
+  0.05 T), heq 0.286 vs 0.295 T. The n ≥ 1 quantum terms carry ~6% of the
+  covariance at 1.8 K — the full sum stays the default.
+- Truncation tail (Ecut 40): last-frequency contribution 7.7e-4 of the total
+  (ω_n^−2 decay; gate < 0.05 passes with 60× margin).
+
+### Test status (TDD)
+
+- **RED → GREEN:** `test_invz_odd_fieldvar.m` written first — all 3 tests
+  errored (`invz_odd_fieldvar` undefined), then passed post-implementation.
+  One amendment during the loop: the structure test's added "generic q has
+  complex off-diagonal" sanity line was measured FALSE (integrand real at every
+  q, see the symmetry finding) and was replaced by the two-point two-basis
+  cross-check.
+- **Fast (3 tests, 0.45 s):** structure (real symmetric, PSD, nonzero, tail
+  < 0.05, two-basis cross-check at 2 q) ✓; C_aa = C_bb at Bx → 0 (RelTol 5e-2,
+  measured 9.8e-6) ✓; static-approx gated + logged ✓. Full fast suite
+  **134 passed / 0 failed / 17 incomplete** (baseline 131/0/17 + 3 new).
+
+### Timings
+
+`invz_odd_fieldvar` itself: **8–20 ms** at 6³/nwn 43 (one 4×4 eig + two 4×4
+products + a [43×4] propagator per q — negligible next to the 0.07–0.2 s warm
+point solve). Fast-suite addition ~0.5 s.
+
+---
