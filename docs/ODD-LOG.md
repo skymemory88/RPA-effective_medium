@@ -1255,3 +1255,20 @@ V4.2 grid sweep ~1.5 min (warm 12/24, 16³-generator build 40 s); dpRng sweep
 ~4 min (Tier-2 B-cuts the pole, within budget). Fast suite 53 s; slow suite 191 s.
 
 ---
+
+## A0 — Full-tensor 1/z preflight (2026-07-17)
+
+Plan: docs/superpowers/plans/2026-07-17-invz-tensor-full.md (v3). Commits 22c9ce3 / 20305aa / a3fe857.
+
+**Implemented (measurement/freeze only — no tensor solver yet):**
+- `invz_tensor/tests/invzt_anchors.m` — tensor-owned anchors measured via `invz_odd_blocks` at dpRng 30; bit-identical to the superseded P0.3 anchors, confirming the Task-1 `invz_common` move is behavior-neutral.
+- `invz_tensor/tests/fixtures/projected_baseline.json` — frozen projected reference on the legacy_inclusive 8^3/dpRng-15 grid, via a committed generator (Step 3a) + filtered clean flag (`filtered_clean=true`, base git 22c9ce3).
+
+**Headline (provenance in parentheses):**
+- ODD-mediated d(Tc) = 0.4994 ueV (8^3/dpRng-15 coarse grid; within the 0.3-0.5 ueV band; production 16^3/dpRng-30 = 0.483 ueV — coarse-grid bias).
+- On-axis small-q ODD decay LINEAR in q (per-decade ratios ~9.63 / 9.99); c*-axis ODD component ~1e-17 (c<->(a,b) symmetry null confirmed).
+- Frozen baseline solve at (1.6 K, 0.5 T): crit < 0 (ordered side of the coarse-grid boundary; production Tc(0.5 T) ~ 1.7-1.8 K); Jxx0 = info.Jaa0 = 3.5081e-3 meV.
+
+**Suite:** no tensor unit tests yet; projected suite 143/0/19 (unchanged from Task 1). No physics stop-rule violated.
+
+**Review Minors (deferred to final):** filtered-flag root whitelist omits `ellipsoid_demagn.m` (called by invz_jq_modes but gated on demag!=0; inert at demag=0); d=0.4994 within 1.2% of the upper band edge; fclose return unchecked.
