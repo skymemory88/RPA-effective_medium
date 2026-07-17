@@ -39,8 +39,7 @@ ion = invz_ion();
 n = 8;  [h, k, l] = ndgrid((0:n-1)/n);  qvec = [h(:) k(:) l(:)];  qvec(1,:) = [];
 [Vca, Vcb, Vcc, infoB] = invz_odd_blocks(ion, qvec, struct('dpRng', 15, 'cache', true));
 S = struct('Vca', Vca, 'Vcb', Vcb, 'Vcc', Vcc, 'Jcc0', infoB.Jcc0);
-Jnu0 = zeros(size(Vcc,3), 4);
-for iq = 1:size(Vcc,3), Jnu0(iq,:) = sort(real(eig(Vcc(:,:,iq)))).'; end
+Jnu0 = invz_odd_modes(Vcc, []);
 o0 = struct('J0eff', infoB.Jcc0, 'Jxx0', infoB.Jaa0);
 t0 = tic;  p0 = invz_solve_point(ion, 1.80, 0.1, Jnu0(:), o0);            t_off = toc(t0);
 o1 = o0;  o1.odd = true;  o1.odd_blocks = S;

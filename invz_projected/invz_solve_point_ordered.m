@@ -72,13 +72,7 @@ if oddOn
     % needs the ordering-MF state, a different siopts).
     Xp = invz_chiperp(ion, T, Bx, struct('hyp', hyp, 'Jxx0', Jxx0, 'transverse_mf', tmf));
     [dJ, d] = invz_odd_deltaJ(ob.Vca, ob.Vcb, Xp);
-    nqo = size(ob.Vcc, 3);
-    Jnu_odd = zeros(nqo, 4);
-    for iq = 1:nqo
-        M = ob.Vcc(:,:,iq) + dJ(:,:,iq);
-        M = (M + M')/2;                        % both terms Hermitian; cleans rounding only
-        Jnu_odd(iq,:) = sort(real(eig(M))).';
-    end
+    Jnu_odd = invz_odd_modes(ob.Vcc, dJ);      % values-only kernel (shared)
     Jnu_flat = Jnu_odd(:);
     % E5 uniform shift, applied HERE exactly once (T1.3 bookkeeping rule: the grid
     % matrices' diagonal already carries -d via E4; J0eff carries the explicit -d;

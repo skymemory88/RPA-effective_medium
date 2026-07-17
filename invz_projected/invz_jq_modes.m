@@ -177,15 +177,7 @@ end
     struct('dpRng', dpRng, 'cache', useCache));
 [dJ, d, dinfo] = invz_odd_deltaJ(Vca, Vcb, Xp);
 nq   = size(qvec, 1);
-v    = ones(4,1)/2;              % uniform (all-sublattices-in-phase) FM mode
-Jnu  = zeros(nq, 4);
-Juni = zeros(nq, 1);
-for iq = 1:nq
-    M = Vcc(:,:,iq) + dJ(:,:,iq);
-    M = (M + M')/2;              % both terms Hermitian; cleans rounding only
-    Jnu(iq,:) = sort(real(eig(M))).';
-    Juni(iq)  = real(v.'*M*v);   % uniform FM-mode coupling (physical dispersion)
-end
+[Jnu, Juni] = invz_odd_modes(Vcc, dJ);   % shared values-only kernel + uniform projection
 info = infoB;
 info.Jcc0 = infoB.Jcc0 - d;      % E5 explicit uniform shift (see header block)
 info.Jshape_cc = 0;              % demag == 0 enforced above (intrinsic-only)

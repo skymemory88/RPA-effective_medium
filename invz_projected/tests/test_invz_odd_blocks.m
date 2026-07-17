@@ -69,7 +69,10 @@ m = arrayfun(@(iq) max(abs(Vca(:,:,iq)), [], 'all'), 1:3);
 verifyEqual(testCase, m(:), A.odd_onaxis_smallq.maxca(:), 'RelTol', 1e-6);   % pinned P0 digits
 verifyEqual(testCase, m(2)/m(1), 0.1, 'RelTol', 0.25);                       % ~linear decade steps
 verifyEqual(testCase, m(3)/m(2), 0.1, 'RelTol', 0.25);
-verifyLessThan(testCase, 18 * m(3)^2, 1e-5 * 6.421e-3);                      % chi_perp*|Jca|^2 << Jcc0
+% chi_perp*|Jca|^2 << Jcc0, on the anchored chi_aa(1.53 K, 0 T) and Jcc0 instead
+% of re-hardcoded rounded literals (measured margin ~10x; the <= 2% shifts from
+% the old rounded 18 / 6.421e-3 cannot flip the gate).
+verifyLessThan(testCase, A.chiperp_1p53K_0T(1,1) * m(3)^2, 1e-5 * A.jcc0);
 end
 
 function test_cache_roundtrip_selfverifying(testCase)
@@ -166,5 +169,6 @@ verifyEqual(testCase, lhs, rhs, 'RelTol', 0.01);
 [~, ~, Vcc] = invz_odd_blocks(ion, qvec, struct('dpRng', 20, 'cache', true));
 % subtract exchange+Lorentz first: rebuild the dipole-only cc from MF_dipole per q
 % is overkill — instead run the same Parseval on Vca vs B_xz,xz in absolute terms:
-verifyEqual(testCase, lhs, C.gfac^2 * 36.73/5.175^6, 'RelTol', 0.015);
+a = 5.175;                       % DS2023 lattice constant (Ang), as in test_ds2023_geometry_sums
+verifyEqual(testCase, lhs, C.gfac^2 * 36.73/a^6, 'RelTol', 0.015);
 end

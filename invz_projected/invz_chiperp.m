@@ -74,7 +74,13 @@ if size(Xp, 3) == 1, Xp = Xp(:, :, 1); end               % clean 2x2 for scalar 
 
 % Elastic share on the STATIC (z = 0) (1,1) element -- a fixed Van-Vleck-dominance
 % diagnostic, independent of opts.z / opts.elastic.
-Xel  = static_ab_block(si, T, true);
+if isscalar(z) && z == 0 && elast
+    % Default case: the block computed above IS static_ab_block(si, T, true)
+    % (same chi0z call, same symmetrize/real ops) -- reuse it bit-identically.
+    Xel = Xp;
+else
+    Xel = static_ab_block(si, T, true);
+end
 Xnel = static_ab_block(si, T, false);
 info.elastic_share = (Xel(1,1) - Xnel(1,1)) / Xel(1,1);
 

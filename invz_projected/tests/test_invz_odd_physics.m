@@ -75,8 +75,7 @@ ion = invz_ion();
 n = 16;  [h, k, l] = ndgrid((0:n-1)/n);  qvec = [h(:) k(:) l(:)];  qvec(1,:) = [];
 [Vca, Vcb, Vcc, infoB] = invz_odd_blocks(ion, qvec, struct('dpRng', 30, 'cache', true));
 S = struct('Vca', Vca, 'Vcb', Vcb, 'Vcc', Vcc, 'Jcc0', infoB.Jcc0);
-Jnu0 = zeros(size(Vcc,3), 4);
-for iq = 1:size(Vcc,3), Jnu0(iq,:) = sort(real(eig(Vcc(:,:,iq)))).'; end
+Jnu0 = invz_odd_modes(Vcc, []);
 Ts = [0.31 0.8 1.2 1.5];
 % Window floor lowered from the invz_critical default [2 7] to [0.1 7]: at T = 1.5 K
 % (only 9 mK below the ODD Tc(0) = 1.509 K) the ODD-suppressed boundary collapses to

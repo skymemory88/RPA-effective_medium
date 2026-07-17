@@ -1,4 +1,4 @@
-%INVZ_RUN_PHASE_DIAGRAM Reproduce R 2007 Fig 1 (paramagnetic-side boundary).
+%INVZ_RUN_PHASE_DIAGRAM
 % Two-regime search: Bc(T) at each fixed T in Ts (invz_critical, vertical field cuts), and
 % Tc(B) at each fixed B in Bs (invz_critical_T, horizontal temperature cuts, self-adapting window).
 
@@ -8,12 +8,28 @@ ion = invz_ion();
 %   Ordering-channel criticality (info.Jcc0/Jnu) and Tc(B=0) are demag-INVARIANT (R2007); Bc(T)
 %   vs APPLIED field can shift via the demag-aware info.Jaa0 (hoisted into Jxx0 below). See
 %   invz_ion.m for the full explanation. demag = 0 (default) matches the R2007 benchmark.
-% ion.odd = 1;  % OPTIONAL ODD (off-diagonal dipolar) Tier-1 knob (odd_implementation_plan.html,
-%   T1.4): geometric blocks are built ONCE pre-parfor below (P0.4: workers do no disk I/O); the
-%   point solvers rebuild the cc modes with deltaJ(T,B) and apply the E5 -d to J0eff internally
-%   (callers keep passing the UNSHIFTED J0); the Tc(B) anchor Tc0 becomes odd-aware via
-%   T-dependent Sc(T)/J0(T) handles. Intrinsic-only (requires demag = 0). Default off = the
-%   published benchmark run, byte-identical.
+
+ion.odd = 1;  % (off-diagonal dipolar) Tier-1 ODD knob
+
+% ---- knobs ------------------------------------------------------------------
+% Standard sweep (used when overlay_quick is false/unset; see below):
+% Tc(B) search window is not set here: invz_critical_T self-adapts per field
+% (anchors at Tc0+0.05 K, spans 0.5 K down; see its header for details).
+% Ts = linspace(0.05, 1.95, 28);   % Temperature points to sample
+% Bs = [];   % magnetic field points to sample
+Ts = []; % Temperature points to sample
+Bs = linspace(0.05,5,26); % magnetic field points to sample
+useParallel = true;             % false -> force a serial run
+
+% V4.1 quick ODD overlay (opt-in; see the header block below for what this
+% does). Set `overlay_quick = true` in the base workspace before running this
+% script to use these instead of the standard sweep above.
+if ~exist('overlay_quick', 'var'), overlay_quick = false; end
+Tq  = [0.8 1.2 1.4];              % B-cut temperatures (all < Tc_ODD(0) = 1.509 K)
+win = [0.1 6];                    % base field window; top (6 T) is PM at every Tq
+t12_budget_s = 15*60;            % Tier-2 wall-clock guard (drop remaining pts if over)
+% -------------------------------------------------------------------------------
+
 [Jf, info, Jxx0] = invz_bz_couplings(ion);   % shared BZ-grid coupling branches (Jaa0-aware)
 J0 = info.Jcc0;   % scalar hoist: avoids broadcasting the whole info struct to workers
 % Jxx0 is demag-aware; at demag = 0 it differs from the hardcoded ion.Jxx0 by <0.1% -- the live
@@ -42,18 +58,11 @@ J0 = info.Jcc0;   % scalar hoist: avoids broadcasting the whole info struct to w
 % boundary, hours) is LEFT TO THE USER: keep overlay_quick = false, set
 % ion.odd = 1 (and/or opts.odd_tier2), widen Ts, and run the standard parfor
 % path once per config -- repo precedent for hours-long sweeps.
-if ~exist('overlay_quick', 'var'), overlay_quick = false; end
 if overlay_quick
     assert(ion.demag == 0, 'invz:oddDemag', 'ODD overlay is intrinsic-only (requires demag = 0).');
-    Tq  = [0.8 1.2 1.4];              % B-cut temperatures (all < Tc_ODD(0) = 1.509 K)
-    win = [0.1 6];                    % base field window; top (6 T) is PM at every Tq
-    t12_budget_s = 15*60;            % Tier-2 wall-clock guard (drop remaining pts if over)
 
     % --- ODD geometric blocks ONCE, pre-loop (P0.4), on the 16^3 driver grid ----
-    [qodd, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5], 'verbose', false);
-    qodd = qodd(any(abs(qodd) > 1e-12, 2), :);
-    [VcaO, VcbO, VccO, infoO] = invz_odd_blocks(ion, qodd, struct('dpRng', 30, 'cache', true));
-    Sodd  = struct('Vca', VcaO, 'Vcb', VcbO, 'Vcc', VccO, 'Jcc0', infoO.Jcc0);   % Jcc0 UNSHIFTED
+    Sodd  = build_driver_odd_blocks(ion);
     oOff  = struct('J0eff', J0, 'Jxx0', Jxx0);                        % 1/z baseline solver opts
     oT1   = struct('J0eff', J0, 'Jxx0', Jxx0, 'odd', true, 'odd_blocks', Sodd);
     oT12  = oT1;  oT12.odd_tier2 = true;
@@ -150,10 +159,7 @@ Sodd = struct();                            % ODD blocks (empty when ion.odd is 
 if ion.odd
     % ---- ODD (T1.4): geometric blocks ONCE, pre-parfor, on the SAME 16^3 Gamma-less
     % grid invz_bz_couplings just used (its defaults: grid [16 16 16], dpRng 30, cache).
-    [qodd, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5], 'verbose', false);
-    qodd = qodd(any(abs(qodd) > 1e-12, 2), :);
-    [VcaO, VcbO, VccO, infoO] = invz_odd_blocks(ion, qodd, struct('dpRng', 30, 'cache', true));
-    Sodd = struct('Vca', VcaO, 'Vcb', VcbO, 'Vcc', VccO, 'Jcc0', infoO.Jcc0);   % Jcc0 UNSHIFTED
+    Sodd = build_driver_odd_blocks(ion);
     % Odd-aware zero-field anchor (T1.5): invz_odd_zero_field REPLACES the old inline-handle
     % SEAM -- identical mode-'full' governing algebra (Sc(J0-d, modes(Vcc+dJ)), J0(T)=Jcc0-d(T)),
     % here on the SINGLE driver grid (16^3) so the adaptive-window anchor matches the parfor
@@ -165,18 +171,6 @@ if ion.odd
 else
 Tc0 = invz_critical_T0field(ion, invz_sigma_crit(J0, Jf), J0);
 end
-
-% ---- knobs ----------------------------------------------------------------
-% Tc(B) search window is not set here: invz_critical_T self-adapts per field
-% (anchors at Tc0+0.05 K, spans 0.5 K down; see its header for details).
-
-Ts = linspace(0.05, 1.95, 28);   % low-T regime: Bc(T) points
-Bs = [];   % high-T regime: Tc(B) points
-
-% Ts = [];
-% Bs = linspace(0.05,5,26);
-
-useParallel = true;             % false -> force a serial run
 
 nT = numel(Ts);  nB = numel(Bs);
 jobs = [Ts(:).' Bs(:).'];           % one independent 1-D root find per job
@@ -249,6 +243,19 @@ legend({'B_c(T): fixed-T field cut', 'T_c(B): fixed-B temperature cut', 'closed-
 % odd-aware zero-field anchor Tc0 above is now produced by invz_odd_zero_field
 % (mode 'full', single 16^3 grid), which owns that mode-'full' governing algebra
 % and its own invz:sigmaCritExcluded suppression.)
+
+% ===========================================================================
+% Shared ODD-blocks builder (the overlay branch AND the standard ion.odd branch
+% build the identical struct; both call this). 16^3 Gamma-excluded driver mesh
+% (same generator/range/filter as invz_bz_couplings' default grid) ->
+% invz_odd_blocks -> the solver-opts blocks struct (P0.4: built ONCE, outside
+% every solver loop).
+function Sodd = build_driver_odd_blocks(ion)
+[qodd, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5], 'verbose', false);
+qodd = qodd(any(abs(qodd) > 1e-12, 2), :);
+[VcaO, VcbO, VccO, infoO] = invz_odd_blocks(ion, qodd, struct('dpRng', 30, 'cache', true));
+Sodd = struct('Vca', VcaO, 'Vcb', VcbO, 'Vcc', VccO, 'Jcc0', infoO.Jcc0);   % Jcc0 UNSHIFTED
+end
 
 % ===========================================================================
 % V4.1 overlay helpers (used only when overlay_quick is true; local functions of
