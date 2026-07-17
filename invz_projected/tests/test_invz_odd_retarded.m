@@ -88,30 +88,45 @@ n = 16;  [h, k, l] = ndgrid((0:n-1)/n);  qvec = [h(:) k(:) l(:)];  qvec(1,:) = [
 [Vca, Vcb, Vcc, infoB] = invz_odd_blocks(ion, qvec, struct('dpRng', 30, 'cache', true));
 S = struct('Vca', Vca, 'Vcb', Vcb, 'Vcc', Vcc, 'Jcc0', infoB.Jcc0);
 o = struct('J0eff', infoB.Jcc0, 'Jxx0', infoB.Jaa0, 'odd', true, 'odd_blocks', S);
-tS = tc_pm_extrap(ion, 2.0, o);
+[tS, TusedS] = tc_pm_extrap(ion, 2.0, o);
 o.odd_retarded = true;
-tR = tc_pm_extrap(ion, 2.0, o);
+[tR, TusedR] = tc_pm_extrap(ion, 2.0, o);
 bS = invz_critical(ion, 1.2, [], rmfield(o, 'odd_retarded'));
 bR = invz_critical(ion, 1.2, [], o);
 fprintf('T2.2: Tc*(2T) static %.6f vs retarded %.6f (d = %+.4f mK); Bc(1.2K) %.4f vs %.4f T\n', ...
     tS, tR, 1e3*(tR - tS), bS, bR);
 verifyTrue(testCase, all(isfinite([tS tR bS bR])));
+% The DeltaTc verdict is only meaningful when both flags extrapolate from
+% IDENTICAL grid points -- convergence can flip at a grid point between the
+% static and retarded runs, which would otherwise let a subset mismatch
+% masquerade as a retardation shift (review finding, T2.2).
+verifyEqual(testCase, TusedR, TusedS);
 end
 
-function tc = tc_pm_extrap(ion, B, o)
+function [tc, Tused] = tc_pm_extrap(ion, B, o)
 % PM-side Tc estimator at fixed B (T2.2 decision leg): sample crit on the house
 % grid step (1/30 K), keep converged points only (the classifier convention of
 % invz_critical_T), and linearly extrapolate the two LOWEST converged PM points
 % to crit = 0. The FIXED grid makes the estimator deterministic: the static and
 % retarded runs vote on identical T points, so tc(static) - tc(retarded) is a
-% pure crit-shift readout, free of grid/bisection noise.
+% pure crit-shift readout, free of grid/bisection noise. Tused (the two grid
+% points actually used) is returned so the caller can verify BOTH flags voted
+% on the same points -- if convergence flips at a grid point between runs, the
+% "same estimator, bias cancels" argument silently fails.
 Tg = 1.20:1/30:1.50;                             % spans the 2 T slowing band
 c  = nan(size(Tg));  okv = false(size(Tg));
 for i = 1:numel(Tg)
     [c(i), okv(i)] = invz_crit_at(ion, Tg(i), B, [], o);
 end
 Tv = Tg(okv);  cv = c(okv);
-assert(numel(cv) >= 2 && all(cv > 0), ...
+assert(numel(cv) >= 2, ...
     'tc_pm_extrap: need >= 2 converged PM points in the scan window (got %d).', numel(cv));
-tc = Tv(1) - cv(1)*(Tv(2) - Tv(1))/(cv(2) - cv(1));   % two lowest converged points
+assert(all(cv > 0), ...
+    'tc_pm_extrap: converged PM crit values must all be positive (got %s).', mat2str(cv));
+assert(cv(2) > cv(1), ...
+    ['tc_pm_extrap: PM-side crit must increase with T on the two lowest ' ...
+     'converged points (got cv(1) = %.6g at T = %.6g, cv(2) = %.6g at T = %.6g).'], ...
+    cv(1), Tv(1), cv(2), Tv(2));
+Tused = Tv(1:2);                                 % two lowest converged points
+tc = Tv(1) - cv(1)*(Tv(2) - Tv(1))/(cv(2) - cv(1));
 end
