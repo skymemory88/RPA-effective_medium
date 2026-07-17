@@ -444,10 +444,13 @@ end
   - Per grid n: build a Γ-EXCLUDED uniform mesh exactly the way the existing Σc benchmark builds it (read `test_invz_sigma_crit.m` / `invz_bz_couplings.m` and reuse the same generator + Γ filter so ODD-off reproduces the published number bitwise); `[Vca, Vcb, Vcc, infoB] = invz_odd_blocks(...)`;
     - `'off'`: `Sc(T) = invz_sigma_crit(infoB.Jcc0, Jnu0_flat)` (T-independent), `J0(T) = infoB.Jcc0` — must reproduce the published route;
     - `'full'` (T1.5 a): `Xp(T) = invz_chiperp(ion, T, [0 0 0])`; `[dJ, d] = invz_odd_deltaJ(Vca, Vcb, Xp)`; modes of `Vcc + dJ`; `J0(T) = infoB.Jcc0 - d(T)`; `Sc(T) = invz_sigma_crit(J0(T), Jnu_odd_flat(T))`;
-    - `'uniform_only'` (T1.5 b, DS2023's MF mechanism): modes of `Vcc` (unmodified), `J0(T) = infoB.Jcc0 - d(T)`;
-    - `'qstruct_only'` (T1.5 c, the fluctuation piece): modes of `Vcc + dJ + d*eye(4)` per q, `J0(T) = infoB.Jcc0`;
+    - `'uniform_only'` (T1.5 b as SOURCE-PLAN-written — kept as a reported DIAGNOSTIC only, see the amendment below): modes of `Vcc` (unmodified), `J0(T) = infoB.Jcc0 - d(T)`;
+    - `'qstruct_only'` (T1.5 c as source-plan-written — reported diagnostic only): modes of `Vcc + dJ + d*eye(4)` per q, `J0(T) = infoB.Jcc0`;
     then `Tc = invz_critical_T0field(ion, ScT_handle, J0T_handle)`.
-  - `out`: per-grid `Tc`, `Tc_rich`, `Sc_at_Tc`, `Sc_rich`, `d_at_Tc`, `mode`, timings, and (mode 'full') `out.split` = the (a)/(b)/(c) trio + closure defect `(a) - [(b) + (c) - Tc_off]`.
+  - DECOMPOSITION AMENDMENT (controller adjudication 2026-07-17, after the Task-6 BLOCKED round; measured on 12^3/24^3 Richardson): the source plan's dTc-space split is ill-posed — its literal (c) is EXACTLY degenerate with (a) (a simultaneous uniform +d shift of all couplings AND J0 leaves the R2007 criticality invariant; measured Tc_c1 == Tc_a to numerical precision; a closed-form THEOREM that independently validates the E4/E5 bookkeeping — log it as such), and its literal (b) drives J0 below the peak finite-q mode (96 excluded modes at 24^3; the uniform-critical assumption is violated — this IS DS2023's naive-MF inconsistency; keep as reported diagnostic with its exclusion counts). The GOVERNING split is sequential in condition/Sigma-space; neither leg enters the invalid regime:
+    - (b) condition-level (DS2023 MF analog): root of `(Jcc0 - d(T))*chi0cc(0;T) = 1 + Sc_off` with `Sc_off = invz_sigma_crit(Jcc0, Jnu0_flat)` FROZEN at the no-ODD value;
+    - (c) self-energy-level (the fluctuation piece): root of `Jcc0*chi0cc(0;T) = 1 + Sc_odd(T)` with `Sc_odd(T) = invz_sigma_crit(Jcc0 - d(T), Jnu_odd_flat(T))` — the full ODD Sigma_c at its own consistent configuration.
+  - `out`: per-grid `Tc`, `Tc_rich`, `Sc_at_Tc`, `Sc_rich`, `d_at_Tc`, `mode`, timings, per-variant excluded-mode counts, and (mode 'full') `out.split` carrying ALL variants so any future re-cut has the numbers: `Tc_b`/`Tc_c` (governing pair), `closure_defect = (a) - [(b) + (c) - Tc_off]` (genuine interaction term — REPORTED, never gated), `Tc_b_naive` (+ `nex.b_naive` counts), `Tc_c1_literal` (== Tc_a, the bookkeeping theorem), `Tc_c_factorial` (modes `Vcc + dJ`, `J0 = Jcc0`).
 
 - [ ] **Step 1: Write the failing tests**:
 
@@ -461,17 +464,24 @@ verifyEqual(testCase, out.Sc_rich, 0.2980, 'AbsTol', 0.006);
 end
 
 function test_zero_field_structure_fast(testCase)
-% Small-grid structural gate: ODD lowers Tc; each split component lowers Tc;
-% (a) is the largest suppression.
+% Small-grid structural gate (AMENDED 2026-07-17, condition/Sigma-space split):
+% directionality only — ODD lowers Tc; each governing leg lowers Tc; d > 0;
+% the literal-(c) bookkeeping theorem holds. Magnitudes, leg orderings, and
+% closure are REPORTED, not gated (the interaction term is genuine physics;
+% the naive (b) is an invalid-regime diagnostic and is only checked finite).
 ion = invz_ion();
 o = struct('grids', {{8}}, 'dpRng', 15);
 Tc0 = invz_odd_zero_field(ion, setfield(o, 'mode', 'off'));   %#ok<SFLD>
 [Tc1, out1] = invz_odd_zero_field(ion, setfield(o, 'mode', 'full')); %#ok<SFLD>
 verifyLessThan(testCase, Tc1, Tc0);
 verifyGreaterThan(testCase, out1.d_at_Tc, 0);
-verifyLessThan(testCase, out1.split.Tc_b, Tc0);
-verifyLessThan(testCase, out1.split.Tc_c, Tc0);
-verifyLessThan(testCase, Tc1, min(out1.split.Tc_b, out1.split.Tc_c) + 1e-9);
+verifyLessThan(testCase, out1.split.Tc_b, Tc0);               % condition-level leg
+verifyLessThan(testCase, out1.split.Tc_c, Tc0);               % Sigma-level leg
+verifyEqual(testCase, out1.split.Tc_c1_literal, Tc1, 'AbsTol', 2e-3);  % theorem
+verifyTrue(testCase, isfinite(out1.split.Tc_b_naive) && isfinite(out1.split.Tc_c_factorial));
+fprintf('split: a %.4f | b_cond %.4f | c_sigma %.4f | closure %+.4f | b_naive %.4f | c_fact %.4f\n', ...
+    Tc1, out1.split.Tc_b, out1.split.Tc_c, out1.split.closure_defect, ...
+    out1.split.Tc_b_naive, out1.split.Tc_c_factorial);
 end
 
 function test_odd_headline_slow(testCase)
@@ -483,8 +493,9 @@ ion = invz_ion();
 [Tc1, out1] = invz_odd_zero_field(ion, struct('mode', 'full'));
 fprintf('ODD zero field: Tc = %.4f K (dTc = %.4f), Sc = %.4f (dSc = %+.4f), d(Tc) = %.4g ueV\n', ...
     Tc1, 1.743 - Tc1, out1.Sc_rich, out1.Sc_rich - 0.2980, out1.d_at_Tc*1e3);
-fprintf('split: (a) %.4f  (b) %.4f  (c) %.4f K, closure defect %.4g K\n', ...
-    Tc1, out1.split.Tc_b, out1.split.Tc_c, out1.split.closure_defect);
+fprintf('split: (a) %.4f | b_cond %.4f | c_sigma %.4f | closure %+.4g K | b_naive %.4f (nex %d) | c1_lit %.4f | c_fact %.4f\n', ...
+    Tc1, out1.split.Tc_b, out1.split.Tc_c, out1.split.closure_defect, ...
+    out1.split.Tc_b_naive, max(out1.split.nex.b_naive(:)), out1.split.Tc_c1_literal, out1.split.Tc_c_factorial);
 A = invz_odd_anchors();
 if isfield(A, 'odd_Tc_rich')                      % reproducibility gate (1%, plan T1.5)
     verifyEqual(testCase, Tc1, A.odd_Tc_rich, 'RelTol', 0.01);
