@@ -568,8 +568,9 @@ All shifts **negative** (ODD suppresses ordering — the sign contract). **Atten
 the shift magnitude GROWS as Bc drops below the DS2023 ≈3.5 T crossover (−0.14 → −0.21 →
 −0.36 → −0.85) — i.e. ODD is attenuated toward high Bx/low T (Bc > 3.5 T) and strongest near
 the boundary's high-T foot, consistent with DS2023 (qualitative). The 1.5 K row sits only 9 mK
-below the ODD Tc(0)=1.509 K, so Bc_on collapses toward B≈0; the finder window floor was lowered
-from the default 2 T to 0.1 T to locate it (gate unchanged — sign only).
+below the ODD Tc(0)=1.509 K, so Bc_on collapses well below the 2 T default window floor
+(measured 1.2187 T at 1.5 K); the finder window floor was lowered from the default 2 T to
+0.1 T to locate it (gate unchanged — sign only).
 
 ### Test status (TDD)
 
