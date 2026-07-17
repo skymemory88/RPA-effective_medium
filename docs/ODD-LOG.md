@@ -1272,3 +1272,13 @@ Plan: docs/superpowers/plans/2026-07-17-invz-tensor-full.md (v3). Commits 22c9ce
 **Suite:** no tensor unit tests yet; projected suite 143/0/19 (unchanged from Task 1). No physics stop-rule violated.
 
 **Review Minors (deferred to final):** filtered-flag root whitelist omits `ellipsoid_demagn.m` (called by invz_jq_modes but gated on demag!=0; inert at demag=0); d=0.4994 within 1.2% of the upper band edge; fclose return unchecked.
+
+## A1 — Full-tensor bridge layer (T6-T8) (2026-07-18)
+
+Plan v3. Commits ed5ca05 (T6) / 357e24c (T7) / b20770b (T8). Tensor CORE suite 23/23 (invz_projected off-path), INTEROP 8/8.
+
+**A1 bridge solver (invzt_solve_point, T6):** K bookkeeping (K = 1/Gloc - 1/G0til) verified algebraically to reduce EXACTLY to invz_emt_scalar in the decoupled limit; frozen no-ODD baseline dSigma0 = -4.1e-5 (gate 2e-3). ODD on/off (1.6 K, 0.1 T, 8^3): crit +0.021 (on) / -0.102 (off) -> ODD-ON is LESS ordered = net Tc-SUPPRESSION, consistent with the projected main body (dTc>0), and it validates the v3 decision to treat the crit direction as a measurement (the naive PSD-Schur enhancement direction is reversed by the self-consistent Sigma+medium). Sigma0 0.447/0.285.
+
+**Critical finders (T7):** Bc(1.2 K) no-ODD = 2.7892 T (tensor) vs 2.7870 T (projected) = 0.0022 T. Zero-field closed-form d/Sc parity ~1e-15 (tensor lat slices through the projected chi_perp -> odd_deltaJ -> odd_modes -> sigma_crit chain, grid-matched legacy 8^3/dpRng-15). A1 proxy-Tc (0.05 T, 16^3/dpRng-30) = 1.5599 K vs grid-matched projected closed form 1.5442 K -> +0.016 K A1 enhancement (retardation ~null + transverse RPA + chi_rest, on the SAME grid so separate from the 16^3->inf Richardson drop to 1.509 K). Phase boundary keyed off sign(pt.crit) (the A1 solver converges metastable ordered-phase roots), with a Sigma0>=-0.5 spurious-root guard.
+
+**Real-axis spectra (T8, A1 continuation ONLY):** exact gamma-uniform identity (force_sigma0) vs local 3x3 RPA to RelTol 1e-8; no-ODD peak-parity vs invz_chi_realaxis 0.0000 meV (gate 0.01). ODD spectral shift: +10 ueV (softening) measured at a CONVERGED PM point (1.55 K, 2 T). CAVEAT: the (1.55 K, 0.5 T) probe sits AT the A1 boundary where odd-on does not converge -> a noisy hyperfine comb, so its "+0.0 ueV" is a grid/non-convergence artifact, NOT evidence of no ODD effect. A3 real-axis continuation of the full Vmat is deferred (documented).
