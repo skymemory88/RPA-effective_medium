@@ -51,7 +51,9 @@ function [dJ, d, dinfo] = invz_odd_deltaJ(Vca, Vcb, Xp)
 %           sublattice diagonal is 0 to machine precision).
 %     d     scalar (meV): E5 uniform reduction, applied by the caller to
 %           Jcc0/J0eff exactly once. d = 0 exactly when Xp = 0.
-%     dinfo struct:
+%     dinfo struct (computed only when requested, nargout >= 3 -- the per-q eig
+%           sweep dominates this function's cost; the invz:oddImag / invz:oddS4
+%           guards above stay unconditional):
 %       .d_per_sublattice [4,1] pre-subtraction per-sublattice BZ means (E5)
 %       .presub_min_eig   min over q of min eig of dJpre (PSD check, >~ -eps)
 %       .postsub_diag_bzavg max_s |mean_q dJ(s,s,:)| (E4 exactness, ~ 0)
@@ -105,17 +107,20 @@ for s = 1:4
     dJ(s, s, :) = dJ(s, s, :) - m_s(s);
 end
 
-% --- diagnostics ---
-dinfo.d_per_sublattice = m_s;
-dinfo.dJ_max = max(abs(dJpre(:)));
-mn = Inf;
-for iq = 1:nq
-    mn = min(mn, min(real(eig(dJpre(:,:,iq)))));   % Hermitian -> real eigs
+% --- diagnostics (dinfo only; gated so the hot [dJ, d] callers skip the per-q
+% eig sweep -- the guards above are unconditional and use none of these) ---
+if nargout >= 3
+    dinfo.d_per_sublattice = m_s;
+    dinfo.dJ_max = max(abs(dJpre(:)));
+    mn = Inf;
+    for iq = 1:nq
+        mn = min(mn, min(real(eig(dJpre(:,:,iq)))));   % Hermitian -> real eigs
+    end
+    dinfo.presub_min_eig = mn;
+    pv = 0;
+    for s = 1:4
+        pv = max(pv, abs(mean(real(squeeze(dJ(s, s, :))))));
+    end
+    dinfo.postsub_diag_bzavg = pv;
 end
-dinfo.presub_min_eig = mn;
-pv = 0;
-for s = 1:4
-    pv = max(pv, abs(mean(real(squeeze(dJ(s, s, :))))));
-end
-dinfo.postsub_diag_bzavg = pv;
 end

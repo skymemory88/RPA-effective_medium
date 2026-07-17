@@ -29,7 +29,7 @@ ion = invz_ion();
 %     - the strict-uniform (q = 0) chi''_cc is demag-corrected via info.Jshape_cc (saturates
 %       instead of diverging); q-path spectra omit that transform (finite-q = intrinsic
 %       response) but still see demag through info.Jaa0.
-T = 0.15;                             % K
+T = 0.001;                             % K
 useParallel = true;                  % true -> parfor over fields (Parallel Computing Toolbox)
 eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency INPUTS (w, wq) AND
                                      % the plotted axes. Computation always runs in meV; the driver

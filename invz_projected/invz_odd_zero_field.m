@@ -248,14 +248,9 @@ end
 % =========================================================================
 function Jf = local_modes(Vcc, dJ)
 %LOCAL_MODES Sorted real cc eigenvalues of Vcc + dJ per q, flattened [nq*4, 1].
-% Mirrors invz_jq_modes' eig assembly (dJ = 0 reproduces its Jnu bitwise).
-nq  = size(Vcc, 3);
-Jnu = zeros(nq, 4);
-for iq = 1:nq
-    M = Vcc(:,:,iq) + dJ(:,:,iq);
-    M = (M + M')/2;                              % both Hermitian; cleans rounding only
-    Jnu(iq,:) = sort(real(eig(M))).';
-end
+% Thin flattening wrapper over the shared values-only kernel invz_odd_modes
+% (dJ = 0 reproduces invz_jq_modes' Jnu bitwise).
+Jnu = invz_odd_modes(Vcc, dJ);
 Jf = Jnu(:);
 end
 

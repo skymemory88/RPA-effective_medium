@@ -14,9 +14,16 @@
 addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')), '..'));
 ion = invz_ion();
 
-% ---- Section A: single-ion angular scans ----
+% ---- knobs -----------------------------------------------------------------
+% Section A: single-ion angular scans
 T_A   = 0.31;  fieldsA = [2 4 6];  phis = unique([0:5:90, 11, 79]);
 modes = {'none', 'legacy_x', 'vector_ab'};
+% Section B: Sigma=0 scalar-vs-tensor comparison
+T_B = 0.1;  fieldsB = [2 4.95 6];  phisB = [0 5 11 15 30 45 60 75 79 90];
+w = (0:0.005:0.6).';  eta = 0.02;
+% -----------------------------------------------------------------------------
+
+% ---- Section A: single-ion angular scans ----
 fprintf('%10s %6s %10s %10s %10s %8s\n', 'model', 'B(T)', 'span(%)', 'A4/A0(%)', 'A8/A0(%)', 'phi0');
 for im = 1:numel(modes)
     for ib = 1:numel(fieldsA)
@@ -34,8 +41,6 @@ end
 
 % ---- Section B: Sigma=0 scalar-vs-tensor over angle (production couplings) ----
 [~, info, Jaa0] = invz_bz_couplings(ion);   % shared BZ-grid coupling branches (Jaa0-aware)
-T_B = 0.1;  fieldsB = [2 4.95 6];  phisB = [0 5 11 15 30 45 60 75 79 90];
-w = (0:0.005:0.6).';  eta = 0.02;
 ropts = struct('Jsel', info.Jcc0, 'Jaa0', Jaa0, 'eta', eta, 'transverse_mf', 'vector_ab');
 fprintf('\n%8s %8s %12s %12s %12s %10s %10s %5s\n', 'phi', '|B| (T)', 'dE_peak', 'eps_amp', 'eps_W', 'Ep_sc', 'Ep_ten', 'ok');
 supported = true(size(phisB));

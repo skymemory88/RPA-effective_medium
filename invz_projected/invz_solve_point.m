@@ -126,20 +126,19 @@ if oddOn
     [Xp, oddXi] = invz_chiperp(ion, T, Bx, struct('hyp', hyp, 'Jxx0', Jxx0, 'transverse_mf', tmf));
     [dJ, d] = invz_odd_deltaJ(ob.Vca, ob.Vcb, Xp);
     nqo = size(ob.Vcc, 3);
-    Jnu_odd = zeros(nqo, 4);
+    Jnu_odd = invz_odd_modes(ob.Vcc, dJ);      % values-only kernel (shared)
     w_odd = zeros(nqo, 4);                     % T2.1 first-order weights u_nu'*dJ*u_nu
-    for iq = 1:nqo
-        M = ob.Vcc(:,:,iq) + dJ(:,:,iq);
-        M = (M + M')/2;                        % both terms Hermitian; cleans rounding only
-        Jnu_odd(iq,:) = sort(real(eig(M))).';
-        if oddRet && ~oddRetEx
-            % Eigvecs from a SEPARATE eig call: the values-only eig above stays
-            % bitwise-identical to the static path (LAPACK jobz='N' vs 'V' may
-            % differ in last bits), so the elastic column of the retarded solve
-            % is exactly the static spectrum. Degenerate pairs make individual
-            % u_nu ambiguous; the first-order error that induces is part of
-            % what the surrogate-vs-exact gate (AbsTol 1e-3 on Sigma0,
-            % test_invz_odd_retarded) measures.
+    if oddRet && ~oddRetEx
+        % Eigvecs from a SEPARATE eig call: the values-only eig above stays
+        % bitwise-identical to the static path (LAPACK jobz='N' vs 'V' may
+        % differ in last bits), so the elastic column of the retarded solve
+        % is exactly the static spectrum. Degenerate pairs make individual
+        % u_nu ambiguous; the first-order error that induces is part of
+        % what the surrogate-vs-exact gate (AbsTol 1e-3 on Sigma0,
+        % test_invz_odd_retarded) measures.
+        for iq = 1:nqo
+            M = ob.Vcc(:,:,iq) + dJ(:,:,iq);
+            M = (M + M')/2;                    % both terms Hermitian; cleans rounding only
             [U, ev] = eig(M, 'vector');
             [~, is] = sort(real(ev));  U = U(:, is);
             for nu = 1:4
@@ -197,12 +196,8 @@ if oddOn
             % elastic column bitwise the static spectrum.
             Jnu_flat = zeros(nqo*4, nwn);
             for n = 1:nwn
-                Jn = zeros(nqo, 4);
-                for iq = 1:nqo
-                    M = ob.Vcc(:,:,iq) + r_n(n)*dJ(:,:,iq);
-                    M = (M + M')/2;
-                    Jn(iq,:) = sort(real(eig(M))).';
-                end
+                dJs = r_n(n)*dJ;                         % scale-then-add == the inline
+                Jn  = invz_odd_modes(ob.Vcc, dJs);       % r_n(n)*dJ(:,:,iq) per element
                 Jnu_flat(:, n) = Jn(:);                  % same column-major order
             end
         else

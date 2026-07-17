@@ -9,8 +9,8 @@ function tests = test_invz_odd_tier2
 % point), the dressed splitting shows level repulsion (Delta_eff >= Delta).
 % IR safety (slow): C stays bounded as crit -> 0 (ODD blocks vanish at q = 0).
 % Combined Tc measurement (slow): PM-side crit(T)-extrapolation estimator at
-% the 0.5 T proxy for off / Tier-1 / Tier-1+2 (AMENDED route, see the local
-% helper odd_tc_extrap below).
+% the 0.5 T proxy for off / Tier-1 / Tier-1+2 (AMENDED route; shared fixture
+% tests/invz_odd_tc_pm_extrap.m).
 % T3.4 (characterization, ODD-LOG SS T3.4): the exact-B = 0 behaviour is
 % REPORTED, not gated -- the Tier-1 scaffold itself (bare invz_twolevel)
 % throws invz:degenerateDoublet at B = 0 before any Tier-2 machinery runs.
@@ -108,15 +108,29 @@ ion = invz_ion();
 n = 16;  [h, k, l] = ndgrid((0:n-1)/n);  qvec = [h(:) k(:) l(:)];  qvec(1,:) = [];
 [Vca, Vcb, Vcc, infoB] = invz_odd_blocks(ion, qvec, struct('dpRng', 30, 'cache', true));
 S = struct('Vca', Vca, 'Vcb', Vcb, 'Vcc', Vcc, 'Jcc0', infoB.Jcc0);
-Jnu0 = zeros(size(Vcc,3), 4);
-for iq = 1:size(Vcc,3), Jnu0(iq,:) = sort(real(eig(Vcc(:,:,iq)))).'; end
+Jnu0 = invz_odd_modes(Vcc, []);
 Tc0f = invz_odd_zero_field(ion, struct('mode', 'off'));
 o0 = struct('J0eff', infoB.Jcc0, 'Jxx0', infoB.Jaa0, 'Tc0', Tc0f);
-t_off = odd_tc_extrap(ion, 0.5, Jnu0(:), o0);    % local helper: the T2.2-leg PM-side
-o1 = o0;  o1.odd = true;  o1.odd_blocks = S;     % crit(T)-extrapolation estimator,
-[t_t1, Tused_t1] = odd_tc_extrap(ion, 0.5, [], o1);          % adapted from
-o2 = o1;  o2.odd_tier2 = true;                               % test_invz_odd_retarded.m
-[t_t12, Tused_t12] = odd_tc_extrap(ion, 0.5, [], o2);
+% Shared PM-side estimator (tests/invz_odd_tc_pm_extrap.m fixture; Jf lets the
+% ODD-off config pass its explicit baseline modes, ODD configs pass []).
+% ADAPTATION (Task 10, documented per the amended brief): T2.2's cross-run
+% "same grid points" guard compared two nearly identical configurations
+% (static vs retarded, dTc ~ 0.02 mK), where a converged-set mismatch could
+% masquerade as the measured shift. Here the three configurations (off / T1 /
+% T1+T2) have Tc differing by ~0.2 K, so each config MUST extrapolate near
+% ITS own boundary and a cross-config same-points guard is meaningless --
+% only the two ODD configs are compared point-for-point (verify below); the
+% fixture's internal guards, used-points report and distance FLAG cover the
+% rest. Common window bracketing all three Tc. Top at 1.90 K, NOT 1.80: the
+% off-config PM-side slowing band at 0.5 T is ~0.06 K wide (probed 2026-07-17:
+% 1.7333/1.7667 non-converged, first converged PM point 1.8000 with crit
+% +0.0253), so a 1.80 top leaves the off config a single converged point.
+Tg = 1.30:1/30:1.90;
+t_off = invz_odd_tc_pm_extrap(ion, 0.5, Jnu0(:), o0, Tg);
+o1 = o0;  o1.odd = true;  o1.odd_blocks = S;
+[t_t1, Tused_t1] = invz_odd_tc_pm_extrap(ion, 0.5, [], o1, Tg);
+o2 = o1;  o2.odd_tier2 = true;
+[t_t12, Tused_t12] = invz_odd_tc_pm_extrap(ion, 0.5, [], o2, Tg);
 fprintf('T3.3 combined (0.5 T): Tc off %.4f, +T1 %.4f, +T1+T2 %.4f K; split %.1f%% : %.1f%%\n', ...
     t_off, t_t1, t_t12, 100*(t_off - t_t1)/max(t_off - t_t12, 1e-9), ...
     100*(t_t1 - t_t12)/max(t_off - t_t12, 1e-9));
@@ -126,50 +140,4 @@ verifyLessThanOrEqual(testCase, t_t12, t_t1 + 5e-3);
 % configs extrapolate from IDENTICAL grid points; the off config's grid
 % points legitimately differ (0.2 K away).
 verifyEqual(testCase, Tused_t12, Tused_t1);
-end
-
-function [tc, Tused] = odd_tc_extrap(ion, B, Jf, o)
-%ODD_TC_EXTRAP PM-side Tc estimator at fixed B: fixed 1/30 K grid, converged
-% vote via invz_crit_at, linear extrapolation of crit(T) to zero from the two
-% LOWEST converged PM points. Copied/adapted from test_invz_odd_retarded.m's
-% tc_pm_extrap (T2.2 leg); Jf added so the ODD-off configuration can pass its
-% explicit baseline modes (ODD configs pass Jf = []).
-%
-% ADAPTATION (Task 10, documented per the amended brief): T2.2's cross-run
-% "same grid points" guard compared two nearly identical configurations
-% (static vs retarded, dTc ~ 0.02 mK), where a converged-set mismatch could
-% masquerade as the measured shift. Here the three configurations (off / T1 /
-% T1+T2) have Tc differing by ~0.2 K, so each config MUST extrapolate near
-% ITS own boundary and a cross-config same-points guard is meaningless.
-% Instead each extrapolation is internally guarded (>= 2 converged PM points,
-% all crit > 0, PM-side monotonicity on the two lowest points), the grid
-% points actually used are REPORTED (so the log shows which T fed each
-% config), and an extrapolation reaching > 2 grid steps below the lowest
-% converged point is FLAGGED in the log (distance sanity, report not gate).
-% Common window bracketing all three Tc. Top at 1.90 K, NOT 1.80: the
-% off-config PM-side slowing band at 0.5 T is ~0.06 K wide (probed 2026-07-17:
-% 1.7333/1.7667 non-converged, first converged PM point 1.8000 with crit
-% +0.0253), so a 1.80 top leaves the off config a single converged point.
-Tg = 1.30:1/30:1.90;
-c  = nan(size(Tg));  okv = false(size(Tg));
-for i = 1:numel(Tg)
-    [c(i), okv(i)] = invz_crit_at(ion, Tg(i), B, Jf, o);
-end
-Tv = Tg(okv);  cv = c(okv);
-assert(numel(cv) >= 2, ...
-    'odd_tc_extrap: need >= 2 converged PM points in the scan window (got %d).', numel(cv));
-assert(all(cv > 0), ...
-    'odd_tc_extrap: converged PM crit values must all be positive (got %s).', mat2str(cv));
-assert(cv(2) > cv(1), ...
-    ['odd_tc_extrap: PM-side crit must increase with T on the two lowest ' ...
-     'converged points (got cv(1) = %.6g at T = %.6g, cv(2) = %.6g at T = %.6g).'], ...
-    cv(1), Tv(1), cv(2), Tv(2));
-Tused = Tv(1:2);                                 % two lowest converged points
-tc = Tv(1) - cv(1)*(Tv(2) - Tv(1))/(cv(2) - cv(1));
-fprintf('odd_tc_extrap(B = %.2g T): used T = [%.4f %.4f] K, crit = [%.4g %.4g], tc = %.4f K\n', ...
-    B, Tused(1), Tused(2), cv(1), cv(2), tc);
-if Tused(1) - tc > 2*(1/30)
-    fprintf(['odd_tc_extrap: FLAG -- extrapolation reaches %.1f grid steps below the ' ...
-        'lowest converged point (%.4f K -> %.4f K).\n'], (Tused(1) - tc)/(1/30), Tused(1), tc);
-end
 end
