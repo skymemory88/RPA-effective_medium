@@ -2,7 +2,7 @@
 % Two-regime search: Bc(T) at each fixed T in Ts (invz_critical, vertical field cuts), and
 % Tc(B) at each fixed B in Bs (invz_critical_T, horizontal temperature cuts, self-adapting window).
 
-addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')),'..'));
+addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')),'..'));  addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'invz_common'));
 ion = invz_ion();
 % ion.demag = 1;  ion.alpha = 0.25;  % OPTIONAL sample-shape (demagnetization) knob; default off.
 %   Ordering-channel criticality (info.Jcc0/Jnu) and Tc(B=0) are demag-INVARIANT (R2007); Bc(T)

@@ -15,7 +15,7 @@
 % Both result structs replot for free, e.g. invz_plot_spectra_map(gca, S, S.chiz, '1/z').
 % Save with:  print(gcf, 'spectra.png', '-dpng', '-r150');
 
-addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')), '..'));
+addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')), '..'));  addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'invz_common'));
 
 ion = invz_ion();
 % ion.demag = 1; ion.alpha = 0.5;    % OPTIONAL sample-shape (demagnetization) knob; default off.

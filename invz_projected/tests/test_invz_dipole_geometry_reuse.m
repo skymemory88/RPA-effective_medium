@@ -10,6 +10,7 @@ function setupOnce(~)
 here = fileparts(mfilename('fullpath'));
 addpath(fullfile(here,'..'));        % invz module
 addpath(fullfile(here,'..','..'));   % repo root: MF_dipole, exchange, invz_ion
+addpath(fullfile(here, '..', '..', 'invz_common'));
 end
 
 function qs = qset()

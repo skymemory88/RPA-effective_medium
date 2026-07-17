@@ -16,7 +16,7 @@
 %   at EVERY tested field. Copy the printed table into
 %   docs/SESSION-2026-07-16-field-angle.md and the constants of
 %   invz/tests/test_invz_tensor_ref.m (reproducibility assertion).
-addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')), '..'));
+addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')), '..'));  addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'invz_common'));
 ion = invz_ion();
 T       = 0.1;                       % K -- the spectra-driver default temperature
 angles  = [0 0.5 1 2 5];             % deg (spec grid; 0 = baseline row, not gated)

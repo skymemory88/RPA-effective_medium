@@ -17,6 +17,7 @@
 here = fileparts(mfilename('fullpath'));   % .../invz_projected/tests/exploratory
 addpath(fullfile(here, '..', '..'));       % invz_projected module
 addpath(fullfile(here, '..', '..', '..')); % repo root: MF_dipole, exchange
+addpath(fullfile(here, '..', '..', '..', 'invz_common')); % shared single-ion engine
 
 ion = invz_ion();
 C   = invz_const();

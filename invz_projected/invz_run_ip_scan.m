@@ -11,7 +11,7 @@
 %   per row dE_peak, eps_amp, eps_W, Epeak_sc/ten; gate per the tilt criterion
 %   (eps_amp <= 0.10 AND dE_peak <= max(0.02*Epeak_ten, eta)).
 % Copy both printed tables into docs/SESSION-2026-07-16-inplane-rotation.md.
-addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')), '..'));
+addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')), '..'));  addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'invz_common'));
 ion = invz_ion();
 
 % ---- knobs -----------------------------------------------------------------
