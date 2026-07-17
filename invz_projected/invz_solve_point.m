@@ -309,6 +309,7 @@ if odd2On
             pt.outer_iters = outer;
             if ~pt.converged, break; end       % masked exactly like the EMT loop
             C_new = invz_odd_fieldvar(ion, pt, ob, T, fvo);
+            % Residual on the UNMIXED step (~2x stricter than the mixed step at mix 0.5).
             t2resid = max(abs(C_new - C), [], 'all') / max(max(abs(C(:))), 1e-30);
             C = C + mix2*(C_new - C);          % mixed covariance
             if t2resid < tol2, t2conv = true; break; end
