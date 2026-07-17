@@ -795,3 +795,122 @@ products + a [43×4] propagator per q — negligible next to the 0.07–0.2 s wa
 point solve). Fast-suite addition ~0.5 s.
 
 ---
+
+## T3.2 — Gauss–Hermite-dressed doublet: `invz_twolevel_avg.m` (2026-07-17)
+
+`[tla, avg] = invz_twolevel_avg(ion, T, Bx, C, opts)` averages the electronic
+two-level response over the quenched Gaussian transverse-field distribution
+N(0, C) (C from T3.1, meV²) and fits effective parameters so the Σ machinery
+keeps its two-level algebra.
+
+> **FLAG (plan T3.2, carried verbatim-in-spirit in the function header):** this
+> quenched-Gaussian, STATIC dressing of the doublet is the **least rigorous
+> step of the whole plan** — thermal/quantum field fluctuations are frozen into
+> a classical distribution and the averaged response is re-compressed into a
+> single pole. Treat downstream numbers accordingly. (README wiring: Task 10.)
+
+**Mechanics.** 2-D Gauss–Hermite (Golub–Welsch on the Hermite Jacobi matrix,
+local subfunction, no toolbox; ngh 7 default; weights sum to 1, asserted at
+1e-12), C diagonalized first; node fields enter as pure field shifts
+`B_node = invz_field_vec(Bx) + [ha hb 0]/(gL·µB)` (NO single-ion code changes).
+Default `opts.avg = 'response'`: average g(iωn) node-by-node on `opts.wn`, fit
+`Delta_eff = sqrt(tail/gbar0)`, `n01_eff = gbar0·Delta_eff/2` — the g(0) and
+ωn⁻² tail conditions match EXACTLY (tail coefficient Σw·2·n01·Δ analytic per
+node, not fitted from the grid); `M2_eff = Σw·M2·g0/gbar0` (response-weighted:
+M² sits outside g, and this choice makes `M2_eff·ḡ(0)` reproduce the averaged
+static χ exactly). `opts.avg = 'params'` (plain (Δ, M2, n01) averages) kept for
+the plan's one-shot comparison. C = 0 short-circuits to the literal
+`invz_twolevel` struct (bitwise, tested). `avg.G0`/`avg.chi0cc0` (node-averaged
+FULL electronuclear cc propagator, hyp = true) are OPT-IN via `opts.G0 = true`
+(adjudication 2026-07-17: `opts.wn` alone no longer triggers the 49
+electronuclear diagonalizations — that side effect was burning fast-suite
+budget; Task 10 passes `G0 = true`).
+
+### Monotonicity ray (1.6 K, 2 T, C = s·eye(2), ngh 7, Ecut 40) — report, not tuned
+
+bare: Δ = 0.151653245 meV, M2 = 27.7913213, χ0_2l = M2·g0 = 183.435 meV⁻¹.
+
+| s (meV²) | Δ_eff (resp) | Δ_eff (params) | M2_eff (resp) | χ0_2l = M2_eff·2n01_eff/Δ_eff | fit_resid |
+|---|---|---|---|---|---|
+| 1e-5   | 0.151766437 | 0.151713319 | 27.7918226 | 183.415 | 7.38e-6 |
+| 8e-5   | 0.152554388 | 0.152134168 | 27.7952784 | 183.279 | 5.90e-5 |
+| 2e-4   | 0.153887502 | 0.152856893 | 27.8009871 | 183.046 | 1.47e-4 |
+| 6.4e-4 | 0.158593356 | 0.155518644 | 27.8196293 | 182.206 | 4.71e-4 |
+
+- **Level repulsion ✓:** Δ_eff monotone UP, ≥ bare (both modes).
+- **Variable-moments suppression ✓ (the gated observable):** the averaged
+  static two-level susceptibility χ0_2l is monotone DOWN and below bare —
+  the criticality-relevant direction the Tier-2 mechanism needs.
+
+### Finding — plan expectation REFUTED: M2_eff RISES along the C-ray at 2 T
+
+The plan's acceptance "M²_eff ≤ M²₀ monotonically in ‖C‖" encodes the near-B=0
+intuition and is measurably FALSE at the 2 T fixture, in BOTH averaging modes.
+Root cause (implementation-independent): bare M2(Bx) at 1.6 K is decreasing but
+**CONVEX** at 2 T — M2''(2 T) = **+0.751 /T²** (3-pt/5-pt agree) — so a
+symmetric quenched spread RAISES the average by ½·M2''·σ_B²: predicted +7.17e-4
+at s = 1e-5 (a-axis), measured **+7.1658e-4** by a GH-free dense-trapezoid
+Gaussian average (also validates the quadrature). Directional split: a-axis
+disorder raises M2 (+1.0e-3 response-weighted, the extra ~+3e-4 being the
+cov(M2, g0) > 0 term), b-axis alone lowers it (−5.1e-4, the |B|-lengthening
+route) — the a-convexity wins in the isotropic sum. The direction is
+plan-compliant at Bx = 1 T (dM2_a and dM2_b both < 0) and reversed at
+2/3/4/4.5 T (+1.62e-3/+2.14e-3/+1.16e-3/+7.9e-4 at s = 8e-5, params mode).
+Adjudicated (Task-9 round, plan amended b691b35): gate χ0_2l, REPORT M2_eff.
+
+### Fit residual and sum rule
+
+`fit_resid` = max relative mismatch of the three fit conditions reproduced by
+the fitted form. g(0) and tail are exact by construction (~1e-16); the honest
+leg is the truncated Matsubara sum rule: per node (1/β)Σ wts·g =
+n01·coth(βΔ/2) = tanh·coth = **1 exactly** (analytic identity, verified in the
+code comment), truncated-grid value ≈ 1 − 2·n01·Δ/(π·Ecut) (asserted within
+2e-2 of 1 per node, `invz:tlavgSumrule`); the fitted pair (Δ_eff, n01_eff) no
+longer satisfies n01 = tanh(βΔ/2), so the residual is SECOND order in the node
+spread, i.e. linear in ‖C‖: measured band **7.4e-6 → 4.7e-4** on the ray (ratios
+track s exactly). Gate adjudicated 1e-6 → **1e-3**. Sum-rule survival:
+`sumrule_avg = 0.998793928` at C = 2e-4·eye(2) (truncation-level, not drift;
+bare-node 0.998824 — the averaging shift is 3.0e-5, same second-order origin).
+
+### Degenerate nodes (T3.4 groundwork)
+
+Nodes with Δ_node < 1e-4 meV (invz:degenerateDoublet — e.g. the exact-origin
+node at Bx = 0) are evaluated in their h → 0⁺ limit: g0 = β, tail = 0,
+n01 = 0, m = 0, g(iωn) = β·(ωn = 0) (elastic Curie weight; per-node sum rule
+= 1 exactly); other errors (incl. invz:orderedPhase) rethrown. The node M² is
+the **basis-invariant** `|Mz11|² + |Mz12|² = (Mz²)(1,1)` — equal to m² in the
+Jz-diagonal basis, i.e. the doublet's Curie weight (controller-approved: at
+exact degeneracy `eig` returns an arbitrary doublet basis, so |Mz12|² alone
+would be randomized in [0, m²]). Measured at (1.55 K, B = 0, C = 2e-4·eye(2)):
+`n_degenerate = 1` of 49 (origin node, raw Δ = 1.4e-14 meV), off-origin nodes
+lift the degeneracy to ≤ 0.0488 meV, dressed **Δ_eff = 5.224e-3 meV** (finite,
+> 0), M2_eff = 30.28 (the m² band), fit_resid = 1.5e-8.
+
+### Response vs params (one-shot comparison, plan T3.2) and GH convergence
+
+- C = 2e-4·eye(2), (1.6 K, 2 T): Δ_eff **0.153888 (response) vs 0.152857
+  (params)** meV — the inequivalence is at the 0.7% level of the shift.
+- GH 5/7/9 at the same C: Δ_eff = 0.153887502443 / 0.153887502321 /
+  0.153887502321 — |Δ(5→7)| = 1.2e-10, |Δ(7→9)| < 1e-12: machine-converged by
+  ngh 7 (smooth integrand); ngh 7 default confirmed.
+
+### Test status (TDD + adjudication round)
+
+- **RED:** brief's tests transcribed verbatim first → 6/6 errored (undefined).
+- **Round 1:** 5/6 green; `test_gh_weights_and_monotonicity` failed exactly on
+  the two M2 legs + the fit_resid 1e-6 gate → escalated BLOCKED with the
+  convexity attribution (task-9-report.md). **Adjudication** (plan amendment
+  b691b35): M2 legs → χ0_2l suppression gate + M2 direction reported;
+  fit_resid gate 1e-3; `opts.G0` opt-in; degenerate-M² deviation approved.
+- **GREEN:** 7/7 (6 amended-brief tests + `test_G0_optin` covering Task 10's
+  consumer path: G0 shape/finiteness, chi0cc0 = −G0(1) > 0, G0-without-wn
+  errors), **0.95 s** (was 23.3 s before the G0 opt-in gating). Full fast
+  suite **141 passed / 0 failed / 17 incomplete** (baseline 134/0/17 + 7 new).
+
+### Timings
+
+Two-level-only averaged call (ngh 7, 49 nodes, no G0): ~0.05–0.1 s. With
+`G0 = true` (49 hyp-true 136-dim MF solves + chi0z): ~1.5–2.5 s per call
+(2.42 s at the B = 0 fixture pre-gating). Fast-suite addition: **+0.95 s**.
+
+---
