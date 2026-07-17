@@ -377,7 +377,7 @@ mode basis with the eigenvectors — pick whichever the code structure makes che
 \( \sqrt{C_{aa}}/(g_L\mu_B\langle J\rangle_{\rm scale}) \) and log it next to Dollberg’s distribution width
 \(h \approx 0.4\) T (their Fig. 4 secondary peaks) as a qualitative cross-check, not an assertion.</div></div>
 
-<div class="task"><div class="task-head"><span class="tid">T3.2</span><span class="tstatus">[ ]</span>
+<div class="task"><div class="task-head"><span class="tid">T3.2</span><span class="tstatus">[x]</span>
 <span class="ttitle">Gaussian-averaged doublet parameters</span></div>
 <ul>
 <li>Extend <code>invz_twolevel</code> (new wrapper <code>invz_twolevel_avg(ion,T,Bx,C,opts)</code>): 2-D Gauss–Hermite quadrature (default 7×7 nodes, diagonalize C first) over transverse fields \( (h_a,h_b) \) added to the single-ion Hamiltonian; at each node solve the single ion and extract \( (\Delta, M^2, n_{01}, g_0) \).</li>
@@ -390,7 +390,8 @@ approximation either way). Default: average the <em>response functions</em> \( g
 node — check it survives averaging) and the leading \( \omega_n^{-2} \) tail, so the Σ machinery keeps its
 two-level algebra. Keep parameter-averaging behind an option; report the T<sub>c</sub> difference between the two
 once. This is the least rigorous step of the whole plan — flag it in the README as such.</div>
-<div class="ok"><b>Acceptance</b>: C=0 reproduces <code>invz_twolevel</code> bitwise; averaged \( \Delta_{\rm eff} \ge \Delta \) (level repulsion) and \( M^2_{\rm eff} \le M^2_0 - m^2 \) monotonically in ‖C‖ on a ray.</div></div>
+<div class="ok"><b>Acceptance</b>: C=0 reproduces <code>invz_twolevel</code> bitwise; averaged \( \Delta_{\rm eff} \ge \Delta \) (level repulsion) and \( M^2_{\rm eff} \le M^2_0 - m^2 \) monotonically in ‖C‖ on a ray.
+<em>AMENDED at Task-9 adjudication (b691b35): the M² leg is REFUTED at the 2 T fixture — bare M²(B<sub>x</sub>) is convex there (M²''(2 T) = +0.751/T², quenched average rises by ½M²''σ²; plan-compliant at 1 T) — the gate is the averaged static two-level χ(0) = M²<sub>eff</sub>·2n<sub>01,eff</sub>/Δ<sub>eff</sub>, monotonically suppressed; M² direction reported (ODD-LOG §T3.2).</em></div></div>
 
 <div class="task"><div class="task-head"><span class="tid">T3.3</span><span class="tstatus">[ ]</span>
 <span class="ttitle">Outer self-consistency and wiring</span></div>
@@ -500,7 +501,7 @@ Keep in lockstep with the <code>[ ]</code> markers above.</p>
     {"id":"T2.1","phase":"T2","deps":["T1.4"],"files":["invz/invz_chiperp.m","invz/invz_emt_scalar.m"],"status":"done"},
     {"id":"T2.2","phase":"T2","deps":["T2.1"],"files":["docs/ODD-LOG.md"],"status":"done"},
     {"id":"T3.1","phase":"T3","deps":["T1.4"],"files":["invz/invz_odd_fieldvar.m"],"status":"done"},
-    {"id":"T3.2","phase":"T3","deps":[],"files":["invz/invz_twolevel_avg.m"],"status":"todo"},
+    {"id":"T3.2","phase":"T3","deps":[],"files":["invz/invz_twolevel_avg.m"],"status":"done"},
     {"id":"T3.3","phase":"T3","deps":["T3.1","T3.2"],"files":["invz/invz_solve_point.m"],"status":"todo"},
     {"id":"T3.4","phase":"T3","deps":["T3.3"],"files":["docs/ODD-LOG.md"],"status":"todo"},
     {"id":"V4.1","phase":"V4","deps":["T2.2","T3.3"],"files":["invz/invz_run_phase_diagram.m"],"status":"todo"},
