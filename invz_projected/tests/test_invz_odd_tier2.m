@@ -80,9 +80,11 @@ n = 16;  [h, k, l] = ndgrid((0:n-1)/n);  qvec = [h(:) k(:) l(:)];  qvec(1,:) = [
 [Vca, Vcb, Vcc, infoB] = invz_odd_blocks(ion, qvec, struct('dpRng', 30, 'cache', true));
 S = struct('Vca', Vca, 'Vcb', Vcb, 'Vcc', Vcc, 'Jcc0', infoB.Jcc0);
 o = struct('J0eff', infoB.Jcc0, 'Jxx0', infoB.Jaa0, 'odd', true, 'odd_blocks', S);
-Bc = invz_critical(ion, T, [], o);                          % para-edge estimate expected:
+Bc = testCase.verifyWarning(@() invz_critical(ion, T, [], o), ...
+    'invz:orderedSideNoConverge');                           % para-edge estimate expected:
 Cn = zeros(3,1);  cr = zeros(3,1);  db = [0.5 0.2 0.05];    % ordered side never converges
-for i = 1:3                                                 % with ODD on (T2.2 finding)
+for i = 1:3                                                 % with ODD on (T2.2 finding) --
+                                                              % now ASSERTED, not loose noise
     pt = invz_solve_point(ion, T, Bc + db(i), [], o);
     assumeTrue(testCase, pt.converged);
     C = invz_odd_fieldvar(ion, pt, S, T, struct());
@@ -112,14 +114,18 @@ Tc0f = invz_odd_zero_field(ion, struct('mode', 'off'));
 o0 = struct('J0eff', infoB.Jcc0, 'Jxx0', infoB.Jaa0, 'Tc0', Tc0f);
 t_off = odd_tc_extrap(ion, 0.5, Jnu0(:), o0);    % local helper: the T2.2-leg PM-side
 o1 = o0;  o1.odd = true;  o1.odd_blocks = S;     % crit(T)-extrapolation estimator,
-t_t1 = odd_tc_extrap(ion, 0.5, [], o1);          % adapted from
-o2 = o1;  o2.odd_tier2 = true;                   % test_invz_odd_retarded.m
-t_t12 = odd_tc_extrap(ion, 0.5, [], o2);
+[t_t1, Tused_t1] = odd_tc_extrap(ion, 0.5, [], o1);          % adapted from
+o2 = o1;  o2.odd_tier2 = true;                               % test_invz_odd_retarded.m
+[t_t12, Tused_t12] = odd_tc_extrap(ion, 0.5, [], o2);
 fprintf('T3.3 combined (0.5 T): Tc off %.4f, +T1 %.4f, +T1+T2 %.4f K; split %.1f%% : %.1f%%\n', ...
     t_off, t_t1, t_t12, 100*(t_off - t_t1)/max(t_off - t_t12, 1e-9), ...
     100*(t_t1 - t_t12)/max(t_off - t_t12, 1e-9));
 verifyLessThanOrEqual(testCase, t_t1, t_off + 5e-3);
 verifyLessThanOrEqual(testCase, t_t12, t_t1 + 5e-3);
+% The Tier-2 split (6 mK) is a pure dressed-crit readout only when both ODD
+% configs extrapolate from IDENTICAL grid points; the off config's grid
+% points legitimately differ (0.2 K away).
+verifyEqual(testCase, Tused_t12, Tused_t1);
 end
 
 function [tc, Tused] = odd_tc_extrap(ion, B, Jf, o)
