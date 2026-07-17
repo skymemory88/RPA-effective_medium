@@ -15,6 +15,7 @@ function setupOnce(~)
 here = fileparts(mfilename('fullpath'));
 addpath(fullfile(here, '..'));
 addpath(fullfile(here, '..', '..'));   % repo root: MF_dipole, exchange
+addpath(fullfile(here, '..', '..', 'invz_common'));
 end
 
 function test_zero_field_off_matches_published_slow(testCase)

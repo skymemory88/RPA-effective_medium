@@ -6,6 +6,7 @@ function setupOnce(~)
 here = fileparts(mfilename('fullpath'));
 addpath(fullfile(here, '..'));
 addpath(fullfile(here, '..', '..'));
+addpath(fullfile(here, '..', '..', 'invz_common'));
 end
 
 function test_expected_invz_errors_become_phase0(testCase)

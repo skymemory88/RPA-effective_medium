@@ -6,6 +6,7 @@ function setupOnce(~)
 here = fileparts(mfilename('fullpath'));
 addpath(fullfile(here, '..'));
 addpath(fullfile(here, '..', '..'));   % repo root: MF_dipole, exchange
+addpath(fullfile(here, '..', '..', 'invz_common'));
 end
 
 function test_anchors_and_symmetry(testCase)

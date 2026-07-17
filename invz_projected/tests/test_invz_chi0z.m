@@ -5,6 +5,7 @@ end
 function setupOnce(~)
 here = fileparts(mfilename('fullpath'));
 addpath(fullfile(here,'..'));
+addpath(fullfile(here, '..', '..', 'invz_common'));
 end
 
 function test_matsubara_equal_time_sum_rule(testCase)

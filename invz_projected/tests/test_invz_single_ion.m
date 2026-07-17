@@ -5,6 +5,7 @@ end
 function setupOnce(~)
 here = fileparts(mfilename('fullpath'));
 addpath(fullfile(here,'..'));
+addpath(fullfile(here, '..', '..', 'invz_common'));
 end
 
 function test_zero_field_electronic_levels(testCase)

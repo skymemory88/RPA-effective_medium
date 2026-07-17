@@ -5,6 +5,7 @@ end
 function setupOnce(~)
 here = fileparts(mfilename('fullpath'));
 addpath(fullfile(here,'..'));
+addpath(fullfile(here, '..', '..', 'invz_common'));
 end
 
 function [tl, wn, wts, beta, g, K] = fixture(Ecut_factor)

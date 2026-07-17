@@ -6,6 +6,7 @@ function setupOnce(~)
 here = fileparts(mfilename('fullpath'));
 addpath(fullfile(here, '..'));
 addpath(fullfile(here, '..', '..'));
+addpath(fullfile(here, '..', '..', 'invz_common'));
 end
 
 function test_legacy_default_bitforbit(testCase)

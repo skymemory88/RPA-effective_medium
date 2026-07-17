@@ -6,6 +6,7 @@ function setupOnce(~)
 here = fileparts(mfilename('fullpath'));
 addpath(fullfile(here, '..'));
 addpath(fullfile(here, '..', '..'));
+addpath(fullfile(here, '..', '..', 'invz_common'));
 end
 
 function test_line_xdata_matches_qaxis_not_color_scratch(testCase)
