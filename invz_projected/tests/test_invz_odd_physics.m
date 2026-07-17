@@ -1,7 +1,10 @@
 function tests = test_invz_odd_physics
 % T1.5 zero-field ODD physics measurements (invz_odd_zero_field).
-%   Fast: structural gate on the 8^3/dpRng-15 grid (ODD lowers Tc; each split
-%   component lowers Tc; (a) full is the largest suppression).
+%   Fast: directionality-only structural gate on the 8^3/dpRng-15 grid, restricted
+%   to the governing condition/Sigma-space legs (ODD lowers Tc; b_cond and c_sigma
+%   each lower Tc; d_at_Tc > 0; the c1-literal bookkeeping theorem holds).
+%   Magnitudes, leg orderings, closure, and the naive/factorial diagnostics are
+%   REPORTED, not gated (see the amended plan / ODD-LOG §T1.5).
 %   Slow (INVZ_SLOW=1): the mode='off' published-anchor reproduction, the
 %   Richardson(12,24) ODD headline + reproducibility gate, and the Bc(T) on/off
 %   boundary-shift table. Physics numbers are REPORTED, never tuned.
