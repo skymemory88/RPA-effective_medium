@@ -75,3 +75,32 @@ for k = 1:nw
 end
 verifyEqual(testCase, chi_ten_lat, R.chi_ten, 'RelTol', 1e-8);
 end
+
+function test_realaxis_peak_parity_no_odd(testCase)
+% Task 8: no-ODD PM-point real-axis peak-energy parity, invzt_chi_realaxis
+% (qsel default 'gamma_uniform') vs the projected invz_chi_realaxis, apples-
+% to-apples via the SAME lat.info Jaa0/Jcc0 threaded as Jxx0/Jsel on the
+% projected leg (the T6/T7 interop convention: SAME grid -> SAME lattice
+% sums on both legs). PM-side field (1.6 K, 2 T) -- a clean, well-converged,
+% single-resonance point (unlike the brief's own (1.55 K, 0.5 T) ODD-spectra
+% test point, whose ground-hyperfine-manifold comb structure sits partly
+% below this window; see task-8-report.md).
+ion = invz_ion();  T = 1.6;  B = [2 0 0];
+g6 = invzt_qgrid(6, 'halfopen');
+lat = invzt_jq_tensor(ion, g6, struct('dpRng', 10, 'cache', true));
+[Jnu, info] = invz_jq_modes(ion, g6.qvec, struct('dpRng', 10, 'cache', true));
+pt = invzt_solve_point(ion, T, B, lat, struct('odd', false));
+pj = invz_solve_point(ion, T, B, Jnu(:), struct('J0eff', info.Jcc0, 'Jxx0', info.Jaa0));
+verifyTrue(testCase, pt.converged && pj.converged);
+
+w = (0.05:0.002:0.7).';
+ot = invzt_chi_realaxis(ion, T, B, pt, w, struct('odd', false));
+op = invz_chi_realaxis(ion, T, B, pj, w, struct('Jsel', info.Jcc0, 'Jxx0', info.Jaa0));
+im_t = squeeze(imag(ot.chi_uniform(3,3,:)));
+im_p = imag(op.chi_cc_q(1,:));
+[~, it] = max(im_t);
+[~, ip] = max(im_p);
+fprintf(['INTEROP realaxis peak parity (no-ODD, PM %.2f K / %.1f T): tensor ' ...
+    '%.4f meV, projected %.4f meV, |d| = %.4f meV\n'], T, B(1), w(it), w(ip), abs(w(it) - w(ip)));
+verifyEqual(testCase, w(it), w(ip), 'AbsTol', 0.01);
+end
