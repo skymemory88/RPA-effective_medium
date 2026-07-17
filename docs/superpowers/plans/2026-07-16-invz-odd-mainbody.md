@@ -702,7 +702,7 @@ end
   - Else: 2-D Gauss–Hermite, `opts.ngh` (default 7) nodes per axis; diagonalize `C = V*diag(s2)*V'`; node fields `[ha; hb] = V*[sqrt(2*s2(1))*x_i; sqrt(2*s2(2))*x_j]` (meV, conjugate to J_a/J_b), weights `w_ij = (wi*wj)/pi` (normalized: sum = 1 — assert to 1e-12). Each node enters the single-ion problem as a FIELD SHIFT `B_node = invz_field_vec(Bx) + [ha, hb, 0]/(ion.gL*C0.muB)` — injects exactly `-ha*Ja - hb*Jb` through the existing Zeeman term; NO single-ion code changes.
   - DEFAULT `opts.avg = 'response'` (the plan's design decision): per node build `tl_node = invz_twolevel(ion, T, B_node, opts_pass)` and average `gbar(i w_n) = sum_nodes w * invz_g(tl_node, i w_n)` on the grid `opts.wn` (REQUIRED for response mode; from `invz_matsubara`); fit effective params by matching (i) `gbar(0)`, (ii) `(1/beta)*sum_n wts.*gbar` — equals 1 EXACTLY per node (two-level identity n01 = tanh(beta*Delta/2): verify analytically in a comment; assert the truncated-grid value is within 2e-2 of 1 per node and that averaging moves it by < 1e-6 — the plan's "check it survives averaging"), (iii) the leading `w_n^-2` tail coefficient `lim w^2*gbar = 2*n01*Delta`; solve `Delta_eff = sqrt(tail/gbar0)`, `n01_eff = gbar0*Delta_eff/2`, then `M2_eff` from node-averaged `M2*g` weight: `M2_eff = (sum_nodes w * tl.M2 * g_node(0)) / gbar0` (moment-weighted; document). `tla` carries the SAME field names as `invz_twolevel` (`Delta`→Delta_eff etc., plus `tla.gh = true`); `avg`: `Delta_eff`, `M2_eff`, `n01_eff`, `fit_resid` (max relative mismatch of the three conditions when reproduced by the fitted two-level form), `node_Delta` spread, `sumrule_avg`.
   - `opts.avg = 'params'`: average `(Delta, M2, n01)` directly (the inequivalent variant — kept for the one-shot comparison, plan T3.2).
-  - `opts.wn` also triggers `avg.G0` = node-averaged FULL electronuclear cc propagator (`-real(squeeze(chi0(3,3,:)))` per node via `invz_single_ion(hyp=true)` + `invz_chi0z(elastic=true)`) and `avg.chi0cc0` — the disorder-averaged G0 the Tier-2 outer loop swaps in (controller-approved extension of the plan's T3.2 spec: the plan's "average ... χ0cc node-by-node" needs a home; this is it).
+  - `opts.G0 = true` (default FALSE; requires `opts.wn`) triggers `avg.G0` = node-averaged FULL electronuclear cc propagator (`-real(squeeze(chi0(3,3,:)))` per node via `invz_single_ion(hyp=true)` + `invz_chi0z(elastic=true)`) and `avg.chi0cc0` — the disorder-averaged G0 the Tier-2 outer loop swaps in (Task 10 passes `G0 = true`). AMENDED 2026-07-17: opt-in, not a side effect of `opts.wn` — the 49 electronuclear diagonalizations per call were burning the fast-suite budget in tests that only need the two-level fit.
   - Degenerate-doublet handling (T3.4 groundwork): nodes where `invz_twolevel` would throw `invz:degenerateDoublet` (Δ_node < 1e-4 meV, e.g. the exact-origin node at Bx = 0) are evaluated in their h→0 LIMIT: catch the error, substitute the analytic degenerate-limit response `g_node(i w_n) = beta * (w_n == 0)`-type elastic weight — NO: instead use the limit of the two-level form: `g(0) = beta` (since `2*tanh(beta*D/2)/D -> beta` as D → 0) and `g(i w_n ~= 0) -> 2*D*n01/w_n^2 -> 0`; document this branch and count such nodes in `avg.n_degenerate`. (At Bx = 0 the OFF-origin nodes carry finite Δ_node ∝ Van-Vleck·h² — the internal field lifts the degeneracy node-wise, plan T3.4.)
 
 - [ ] **Step 1: Write the failing tests**:
@@ -717,22 +717,33 @@ for i = 1:numel(fn), verifyEqual(testCase, tla.(fn{i}), tl.(fn{i})); end   % bit
 end
 
 function test_gh_weights_and_monotonicity(testCase)
-% Level repulsion: Delta_eff grows with ||C||; moments shrink. Realistic C scale:
-% Dollberg h ~ 0.4 T <-> C ~ (0.4 * gL*muB)^2 ~ 8e-4 meV^2 — ray spans below that.
+% AMENDED (Task-9 adjudication, 2026-07-17). Level repulsion: Delta_eff grows
+% with ||C||. The source plan's "M2_eff decreases monotonically" encodes the
+% near-B=0 intuition and is REFUTED at the 2 T fixture: bare M2(Bx) is CONVEX
+% along a (M2'' = +0.751/T^2), so the quenched average RAISES M2 there (the
+% b-leg alone lowers it; verified == 0.5*M2''*sigma^2). The criticality-
+% relevant variable-moments statement is the averaged static two-level
+% susceptibility chi(0) = M2_eff * 2*n01_eff/Delta_eff, which IS monotonically
+% suppressed — gate that; REPORT the M2 direction. fit_resid: g(0)/tail legs
+% are exact by construction; the residual is the sum-rule truncation
+% structure, second-order in ||C|| (measured band 7e-6..5e-4) — gate 1e-3.
 ion = invz_ion();
 [wn, ~, ~] = invz_matsubara(1.6, 40);
 s = [1e-5 8e-5 6.4e-4];
-[D, M2] = deal(zeros(3,1));
+[D, M2, X0] = deal(zeros(3,1));
 for i = 1:3
     [~, avg] = invz_twolevel_avg(ion, 1.6, 2, s(i)*eye(2), struct('wn', wn));
     D(i) = avg.Delta_eff;  M2(i) = avg.M2_eff;
-    verifyLessThan(testCase, avg.fit_resid, 1e-6);
+    X0(i) = avg.M2_eff * 2*avg.n01_eff/avg.Delta_eff;
+    verifyLessThan(testCase, avg.fit_resid, 1e-3);
 end
 tl = invz_twolevel(ion, 1.6, 2, struct());
 verifyTrue(testCase, all(diff(D) > 0));
 verifyGreaterThanOrEqual(testCase, D(1), tl.Delta - 1e-12);   % Delta_eff >= Delta
-verifyTrue(testCase, all(diff(M2) < 0));
-verifyLessThanOrEqual(testCase, M2(1), tl.M2 + 1e-12);        % M2_eff <= M2
+verifyTrue(testCase, all(diff(X0) < 0));                      % variable moments suppress chi(0)
+verifyLessThan(testCase, X0(1), tl.M2*tl.g0 + 1e-12);
+fprintf('T3.2 ray: Delta_eff %s | chi0_2l %s | M2_eff %s (direction REPORTED; convexity note)\n', ...
+    mat2str(D.', 6), mat2str(X0.', 6), mat2str(M2.', 6));
 end
 
 function test_sumrule_survives_averaging(testCase)
