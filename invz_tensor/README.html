@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>invz_tensor — Full-Tensor 1/z Expansion (A0→A4) · Module Reference</title>
+<style>
+  :root{
+    --ink:#1c1a17; --paper:#fdfcf9; --rule:#d8d3c8;
+    --derived:#1e6b45; --derived-bg:#f0f7f2;
+    --quoted:#9a5b00; --quoted-bg:#fbf4e8;
+    --caution:#8a1f1f; --caution-bg:#fbeeee;
+    --accent:#26456b; --accent-bg:#eef2f8;
+    --code-bg:#f4f2ec;
+  }
+  html{font-size:17px;}
+  body{
+    font-family: Charter, "Bitstream Charter", "Palatino Linotype", Palatino, Georgia, serif;
+    color:var(--ink); background:var(--paper);
+    margin:0; line-height:1.55;
+  }
+  .wrap{max-width:900px; margin:0 auto; padding:2.4rem 1.4rem 5rem;}
+  h1{font-size:1.9rem; line-height:1.2; margin:0 0 .3rem; letter-spacing:-.01em;}
+  h1 .sub{display:block; font-size:1.02rem; font-weight:400; color:#5b554c; margin-top:.35rem; letter-spacing:0;}
+  h2{font-size:1.35rem; margin:2.4rem 0 .7rem; padding-bottom:.25rem; border-bottom:2px solid var(--rule); color:var(--accent);}
+  h3{font-size:1.08rem; margin:1.5rem 0 .4rem; color:var(--ink);}
+  p{margin:.6rem 0;}
+  a{color:var(--accent);}
+  code, kbd, .mono{font-family:"SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; font-size:.86em;}
+  code{background:var(--code-bg); padding:.08em .35em; border-radius:4px;}
+  pre{background:var(--code-bg); border:1px solid var(--rule); border-radius:8px; padding:.8rem 1rem; overflow-x:auto; font-size:.82rem; line-height:1.45;}
+  pre code{background:none; padding:0;}
+  table{border-collapse:collapse; width:100%; margin:1rem 0; font-size:.88rem;}
+  th,td{border:1px solid var(--rule); padding:.4rem .6rem; text-align:left; vertical-align:top; overflow-wrap:anywhere;}
+  table.ref-table th:nth-child(1), table.ref-table td:nth-child(1){white-space:nowrap; width:1%;}
+  table.ref-table th:nth-child(2), table.ref-table td:nth-child(2){width:22%;}
+  th{background:var(--accent-bg); color:var(--accent); font-weight:600;}
+  tbody tr:nth-child(even){background:#faf8f3;}
+  .lead{font-size:1.06rem; color:#3a352d;}
+  .callout{border-left:4px solid var(--accent); background:var(--accent-bg); padding:.6rem .9rem; border-radius:0 6px 6px 0; margin:1rem 0;}
+  .callout.caution{border-color:var(--caution); background:var(--caution-bg);}
+  .callout.note{border-color:var(--derived); background:var(--derived-bg);}
+  .callout .tag{font-variant:small-caps; font-weight:700; letter-spacing:.03em; font-size:.82rem; margin-right:.4rem;}
+  .callout.caution .tag{color:var(--caution);}
+  .callout.note .tag{color:var(--derived);}
+  .callout.plain .tag{color:var(--accent);}
+  .muted{color:#7a7264;}
+  ul.tight{margin:.4rem 0; padding-left:1.3rem;}
+  ul.tight li{margin:.25rem 0;}
+  ol.locked{padding-left:1.4rem;}
+  ol.locked li{margin:.7rem 0;}
+  hr{border:none; border-top:1px solid var(--rule); margin:2rem 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>The <code>invz_tensor</code> module
+  <span class="sub">Full-tensor (3 Cartesian &times; 4 sublattice, multi-level) 1/z effective-medium expansion for LiHoF<sub>4</sub> — module reference (stages A0&rarr;A4)</span>
+</h1>
+
+<p class="lead">Full-tensor implementation of Jensen's 1/<em>z</em> effective-medium expansion for LiHoF<sub>4</sub>, in contrast to <code>../invz_projected/</code>, which projects onto the scalar <em>cc</em> (Ising) channel with a two-level self-energy. The tensor route exists to give the projected module's opt-in ODD (off-diagonal dipolar) extension (<a href="../invz_projected/README.html#odd"><code>invz_projected/README.html</code> &sect;1.9</a>) a <strong>rigorous completion</strong>: a genuine multi-level, multi-Cartesian 1/z self-energy that must reduce to the projected ODD equations E1/E4/E5 as a designed cross-validation (framework <code>jensen_1z_framework.html</code> &sect;11.8).</p>
+
+<p>Implementation plan (the source of record for every design decision below): <code>../docs/superpowers/plans/2026-07-17-invz-tensor-full.md</code> (v3). It supersedes <code>../docs/superpowers/plans/2026-07-16-invz-tensor-odd.md</code> (SUPERSEDED banner atop that file); see &sect;7 "Suite topology" and the LOCKED conventions below. Physics base: <code>../jensen_1z_framework.html</code> &sect;&sect;0&ndash;11 (scalar theory + ODD), <code>../odd_implementation_plan.html</code> Appendix A (A0&ndash;A2 staging), <code>../three_level_1z_extension.html</code> (A3 exact multi-level vertex), Yang&ndash;Wang PRB 10, 4714 (1974) &amp; PRB 12, 1057 (1975) (SBO diagrammatics). Full measurement record: <code>../docs/ODD-LOG.md</code> &sect;A0&ndash;&sect;A4.</p>
+
+<div class="callout note"><span class="tag">Status (2026-07-18)</span> A0&rarr;A4 implemented and cross-validated. All five stages below are in place; the emergent-boundary test (framework &sect;11.8) passes in two sectors (exact scalar identity + matched-truncation ODD collapse). See "Headline results" and "Open items".</div>
+
+<h2 id="quickstart">1 &middot; Running the suites (quickstart)</h2>
+
+<div class="callout plain"><span class="tag">Prerequisites</span> MATLAB <strong>R2025a</strong> (the module uses <code>pagemtimes</code>/<code>pagemldivide</code>); run every command <strong>from the repository root</strong> (the path contains spaces &mdash; keep the whole command quoted exactly as shown); <strong>Python is not needed at run time</strong> (the vertex oracle is the committed JSON fixture &mdash; MATLAB never calls Python).</div>
+
+<p><strong>Fast check &mdash; the default gate (CORE, ~1&ndash;2 min warm-cache).</strong> The tensor unit tests, run with <code>invz_projected</code> <em>off</em> the path:</p>
+<pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests'); disp(r); assertSuccess(r)"</code></pre>
+<p>&rarr; expected <strong>47 passed / 0 failed / 1 incomplete</strong> (the incomplete is the <code>INVZ_SLOW</code>-gated A4 production-ladder test).</p>
+
+<p><strong>Interop parity (optional)</strong> &mdash; live cross-checks against <code>invz_projected</code>:</p>
+<pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests/interop'); disp(r); assertSuccess(r)"</code></pre>
+<p>&rarr; expected <strong>8 / 0 / 2</strong>.</p>
+
+<p><strong>Projected regression</strong> (must stay identical to the pre-tensor baseline):</p>
+<pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_projected/tests'); disp(r); assertSuccess(r)"</code></pre>
+<p>&rarr; expected <strong>143 / 0 / 19</strong>.</p>
+
+<p><strong>Full run including the slow gates</strong> (<code>INVZ_SLOW=1</code>; adds the 16&sup3;/<code>dpRng</code>-30 reproducibility gate and the slow spectra/critical benchmarks &mdash; minutes; NB the A4 <code>e6</code> production rung is ~10 h if reached, see "Open items"). Prefix any of the above, e.g.:</p>
+<pre><code>INVZ_SLOW=1 "/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests'); disp(r); assertSuccess(r)"</code></pre>
+
+<p>The first cold run of a grid-dependent test recomputes the dipole/coupling sums into <code>invz_tensor/cache/</code> (gitignored; a few minutes at 16&sup3;/<code>dpRng</code>-30); subsequent runs are warm. Detailed path-isolation / boilerplate / grid-contract rationale is under <a href="#topology">&sect;7 "Suite topology"</a> below.</p>
+
+<p><strong>Run one computation (not a test)</strong> &mdash; a mode-<code>'a1'</code> point solve, from the repo root:</p>
+<pre><code>addpath(pwd); addpath('invz_common'); addpath('invz_tensor');   % root: MF_dipole/exchange/qVec_generator; shared engine; module
+ion = invz_ion();
+g   = invzt_qgrid(8, 'halfopen');                                % &Gamma;-excluded 8&sup3; grid
+lat = invzt_jq_tensor(ion, g, struct('dpRng', 15, 'cache', true));
+pt  = invzt_solve_point(ion, 2.0, [0.5 0 0], lat, struct('mode', 'a1', 'odd', true));
+fprintf('crit = %+.4f (&gt;0 = PM),  Sigma0 = %.4f,  converged = %d\n', pt.crit, pt.Sigma0, pt.converged);</code></pre>
+<p>Swap <code>'mode','a3'</code> for the genuine tensor self-energy, add <code>'nlevels','e3'</code> for an A4 rung, <code>'dress','dominant'</code> for the E1-matched truncation &mdash; see <a href="#modeladder">&sect;5 "The mode ladder"</a>.</p>
+
+<h2 id="recipes">2 &middot; Getting a phase diagram or a susceptibility spectrum</h2>
+
+<div class="callout note"><span class="tag">Drivers</span> Two runnable driver scripts ship with the module &mdash; <code>invzt_run_phase_diagram.m</code> (PM-side field-cut boundary B<sub>c</sub>(T) with zero-field anchors) and <code>invzt_run_spectra.m</code> (field-sweep &chi;&Prime;<sub>cc</sub> spectra at q&rarr;0, or a q-path dispersion view via the <code>qpath</code> knob) &mdash; the tensor analogues of the projected <code>invz_run_phase_diagram.m</code> / <code>invz_run_spectra.m</code>, with knobs at the top of each script (including the tensor-only <code>mode</code>/<code>nlevels</code> axes; the spectra driver requires <code>mode = 'a1'</code>, the only rung with a real-axis continuation, and dispersion q-paths are &Gamma;-excluded &mdash; strict q = 0 computes the Lorentz-cavity strict-uniform observable, not the q&rarr;0<sup>+</sup> limit). Both are honestly scoped to PM-side physics: there is no ordered/FM tensor solve and no temperature-cut finder (<code>invzt_critical_T</code>), so the near-vertical region of the boundary approaching T<sub>c</sub>(0) is left blank by design (&sect;10 "Open items"). <code>invzt_run_ladder.m</code> is <strong>not</strong> a sweep driver &mdash; it walks the A0&ndash;A4 basis/mode ladder at one fixed validation point (&sect;5/&sect;9 A4). The recipes below are what these drivers do under the hood &mdash; the starting point for custom sweeps.</div>
+
+<h3>2.1 &nbsp;Phase diagram &mdash; Bc(T) via a loop over <code>invzt_critical</code></h3>
+<p><code>invzt_critical</code> (&sect;5) finds one Bc at one fixed T by bisection. <code>invzt_run_phase_diagram.m</code> packages the loop below (plus parfor, the small-B<sub>x</sub> proxy anchor, and an opt-in projected closed-form comparator); the inline version, for custom sweeps:</p>
+<pre><code>addpath(pwd); addpath('invz_common'); addpath('invz_tensor');
+ion = invz_ion();
+g   = invzt_qgrid(8, 'halfopen');
+lat = invzt_jq_tensor(ion, g, struct('dpRng', 15, 'cache', true));
+
+Ts   = 1.0:0.1:2.2;                 % temperature grid (K)
+Bc   = nan(size(Ts));
+opts = struct('mode', 'a1', 'odd', true);   % same opts every point solve gets
+for k = 1:numel(Ts)
+    try
+        Bc(k) = invzt_critical(ion, Ts(k), lat, [0.05 5.0], opts);   % [Blo Bhi] bracket, T
+    catch err
+        if ~startsWith(err.identifier, 'invzt:'), rethrow(err); end
+        fprintf('T=%.2f: %s (widen the bracket or skip)\n', Ts(k), err.message);
+    end
+end
+plot(Bc, Ts, 'o-'); xlabel('B_c (T)'); ylabel('T (K)');</code></pre>
+<p>Notes: <code>Blo</code> must stay above 0 (mode <code>'a1'</code> forbids exact B=0, <code>invzt:a1ZeroField</code>); widen <code>[Blo Bhi]</code> if a given T throws <code>invzt:bracket</code> (the top of the range wasn't a converged PM point, or the floor was already ordered). Swap <code>parfor</code> for the plain loop to parallelize across T, same pattern as the projected driver (&sect;5 of <code>invz_projected/README.html</code>). For the true zero-field endpoint <code>Tc(B=0)</code> specifically (not a small-<code>Bx</code> proxy), use <code>invzt_tc_pm_extrap</code> (linear crit&rarr;0 extrapolation from the two lowest converged-PM points on a fixed T grid) or the projected closed form <code>invz_odd_zero_field</code> &mdash; A3's true-zero-field solve is deferred (&sect;10 "Open items").</p>
+
+<h3>2.2 &nbsp;Susceptibility spectrum &mdash; &chi;&Prime;(&omega;) via <code>invzt_chi_realaxis</code></h3>
+<p>Converge a point with <code>invzt_solve_point</code>, then continue it to the real axis with <code>invzt_chi_realaxis</code> over whatever frequency grid you want &mdash; <code>invzt_run_spectra.m</code> packages exactly this over a field sweep (with ordered-side masking and the shared <code>invz_peak_energy</code> peak pick):</p>
+<pre><code>T = 1.6; B = [0.5 0 0];
+pt = invzt_solve_point(ion, T, B, lat, struct('mode', 'a1', 'odd', true));
+
+w   = linspace(0, 0.6, 400).';                 % meV
+out = invzt_chi_realaxis(ion, T, B, pt, w, struct('qsel', 'gamma_uniform'));
+chipp_cc = squeeze(imag(out.chi_uniform(3,3,:)));   % chi''_cc(omega) at q -> 0
+plot(w, chipp_cc); xlabel('\omega (meV)'); ylabel("\chi''_{cc}(q\to0,\omega)");</code></pre>
+<p>For a dispersion along a q-path (the tensor analogue of <code>invz_spectra_qpath</code>), pass an explicit <code>[nq,3]</code> <code>qvec</code> as <code>opts.qsel</code> instead of <code>'gamma_uniform'</code>; the per-q sublattice-averaged cc response comes back in <code>out.chi_cc_q</code> <code>[nq,nw]</code>:</p>
+<pre><code>qpath = [linspace(0.1, 0.5, 41).' zeros(41,2)]; % finite-q -> (0.5,0,0); keep Gamma-excluded
+out   = invzt_chi_realaxis(ion, T, B, pt, w, struct('qsel', qpath, 'dpRng', 15));
+chipp_q = imag(out.chi_cc_q);                   % [nq, nw]
+imagesc(w, 1:size(chipp_q,1), chipp_q); xlabel('\omega (meV)'); ylabel('q index');</code></pre>
+<div class="callout note"><span class="tag">Scope</span> <code>invzt_chi_realaxis</code> continues only the A1 scalar-&Sigma; self-energy (mode <code>'a1'</code>'s converged <code>pt</code>) &mdash; it does not accept an A3 <code>pt</code>; continuing the full tensor <code>Vmat(i&omega;n)</code> to the real axis is deferred (&sect;10 "Open items"). To sanity-check a spectrum against the scalar reference, run the equivalent point through <code>invz_projected</code>'s <code>invz_chi_realaxis</code> and compare, or use the <code>interop/</code> suite (&sect;7 "Suite topology").</div>
+
+<h2 id="architecture">3 &middot; Architecture — staged A0 &rarr; A4</h2>
+<table>
+<thead><tr><th>Stage</th><th>What it is</th><th>Key functions</th></tr></thead>
+<tbody>
+<tr><td><strong>A0</strong></td><td>Tensor-RPA parity layer: cached <code>[12,12,nq]</code> coupling tensor, page-wise 12&times;12 RPA, tensor-owned anchors</td><td><code>invzt_qgrid</code>, <code>invzt_jq_tensor</code>, <code>invzt_chi_rpa</code>, <code>invzt_gcc_lattice</code></td></tr>
+<tr><td><strong>A1</strong></td><td>Projected-1/z bridge: dominant-sector &Sigma; inside the full tensor RPA (no <code>invz_chiperp</code>/<code>invz_odd_deltaJ</code> needed &mdash; the tensor RPA carries transverse/ODD mediation automatically)</td><td><code>invzt_chi0_split</code>, <code>invzt_solve_point</code> (mode <code>'a1'</code>), <code>invzt_critical</code>, <code>invzt_tc_pm_extrap</code>, <code>invzt_chi_realaxis</code></td></tr>
+<tr><td><strong>A2</strong></td><td>Matrix effective medium: DIRECT closure <code>K = ctil<sup>-1</sup> &minus; chibar<sup>-1</sup></code> (no iteration)</td><td><code>invzt_emt_matrix</code>, <code>invzt_solve_point</code> (mode <code>'a2'</code>)</td></tr>
+<tr><td><strong>A3</strong></td><td>Genuine tensor 1/z self-energy from the exact component-labelled four-point vertex</td><td><code>invzt_kernels</code>, <code>invzt_vertex4</code>, <code>invzt_gamma4</code>, <code>invzt_vertex3</code>, <code>invzt_threestate</code>, <code>invzt_sigma_tensor</code>, <code>invzt_solve_point</code> (mode <code>'a3'</code>); oracle: <code>verify_tensor_vertex.py</code></td></tr>
+<tr><td><strong>A4</strong></td><td>Basis-defined state-space ladder: how the A3 physics evolves as CF/nuclear basis content grows</td><td><code>invzt_rung_basis</code>, <code>invzt_run_ladder</code>, <code>invzt_report_ladder</code></td></tr>
+</tbody>
+</table>
+
+<h2 id="modulemap">4 &middot; Module map</h2>
+
+<h3><code>invz_tensor/</code> (this directory, <code>invzt_</code> prefix; all new code)</h3>
+<table class="ref-table">
+<thead><tr><th>File</th><th>Task</th><th>Responsibility</th></tr></thead>
+<tbody>
+<tr><td><code>invzt_qgrid.m</code></td><td>T3</td><td>THE q-grid builder &mdash; <code>'halfopen'</code> / <code>'legacy_inclusive'</code> conventions, weights, hash (LOCKED contract)</td></tr>
+<tr><td><code>invzt_jq_tensor.m</code></td><td>T3</td><td>Cached <code>[12,12,nq]</code> sublattice&times;Cartesian coupling tensor + <code>lat</code> struct assembly</td></tr>
+<tr><td><code>invzt_chi_rpa.m</code></td><td>T4</td><td>Page-wise 12&times;12 tensor RPA propagator at one frequency</td></tr>
+<tr><td><code>invzt_gcc_lattice.m</code></td><td>T4</td><td>Weighted BZ + sublattice average of the site-diagonal cc RPA response</td></tr>
+<tr><td><code>invzt_chi0_split.m</code></td><td>T5</td><td>Transition-mask split &chi;0 = &chi;_dom + &chi;_rest, with the LOCKED elastic convention</td></tr>
+<tr><td><code>invzt_solve_point.m</code></td><td>T6/T9/T12/T13</td><td>A1 bridge / A2 medium / A3 self-energy point solver (mode-switched); the module's main entry point</td></tr>
+<tr><td><code>invzt_critical.m</code></td><td>T7</td><td>PM-side critical transverse field Bc via <code>sign(crit)</code> bisection</td></tr>
+<tr><td><code>invzt_tc_pm_extrap.m</code></td><td>T7</td><td>Handle-based small-B-proxy Tc estimator (two-point crit extrapolation)</td></tr>
+<tr><td><code>invzt_chi_realaxis.m</code></td><td>T8</td><td>A1 scalar-&Sigma; real-axis continuation ONLY (not A3 &mdash; see "Open items")</td></tr>
+<tr><td><code>invzt_emt_matrix.m</code></td><td>T9</td><td>A2 direct matrix effective-medium closure</td></tr>
+<tr><td><code>invzt_kernels.m</code></td><td>T11</td><td>KMS-scaled, exprel-stable divided-difference kernels (&phi; / I2 / I3)</td></tr>
+<tr><td><code>invzt_vertex4.m</code></td><td>T11</td><td>Component-labelled four-point vertex engine &mdash; DENSE ordered path-sum (production)</td></tr>
+<tr><td><code>invzt_gamma4.m</code></td><td>T11/T12</td><td>Vectorized connected four-point cumulant &Gamma;4 over the whole (n,l) grid (~100&times; faster than row-by-row <code>invzt_vertex4</code> stage <code>'Gamma'</code>; bit-identical to ~1e-12)</td></tr>
+<tr><td><code>invzt_vertex3.m</code></td><td>T11</td><td>Component-labelled three-point vertex (sum-rule / condition-space route)</td></tr>
+<tr><td><code>invzt_threestate.m</code></td><td>T12</td><td>Explicit three-state toy single-ion model (independent-&Delta;1 contract, v3)</td></tr>
+<tr><td><code>invzt_sigma_tensor.m</code></td><td>T12</td><td>A3 self-energy assembly: vertex &rarr; Dyson resummation &rarr; A2 medium &rarr; outer fixed point</td></tr>
+<tr><td><code>invzt_rung_basis.m</code></td><td>T13</td><td>Basis-content-defined A4 rung &rarr; projector + basis energies (multiplet-complete)</td></tr>
+<tr><td><code>invzt_run_ladder.m</code></td><td>T13</td><td>A4 ladder driver (data-only, budget-refusing)</td></tr>
+<tr><td><code>invzt_report_ladder.m</code></td><td>T13</td><td>Serializes a completed A4 run into an ODD-LOG-pasteable text report (writes no files)</td></tr>
+<tr><td><code>invzt_active_projector.m</code></td><td>T9/T12 (<code>/simplify</code>)</td><td>Shared frequency-consistent active-subspace projector (union-of-ranges rank-reveal); called by <code>invzt_emt_matrix</code> + <code>invzt_sigma_tensor</code></td></tr>
+<tr><td><code>invzt_str.m</code></td><td><code>/simplify</code></td><td>Shared value&rarr;display-string coercion for error messages (replaced 4 per-file copies)</td></tr>
+<tr><td><code>README.html</code></td><td>T15</td><td>This file</td></tr>
+</tbody>
+</table>
+
+<h3>Shared engine and oracle</h3>
+<table class="ref-table">
+<thead><tr><th>Path</th><th>Responsibility</th></tr></thead>
+<tbody>
+<tr><td><code>../invz_common/</code></td><td>Branch-shared single-ion engine (16 functions, pure <code>git mv</code> out of <code>invz_projected/</code>, zero logic changes): <code>invz_ion</code>, <code>invz_single_ion</code>, <code>invz_chi0z</code>, <code>invz_chiperp</code>, <code>invz_check_transverse_mf</code>, <code>invz_cfrot</code>, <code>invz_field_vec</code>, <code>stevens_ops</code>, <code>invz_matsubara</code>, <code>invz_twolevel</code>, <code>invz_g</code>, <code>invz_lambdas</code>, <code>invz_sigma</code>, <code>getf</code>, <code>invz_const</code>, <code>invz_is_gamma_equiv</code>, plus tensor-only <code>invz_cache_key.m</code>. <code>invz_projected/tests</code> remains the acceptance suite of record for these 16; any caller must <code>addpath</code> this folder explicitly.</td></tr>
+<tr><td><code>../verify_tensor_vertex.py</code></td><td>Component-labelled vertex ORACLE (T10): mpmath first-principles reference of record for the A3 vertex machinery. Writes the committed <code>invz_tensor/tests/fixtures/vertex_oracle.json</code>; MATLAB suites never call Python at run time &mdash; the committed JSON IS the oracle.</td></tr>
+</tbody>
+</table>
+
+<h3>Tests (<code>invz_tensor/tests/</code>)</h3>
+<table class="ref-table">
+<thead><tr><th>Path</th><th>Role</th></tr></thead>
+<tbody>
+<tr><td><code>invzt_anchors.m</code></td><td>Plain fixture (not a test; <code>runtests</code> on a folder does not collect it) &mdash; tensor-owned pinned digit anchors, measured independently on this tree so CORE tests never depend on <code>invz_projected/tests</code> at run time</td></tr>
+<tr><td><code>test_invzt_jq_tensor.m</code> (also holds the q-grid convention tests), <code>test_invzt_chi_rpa.m</code>, <code>test_invzt_chi0_split.m</code></td><td>A0/A1 building blocks</td></tr>
+<tr><td><code>test_invzt_solve_point.m</code>, <code>test_invzt_critical.m</code></td><td>A1 bridge solver + critical finder</td></tr>
+<tr><td><code>test_invzt_chi_realaxis.m</code></td><td>A1 real-axis continuation</td></tr>
+<tr><td><code>test_invzt_emt_matrix.m</code></td><td>A2 matrix effective medium</td></tr>
+<tr><td><code>test_invzt_vertex.m</code></td><td>T10/T11 &mdash; kernels + vertex4/vertex3 vs the mpmath oracle</td></tr>
+<tr><td><code>test_invzt_a3_threestate.m</code></td><td>A3 three-state model + <code>invzt_sigma_tensor</code> (the framework &sect;11.8 emergence gate)</td></tr>
+<tr><td><code>test_invzt_a4_ladder.m</code></td><td>A4 ladder structural + (<code>INVZ_SLOW</code>-gated) production tests</td></tr>
+<tr><td><code>interop/test_invzt_jq_parity.m</code>, <code>interop/test_invzt_rpa_parity.m</code>, <code>interop/test_invzt_solve_parity.m</code>, <code>interop/test_invzt_critical_parity.m</code></td><td>Live parity tests against <code>invz_projected</code> (optional suite &mdash; see &sect;7)</td></tr>
+<tr><td><code>fixtures/projected_baseline.json</code></td><td>T2 &mdash; frozen projected reference numbers (committed generator + filtered-clean dirty flag over physics-source paths, base git <code>22c9ce3</code>)</td></tr>
+<tr><td><code>fixtures/vertex_oracle.json</code></td><td>T10 &mdash; the mpmath vertex oracle (138/138 checks)</td></tr>
+<tr><td><code>exploratory/explore_tensor_blocks.m</code>, <code>exploratory/freeze_projected_baseline.m</code>, <code>exploratory/perf_vertex_scaling.m</code></td><td>Read-only measurement scripts (not tests); provenance for the anchors, the frozen baseline, and the T11 performance gate</td></tr>
+</tbody>
+</table>
+<p class="muted">(The q-grid convention tests &mdash; <code>test_qgrid_conventions</code> etc. &mdash; are local functions inside <code>test_invzt_jq_tensor.m</code>, per the T3 plan; there is no separate <code>test_invzt_qgrid.m</code>.)</p>
+
+<h2 id="modeladder">5 &middot; The mode ladder</h2>
+<p><code>invzt_solve_point(ion, T, B, lat, opts)</code> is the module's single point-solver entry; two independent axes select what it computes:</p>
+
+<p><strong><code>opts.mode</code></strong> &mdash; the physics layer:</p>
+<ul class="tight">
+  <li><code>'a1'</code> (default) &mdash; A1 dominant-sector bridge: <code>ctil = cdom/(1+&Sigma;) + crest</code> propagated through the full tensor RPA; Anderson-accelerated outer loop on the scalar &Sigma;.</li>
+  <li><code>'a2'</code> &mdash; A2 direct matrix effective medium (<code>invzt_emt_matrix</code>); same outer loop, K is now a <code>[3,3,nwn]</code> matrix instead of a scalar.</li>
+  <li><code>'a3'</code> &mdash; A3 genuine tensor self-energy: <code>invzt_sigma_tensor</code> runs its own inner fixed point on <code>Vmat</code> (the four-point-vertex self-energy correction), consuming the A2 medium each iteration.</li>
+</ul>
+
+<p><strong><code>opts.nlevels</code></strong> &mdash; the single-ion construction (routes which Hilbert space the mode above acts on):</p>
+<ul class="tight">
+  <li><code>'std'</code> (default) &mdash; the full electronuclear <code>invz_single_ion</code> (136-dim: 17 electronic &times; 8 nuclear I=7/2).</li>
+  <li><code>'three'</code> &mdash; the explicit <code>invzt_threestate</code> toy (hyperfine excluded), the A3 validation model.</li>
+  <li><code>'eN'</code> / <code>'eNxI8'</code>, N &isin; {3, 6, 17} &mdash; A4 ladder rungs (<code>invzt_rung_basis</code>): the field/MF single-ion Hamiltonian built and diagonalized IN a multiplet-complete reduced CF basis; <code>xI8</code> tensors that electronic basis with the complete I=7/2 nuclear space. <code>'e17xI8'</code> = 136 = <code>'std'</code>.</li>
+</ul>
+
+<p><strong><code>opts.dress</code></strong> (A3 only) &mdash; which channels the vertex self-energy dresses:</p>
+<ul class="tight">
+  <li><code>'full'</code> (default) &mdash; dresses ALL Cartesian channels; includes the genuine beyond-E1 transverse-spectator dressing Jensen's dominant-only rule leaves bare (a reported physical correction, not a defect).</li>
+  <li><code>'dominant'</code> &mdash; E1-matched truncation: the vertex dresses ONLY the dominant cc transition (spectator-normalized, constraint 3), leaving the transverse spectator and non-dominant cc paths bare &mdash; the framework &sect;11.8 emergence comparator (A3-dominant &equiv; A1/E1 up to the O(1/z&sup2;) resummation-scheme difference, constraint 8).</li>
+</ul>
+
+<p>The A4 ladder (<code>invzt_run_ladder</code>) walks the outer product of <code>{a1, a3-dominant, a3-full} &times; {odd off, odd on} &times; {'three','e3','e6', budget-refused: 'e17','e3xI8','e6xI8','e17xI8'}</code> at one validation point, seed-continuous across the whole walk.</p>
+
+<h2 id="flags">6 &middot; Flag surface</h2>
+<p>All options use <code>getf(opts, name, default)</code> (silently defaulted, never required). Selected flags, module-wide:</p>
+<table class="ref-table">
+<thead><tr><th>Flag</th><th>Default</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>odd</code></td><td><code>true</code></td><td><code>false</code> zeroes the Cartesian-off-diagonal entries of every sublattice block of <code>lat.Jt</code> (a copy) &mdash; the cc sector no longer sees the transverse ODD blocks.</td></tr>
+<tr><td><code>chi_rest</code></td><td><code>true</code></td><td><code>false</code> drops the non-dominant (<code>crest</code>) part of the local &chi;0 &mdash; only the dominant (ground-manifold) sector is renormalized/mediated.</td></tr>
+<tr><td><code>Esplit</code></td><td>0.4653 meV</td><td>Dominant/rest split energy (half the ~0.9306 meV &Gamma;-doublet-to-first-excited-CF gap); passed to <code>invzt_chi0_split</code> and (mode <code>'a3'</code>, <code>dress='dominant'</code>) to the dominant-group selector.</td></tr>
+<tr><td><code>chi0_diag</code></td><td><code>false</code></td><td>TEST HOOK. Zeroes the cross-Cartesian elements of the local tensor <code>ctil</code>/<code>ctil0</code> before use, so with <code>odd=false</code> the cc sector EXACTLY decouples (enables exact-identity gates).</td></tr>
+<tr><td><code>force_sigma0</code></td><td><code>false</code></td><td>(<code>invzt_chi_realaxis</code> only) TEST HOOK. Forces <code>Sigma_w = 0</code> identically, isolating the bare-propagator identity gate.</td></tr>
+<tr><td><code>mtol</code></td><td><code>0</code></td><td>(<code>invzt_vertex4</code> only) Matrix-element pruning tolerance; <code>0</code> = no pruning (exact). Dropped <code>|element| &lt; mtol</code>, discarded weight bounded in <code>out.pruned_bound</code>.</td></tr>
+<tr><td><code>rank_tol</code></td><td><code>1e-12</code></td><td>Active-subspace threshold (relative to the largest active singular value) for every rank-revealing solve: <code>invzt_emt_matrix</code>'s common projector, <code>invzt_sigma_tensor</code>'s <code>resum_dyson</code>, the Hermitian-eig criticality square root.</td></tr>
+<tr><td><code>chiperp_scale</code></td><td><code>1</code></td><td>(<code>invzt_threestate</code> only) Rescales the matched spectator coupling &rho; &rarr; <code>chiperp_scale&middot;&rho;</code> and RE-REFINES (&Delta;1, m0) at that &rho; so the doublet always still reproduces (&Delta;, M&sup2;) and only &chi;&perp; varies (&prop; scale&sup2;); <code>chiperp_scale = 0</code> gives the exact two-level limit with <code>|3&gt;</code> decoupled.</td></tr>
+<tr><td><code>far_excited</code></td><td><code>false</code></td><td>(<code>invzt_threestate</code> only) <code>true</code> moves the spectator gap &Delta;2 from 0.9306 meV (LiHoF4 CF gap) to 40 meV (a "far" spectator regime probe).</td></tr>
+<tr><td><code>impl</code></td><td><code>'dense'</code></td><td>(<code>invzt_vertex4</code> only) <code>'dense'</code> is the sole production engine. <code>'factored'</code> is DISABLED &mdash; errors <code>invzt:factoredUnproven</code> (Task-10 oracle check recorded <code>factored_ok = false</code>; see LOCKED conventions).</td></tr>
+<tr><td><code>dress</code></td><td><code>'full'</code></td><td>(mode <code>'a3'</code> only) <code>'full'</code> | <code>'dominant'</code> &mdash; see &sect;5 "The mode ladder" above.</td></tr>
+<tr><td><code>nlevels</code></td><td><code>'std'</code></td><td>Single-ion construction rung &mdash; see &sect;5 "The mode ladder" above.</td></tr>
+</tbody>
+</table>
+
+<div class="callout plain"><span class="tag">Note on <code>dd_tol</code></span> there is no exposed <code>dd_tol</code> option. The divided-difference kernels (<code>invzt_kernels.m</code>, <code>invzt_gamma4.m</code>) use a HARDCODED small-argument branch threshold of <code>1e-10</code> (matching the oracle generator verbatim: &phi; 1e-12, &phi;&prime; 1e-10, &phi;&Prime; 1e-8, divided-difference denominators 1e-10) so that repeated-node (degenerate) rows select the correct Hermite limit. This is a kernel implementation constant, not a caller-tunable option.</div>
+
+<p>Other opts of note (outer-loop control, all <code>getf</code>-defaulted, not part of the "flag surface" proper): <code>mix_outer</code>, <code>tol_outer</code>, <code>max_outer</code>, <code>anderson_depth</code> (A1/A2: 5; A3: 1 &mdash; Anderson was observed to converge to a spurious A3 fixed point, see <code>invzt_sigma_tensor.m</code>), <code>Sigma_seed</code> / <code>Vmat_seed</code> (warm-start), <code>Ecut</code>, <code>hyp</code>, <code>transverse_mf</code>, <code>Lmax</code> (A3 internal Matsubara cutoff), <code>static_idx</code> (<code>invzt_emt_matrix</code>, opt-in static-slot Hermiticity gate).</p>
+
+<h2 id="topology">7 &middot; Suite topology</h2>
+<p>Three suites, run from repo root (path contains spaces &mdash; always quote it):</p>
+
+<p><strong>CORE</strong> (after every task from T3 on; must pass with <code>invz_projected</code> absent from the path):</p>
+<pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests'); disp(r); assertSuccess(r)"</code></pre>
+<p class="muted">(<code>runtests</code> on a folder does not recurse into <code>interop/</code>.)</p>
+
+<p><strong>INTEROP</strong> (optional; live parity tests against <code>invz_projected</code>):</p>
+<pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests/interop'); disp(r); assertSuccess(r)"</code></pre>
+
+<p><strong>PROJECTED</strong> (regression gate &mdash; must stay identical to the pre-<code>invz_tensor</code> frozen baseline):</p>
+<pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_projected/tests'); disp(r); assertSuccess(r)"</code></pre>
+
+<p>Slow gates are prefixed <code>INVZ_SLOW=1</code> (tests use <code>assumeTrue(testCase, ~isempty(getenv('INVZ_SLOW')), 'INVZ_SLOW only')</code>) &mdash; this covers the A4 production ladder run (see "Open items").</p>
+
+<p>CORE test boilerplate (no <code>invz_projected</code> on path):</p>
+<pre><code>function setupOnce(~)
+here = fileparts(mfilename('fullpath'));
+addpath(fullfile(here, '..'));                          % invz_tensor
+addpath(fullfile(here, '..', '..'));                    % repo root: MF_dipole, exchange, qVec_generator
+addpath(fullfile(here, '..', '..', 'invz_common'));     % shared single-ion engine
+end</code></pre>
+<p>INTEROP suite adds two lines: <code>addpath(...'invz_projected')</code> and <code>addpath(...'invz_projected','tests')</code> (for <code>invz_odd_anchors</code>).</p>
+
+<div class="callout note"><span class="tag">Grid contract (LOCKED, T3)</span> All grids come from <code>invzt_qgrid(n, conv)</code>, returning <code>g.qvec</code> (&Gamma;-excluded), <code>g.w</code> (uniform weights summing to 1, the dropped-&Gamma; point simply unrepresented), <code>g.conv</code>, <code>g.hash</code>. Two conventions, never mixed inside one comparison:
+<ul class="tight">
+  <li><code>'halfopen'</code> (default for all new tensor work) &mdash; <code>ndgrid((0:n-1)/n)</code> minus &Gamma;; n distinct points per axis, no duplicated reciprocal-periodic face.</li>
+  <li><code>'legacy_inclusive'</code> (parity with projected/legacy anchors ONLY) &mdash; exactly <code>qVec_generator(...,'grid',[n n n],'range',[-0.5 0.5])</code> + the same &Gamma; filter (endpoint-inclusive, spacing 1/(n&minus;1) &mdash; duplicates the &plusmn;0.5 faces by design, matching the projected production convention bit-for-bit).</li>
+</ul>
+Grid conv + hash thread into every cache key, the <code>lat</code> struct's provenance, and every reported anchor.</div>
+
+<p><strong>Cache namespace.</strong> <code>invz_tensor/cache/</code> (<code>.gitignore = *</code>, never shared with <code>invz_projected/cache</code>). Keys: <code>invz_cache_key('jqt1', dpRng, [qhash; convcode], pkey)</code> with <code>pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; 1]</code>; the loader <code>isequal</code>-verifies the stored <code>pkey</code> + <code>qvec</code> before trusting a hit.</p>
+
+<p><strong>Tier-2 scope box.</strong> The tensor branch does NOT re-implement the projected Tier-2 additive layer. A1 cross-validates against projected <em>Tier-1-only</em> numbers; variable-moments physics re-enters ONLY at A3, via the mixed cumulants of the exact vertex, cross-validated against the projected Tier-2 share (&asymp;2.8%) as a REPORT (see the A4 headline below). Never stack an A3 result with the projected Tier-1/Tier-2 corrections.</p>
+
+<h2 id="locked">8 &middot; LOCKED conventions</h2>
+<p>These bind every function in the module; a violation is a bug, not a judgment call.</p>
+<ol class="locked">
+  <li><strong>Tensor index order.</strong> Composite index sublattice-major, Cartesian-minor: <code>i = 3*(s-1) + mu</code>, s = 1..4, mu = 1(a), 2(b), 3(c). Slices: cc = <code>Jt(3:3:12,3:3:12,iq)</code>, ca = <code>Jt(3:3:12,1:3:12,iq)</code>. Local response embeds as <code>kron(eye(4), chi0_3x3)</code>.</li>
+  <li><strong>K bookkeeping (framework &sect;11.8, "bridge medium").</strong> K is defined against the RENORMALIZED propagator, never the bare one: <code>K = 1/Gloc &minus; 1/G&#771;0</code>, with <code>G&#771;0 = &minus;[&chi;_dom/(1+&Sigma;) + &chi;_rest]_cc</code> site-local. Defining K against bare G0 (the superseded 2026-07-16 draft's error) is wrong at O(&chi;_rest&middot;&Sigma;) and breaks the exact reduction to the scalar closed form when weak transitions are dropped.</li>
+  <li><strong>Symmetric bracket (framework &sect;11.8, "matrix resummation").</strong> Beyond two levels the first-order correction is carried ADDITIVELY and resummed via the manifestly Hermitian sandwich <code>G&#771;0 = G0&middot;(G0+&Vscr;)<sup>-1</sup>&middot;G0</code> &mdash; NEVER <code>inv(G0)</code> alone (a multi-pole G0 has real zeros between poles, where a ratio &Sigma; = &Vscr;/G0 acquires artificial poles). In the scalar two-level limit &Vscr; = G0&middot;&Sigma; and this collapses to <code>G&#771;0 = G0/(1+&Sigma;)</code>.</li>
+  <li><strong>Negative-frequency tensor transpose relation (constraint 9).</strong> From the Lehmann form, <code>&chi;<sub>&rho;&sigma;</sub>(&minus;i&omega;n) = &chi;<sub>&sigma;&rho;</sub>(i&omega;n)</code> &mdash; the TRANSPOSE, not componentwise evenness. The same relation holds for K and every channel-matrix object; scalar/diagonal cases degenerate to evenness.
+    <div class="callout note" style="margin-top:.5rem"><span class="tag">Finding (A2, LOCKED)</span> &chi;0(i&omega;n) is genuinely NON-HERMITIAN off the static slot (measured anti-Hermitian fraction ~6&ndash;17%, up to 9.75% at Bx = 0.5 T &mdash; the physical gyrotropic ~B response). K and &chi;_bar inherit the transpose relation to ~1e-17 and are Hermitian ONLY at the static wn = 0 slot; single-frequency Hermiticity is deliberately NOT asserted off that slot (it would contradict this constraint). Consumed AS-IS in A3 (<code>pt.Kmat</code>), never symmetrized.</div>
+  </li>
+  <li><strong>&Delta;Tc decomposition language.</strong> Sequential condition/&Sigma;-space legs only (<code>uniform_only</code> / <code>qstruct_only</code> + closure defect); additive "(a)/(b)/(c)" language is FORBIDDEN (uniform-shift theorem, framework &sect;11.3).</li>
+  <li><strong>Elastic convention</strong> (<code>invzt_chi0_split</code>, T5). The dominant block's elastic term restricts the connected degenerate-pair sum to dominant-dominant pairs and replaces the global-mean counterterm with the DOMINANT-GROUP mean moment <code>Jdom = &Sigma;<sub>p&isin;dom</sub> P<sub>p</sub>&middot;M<sub>pp</sub></code> (not renormalized by <code>&Sigma;<sub>p&isin;dom</sub> P<sub>p</sub></code>) &mdash; a literal transcription of the locked-box convention; <code>crest</code> absorbs the residual by construction. Reported as <code>mspec.elastic_conv_share</code>, bounded by the excited-state population share.</li>
+  <li><strong>Criticality: Hermitian eigendecomposition, never <code>sqrtm</code></strong> (v3). With <code>ctil0</code> the static renormalized 3&times;3 and <code>C12 = kron(eye(4), ctil0)</code> PSD: <code>[U,D] = eig((C12+C12')/2)</code>; <code>d = real(diag(D))</code>, clipped below <code>rank_tol</code>; <code>S = U*diag(sqrt(max(d,0)))*U'</code>; <code>M = eye(12) &minus; S*JtGamma*S</code>; <code>crit = min(real(eig((M+M')/2)))</code>. Avoids <code>sqrtm</code>'s complex/non-Hermitian noise near criticality; <code>crit &gt; 0</code> in the PM phase; clipped mass + active rank recorded. <strong>Phase key is <code>sign(pt.crit)</code>, never <code>pt.converged</code></strong> &mdash; the A1 Anderson solver converges metastable PM fixed points inside the ordered phase.</li>
+  <li><strong>Three-state independent-&Delta;1 contract</strong> (v3, <code>invzt_threestate</code>). A direct low-doublet tunnelling term <code>(Delta1/2)*Sx12</code> splits the doublet independently of the spectator coupling &rho; (<code>Ja0</code>/<code>Jb0</code>); &rho; carries ONLY the transverse/spectator channel, so &rho;&rarr;0 leaves a GENUINE two-level system (splitting survives as &Delta;1) &mdash; this is what makes the exact scalar-compatibility identity (item 9 below) consistent. <code>(Delta1, m0, rho)</code> solve three independent targets <code>(Delta, M2, chi_perp)</code> by Newton on the full <code>eig(H3)</code> &mdash; no overconstraint.</li>
+  <li><strong>DENSE-primary vertex.</strong> <code>invzt_vertex4</code>'s dense ordered path-sum is THE production engine and correctness reference (reproduces the mpmath oracle to &le;4e-15). The O(N&sup3;) <code>'factored'</code> contraction is an UNPROVEN conjecture: Task-10's oracle check recorded <code>factored_ok = false</code> &mdash; the naive resolvent chain drops the &phi;/KMS boundary + initial-state structure and mismatches dense by 1e15&ndash;1e17 (spurious poles). <code>opts.impl='factored'</code> is disabled and errors <code>invzt:factoredUnproven</code>; there is no O(N&sup3;) production path.</li>
+</ol>
+
+<h2 id="headline">9 &middot; Headline results</h2>
+<p class="muted">(<code>docs/ODD-LOG.md</code> &sect;A0&ndash;&sect;A4; report, never tuned)</p>
+<ul class="tight">
+  <li><strong>A0 (preflight):</strong> tensor-owned anchors bit-identical to the superseded P0.3 anchors (confirms the <code>invz_common</code> move is behavior-neutral); on-axis small-q ODD decay confirmed LINEAR in q; frozen projected baseline captured (<code>fixtures/projected_baseline.json</code>).</li>
+  <li><strong>A1 (bridge):</strong> K bookkeeping verified to reduce EXACTLY to <code>invz_emt_scalar</code> in the decoupled limit (frozen no-ODD baseline <code>dSigma0 = &minus;4.1e-5</code>, gate 2e-3). <strong>A1 proxy-Tc (0.05 T, 16&sup3;/dpRng-30) = 1.5599 K</strong> vs the grid-matched projected closed form 1.5442 K (+0.016 K A1 enhancement &mdash; retardation ~null + transverse RPA + <code>chi_rest</code>, same grid, so distinct from the 16&sup3;&rarr;&infin; Richardson drop to 1.509 K). Real-axis continuation: exact &gamma;-uniform identity to RelTol 1e-8; no-ODD peak-parity vs <code>invz_chi_realaxis</code> 0.0000 meV.</li>
+  <li><strong>A2 (matrix medium):</strong> <code>invzt_emt_matrix</code>'s scalar reduction matches <code>invz_emt_scalar</code>'s <code>med.K</code> to 7.8e-14 (positive sign, no flip); a2&equiv;a1 exact identity on diagonal input holds EXACTLY at the K-map level.</li>
+  <li><strong>A3 (genuine tensor self-energy) &mdash; the framework &sect;11.8 emergence, SHARPENED.</strong> The original single-number "slope &ge; 2.3" gate was internally inconsistent with LOCKED constraint 8 (Dyson-vs-additive resummation differ at O(1/z&sup2;), so a crit-shift slope ~2 is inherent, not a pass/fail threshold). Emergence is validated in <strong>two sectors</strong> instead:
+    <ul class="tight">
+      <li><strong>SCALAR (exact):</strong> the A3 vertex reduces to <code>invz_sigma</code> at &rho;&rarr;0 to <strong>3.24e-11</strong> (&le; 1e-8 gate) &mdash; the strongest single emergence statement.</li>
+      <li><strong>ODD (matched truncation):</strong> <code>dress='dominant'</code> (E1's dominant-only rule; the transverse spectator is provably bare there) reduces to A1/E1 &mdash; dominant-dress ratio <strong>rd(1) = 1.0159</strong> vs full-A3 <strong>rf(1) = 1.1132</strong>; the beyond-E1 excess COLLAPSES 1.113 &rarr; 1.016 (86% removed), confirming the transverse-spectator dressing is what full-A3 adds on top of E1. The residual 1.6% (<code>|rd&minus;1| = 0.0159 &le; 0.05</code> band) is the constraint-8 O(1/z&sup2;) resummation ambiguity (<code>resum_spread_crit = &minus;3.93e-2</code>). This SUPERSEDES the earlier "slope &ge; 2.3" framing.</li>
+    </ul>
+    Perf gate (dense, 12 h budget): AFFORDABLE <code>{three, e3, e6}</code> (e6 near the boundary at 9.86 h); REFUSE <code>{e17 (~196 h), every &times;I8, e17&times;I8 = 136 (~5.9e5 h)}</code>.
+  </li>
+  <li><strong>A4 (state-space ladder) &mdash; the basis-content climb.</strong> At the anchor (2.0 K, 0.5 T), the beyond-E1 transverse-spectator-dressing share (<code>rf &minus; 1</code>) CONVERGES as CF content grows: <strong>three 11.3% &rarr; e3 11.4% &rarr; e6 2.6%</strong>, landing on the projected Tier-2 share (&asymp;2.8%) &mdash; the small toy models OVERESTIMATE the beyond-Gaussian content; a real 6-state CF basis screens it down to the projected value. The virtual-completeness deficit (rung &chi;0 vs the full-136 &chi;0, a diagnostic, not a bound) drops monotonically <strong>0.041 &rarr; 0.002</strong>. <code>crit_shift_odd</code> (+ = ODD lowers Tc, the projected &Delta;Tc &gt; 0 direction): three/e3 +0.028/+0.031 (1.6 K, 0.1 T), e6 +0.0547 (anchor point). Budget (12 h, dense): affordable three/e3 (0.62 h), e6 (9.86 h); refuse e17 (196 h), e3&times;I8 (2524 h), e6&times;I8 (4e4 h), e17&times;I8 = 136 (5.9e5 h) &mdash; recorded in <code>out.skipped_rungs</code>, not run.</li>
+</ul>
+<div class="callout note"><span class="tag">Cross-validation summary</span> the A3 ladder's beyond-E1 correction converging to the projected Tier-2 2.8% share, from the opposite direction (a genuine tensor self-energy gaining CF content, vs. the projected module's quenched-Gaussian internal-field dressing), is an independent confirmation that the two routes describe the same physics once the tensor side's basis is complete enough.</div>
+
+<h2 id="open">10 &middot; Open items</h2>
+<ul class="tight">
+  <li><strong>The O(N&sup3;) "factored" vertex is a dead end, not a backlog item to retry as-is.</strong> Task-10 disproved the naive chained-resolvent conjecture (<code>factored_ok = false</code>). A cheaper-than-dense engine, if wanted, needs a different starting point &mdash; e.g. a transition-Liouville-space (superoperator) formulation that keeps the KMS/initial-state structure &mdash; not a patch of the current <code>'factored'</code> stage.</li>
+  <li><strong>Production ladder beyond e6 is user-left.</strong> e6 costs ~10 min/point but a full Tc scan at that rung is ~10 h wall time (<code>INVZ_SLOW</code>-gated, not run as part of routine verification).</li>
+  <li><strong>e17 and every &times;I8 rung are budget-refused</strong>, not attempted: dense-vertex cost scales ~N&#8308; and the smallest refused rung (e17) already projects to ~196 h under the 12 h gate.</li>
+  <li><strong>A3 real-axis continuation is deferred.</strong> <code>invzt_chi_realaxis</code> continues only the A1 scalar-&Sigma;; continuing the full <code>Vmat(i&omega;n)</code> to the real axis needs either direct real-axis kernel evaluation or a fitted continuation (documented in the function header, not implemented).</li>
+  <li><strong>A3 true-zero-field Tc is deferred.</strong> Mode <code>'a1'</code>/<code>'a3'</code> both require a symmetry-breaking transverse field (<code>invzt:a1ZeroField</code> below 1e-6 T); every reported A3 Tc-like number (including the A4 ladder's) is the small-Bx proxy (0.05 T), never a true B=0 solve. True zero-field physics stays with the projected closed form (<code>invz_odd_zero_field</code>).</li>
+  <li><strong>Deferred-Minor triage list.</strong> Several non-blocking Minors were logged across A0&ndash;A4 reviews (e.g. A0's filtered-flag root whitelist omitting <code>ellipsoid_demagn.m</code>, inert at <code>demag=0</code>) &mdash; see the Minors noted inline in each <code>docs/ODD-LOG.md</code> &sect;A0&ndash;&sect;A4 entry; none gate correctness, but a future pass should sweep them.</li>
+</ul>
+
+<h2 id="seealso">11 &middot; See also</h2>
+<ul class="tight">
+  <li>Plan: <code>../docs/superpowers/plans/2026-07-17-invz-tensor-full.md</code> (every design decision, hard mathematical constraints 1&ndash;9, global constraints, per-task acceptance criteria).</li>
+  <li>Measurement record: <code>../docs/ODD-LOG.md</code> &sect;A0&ndash;&sect;A4 (and &sect;P0&ndash;&sect;V4 for the projected-side ODD physics this module cross-validates against).</li>
+  <li>Framework: <code>../jensen_1z_framework.html</code> &sect;11 (ODD within 1/z) and &sect;11.8 in particular (the emergent-boundary test this module implements).</li>
+  <li>Projected module: <a href="../invz_projected/README.html#odd"><code>../invz_projected/README.html</code> &sect;1.9</a> (Tier-1/Tier-2 ODD, the parity target for A1 and the Tier-2 cross-validation target for A3/A4).</li>
+</ul>
+
+<hr>
+<p class="muted" style="font-size:.85rem;">Companion documents in this repository: <code>invz_tensor/SESSION-2026-07-18-invz-tensor-full.md</code> (human handoff note — why, execution story, what's left) and <code>../invz_projected/README.html</code> (the scalar sibling module this branch cross-validates against).</p>
+
+</div>
+</body>
+</html>

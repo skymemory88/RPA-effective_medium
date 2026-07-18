@@ -3,7 +3,7 @@
 **Date:** 2026-07-18 · **Branch:** `invz-1z-lihof4` · **Plan:** `docs/superpowers/plans/2026-07-17-invz-tensor-full.md` (v4, committed `c011a4f`)
 **Status:** All 15 plan tasks complete; final whole-branch review **Ready to merge: Yes** (0 Critical / 0 Important / 0 must-fix). Suites green.
 
-This note is the human handoff. The module reference (module map, mode ladder, flag surface, LOCKED conventions, headline results, open items) lives in `invz_tensor/README.md`; the measured physics log is `docs/ODD-LOG.md` §A0–§A4. This note adds the *why*, the execution story, and what's left.
+This note is the human handoff. The module reference (module map, mode ladder, flag surface, LOCKED conventions, headline results, open items) lives in `invz_tensor/README.html`; the measured physics log is `docs/ODD-LOG.md` §A0–§A4. This note adds the *why*, the execution story, and what's left.
 
 ---
 
