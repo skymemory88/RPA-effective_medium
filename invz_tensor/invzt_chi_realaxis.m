@@ -45,16 +45,28 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 %     explicit [nq,3] qvec -- rebuilds lat via INVZT_JQ_TENSOR at opts.dpRng
 %       (own cache namespace; see INVZT_JQ_TENSOR) and ALSO returns the
 %       per-q, sublattice-averaged site-diagonal cc response out.chi_cc_q
-%       [nq,nw] (mirrors INVZT_GCC_LATTICE's per-q diag4 mean, evaluated one
-%       q at a time rather than BZ-averaged together). out.chi_uniform is
-%       still populated via the SAME Jd uniform-mode construction (a
-%       q-grid-independent quantity, always available).
+%       [nq,nw], COMPLEX -- imag() is chi'' (positive up to the frozen-Kw
+%       caveat below) (contract parity with the projected INVZ_CHI_REALAXIS's
+%       chi_cc_q). The sublattice diag4 mean mirrors INVZT_GCC_LATTICE's
+%       pattern but WITHOUT its real(): that projection is Matsubara-axis-only
+%       and would delete the whole dissipative part here (fixed 2026-07-18,
+%       Codex review F1).
+%       out.chi_uniform is still populated via the SAME Jd uniform-mode
+%       construction (a q-grid-independent quantity, always available).
 %
 %   Returns:
 %     out.chi_uniform [3,3,nw] : S4-uniform-mode tensor response, ALL qsel.
-%     out.chi_cc_q    [nq,nw]  : per-q sublattice-averaged cc response;
-%                                populated ONLY for an explicit qvec (empty
-%                                [] for 'gamma_uniform'/'gamma').
+%     out.chi_cc_q    [nq,nw]  : COMPLEX per-q sublattice-averaged cc response
+%                                (imag = chi''; NB the full-Sigma frozen-Kw
+%                                continuation carries a known near-resonance
+%                                negative-chi'' artifact -- shared with
+%                                chi_uniform and the projected reference
+%                                scheme, e.g. -313 beside a +652 peak at T=1.6
+%                                K/B=2 T -- exact non-negativity holds in the
+%                                force_sigma0 bare-RPA limit; see
+%                                test_qsel_explicit_q_complex_response);
+%                                populated ONLY for an explicit qvec (empty []
+%                                for 'gamma_uniform'/'gamma').
 %     out.Sigma_w     [nw,1]   : the A1 scalar self-energy continuation.
 %
 %   B : scalar (transverse-along-a, historical) or [Bx By Bz] (T); validated
@@ -84,11 +96,11 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 %                                    the exact-identity gate.
 %
 %   SCOPE (v2, LOCKED): this is the A1 scalar-Sigma analytic continuation
-%   ONLY. It does NOT extend to A3: continuing the full Vmat(i*omega_n) needs
-%   either direct real-axis kernel evaluation (the tensor kernels accept
-%   complex frequency arguments) or a fitted continuation -- a separate future
-%   work item (docs/superpowers/plans/2026-07-17-invz-tensor-full.md Task 8,
-%   Task 12).
+%   ONLY. It does NOT extend to A2/A3: continuing the full Vmat(i*omega_n)
+%   needs either direct real-axis kernel evaluation (the tensor kernels
+%   accept complex frequency arguments) or a fitted continuation -- a
+%   separate future work item
+%   (docs/superpowers/plans/2026-07-17-invz-tensor-full.md Task 8, Task 12).
 %
 %   See also INVZT_SOLVE_POINT, INVZT_CHI_RPA, INVZT_CHI0_SPLIT,
 %   INVZT_JQ_TENSOR, INVZT_GCC_LATTICE, INVZ_CHI_REALAXIS (projected
@@ -103,6 +115,14 @@ Esplit   = getf(opts, 'Esplit', 0.4653);
 odd_req  = getf(opts, 'odd', pt.odd);
 force_sigma0 = isfield(opts, 'force_sigma0') && ~isempty(opts.force_sigma0) ...
     && ~isequal(opts.force_sigma0, false);
+
+ptmode = getf(pt, 'mode', 'a1');
+if ~strcmp(ptmode, 'a1')
+    error('invzt:realaxisMode', ['invzt_chi_realaxis is the A1 scalar-Sigma ' ...
+        'continuation ONLY (LOCKED scope; see the SCOPE box in this header): ' ...
+        'got pt.mode = ''%s''. Re-solve the point with mode ''a1''. Continuing ' ...
+        'the A2/A3 matrix objects is an open item (README section 10).'], ptmode);
+end
 
 if ~isequal(odd_req, pt.odd)
     error('invzt:oddMismatch', ['opts.odd (%s) must equal pt.odd (%s): ' ...
@@ -167,7 +187,7 @@ else
     qvec = qsel;
     nq   = size(qvec, 1);
     latq = invzt_jq_tensor(ion, qvec, struct('dpRng', dpRng, 'cache', cacheq));
-    out.chi_cc_q = zeros(nq, nw);
+    out.chi_cc_q = complex(zeros(nq, nw));
 end
 for k = 1:nw
     X = invzt_chi_rpa(ctil(:,:,k), Jpage);
@@ -177,7 +197,7 @@ for k = 1:nw
         for iq = 1:nq
             acc = 0;
             for s = 1:4
-                acc = acc + real(Xq(3*(s-1)+3, 3*(s-1)+3, iq));
+                acc = acc + Xq(3*(s-1)+3, 3*(s-1)+3, iq);
             end
             out.chi_cc_q(iq, k) = acc / 4;
         end
