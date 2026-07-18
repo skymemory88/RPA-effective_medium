@@ -138,23 +138,10 @@ for k = 1:nz
 end
 
 % --- frequency-consistent active-subspace projector (union over frequencies) ----
-%     G3 = sum_n Cn^H*Cn (Cn Hermitized ctil), a 3x3 PSD whose null space is exactly
-%     the intersection of the per-frequency null spaces, so range(G3) = union of
-%     active subspaces. eig gives an orthonormal basis; rank-reveal on sqrt(eig) (a
-%     magnitude scale) relative to the largest active channel.
-G3 = zeros(3);
-for k = 1:nz
-    Ck = (ctil(:,:,k) + ctil(:,:,k)')/2;                % Hermitized part (active-channel content)
-    G3 = G3 + Ck'*Ck;
-end
-G3 = (G3 + G3')/2;
-[V, dv] = eig(G3, 'vector');
-dv = real(dv);
-mag = sqrt(max(dv, 0));                                  % per-eigvec magnitude scale
-smax = max(mag);
-if smax <= 0, smax = 1; end                              % all-zero ctil guard (K stays 0)
-active = mag > rank_tol * smax;
-P = V(:, active);
+%     range(sum_n Cn^H*Cn) (Cn = Hermitized ctil) is exactly the UNION of the per-
+%     frequency active subspaces, rank-revealed relative to the largest active channel
+%     (shared policy with INVZT_SIGMA_TENSOR); see INVZT_ACTIVE_PROJECTOR.
+P = invzt_active_projector(ctil, rank_tol);
 r = size(P, 2);
 
 % --- (3): K = ctil^-1 - chi_bar^-1 via solves on the common active subspace ------

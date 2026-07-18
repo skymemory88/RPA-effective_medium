@@ -100,8 +100,11 @@ ops  = struct('a', si.Mx - Jexp(1)*eye(N), ...
 G0 = -invz_chi0z(si, T, 1i*wn, struct('elastic', true));        % [3,3,nwn] (Cartesian)
 
 % --- active-subspace projector of G0 (union over frequencies; shared A2 policy) --
-P = active_projector(G0, rtol);
+P = invzt_active_projector(G0, rtol);
 r = size(P, 2);
+% G0 and P are fixed for the whole outer loop, so the resummation's P'*G0*P is a
+% loop-invariant: precompute it ONCE here (pagectranspose(P) = P' per page).
+G0p_all = pagemtimes(pagemtimes(pagectranspose(P), G0), P);    % [r,r,nwn]
 
 % --- (3-precompute) connected Gamma4[npair,nc,nc,nwn,nl], Kmat-INDEPENDENT --------
 labs  = {'a', 'b', 'c'};  nc = 3;
@@ -163,7 +166,7 @@ cleaner = onCleanup(@() warning(wstate));  %#ok<NASGU>
 Fhist = cell(1, 0);  Xhist = cell(1, 0);
 Vnew = Vmat;
 for outer = 1:maxo
-    chi_til = resum_dyson(G0, Vmat, P);                         % symmetric bracket
+    chi_til = resum_dyson(G0p_all, Vmat, P);                    % symmetric bracket
     [Kmat, chi_bar, emtinfo] = invzt_emt_matrix(chi_til, lat_eff, struct('rank_tol', rtol));
     Vnew = contract_vertex(G4, Kmat, mu_i, nu_i, Lmax, nwn, nc, beta, dom);
     f  = Vnew - Vmat;
@@ -203,12 +206,12 @@ end
 %  Symmetric-bracket resummation on the active subspace P:
 %     chi_til = -G0 * ((G0 + Vmat) \ G0)   restricted to range(P), 0 on the complement.
 % ======================================================================= %
-function chi_til = resum_dyson(G0, Vmat, P)
-nwn = size(G0, 3);  r = size(P, 2);
+function chi_til = resum_dyson(G0p_all, Vmat, P)
+nwn = size(Vmat, 3);  r = size(P, 2);
 chi_til = complex(zeros(3, 3, nwn));
 if r == 0, return; end
 for k = 1:nwn
-    G0p = P' * G0(:,:,k) * P;                   % [r,r]
+    G0p = G0p_all(:,:,k);                        % [r,r] precomputed P'*G0*P
     Vp  = P' * Vmat(:,:,k) * P;
     G0til_p = G0p * ((G0p + Vp) \ G0p);         % LOCKED symmetric bracket
     chi_til(:,:,k) = -P * G0til_p * P';
@@ -246,23 +249,6 @@ for ip = iplist(:).'
     contr = sum(sum(sum(G4p .* Kb, 1), 2), 4);  % [1,1,nwn,1]
     Vmat(mu_i(ip), nu_i(ip), :) = reshape(contr, [1, 1, nwn]) / (2*beta);
 end
-end
-
-% ----- frequency-consistent active-subspace projector (union of ranges) -----
-function P = active_projector(X, rtol)
-nz = size(X, 3);
-G3 = zeros(3);
-for k = 1:nz
-    Ck = (X(:,:,k) + X(:,:,k)')/2;              % Hermitized channel content
-    G3 = G3 + Ck'*Ck;
-end
-G3 = (G3 + G3')/2;
-[V, dv] = eig(G3, 'vector');
-dv = real(dv);
-mag = sqrt(max(dv, 0));
-smax = max(mag);  if smax <= 0, smax = 1; end
-active = mag > rtol*smax;
-P = V(:, active);
 end
 
 % ----- session cache of Gamma4 (keyed+verified by the toy signature) -----

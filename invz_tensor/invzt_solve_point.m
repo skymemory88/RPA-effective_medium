@@ -114,7 +114,7 @@ odd = ~isfield(opts, 'odd') || isempty(opts.odd) || ~isequal(opts.odd, false);
 if ~(ischar(mode) || isstring(mode)) || ~ismember(char(mode), {'a1','a2','a3'})
     error('invzt:mode', ['invzt_solve_point implements modes ''a1'' (A1 projected-1/z ' ...
         'bridge), ''a2'' (A2 direct matrix effective medium) and ''a3'' (A3 genuine ' ...
-        'tensor 1/z self-energy from the exact four-point vertex); got %s.'], local_str(mode));
+        'tensor 1/z self-energy from the exact four-point vertex); got %s.'], invzt_str(mode));
 end
 mode = char(mode);
 emt_rank_tol = getf(opts, 'rank_tol', 1e-12);
@@ -521,12 +521,4 @@ si.E0 = E(1);
 si.transverse_mf = tmf;
 si.rung = rb.rung;
 si.dim_actual = rb.dim_actual;
-end
-
-function s = local_str(x)
-if ischar(x) || (isstring(x) && isscalar(x))
-    s = char(x);
-else
-    s = mat2str(x);
-end
 end

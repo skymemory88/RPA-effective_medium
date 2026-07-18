@@ -71,7 +71,7 @@ end
 
 if ~(ischar(parts) || isstring(parts)) || ~ismember(char(parts), {'full','dipole'})
     error('invzt:parts', 'opts.parts must be ''full'' or ''dipole''; got %s.', ...
-        local_str(parts));
+        invzt_str(parts));
 end
 parts = char(parts);
 isFull = strcmp(parts, 'full');
@@ -194,14 +194,6 @@ switch convstr
     case 'halfopen',         c = 1;
     case 'legacy_inclusive', c = 2;
     otherwise
-        error('invzt:conv', 'Unknown grid convention %s.', local_str(convstr));
-end
-end
-
-function s = local_str(x)
-if ischar(x) || (isstring(x) && isscalar(x))
-    s = char(x);
-else
-    s = mat2str(x);
+        error('invzt:conv', 'Unknown grid convention %s.', invzt_str(convstr));
 end
 end
