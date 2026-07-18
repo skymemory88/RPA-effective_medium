@@ -1290,3 +1290,17 @@ Plan v3. Commit 1239c33. Tensor CORE 26/26 (invz_projected off-path).
 **invzt_emt_matrix (DIRECT closure K = ctil^-1 - chibar^-1):** scalar reduction K_cc == invz_emt_scalar med.K to 7.8e-14 (POSITIVE sign, no flip); a2==a1 exact-identity on diagonal input holds EXACTLY (0.0) at the K-map level (verified by seeding a1 at the a2 root; the outer solve is multi-root at chi0_diag configs so the fixed-point Sigma0 itself is seed-sensitive). Physical (odd-on) matrix-medium content a2-a1: dSigma0 = +1.14e-5 (small; report, seed-sensitive).
 
 **Non-Hermiticity finding (physics, LOCKED):** chi0(iwn) is genuinely NON-Hermitian off the static slot -- off-static anti-Hermitian part 9.75% at Bx=0.5 T (the gyrotropic ~B response, imaginary-antisymmetric). K and chi_bar obey the transpose relation (constraint 9) X(-iwn)=X(iwn).' to ~1e-17, Hermitian only at wn=0. The A2 review CAUGHT and CORRECTED an internal plan contradiction (the v2 A2 tests asserted single-wn Hermiticity, contradicting constraint 9); the gyrotropic part is preserved, not symmetrized. pt.Kmat stores the full non-Hermitian K for A3.
+
+## A3 — Genuine tensor 1/z self-energy (T10-T12) (2026-07-18)
+
+Plan v3/v4. Commits 0cbe8d0 (T10 oracle) / 0f4c0ad (T11 engine+perf) / b22dd70 (T12 A3). Tensor CORE 43/43 (invz_projected off-path).
+
+**Vertex oracle (T10):** verify_tensor_vertex.py + vertex_oracle.json, 138/138 checks; dense reference correct + independent (GL quadrature vs analytic I3 ~1e-13). *** FACTORIZATION NOT ESTABLISHED (factored_ok=false): the naive O(N^3) resolvent chain mismatches dense by 1e15-1e17 (spurious poles, dropped I3/KMS structure) *** -> A3 is DENSE-ONLY.
+
+**Vertex engine (T11):** invzt_kernels + invzt_vertex4, dense, reproduces oracle to <=4e-15; KMS complex-signed log-folded exact @betaDelta=200; Jensen bridge V==G0.Sigma 2.1e-12. PERF GATE (dense, 12h budget): AFFORDABLE {three, e3, e6}; REFUSE {e17 ~196h, all xI8, e17xI8=136 ~5.9e5h}. e6 near boundary (9.86h).
+
+**A3 solver (T12): the framework SS11.8 emergence, SHARPENED.** The original slope>=2.3 gate was internally inconsistent with LOCKED constraint 8 (A3 whole-cc-Dyson+matrix-EMT vs A1 dom/rest+K-bookkeeping differ at O(1/z^2) -> crit-shift slope ~2 inherent). Emergence validated in TWO sectors instead:
+  - SCALAR (EXACT): A3 vertex -> invz_sigma at rho->0 = 3.24e-11 (<= 1e-8). Strongest single emergence statement.
+  - ODD (matched truncation): dress='dominant' (E1's dominant-only rule; transverse spectator PROVABLY bare via the toy reflection symmetry) reduces to A1/E1 -- dominant-dress ratio rd(1)=1.0159, full-A3 rf(1)=1.1132; the beyond-E1 excess COLLAPSES 1.113->1.016 (86% removed) confirming the transverse-spectator dressing; residual 1.6% (band |rd-1|=0.0159<=0.05) = the constraint-8 O(1/z^2) resummation ambiguity (resum_spread_crit -3.93e-2). Full-A3 slope 2.06 (O(1/z^2)-capped, REPORT).
+  SCOPE NOTE (per review): the ODD-sector HARD evidence is the single-lambda matched collapse/band + the exact rho->0 identity; the multi-lambda slope is report-only (constraint-8-capped). Do not overread as a 3-point asymptotic emergence.
+  Three-state contract (v3 option-a independent Delta1): (Delta1,m0,rho)->(Delta,M2,chiperp) EXACT. pt.Kmat consumed as-is (non-Hermitian, constraint 9). dress='full' adds the genuine beyond-E1 transverse dressing (rf=1.113): A3 is MORE complete than E1.
