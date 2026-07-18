@@ -54,6 +54,32 @@ out = invzt_run_ladder(ion, struct('rungs', {{'three','e3','e6','e17','e3xI8'}},
 verifyTrue(testCase, isstruct(out) && ~isempty(out.rungs));
 end
 
+function test_sigma_tensor_assembles_dim6(testCase)
+% REGRESSION GUARD (coordinator review): the A3 assembly must be N-adaptive in the
+% STATE space (numel(si.E)), NOT the toy's 3. A hardcoded eye(3) operator-centering in
+% invzt_sigma_tensor crashed the full-A3 solve for e6 (6x6 si.Mx) with
+% MATLAB:sizeDimensionsMustMatch -- a bug that hid behind INVZ_SLOW because T12 only
+% exercised N=3. Feed a SYNTHETIC dim-6 si through invzt_sigma_tensor (full dress) on a
+% TINY Matsubara grid and assert it ASSEMBLES (Vmat [3,3,nwn], finite) -- a cheap
+% structural guard (no full/production solve), the regression that should have existed.
+ion = invz_ion();  T = 1.6;  C = invz_const();  beta = 1/(C.kB*T);
+g = invzt_qgrid(4, 'halfopen');
+lat = invzt_jq_tensor(ion, g, struct('dpRng', 8, 'cache', false));
+N = 6;                                           % > 3: the dimension that used to crash
+E = [0; 0.02; 0.5; 0.9; 1.2; 1.6];               % distinct energies (ground near-pair + spread)
+p = exp(-beta*(E - E(1)));  p = p/sum(p);
+rng(20260718);
+si = struct('E', E, 'P', p, 'Mx', local_herm(N), 'My', local_herm(N), 'Mz', local_herm(N));
+si.Jexp = [real(sum(p.*diag(si.Mx))); real(sum(p.*diag(si.My))); real(sum(p.*diag(si.Mz)))];
+si.JzJz_fluct = real(sum(p.*diag(si.Mz*si.Mz))) - si.Jexp(3)^2;
+wn = 2*pi*(0:1).'/beta;                          % nwn = 2 -> Lmax = 1, cheap (n,l) grid
+out = invzt_sigma_tensor(si, T, lat, wn, beta, struct('max_outer', 3, 'dress', 'full'));
+verifyEqual(testCase, size(out.Vmat), [3 3 numel(wn)]);   % external Cartesian tensor stays 3x3
+verifyTrue(testCase, all(isfinite(out.Vmat(:))));
+fprintf('[dim-6 guard] invzt_sigma_tensor assembled N=%d: Vmat %s, max|V|=%.3g\n', ...
+    N, mat2str(size(out.Vmat)), max(abs(out.Vmat(:))));
+end
+
 function test_gamma4_equals_vertex4_cross_channels(testCase)
 % Task-12 review Minor #1 (brief resolution 8): the rho->0 scalar gate exercised only
 % the cc channel, but the ladder uses invzt_gamma4 (the cached Gamma4 precompute) at
@@ -95,4 +121,11 @@ for ip = 1:numel(ext)
 end
 fprintf('[gamma4==vertex4] worst |Gamma4 - vertex4 Gamma| over aa/ab/ac/bc/cc x {a,b,c}^2 = %.3e\n', worst);
 verifyLessThan(testCase, worst, 1e-11);
+end
+
+% ============================== helpers ============================== %
+function H = local_herm(N)
+% Generic N x N Hermitian operator (state-space dimension N, for the dim-6 guard).
+A = randn(N) + 1i*randn(N);
+H = (A + A')/2;
 end

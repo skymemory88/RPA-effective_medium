@@ -85,13 +85,19 @@ end
 dom = strcmp(char(dress), 'dominant');
 
 % --- (0) centred operators, bare local propagator -------------------------------
+% The single-ion STATE space has dimension N = numel(si.E) (3 for the toy/e3, 6 for
+% e6, 24 for e3xI8, ... up to 136); the centering identity must be N x N -- NOT the
+% external Cartesian 3 x 3 (which is the (mu,nu) tensor index, a separate axis). A
+% hardcoded eye(3) here is correct only at the toy dimension and crashes for any
+% larger rung (mirrors the dominant branch's eye(numel(di)) below).
+N    = numel(si.E);
 p    = si.P(:);
 Jexp = si.Jexp(:);
 es   = struct('E', si.E(:), 'p', p);
-ops  = struct('a', si.Mx - Jexp(1)*eye(3), ...
-              'b', si.My - Jexp(2)*eye(3), ...
-              'c', si.Mz - Jexp(3)*eye(3));
-G0 = -invz_chi0z(si, T, 1i*wn, struct('elastic', true));        % [3,3,nwn]
+ops  = struct('a', si.Mx - Jexp(1)*eye(N), ...
+              'b', si.My - Jexp(2)*eye(N), ...
+              'c', si.Mz - Jexp(3)*eye(N));
+G0 = -invz_chi0z(si, T, 1i*wn, struct('elastic', true));        % [3,3,nwn] (Cartesian)
 
 % --- active-subspace projector of G0 (union over frequencies; shared A2 policy) --
 P = active_projector(G0, rtol);
