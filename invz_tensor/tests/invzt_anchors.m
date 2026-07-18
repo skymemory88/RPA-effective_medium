@@ -93,4 +93,106 @@ A.dpRng_sensitivity.Jcc0      = [ 0.0064230405010920833 ...
 A.dpRng_sensitivity.Jaa0      = [ 0.0035111437823696070 ...
                                    0.0035104462050649012 ...
                                    0.0035117391190836412 ];
+
+% =============================================================================
+% TASK-14 HEADLINE ANCHORS (reproducibility pinning) -------------------------
+% =============================================================================
+% PROVENANCE: appended 2026-07-18 on branch invz-1z-lihof4 at git 856eeab
+% (Tasks 1-13 complete; A0-A4 all landed; docs/ODD-LOG.md SSA1/SSA3/SSA4). These
+% pin the CURRENT measured values -- the physics EVOLVED during execution, so
+% these are NOT the plan's original assumptions (in particular, Task 12's
+% original "lambda-slope >= 2.3" protocol was reframed mid-execution to the
+% matched-truncation ratio+collapse+band gate below; see docs/ODD-LOG.md SSA3
+% and the coordinator RESOLUTION in .superpowers/sdd/task-12-report.md -- the
+% superseded slope>=2.3 number is deliberately NOT pinned here). Same read-only
+% convention as the rest of this file: a mismatch on a future rerun is a
+% finding to escalate, never silently updated to match new code.
+
+% --- A1 proxy-Tc (SSA1, Task 7 commit 357e24c: invzt_critical.m / ---------
+%     invzt_tc_pm_extrap.m; reproducibility-gated by ------------------------
+%     test_headline_reproducibility_slow, tests/interop/ ----------------------
+%     test_invzt_critical_parity.m) ---------------------------------------
+% invzt_tc_pm_extrap on the SMALL-Bx proxy (0.05 T, ODD on), 16^3
+% legacy_inclusive grid, dpRng 30, T-grid 1.30:1/30:1.75, mode 'a1'/nlevels
+% 'std' (invzt_solve_point). T7 originally measured this to 1.5599 K
+% (commit 357e24c); the full-precision literal below is a Task-14 controller
+% re-run of the IDENTICAL protocol on THIS tree (ad hoc script, format long g,
+% 2026-07-18, 562 s), reproducing 1.5598631081277523 K -- agreement to 5
+% decimal places across the T8-T13 intervening commits (A1 untouched by A2-A4
+% work, as expected). Comparator: invz_odd_zero_field('full', 16^3, dpRng 30)
+% grid-matched projected closed form, NOT the production Richardson (12^3,24^3)
+% anchor 1.509 K (see the T7 report's grid-match nuance). [K]
+A.task14.a1_proxy_tc.Tc_tensor_16cubed          = 1.5598631081277523;
+A.task14.a1_proxy_tc.Tc_projected_16cubed       = 1.5442359495209526;
+A.task14.a1_proxy_tc.gap_tensor_minus_projected = 1.5598631081277523 - 1.5442359495209526;
+A.task14.a1_proxy_tc.grid     = 'legacy_inclusive';
+A.task14.a1_proxy_tc.n        = 16;
+A.task14.a1_proxy_tc.dpRng    = 30;
+A.task14.a1_proxy_tc.proxy_Bx_T = 0.05;
+
+% --- A3 SS11.8 emergence, MATCHED-TRUNCATION form (SSA3, Task 12 commit -----
+%     b22dd70: invzt_threestate.m / invzt_sigma_tensor.m; -------------------
+%     tests/test_invzt_a3_threestate.m) ------------------------------------
+% Two components, BOTH re-run at full precision by a Task-14 controller script
+% replicating the committed tests verbatim (format long g, 2026-07-18):
+%  (1) EXACT rho->0 scalar-compatibility identity (test_a3_scalar_compat_exact_
+%      rho0, T=1.6 K/Bx=0.5 T, 6^3 halfopen/dpRng 10): A3's Sigma_cc_equiv(1)
+%      vs the scalar invz_emt_scalar+invz_sigma chain on the SAME cc branch
+%      spectrum. Originally reported |diff|=3.24e-11.
+%  (2) MATCHED-TRUNCATION ODD-sector emergence (test_a3_emergence_matched_
+%      truncation, STABLE PM anchor T=2.0 K/Bx=0.5 T, same grid): rd(1) =
+%      dominant-dress-A3/A1 crit-shift ratio (matches E1 up to the O(1/z^2)
+%      constraint-8 resummation band); rf(1) = full-A3/A1 ratio (REPORT: the
+%      genuine beyond-E1 transverse-spectator dressing); collapse =
+%      |rd(1)-1|/|rf(1)-1| (transverse-dressing removal fraction); slope is a
+%      REPORT only (O(1/z^2)-capped, NOT the superseded >=2.3 gate).
+%      Originally reported rd(1)=1.0159, rf(1)=1.1132, collapse=0.140.
+A.task14.a3_emergence.rho0_A3_sigma_cc_equiv = 0.36403693825388755;
+A.task14.a3_emergence.rho0_scalar_sigma      = 0.364036938221526;
+A.task14.a3_emergence.rho0_absdiff           = 3.23615578778913e-11;
+A.task14.a3_emergence.rho0_T_K  = 1.6;
+A.task14.a3_emergence.rho0_Bx_T = 0.5;
+A.task14.a3_emergence.rd1 = 1.0158938460775333;
+A.task14.a3_emergence.rf1 = 1.1131532562138944;
+A.task14.a3_emergence.collapse             = 0.14046300220904873;   % |rd1-1|/|rf1-1|
+A.task14.a3_emergence.band_abs_rd1_minus1  = 0.015893846077533302;  % O(1/z^2) resummation band
+A.task14.a3_emergence.slope_report         = 2.0563526186836825;    % REPORT only
+A.task14.a3_emergence.resum_spread_crit    = -0.039327890102603319; % crit(dyson)-crit(additive)
+A.task14.a3_emergence.anchor_T_K  = 2.0;
+A.task14.a3_emergence.anchor_Bx_T = 0.5;
+A.task14.a3_emergence.grid  = 'halfopen';
+A.task14.a3_emergence.n     = 6;
+A.task14.a3_emergence.dpRng = 10;
+
+% --- A4 basis-defined ladder climb (SSA4, Task 13 commits 920f440 -----------
+%     [feat] + 9414425 [N-adaptive fix]; invzt_run_ladder.m) ----------------
+% Full-A3/A1 crit-shift ratio rf at the STABLE PM emergence anchor (2.0 K,
+% 0.5 T; same anchor as a3_emergence above), across rungs three (N=3 toy) ->
+% e3 (N=3 real CF basis) -> e6 (N=6 real CF basis, ~14 min/point, the largest
+% rung proven end-to-end): the beyond-E1 transverse-spectator-dressing share
+% (rf-1) CONVERGES 11.3% -> 2.6% as CF content grows, landing near the
+% projected Tier-2 share (~2.8%, REPORT comparator, never tuned). Virtual-
+% completeness deficit (chi0 rung vs full-136, DIAGNOSTIC not a bound) drops
+% monotonically e3 0.041 -> e6 0.002. crit_shift_odd (+ = ODD lowers Tc): the
+% e6 value is at THIS SAME (2.0 K, 0.5 T) anchor; the three/e3 values are at
+% the SEPARATE LOCKED validation point (1.6 K, 0.1 T, sub-critical regime, NOT
+% the clean-emergence point -- see the T13 report's regime note) since e6 was
+% not re-run there (budget: a single e6 point is ~14-15 min; T13 measured both
+% points for e6 already). These are PINNED AT THE PRECISION MEASURED AND
+% RECORDED in commits 920f440/9414425 / docs/ODD-LOG.md SSA4 (NOT re-derived
+% at higher precision here -- a fresh e6 rung re-run is production-ladder-scale
+% compute, out of this task's cheap-spot-check budget; see the Task-14 report
+% for the explicit time-budget rationale).
+A.task14.a4_ladder.anchor_T_K  = 2.0;
+A.task14.a4_ladder.anchor_Bx_T = 0.5;
+A.task14.a4_ladder.rf_three = 1.1132;
+A.task14.a4_ladder.rf_e3    = 1.1140;
+A.task14.a4_ladder.rf_e6    = 1.0263;
+A.task14.a4_ladder.vdef_e3  = 0.041;
+A.task14.a4_ladder.vdef_e6  = 0.002;
+A.task14.a4_ladder.validation_T_K  = 1.6;
+A.task14.a4_ladder.validation_Bx_T = 0.1;
+A.task14.a4_ladder.crit_shift_odd_e6_anchor           = 0.0547;
+A.task14.a4_ladder.crit_shift_odd_three_validation     = 0.02812;
+A.task14.a4_ladder.crit_shift_odd_e3_validation        = 0.03093;
 end
