@@ -111,13 +111,19 @@ chi_rest  = ~isfield(opts, 'chi_rest') || isempty(opts.chi_rest) || ~isequal(opt
 chi0_diag = isfield(opts, 'chi0_diag') && ~isempty(opts.chi0_diag) && ~isequal(opts.chi0_diag, false);
 odd = ~isfield(opts, 'odd') || isempty(opts.odd) || ~isequal(opts.odd, false);
 
-if ~(ischar(mode) || isstring(mode)) || ~ismember(char(mode), {'a1','a2'})
-    error('invzt:mode', ['invzt_solve_point currently implements modes ''a1'' ' ...
-        '(A1 projected-1/z bridge) and ''a2'' (A2 direct matrix effective medium; ' ...
-        'T12 adds ''a3''); got %s.'], local_str(mode));
+if ~(ischar(mode) || isstring(mode)) || ~ismember(char(mode), {'a1','a2','a3'})
+    error('invzt:mode', ['invzt_solve_point implements modes ''a1'' (A1 projected-1/z ' ...
+        'bridge), ''a2'' (A2 direct matrix effective medium) and ''a3'' (A3 genuine ' ...
+        'tensor 1/z self-energy from the exact four-point vertex); got %s.'], local_str(mode));
 end
 mode = char(mode);
 emt_rank_tol = getf(opts, 'rank_tol', 1e-12);
+
+% nlevels routes the single-ion construction: 'three' -> the explicit three-state toy
+% (invzt_threestate) for ALL modes (a1/a2/a3), hyperfine EXCLUDED at this rung; 'std'
+% (default) -> the full electronuclear invz_single_ion.
+nlevels    = getf(opts, 'nlevels', 'std');
+threestate = strcmp(char(nlevels), 'three');
 
 B = invz_field_vec(B);                     % scalar -> [B 0 0]; 3-vector passes through
 
@@ -141,9 +147,21 @@ Jxx0 = lat.info.Jaa0;                       % v3: single-ion / two-level get inf
 % --- (1) frequency grid, single-ion input, chi0 split, two-level response (once)
 [wn, wts, beta] = invz_matsubara(T, Ecut);
 nwn = numel(wn);
-si  = invz_single_ion(ion, T, B, struct('hyp', hyp, 'transverse_mf', tmf, 'Jxx0', Jxx0));
+if threestate
+    % Explicit three-state toy (hyperfine EXCLUDED). The toy targets invz_twolevel at
+    % the DEFAULT Jxx0 (a standalone electronic model), NOT lat.info.Jaa0 -- the doublet
+    % match absorbs the real transverse mean field into Delta1. tl derives from the toy.
+    ts_opts = struct('far_excited',    getf(opts, 'far_excited', false), ...
+                     'chiperp_scale',  getf(opts, 'chiperp_scale', 1), ...
+                     'chiperp_target', getf(opts, 'chiperp_target', 11.05), ...
+                     'transverse_mf',  getf(opts, 'transverse_mf', 'none'), 'hz', 0);
+    si = invzt_threestate(ion, T, B, ts_opts);
+    tl = local_tl_from_si(si, T);
+else
+    si = invz_single_ion(ion, T, B, struct('hyp', hyp, 'transverse_mf', tmf, 'Jxx0', Jxx0));
+    tl = invz_twolevel(ion, T, B, struct('Jxx0', Jxx0, 'transverse_mf', tmf));
+end
 [cdom, crest, mspec] = invzt_chi0_split(si, T, 1i*wn, struct('Esplit', Esplit));
-tl  = invz_twolevel(ion, T, B, struct('Jxx0', Jxx0, 'transverse_mf', tmf));
 g   = real(invz_g(tl, 1i*wn));
 
 % cc (3,3) branches are real at imaginary Matsubara frequency (conjugate pairs
@@ -176,7 +194,49 @@ if ~(oddmag < 1e-10*abs(lat.info.Jcc0))
         oddmag, 1e-10*abs(lat.info.Jcc0));
 end
 
-% --- (2) outer self-consistent Sigma loop: Anderson-accelerated damped mixing ---
+% --- (2) outer self-consistent loop -----------------------------------------------
+% A3 self-energy fields (populated only in mode 'a3'; NaN/[] otherwise).
+Vmat = [];  chi_til = [];  Sigma_cc_equiv = nan(nwn, 1);
+resum_spread_crit = NaN;  eps_el = NaN;  eps_cross = NaN;  a3_active_rank = NaN;
+ctil0_add = [];  a3_dress = '';
+
+if strcmp(mode, 'a3')
+    % ===== A3: genuine tensor 1/z self-energy from the exact four-point vertex =====
+    % invzt_sigma_tensor runs its OWN Vmat fixed-point (Gamma4 precomputed once); it
+    % consumes pt.Kmat's full non-Hermitian K AS-IS (constraint 9, never symmetrized).
+    st_opts = struct('rank_tol', emt_rank_tol);
+    if isfield(opts, 'mix_outer'), st_opts.mix_outer = opts.mix_outer; end
+    if isfield(opts, 'tol_outer'), st_opts.tol_outer = opts.tol_outer; end
+    if isfield(opts, 'max_outer'), st_opts.max_outer = opts.max_outer; end
+    if isfield(opts, 'Vmat_seed'), st_opts.Vmat_seed = opts.Vmat_seed; end
+    if isfield(opts, 'dress'),     st_opts.dress     = opts.dress;     end  % 'full'|'dominant' (E1 match)
+    st = invzt_sigma_tensor(si, T, lat_eff, wn, beta, st_opts);
+    Vmat = st.Vmat;  chi_til = st.chi_til;  Kmat = st.Kmat;  emtinfo = st.emtinfo;
+    Gloc = st.Gloc;  converged = st.converged;  outer = st.outer_iters;
+    a3_active_rank = st.active_rank;  a3_dress = st.dress;
+    diag4 = emtinfo.diag4_cc;
+    K = real(squeeze(Kmat(3,3,:)));                     % cc medium kernel (report)
+    G0cc = squeeze(st.G0(3,3,:));
+    ok = abs(G0cc) > emt_rank_tol;
+    Sigma_cc_equiv(ok) = squeeze(Vmat(3,3,ok)) ./ G0cc(ok);   % +V/G0 (v3 POSITIVE; DIAGNOSTIC)
+    Sigma = real(Sigma_cc_equiv);
+    lam = [NaN; NaN];  sg = struct('alpha', NaN, 'gamma', nan(nwn,1), 'Sigma', Sigma);
+    if strcmp(a3_dress, 'dominant')
+        % MATCHED truncation to E1: the crit's static renormalized chi uses the SAME
+        % dominant-renormalized/rest-bare split as A1/A2 (cdom/(1+Sigma) + crest), driven
+        % by A3's dominant self-energy -- NOT the whole-cc Dyson chi_til (which would
+        % renormalize the non-dominant crest_cc too, a beyond-E1 effect). This makes
+        % A3-dominant a faithful E1 truncation in BOTH the self-energy and the criticality.
+        ctil0 = herm_real(cdom(:,:,1) / (1 + real(Sigma_cc_equiv(1))) + crest(:,:,1));
+    else
+        ctil0 = herm_real(chi_til(:,:,1));             % full A3: static Dyson renormalized 3x3
+    end
+    ctil0_add = herm_real(st.chi_til_add(:,:,1));       % static additive renormalized 3x3
+    % monitors: elastic-sector control (constraint 7) and cross-Cartesian leakage
+    eps_el    = beta * abs(K(1)) * si.JzJz_fluct;
+    eps_cross = a3_eps_cross(Kmat, emt_rank_tol);
+else
+% --- a1/a2 outer self-consistent Sigma loop: Anderson-accelerated damped mixing ---
 %     The base update is the damped-mix step Sigma <- Sigma + mixo*(g(Sigma)-Sigma)
 %     (Anderson depth 1); depth mAA > 1 adds history extrapolation. Plain damped
 %     Picard is insufficient near the ORDERED-side near-singular RPA (a near-Gamma
@@ -236,20 +296,21 @@ for outer = 1:maxo
     end
 end
 
+    ctil0 = cdom(:,:,1) / (1 + Sigma(1)) + crest(:,:,1);     % static renormalized 3x3
+    if chi0_diag, ctil0 = diag(diag(ctil0)); end
+end                                                          % end mode branch
+
 % --- criticality (Hermitian eigendecomposition, rank-clipped PSD square root) ---
-ctil0 = cdom(:,:,1) / (1 + Sigma(1)) + crest(:,:,1);     % static renormalized 3x3
-if chi0_diag, ctil0 = diag(diag(ctil0)); end
-C12  = kron(eye(4), ctil0);
-[U, D] = eig((C12 + C12')/2);
-d = real(diag(D));
+% The static renormalized 3x3 ctil0 (A1/A2: cdom/(1+Sigma)+crest; A3: chi_til(:,:,1))
+% shares the zeros of I - C12*JtGamma on its active subspace (C12 = kron(eye(4),ctil0)
+% PSD). crit > 0 in the PM phase. A3 also reports the Cartesian-Dyson-vs-additive
+% resummation SPREAD in crit (constraint 8: the O(1/z^2) method error bar).
 rank_tol = 1e-12;
-clip = d < rank_tol;
-crit_clipped_mass = sum(abs(d(clip)));
-crit_active_rank  = sum(~clip);
-d(clip) = 0;
-S = U * diag(sqrt(max(d, 0))) * U';
-M = eye(size(S,1)) - S*lat.JtGamma*S;
-crit = min(real(eig((M + M')/2)));
+[crit, crit_clipped_mass, crit_active_rank] = local_crit(ctil0, lat.JtGamma, rank_tol);
+if strcmp(mode, 'a3')
+    crit_add = local_crit(ctil0_add, lat.JtGamma, rank_tol);
+    resum_spread_crit = crit - crit_add;
+end
 
 % --- assemble pt ----------------------------------------------------------------
 pt.Sigma0 = Sigma(1);
@@ -267,7 +328,16 @@ pt.crit = crit;
 pt.crit_clipped_mass = crit_clipped_mass;
 pt.crit_active_rank  = crit_active_rank;
 pt.sumrule_rel = abs(sum(wts.*Gloc)/beta + si.JzJz_fluct) / si.JzJz_fluct;
-pt.converged = converged && all(isfinite(Sigma)) && all(isfinite(K)) && all(isfinite(Gloc));
+if strcmp(mode, 'a3')
+    % Sigma_cc_equiv is a DIAGNOSTIC that is legitimately NaN where |G0_cc| <= rank_tol
+    % (high-frequency slots where the bare cc propagator decays to ~0), so it must NOT
+    % gate convergence -- the physical A3 objects (Vmat, chi_til, K, Gloc) do.
+    phys_finite = all(isfinite(Vmat(:))) && all(isfinite(chi_til(:))) ...
+        && all(isfinite(K)) && all(isfinite(Gloc));
+else
+    phys_finite = all(isfinite(Sigma)) && all(isfinite(K)) && all(isfinite(Gloc));
+end
+pt.converged = converged && phys_finite;
 pt.outer_iters = outer;
 % REPORT: sublattice spread of the site-diagonal cc average (S4 symmetry breaking;
 % only meaningful on a full symmetric BZ grid, ~0 there; noisy for explicit-q lat).
@@ -277,6 +347,16 @@ pt.odd  = odd;
 pt.chi_rest = chi_rest;
 pt.mspec = mspec;
 pt.Jxx0_used = Jxx0;
+pt.nlevels = char(nlevels);
+% --- A3-specific outputs (constraints 2/7/8) ------------------------------------
+pt.Sigma_cc_equiv    = Sigma_cc_equiv;      % +V_cc/G0_cc (v3 POSITIVE sign; DIAGNOSTIC ONLY)
+pt.Vmat              = Vmat;                 % [3,3,nwn] tensor self-energy correction (V=G0.Sigma)
+pt.chi_til           = chi_til;             % [3,3,nwn] Dyson renormalized local chi
+pt.resum_spread_crit = resum_spread_crit;   % crit(dyson) - crit(additive) -- O(1/z^2) error bar
+pt.eps_el            = eps_el;              % beta*|K_cc(0)|*<dJz^2> elastic-sector control (constraint 7)
+pt.eps_cross         = eps_cross;          % cross-Cartesian (c<->a,b) leakage in K, relative
+pt.a3_active_rank    = a3_active_rank;      % resummation active-subspace rank
+pt.a3_dress          = a3_dress;           % 'full' | 'dominant' (E1-matched truncation)
 % lat provenance (drop the bulk Jt pages; keep hash/conv/JtGamma/info/Jxx0_used).
 pt.lat = struct('qvec_hash', hash_vec(lat.qvec(:)), 'conv', lat.conv, ...
     'JtGamma', lat.JtGamma, 'info', lat.info, 'Jxx0_used', Jxx0);
@@ -288,6 +368,61 @@ function h = hash_vec(v)
 % Weak grid-identity hash, same formula as invz_cache_key / invzt_qgrid.
 v = v(:);
 h = sprintf('%dv_%08x', numel(v), typecast(single(sum(v.*(1:numel(v))')), 'uint32'));
+end
+
+function [crit, cmass, arank] = local_crit(ctil0, JtGamma, rank_tol)
+% Task-6 criticality: min eig of I - S*JtGamma*S with S the rank-clipped PSD square
+% root of C12 = kron(eye(4), ctil0) (Hermitian eigendecomposition, NOT sqrtm). crit
+% shares the zeros of I - C12*JtGamma on the active subspace; crit > 0 in the PM phase.
+C12 = kron(eye(4), (ctil0 + ctil0')/2);
+[U, D] = eig((C12 + C12')/2);
+d = real(diag(D));
+clip = d < rank_tol;
+cmass = sum(abs(d(clip)));
+arank = sum(~clip);
+d(clip) = 0;
+S = U * diag(sqrt(max(d, 0))) * U';
+M = eye(size(S,1)) - S*JtGamma*S;
+crit = min(real(eig((M + M')/2)));
+end
+
+function A = herm_real(A)
+% Real symmetric (Hermitian) part -- the static renormalized chi is Hermitian at
+% wn = 0 (the gyrotropic anti-Hermitian part vanishes there); used for crit.
+A = real((A + A')/2);
+end
+
+function e = a3_eps_cross(Kmat, tol)
+% Cross-Cartesian (c<->a,b) leakage monitor: the largest c<->(a,b) medium-kernel
+% magnitude relative to the largest |K_cc|, over all frequencies. ~0 with odd=false
+% (block-diagonal K); O(ODD strength) with odd=true.
+Kcc = max(abs(real(squeeze(Kmat(3,3,:)))));
+cross = 0;
+for pr = {[3 1],[3 2],[1 3],[2 3]}
+    ij = pr{1};
+    cross = max(cross, max(abs(squeeze(Kmat(ij(1), ij(2), :)))));
+end
+e = cross / max(Kcc, tol);
+end
+
+function tl = local_tl_from_si(si, T)
+% Two-level params derived from a three-state toy's ground doublet (mirrors
+% invz_twolevel's fields, but read off the toy's E/Mz rather than a fresh single-ion
+% solve). Used by A1/A2 when nlevels = 'three'.
+C = invz_const();
+tl.Delta = si.E(2) - si.E(1);
+if tl.Delta < 1e-4
+    error('invz:degenerateDoublet', ...
+        'Toy doublet splitting %.2e meV too small for the two-level self-energy.', tl.Delta);
+end
+tl.M2  = abs(si.Mz(1,2))^2;
+tl.m   = real(si.Mz(1,1));
+if abs(tl.m) > 1e-3
+    error('invz:orderedPhase', 'Nonzero toy diagonal moment m=%.3g: outside paramagnetic scope.', tl.m);
+end
+tl.n01 = tanh(tl.Delta/(2*C.kB*T));
+tl.g0  = 2*tl.n01/tl.Delta;
+tl.transverse_mf = 'toy';
 end
 
 function s = local_str(x)
