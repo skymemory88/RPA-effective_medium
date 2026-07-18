@@ -22,6 +22,16 @@ path terminates at the solve floor instead of re-sampling the identical
 grid; the driver preflights `Btol`/`Ttol`/`Twidth`/`Tgridstep` and Twin's
 floor; re-entrance evidence accumulates ACROSS adaptive attempts (`nseen`);
 `sigma_floor` gets direct threading coverage.
+**REV 4 (2026-07-19)**, after the third-pass review (T1–T3): the hard-window
+message assertion is rewritten as an explicit try/catch (`verifyError` does
+NOT return the caught `MException` — reviewer-reproduced `<missing>`); `winS`
+is captured only AFTER the floor-collapse guard so a collapse reports the
+previous really-sampled window; degenerate hard-window spans are rejected;
+the hard-window diagnostic and the adaptive floor termination gain CHEAP
+fast tests via the B = 0 all-invalid trick (pre-lattice `invzt:a1ZeroField`
+makes every sample invalid — no physics solves); wording/id-list drift
+cleaned (the seed is length-MATCHED and poisonous-VALUED, not
+"incompatible").
 
 ## Decisions
 
@@ -116,8 +126,10 @@ floor; re-entrance evidence accumulates ACROSS adaptive attempts (`nseen`);
 - **No `Sigma_seed` warm-start across a T-scan**: the Matsubara vector
   length is T-dependent (`invzt_critical` seeds only because "T fixed =>
   length always fits", its header). A caller-supplied `Sigma_seed` is
-  stripped; the slow round-trip test passes a deliberately incompatible
-  seed to prove the strip.
+  stripped; the slow round-trip test proves the strip with a seed that is
+  length-MATCHED to the window's top endpoint but poisonous in VALUE (NaN)
+  — a wrong-LENGTH seed is silently ignored by the solver's
+  `numel == nwn` guard and proves nothing (third-review wording fix).
 - **`invzt_crit_at`'s guard paths are pre-lattice**: `invzt_solve_point`
   validates `opts.mode` and the zero-transverse-field guard BEFORE touching
   `lat`, so sampler-contract tests run in milliseconds with dummy structs.
@@ -341,7 +353,8 @@ function [tc, out] = invzt_critical_T(ion, B, lat, opts)
 %   upper crossing in a later window must still warn).
 %
 %   OPTIONS (getf defaults; every other field forwards to INVZT_SOLVE_POINT):
-%     window    []     HARD [Tlo Thi] bound (K); validated; no sliding.
+%     window    []     HARD [Tlo Thi] bound (K); validated (degenerate spans
+%                      Thi - Tlo <= 1e-9 rejected); no sliding.
 %     Tc0       --     zero-field Tc anchor (K) for the adaptive window;
 %                      REQUIRED (finite positive scalar > the solve floor)
 %                      when window is absent.
@@ -361,7 +374,9 @@ function [tc, out] = invzt_critical_T(ion, B, lat, opts)
 %   without a crossing, adaptive attempts exhausted, the window collapsed at
 %   the solve floor, or a no-valid-voter window already at the floor --
 %   nothing below left to expose, second review R3). Bracket messages always
-%   report the last SAMPLED window.
+%   report the last SAMPLED window: winS is captured only AFTER the collapse
+%   guard confirms a grid will be evaluated, so a floor collapse reports the
+%   previous attempt's really-sampled window (third review T2).
 %
 %   See also INVZT_CRITICAL (fixed-T field cut), INVZT_TC_PICK,
 %   INVZT_CRIT_AT, INVZT_TC_PM_EXTRAP, INVZ_REFINE_CROSSING,
@@ -387,9 +402,9 @@ hardwin = isfield(opts, 'window') && ~isempty(opts.window);
 if hardwin
     win = opts.window;
     if ~(isnumeric(win) && isreal(win) && numel(win) == 2 && all(isfinite(win(:))) ...
-            && win(2) > win(1) && win(1) > 0)
+            && win(2) - win(1) > 1e-9 && win(1) > 0)
         error('invzt:tcWindow', ...
-            'opts.window must be finite real [Tlo Thi] with 0 < Tlo < Thi; got %s.', ...
+            'opts.window must be finite real [Tlo Thi] with 0 < Tlo < Thi (span > 1e-9); got %s.', ...
             invzt_str(win));
     end
     if win(2) <= Tmin
@@ -415,8 +430,10 @@ nseen = 0;                                      % boundary indicators ACROSS att
 winS  = [Tlo Thi];                              % last SAMPLED window (reporting, R2)
 for attempt = 1:nattempt
     Tlo = max(Tlo, Tmin);
-    winS = [Tlo Thi];
     if Thi <= Tlo + 1e-9, break; end            % collapsed at the floor -> invzt:bracket
+                                                % (winS keeps the PREVIOUS attempt's
+                                                % really-sampled window -- T2)
+    winS = [Tlo Thi];                           % captured only when a grid WILL run
     ng  = max(5, round((Thi - Tlo)/gstep) + 1);
     Tg  = linspace(Tlo, Thi, ng);
     c   = nan(1, ng);  ok = false(1, ng);
@@ -721,7 +738,7 @@ branch now covers that region properly).
 Standard CORE `setupOnce` boilerplate. **Five fast** test functions (pure
 core policy ×2, validation, sampler contract, refine-crossing helper) and
 **two `INVZ_SLOW`** integration gates (odd-off Bc↔Tc round-trip with a
-deliberately incompatible `Sigma_seed` and `out`-field assertions; a
+length-MATCHED poisonous `Sigma_seed` and `out`-field assertions; a
 committed odd-on T-cut). Full test code lives in the implementation plan
 (Task 2 Step 1); the acceptance matrix:
 
@@ -729,7 +746,7 @@ committed odd-on T-cut). Full test code lives in the implementation plan
 |---|---|---|
 | Crossing policy | `[-1 1]` bracket; `[1 -1 1]` highest + ncross 2; all-PM down; all-ordered up; re-entrant lower leg `[1 1 -1 -1]` up; singletons | Bc↔Tc round-trip, `AbsTol` 0.05 K |
 | Exact zeros | `[-1 0 1]` zero, ncross 1; zero-run `[-1 0 0 1]`; `[1 0 -1]` up; zero above bracket `[-1 1 -1 0 1]`; lone `0` | — |
-| Validation | `invzt_str(struct())` placeholder (the hardened formatter); `invzt:tcAnchor` (missing/vector/complex/negative/below-floor `Tc0`); `invzt:tcWindow` (reversed/struct/below-floor); `invzt:tcOpts` (zero gridstep, negative tol, Inf width) — malformed-opts fixtures built by FIELD ASSIGNMENT (the `struct('f',[a b])` constructor makes struct arrays) | hard window `[1.0 1.8]` used by the round-trip; deep-ordered hard window errors `invzt:bracket` whose MESSAGE reports the unmutated user window `[0.250, 0.450]` (one pass, no slide-mutated diagnostics — F4 + R2 end-to-end, in the odd-on test) |
+| Validation | `invzt_str(struct())` placeholder (the hardened formatter); `invzt:tcAnchor` (missing/vector/complex/negative/below-floor `Tc0`); `invzt:tcWindow` (reversed/struct/below-floor); `invzt:tcOpts` (zero gridstep, negative tol, Inf width) — malformed-opts fixtures built by FIELD ASSIGNMENT (the `struct('f',[a b])` constructor makes struct arrays); CHEAP bracket diagnostics via the B = 0 all-invalid trick (pre-lattice `invzt:a1ZeroField`, dummy `lat`, no solves): hard-window `invzt:bracket` message reports the EXACT user window, and the adaptive no-valid grow path terminates at the floor (T1/T3) | hard window `[1.0 1.8]` used by the round-trip; deep-ordered hard window errors `invzt:bracket` whose MESSAGE reports the unmutated user window `[0.250, 0.450]` (one pass, no slide-mutated diagnostics — F4 + R2 end-to-end, in the odd-on test) |
 | Sampler | zero-field absorbed (`ok=false`, `c=NaN`); bad mode rethrows `invzt:mode` — both pre-lattice, dummy `lat` | valid votes on both signs (implicit in round-trip); `sigma_floor = Inf` invalidates a finite-crit converged point (threading + rejection, one solve — R6) |
 | Helper | `invz_refine_crossing`: linear bracket to `1e-3`; interior dead-zone with midpoint recovery/interp fallback | — |
 | Seed | — | POISONOUS NaN seed, length-matched to the top endpoint's Matsubara count (a wrong-length seed is silently ignored by the solver's `numel == nwn` guard — a 7-element seed proves NOTHING, second review R1); with the strip, `out.ok(end)` stays a valid voter |
@@ -825,8 +842,8 @@ after.
 - **F3 (High) — accepted.** The pure core enables the full fast acceptance
   matrix; sampler-contract tests ride the verified pre-lattice guard paths;
   direct `invz_refine_crossing` test added in CORE (PROJECTED's frozen
-  count is a repo invariant); seed-strip proven by an incompatible seed in
-  the slow round-trip; odd-on T-cut is now a COMMITTED `INVZ_SLOW` test,
+  count is a repo invariant); seed-strip proven by a length-MATCHED
+  poisonous seed in the slow round-trip; odd-on T-cut is now a COMMITTED `INVZ_SLOW` test,
   not just the throwaway smoke.
 - **F4 (Medium) — accepted, reviewer's preferred option**: explicit window
   = hard bound, no sliding; adaptive mode slides. Documented in the finder
@@ -862,7 +879,8 @@ after.
   identical floor-clamped grid for the remaining attempt budget. Fixed:
   terminate when the sampled `Tlo` is already at the floor. (The reviewer's
   optional pure window-transition helper was declined as over-engineering
-  for a four-line switch; the floor guard is integration-covered only.)
+  for a four-line switch; the floor guard is FAST-covered via the B = 0
+  all-invalid trick — third review T3.)
 - **R4 (Medium) — accepted**: `Btol`/`Ttol`/`Twidth`/`Tgridstep` preflighted
   as finite positive real scalars with stable driver identifiers, and Twin
   must reach above the 0.02 K solve floor — all before the lattice build
@@ -874,6 +892,25 @@ after.
 - **R6 (Low) — accepted**: direct `sigma_floor` coverage added to the slow
   round-trip (one extra solve: `sigma_floor = Inf` must yield finite `c`
   with `ok = false`).
+
+## Third-pass review dispositions (T1–T3, 2026-07-19)
+
+- **T1 (High) — accepted, reviewer-reproduced**: MATLAB's `verifyError`
+  outputs are the evaluated function's outputs (`<missing>` when it throws),
+  never the caught `MException` — the rev-3 message assertion failed on
+  CORRECT behavior. Fixed: explicit try/catch asserting identifier AND
+  message; plus the reviewer's cheap variant adopted (B = 0 + dummy `lat`
+  makes every sample invalid pre-lattice, exercising the hard-window
+  diagnostic with zero physics solves).
+- **T2 (Medium) — accepted, confirmed in the rev-3 block**: `winS` was
+  assigned before the collapse guard, so a floor collapse reported a
+  never-sampled degenerate pair as the "last sampled window". Fixed:
+  capture after the guard; degenerate hard-window spans (≤ 1e-9) rejected
+  at validation.
+- **T3 (Low) — accepted**: adaptive floor termination now fast-covered
+  (same B = 0 trick, `Tc0` just above the floor); the plan's error-policy
+  list gains the four driver control ids; every "incompatible seed" phrase
+  corrected to length-MATCHED / poisonous-VALUED.
 
 ## Out of scope
 
