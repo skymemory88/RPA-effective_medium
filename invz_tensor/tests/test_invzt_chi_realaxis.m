@@ -91,3 +91,58 @@ verifyTrue(testCase, all(isfinite(out.chi_uniform(:))));
 outU = invzt_chi_realaxis(ion, T, B, pt, w, struct('odd', false));
 verifyEqual(testCase, out.chi_uniform, outU.chi_uniform, 'RelTol', 1e-12);
 end
+
+function test_qsel_explicit_q_complex_response(testCase)
+% F1 regression (Codex review 2026-07-18): the explicit-q response must keep
+% its imaginary (dissipative) part on the real axis. The pre-fix code
+% real()-projected each site-diagonal element (a Matsubara-pattern transplant
+% from invzt_gcc_lattice, where real() is a legitimate noise-clean), making
+% chi_cc_q identically real and every q-path chi'' map zero.
+ion = invz_ion();  T = 1.6;  B = [2 0 0];
+g6 = invzt_qgrid(6, 'halfopen');
+lat = invzt_jq_tensor(ion, g6, struct('dpRng', 10, 'cache', true));
+pt = invzt_solve_point(ion, T, B, lat, struct('odd', false));
+w = (0.05:0.05:0.55).';
+qlist = [0.25 0 0; 0.1 0.2 0.3];
+out = invzt_chi_realaxis(ion, T, B, pt, w, ...
+    struct('odd', false, 'qsel', qlist, 'dpRng', 10, 'cache', false));
+verifyFalse(testCase, isreal(out.chi_cc_q), ...
+    'chi_cc_q lost its imaginary (dissipative) part');
+mx = max(imag(out.chi_cc_q(:)));
+verifyGreaterThan(testCase, mx, 1e-6, ...
+    'no positive dissipative weight anywhere on the q list');
+% NOTE: no global chi''>=0 gate on the full-Sigma call above. The frozen-Kw
+% A1 continuation (Kw seeded at Gamma, held fixed across the whole w grid --
+% see this function's own SCOPE box) has a known near-resonance negative-chi''
+% lobe at these (T,B,q) -- e.g. -312.9 alongside a +652.5 peak two grid points
+% away -- shared identically by out.chi_uniform (an untouched code path) and
+% by the projected reference's same Kw-seeding scheme. It is NOT introduced by
+% this fix and is out of scope to repair here; tracked as a known limitation.
+% The causality/passivity gate instead runs below on the force_sigma0
+% bare-chi0 RPA response, which is a manifestly passive equilibrium response
+% (Sigma_w == 0 identically) while still exercising the identical complex
+% accumulation path this fix touched -- a sign flip in the accumulation would
+% make imF <= 0 everywhere and fail this hard.
+outF = invzt_chi_realaxis(ion, T, B, pt, w, ...
+    struct('odd', false, 'qsel', qlist, 'dpRng', 10, 'cache', false, 'force_sigma0', true));
+imF = imag(outF.chi_cc_q);
+mxF = max(imF(:));
+verifyGreaterThan(testCase, mxF, 1e-6, 'no dissipative weight in the bare-RPA limit');
+verifyGreaterThan(testCase, min(imF(:)), -1e-6*mxF, ...
+    'bare-RPA chi'''' must be non-negative for w > 0 (passive response)');
+end
+
+function test_realaxis_rejects_non_a1_point(testCase)
+% invzt_chi_realaxis is the A1 scalar-Sigma continuation ONLY (LOCKED scope):
+% an A2/A3 point must be rejected loudly -- its alpha/lambda/K fields are
+% matrix or diagnostic objects that would otherwise produce silent garbage
+% or all-NaN spectra (Codex review F3).
+ion = invz_ion();  T = 1.6;  B = [2 0 0];
+g6 = invzt_qgrid(6, 'halfopen');
+lat = invzt_jq_tensor(ion, g6, struct('dpRng', 10, 'cache', true));
+pt2 = invzt_solve_point(ion, T, B, lat, struct('odd', false, 'mode', 'a2'));
+w = (0.1:0.1:0.3).';
+verifyError(testCase, ...
+    @() invzt_chi_realaxis(ion, T, B, pt2, w, struct('odd', false)), ...
+    'invzt:realaxisMode');
+end
