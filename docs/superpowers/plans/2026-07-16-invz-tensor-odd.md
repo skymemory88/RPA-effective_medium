@@ -1,5 +1,14 @@
 # invz_tensor — Full-Tensor 1/z ODD Branch (Appendix A: A0+A1 + Tier 2) Implementation Plan
 
+> **SUPERSEDED 2026-07-17** by `2026-07-17-invz-tensor-full.md` (A0–A4). That plan absorbs the
+> A0/A1 layer (updated to consume the now-implemented projected ODD functions as parity targets),
+> fixes two physics defects here — the Task-8 additive "(a)/(b)/(c)" ΔTc decomposition (ill-posed
+> per the uniform-shift theorem, framework §11.3/§11.6) and the Task-7 K formula (must be defined
+> against the renormalized propagator: K = 1/G_loc − 1/G̃₀, G̃₀ = −[χ_dom/(1+Σ)+χ_rest]_cc) —
+> drops the Tier-2-additive re-implementation (Tier-2 physics re-enters via the A3 mixed
+> cumulants), and adds A2 (matrix EMT) + A3 (tensor Σ) + A4 (state-space ladder). Do not execute
+> this document.
+
 > **STATUS: DEFERRED (user decision, 2026-07-16).** The active ODD stream is the
 > main body of `odd_implementation_plan.html` executed against `invz_projected/`
 > — see `2026-07-16-invz-odd-mainbody.md`. This Appendix-A plan is kept as the
