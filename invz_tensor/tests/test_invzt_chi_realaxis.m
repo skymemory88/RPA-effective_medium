@@ -132,15 +132,74 @@ verifyGreaterThan(testCase, min(imF(:)), -1e-6*mxF, ...
     'bare-RPA chi'''' must be non-negative for w > 0 (passive response)');
 end
 
+function test_qsel_explicit_q_odd_mask(testCase)
+% R1 regression (2026-07-18 second Codex review): the explicit-q branch
+% rebuilds latq = invzt_jq_tensor(...) and must apply the SAME odd=false
+% Cartesian-off-diagonal mask (INVZT_ODD_MASK) that invzt_solve_point applied
+% to lat.Jt before solving -- otherwise an odd=false point gets ODD-on
+% couplings at finite q (measured 17.2% response error by the reviewer).
+ion = invz_ion();  T = 1.6;  B = [2 0 0];
+g6 = invzt_qgrid(6, 'halfopen');
+lat = invzt_jq_tensor(ion, g6, struct('dpRng', 10, 'cache', true));
+pt0 = invzt_solve_point(ion, T, B, lat, struct('odd', false));
+w = (0.1:0.1:0.3).';
+qlist = [0.25 0 0; 0.1 0.2 0.3];
+out = invzt_chi_realaxis(ion, T, B, pt0, w, ...
+    struct('odd', false, 'qsel', qlist, 'dpRng', 10, 'cache', false, 'force_sigma0', true));
+
+% --- manual reconstruction mirroring invzt_chi_realaxis's exact call sequence,
+%     with force_sigma0 so Sigma_w == 0 identically and ctil == chi0_split's
+%     own cdom+crest (reconstructible without touching pt.alpha/lambda/K) ----
+eta    = 5e-3;      % invzt_chi_realaxis's default opts.eta
+Esplit = 0.4653;    % invzt_chi_realaxis's default opts.Esplit
+nw = numel(w);
+z  = w + 1i*eta;
+[cdom, crest] = invzt_chi0_split(pt0.si, T, z, struct('Esplit', Esplit, 'elastic', false));
+if ~pt0.chi_rest
+    crest = zeros(size(crest));
+end
+ctil = cdom + crest;                                     % Sw == 0 (force_sigma0)
+latq = invzt_jq_tensor(ion, qlist, struct('dpRng', 10, 'cache', false));
+nq = size(qlist, 1);
+chi_masked   = complex(zeros(nq, nw));
+chi_unmasked = complex(zeros(nq, nw));
+Jmasked = invzt_odd_mask(latq.Jt);
+for k = 1:nw
+    Xm = invzt_chi_rpa(ctil(:,:,k), Jmasked);
+    Xu = invzt_chi_rpa(ctil(:,:,k), latq.Jt);
+    for iq = 1:nq
+        accm = 0;  accu = 0;
+        for s = 1:4
+            accm = accm + Xm(3*(s-1)+3, 3*(s-1)+3, iq);
+            accu = accu + Xu(3*(s-1)+3, 3*(s-1)+3, iq);
+        end
+        chi_masked(iq, k)   = accm / 4;
+        chi_unmasked(iq, k) = accu / 4;
+    end
+end
+
+verifyEqual(testCase, out.chi_cc_q, chi_masked, 'RelTol', 1e-12, 'AbsTol', 1e-12);
+
+% The masked and unmasked routes must differ materially -- proves the mask is
+% load-bearing (RED against the pre-fix unmasked code).
+reldiff = abs(chi_masked - chi_unmasked) ./ max(abs(chi_masked), abs(chi_unmasked));
+verifyGreaterThan(testCase, max(reldiff(:)), 0.01, ...
+    'masked vs unmasked explicit-q response differs by <1%% -- mask not load-bearing at these parameters');
+end
+
 function test_realaxis_rejects_non_a1_point(testCase)
 % invzt_chi_realaxis is the A1 scalar-Sigma continuation ONLY (LOCKED scope):
 % an A2/A3 point must be rejected loudly -- its alpha/lambda/K fields are
 % matrix or diagnostic objects that would otherwise produce silent garbage
-% or all-NaN spectra (Codex review F3).
+% or all-NaN spectra (Codex review F3). R6 (2026-07-18 second review): the
+% synthetic pt.mode override below isolates the guard from A2 solver
+% behavior -- it does not need a real A2 solve to exercise the mode check.
 ion = invz_ion();  T = 1.6;  B = [2 0 0];
 g6 = invzt_qgrid(6, 'halfopen');
 lat = invzt_jq_tensor(ion, g6, struct('dpRng', 10, 'cache', true));
-pt2 = invzt_solve_point(ion, T, B, lat, struct('odd', false, 'mode', 'a2'));
+pt1 = invzt_solve_point(ion, T, B, lat, struct('odd', false));
+pt2 = pt1;
+pt2.mode = 'a2';
 w = (0.1:0.1:0.3).';
 verifyError(testCase, ...
     @() invzt_chi_realaxis(ion, T, B, pt2, w, struct('odd', false)), ...

@@ -90,6 +90,17 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 %                                    'invzt:oddMismatch' (Sigma_w/alpha/lambda/K
 %                                    already bake in the odd flag used at solve
 %                                    time; omitting opts.odd skips the check).
+%                                    odd=false ALSO applies INVZT_ODD_MASK's
+%                                    Cartesian-off-diagonal mask to the coupling
+%                                    tensor consumed at finite q ('gamma' and
+%                                    explicit-qvec Jpage) -- the SAME geometric
+%                                    rule INVZT_SOLVE_POINT applies to lat.Jt
+%                                    before solving, not merely a bookkeeping
+%                                    check (R1, 2026-07-18 second review; a
+%                                    pre-fix odd=false point got ODD-on
+%                                    couplings at finite q). 'gamma_uniform' is
+%                                    unaffected: its Jd page is Cartesian-
+%                                    diagonal by construction.
 %     force_sigma0 false           : TEST HOOK. Forces Sigma_w = 0 identically
 %                                    (bypasses pt.alpha/lambda/K entirely),
 %                                    isolating the bare-chi0 RPA limit used by
@@ -171,9 +182,16 @@ if ischar(qsel) || isstring(qsel)
     qsel = char(qsel);
     switch qsel
         case 'gamma_uniform'
-            Jpage = Jd;
+            Jpage = Jd;                              % Cartesian-diagonal by construction; no mask
         case 'gamma'
             Jpage = pt.lat.JtGamma;
+            if ~pt.odd
+                % Same odd=false rule INVZT_SOLVE_POINT applies to lat.Jt before solving
+                % (R1, 2026-07-18 second review), applied here for uniformity -- a PROVABLE
+                % no-op at Gamma: invzt_solve_point already asserts JtGamma's ODD (c<->a,b)
+                % blocks vanish there by C2 symmetry, so masking changes nothing numerically.
+                Jpage = invzt_odd_mask(Jpage);
+            end
         otherwise
             error('invzt:qsel', ['opts.qsel must be ''gamma_uniform'', ''gamma'', ' ...
                 'or an [nq,3] numeric qvec; got string ''%s''.'], qsel);
@@ -187,6 +205,14 @@ else
     qvec = qsel;
     nq   = size(qvec, 1);
     latq = invzt_jq_tensor(ion, qvec, struct('dpRng', dpRng, 'cache', cacheq));
+    if ~pt.odd
+        % R1 fix (2026-07-18 second Codex review): the pre-fix code consumed
+        % latq.Jt UNMASKED here, so an odd=false point got ODD-on couplings at
+        % finite q (17.2% response error measured by the review). Apply the
+        % SAME Cartesian-off-diagonal mask INVZT_SOLVE_POINT applies to lat.Jt
+        % before solving.
+        latq.Jt = invzt_odd_mask(latq.Jt);
+    end
     out.chi_cc_q = complex(zeros(nq, nw));
 end
 for k = 1:nw
