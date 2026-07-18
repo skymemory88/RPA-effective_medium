@@ -13,6 +13,15 @@ current projected algorithm, shared helpers) explicitly selected.
 and MATLAB R2025a behavior before acceptance) — dispositions in the
 "Review dispositions" section; the Component code blocks below are the
 post-review, governing versions.
+**REV 3 (2026-07-19)**, after the second-pass review (same file, R1–R6, all
+verified before acceptance): the seed-strip test was a FALSE PROOF (the
+solver silently ignores wrong-length seeds — now a poisonous length-matched
+NaN seed asserting the endpoint stays valid); hard windows no longer mutate
+their reported window (break before the slide switch); the no-valid `grow`
+path terminates at the solve floor instead of re-sampling the identical
+grid; the driver preflights `Btol`/`Ttol`/`Twidth`/`Tgridstep` and Twin's
+floor; re-entrance evidence accumulates ACROSS adaptive attempts (`nseen`);
+`sigma_floor` gets direct threading coverage.
 
 ## Decisions
 
@@ -321,11 +330,15 @@ function [tc, out] = invzt_critical_T(ion, B, lat, opts)
 %   from one temperature does not fit another (INVZT_CRITICAL may seed only
 %   because its T is fixed).
 %
-%   RE-ENTRANCE: more than one boundary indicator among the final window's
-%   voters (INVZT_TC_PICK's ncross: strict sign flips + exactly-critical
-%   runs) warns invzt:multipleCrossings and returns the highest-T root
-%   (candidate hyperfine re-entrance is physically reported at low field --
-%   report, never mask).
+%   RE-ENTRANCE: boundary indicators (INVZT_TC_PICK's ncross: strict sign
+%   flips + exactly-critical runs) are ACCUMULATED across adaptive attempts
+%   (within-window indicators never span windows: crossing pairs are
+%   intra-window, and an exact zero at a window top returns immediately so
+%   it is never re-counted) -- more than one across the whole scan warns
+%   invzt:multipleCrossings and the highest-T root is returned (candidate
+%   hyperfine re-entrance is physically reported at low field -- report,
+%   never mask; second review R5: a down-leg seen in one window and the
+%   upper crossing in a later window must still warn).
 %
 %   OPTIONS (getf defaults; every other field forwards to INVZT_SOLVE_POINT):
 %     window    []     HARD [Tlo Thi] bound (K); validated; no sliding.
@@ -337,15 +350,18 @@ function [tc, out] = invzt_critical_T(ion, B, lat, opts)
 %     tol       0.005  crossing refinement tolerance (K); finite positive
 %                      real scalar.
 %
-%   out: .Tg/.c/.ok (final window's samples, incl. invalid ones), .window
-%   (final [Tlo Thi]), .ncross (boundary indicators among the voters),
+%   out: .Tg/.c/.ok (the last SAMPLED window's samples, incl. invalid ones),
+%   .window (the last SAMPLED [Tlo Thi] -- never a slide-mutated pair, second
+%   review R2), .ncross (boundary indicators accumulated across the scan),
 %   .B (validated field row).
 %
 %   ERRORS invzt:tcOpts (malformed width/gridstep/tol), invzt:tcWindow
 %   (malformed or below-floor opts.window), invzt:tcAnchor (adaptive mode
 %   without a usable Tc0), invzt:bracket (no returnable root: hard window
-%   without a crossing, adaptive attempts exhausted, or the window collapsed
-%   at the solve floor).
+%   without a crossing, adaptive attempts exhausted, the window collapsed at
+%   the solve floor, or a no-valid-voter window already at the floor --
+%   nothing below left to expose, second review R3). Bracket messages always
+%   report the last SAMPLED window.
 %
 %   See also INVZT_CRITICAL (fixed-T field cut), INVZT_TC_PICK,
 %   INVZT_CRIT_AT, INVZT_TC_PM_EXTRAP, INVZ_REFINE_CROSSING,
@@ -395,8 +411,11 @@ else
 end
 
 nattempt = 1;  if ~hardwin, nattempt = 9; end   % hard window: ONE pass, no sliding
+nseen = 0;                                      % boundary indicators ACROSS attempts (R5)
+winS  = [Tlo Thi];                              % last SAMPLED window (reporting, R2)
 for attempt = 1:nattempt
     Tlo = max(Tlo, Tmin);
+    winS = [Tlo Thi];
     if Thi <= Tlo + 1e-9, break; end            % collapsed at the floor -> invzt:bracket
     ng  = max(5, round((Thi - Tlo)/gstep) + 1);
     Tg  = linspace(Tlo, Thi, ng);
@@ -410,27 +429,39 @@ for attempt = 1:nattempt
     else
         [act, ka, kb, ncross] = invzt_tc_pick(cv);
     end
+    % Re-entrance evidence accumulates ACROSS attempts (R5). No double count:
+    % crossing pairs are intra-window, and an exact zero at a window top
+    % returns immediately (so no zero is ever re-counted by a later window).
+    nseen = nseen + ncross;
     switch act
         case {'zero', 'bracket'}
-            if ncross > 1
+            if nseen > 1
                 warning('invzt:multipleCrossings', ...
-                    ['|B| = %.3f T: %d boundary indicators in [%.3f, %.3f] K ' ...
-                     '(possible re-entrance); returning the highest-T root.'], ...
-                    norm(B), ncross, Tlo, Thi);
+                    ['|B| = %.3f T: %d boundary indicators seen across the scan ' ...
+                     '(possible re-entrance); returning the highest-T root of ' ...
+                     'window [%.3f, %.3f] K.'], norm(B), nseen, winS(1), winS(2));
             end
             if strcmp(act, 'zero')
                 tc = Tv(ka);                    % exactly-critical sample IS the boundary
             else
                 tc = invz_refine_crossing(f, Tv(ka), cv(ka), Tv(kb), cv(kb), tol);
             end
-            out = struct('Tg', Tg, 'c', c, 'ok', ok, 'window', [Tlo Thi], ...
-                         'ncross', ncross, 'B', B);
+            out = struct('Tg', Tg, 'c', c, 'ok', ok, 'window', winS, ...
+                         'ncross', nseen, 'B', B);
             return;
+    end
+    if hardwin, break; end                      % ONE pass (R2): leave BEFORE any slide,
+                                                % so the error reports the window the
+                                                % user actually asked for and we sampled
+    switch act
         case 'up'                               % top voter ordered: boundary above
             Tlo = Thi;  Thi = Thi + width;
         case 'down'                             % all voters PM: boundary below
             Thi = Tlo;  Tlo = Tlo - width;
         case 'grow'
+            if winS(1) <= Tmin + 1e-9, break; end   % already at the floor: nothing
+                                                    % below left to expose (R3 -- do
+                                                    % not re-sample the identical grid)
             Tlo = Tlo - width;
     end
 end
@@ -438,11 +469,11 @@ if hardwin
     error('invzt:bracket', ...
         ['|B| = %.3f T: no valid ordered/paramagnet root in the EXPLICIT window ' ...
          '[%.3f, %.3f] K (hard bound, no sliding): widen opts.window.'], ...
-        norm(B), Tlo, Thi);
+        norm(B), winS(1), winS(2));
 else
     error('invzt:bracket', ...
-        '|B| = %.3f T: no valid ordered/paramagnet root found (last window [%.3f, %.3f] K).', ...
-        norm(B), Tlo, Thi);
+        '|B| = %.3f T: no valid ordered/paramagnet root found (last sampled window [%.3f, %.3f] K).', ...
+        norm(B), winS(1), winS(2));
 end
 end
 ```
@@ -546,10 +577,23 @@ assert(isempty(Bs) || (isnumeric(Bs) && isreal(Bs) && isvector(Bs) && ...
     'Bs must be empty or a finite positive real vector (mode ''a1'' forbids B = 0); got %s.', ...
     invzt_str(Bs));
 assert(isempty(Twin) || (isnumeric(Twin) && isreal(Twin) && numel(Twin) == 2 && ...
-    all(isfinite(Twin)) && Twin(2) > Twin(1) && Twin(1) > 0), ...
+    all(isfinite(Twin)) && Twin(2) > Twin(1) && Twin(1) > 0 && Twin(2) > 0.02), ...
     'invzt_run_phase_diagram:Twin', ...
-    'Twin must be [] (adaptive) or a finite HARD [Tlo Thi] bound with 0 < Tlo < Thi; got %s.', ...
-    invzt_str(Twin));
+    ['Twin must be [] (adaptive) or a finite HARD [Tlo Thi] bound with 0 < Tlo < Thi ' ...
+     'reaching above the 0.02 K solve floor; got %s.'], invzt_str(Twin));
+% Finder control knobs: validate BEFORE the lattice build and proxy (the
+% finders would reject or misuse them only inside a sweep job, after the
+% expensive setup -- second review R4). invzt_critical does NOT validate its
+% opts.tol at all, so a bad Btol would silently corrupt the bisection.
+posk = @(x) isnumeric(x) && isreal(x) && isscalar(x) && isfinite(x) && x > 0;
+assert(posk(Btol), 'invzt_run_phase_diagram:Btol', ...
+    'Btol must be a finite positive real scalar (TESLA); got %s.', invzt_str(Btol));
+assert(posk(Ttol), 'invzt_run_phase_diagram:Ttol', ...
+    'Ttol must be a finite positive real scalar (KELVIN); got %s.', invzt_str(Ttol));
+assert(posk(Twidth), 'invzt_run_phase_diagram:Twidth', ...
+    'Twidth must be a finite positive real scalar (KELVIN); got %s.', invzt_str(Twidth));
+assert(posk(Tgridstep), 'invzt_run_phase_diagram:Tgridstep', ...
+    'Tgridstep must be a finite positive real scalar (KELVIN); got %s.', invzt_str(Tgridstep));
 
 if show_projected_anchor
     addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'invz_projected'));
@@ -685,10 +729,10 @@ committed odd-on T-cut). Full test code lives in the implementation plan
 |---|---|---|
 | Crossing policy | `[-1 1]` bracket; `[1 -1 1]` highest + ncross 2; all-PM down; all-ordered up; re-entrant lower leg `[1 1 -1 -1]` up; singletons | Bc↔Tc round-trip, `AbsTol` 0.05 K |
 | Exact zeros | `[-1 0 1]` zero, ncross 1; zero-run `[-1 0 0 1]`; `[1 0 -1]` up; zero above bracket `[-1 1 -1 0 1]`; lone `0` | — |
-| Validation | `invzt_str(struct())` placeholder (the hardened formatter); `invzt:tcAnchor` (missing/vector/complex/negative/below-floor `Tc0`); `invzt:tcWindow` (reversed/struct/below-floor); `invzt:tcOpts` (zero gridstep, negative tol, Inf width) — malformed-opts fixtures built by FIELD ASSIGNMENT (the `struct('f',[a b])` constructor makes struct arrays) | hard window `[1.0 1.8]` used by the round-trip; deep-ordered hard window errors `invzt:bracket` (one pass, no sliding — F4's contract end-to-end, in the odd-on test) |
-| Sampler | zero-field absorbed (`ok=false`, `c=NaN`); bad mode rethrows `invzt:mode` — both pre-lattice, dummy `lat` | valid votes on both signs (implicit in round-trip) |
+| Validation | `invzt_str(struct())` placeholder (the hardened formatter); `invzt:tcAnchor` (missing/vector/complex/negative/below-floor `Tc0`); `invzt:tcWindow` (reversed/struct/below-floor); `invzt:tcOpts` (zero gridstep, negative tol, Inf width) — malformed-opts fixtures built by FIELD ASSIGNMENT (the `struct('f',[a b])` constructor makes struct arrays) | hard window `[1.0 1.8]` used by the round-trip; deep-ordered hard window errors `invzt:bracket` whose MESSAGE reports the unmutated user window `[0.250, 0.450]` (one pass, no slide-mutated diagnostics — F4 + R2 end-to-end, in the odd-on test) |
+| Sampler | zero-field absorbed (`ok=false`, `c=NaN`); bad mode rethrows `invzt:mode` — both pre-lattice, dummy `lat` | valid votes on both signs (implicit in round-trip); `sigma_floor = Inf` invalidates a finite-crit converged point (threading + rejection, one solve — R6) |
 | Helper | `invz_refine_crossing`: linear bracket to `1e-3`; interior dead-zone with midpoint recovery/interp fallback | — |
-| Seed | — | `Sigma_seed = 0.3*ones(7,1)` passed in; run must succeed (strip proven) |
+| Seed | — | POISONOUS NaN seed, length-matched to the top endpoint's Matsubara count (a wrong-length seed is silently ignored by the solver's `numel == nwn` guard — a 7-element seed proves NOTHING, second review R1); with the strip, `out.ok(end)` stays a valid voter |
 | odd-on | — | `Tc(1.5 T)` finite in `[1.35, 1.60]`, window `[1.2 1.7]` |
 | out struct | — | fields `Tg/c/ok/window/ncross/B` present, sizes consistent |
 
@@ -800,6 +844,36 @@ after.
 - **F8 (Low) — accepted**: "up to 9 window attempts" wording; Task-1
   coverage claim corrected (fast helper coverage = interop field-cut parity
   + the new direct CORE test); durations documented as estimates.
+
+## Second-pass review dispositions (R1–R6, 2026-07-19)
+
+- **R1 (High) — accepted, confirmed at source** (`invzt_solve_point.m:274`:
+  `numel(opts.Sigma_seed) == nwn` guard; measured nwn 75/54/43 at
+  1.0/1.4/1.8 K, so a 7-element seed is silently ignored and the old test
+  passed with the strip deleted). Fixed: poisonous NaN seed length-matched
+  to the top endpoint via `invz_matsubara(window(2), 40)`; `out.ok(end)`
+  asserted.
+- **R2 (Medium) — accepted, confirmed by re-reading the rev-2 loop**: the
+  slide switch mutated `[Tlo Thi]` before a hard-window exit, so the error
+  reported a window never sampled. Fixed: `if hardwin, break; end` BEFORE
+  the slide switch + all reporting through the last-sampled `winS`; the
+  odd-on test asserts the message contains `[0.250, 0.450]`.
+- **R3 (Medium) — accepted**: the no-valid `grow` path re-sampled the
+  identical floor-clamped grid for the remaining attempt budget. Fixed:
+  terminate when the sampled `Tlo` is already at the floor. (The reviewer's
+  optional pure window-transition helper was declined as over-engineering
+  for a four-line switch; the floor guard is integration-covered only.)
+- **R4 (Medium) — accepted**: `Btol`/`Ttol`/`Twidth`/`Tgridstep` preflighted
+  as finite positive real scalars with stable driver identifiers, and Twin
+  must reach above the 0.02 K solve floor — all before the lattice build
+  (NB `invzt_critical` does not validate its `opts.tol` at all).
+- **R5 (Medium) — accepted**: boundary indicators now accumulate across
+  adaptive attempts (`nseen`) and feed both the warning and `out.ncross`;
+  no-double-count argument documented in-code (crossing pairs are
+  intra-window; a zero at a window top returns immediately).
+- **R6 (Low) — accepted**: direct `sigma_floor` coverage added to the slow
+  round-trip (one extra solve: `sigma_floor = Inf` must yield finite `c`
+  with `ok = false`).
 
 ## Out of scope
 
