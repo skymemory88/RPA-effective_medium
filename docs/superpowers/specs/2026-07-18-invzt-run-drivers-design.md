@@ -357,8 +357,11 @@ function [c, ok] = invzt_crit_at(ion, T, B, lat, opts)
 try
     pt = invzt_solve_point(ion, T, B, lat, opts);
     c  = pt.crit;
-    % Same three-part sample-validity rule as invzt_critical, with the SAME
-    % single-sourced floor (invzt_critical's opts.sigma_floor, default -0.5).
+    % Same VALIDITY floor as invzt_critical (single-sourced sigma_floor,
+    % default -0.5). NB deliberately NO crit>0 term here, unlike the spectra
+    % driver's otherwise-similar check: ok is validity-only by
+    % invzt_tc_pm_extrap's contract -- IT applies the crit>0 PM filter, so
+    % metastable ordered-side samples are FILTERED there, never asserted on.
     ok = pt.converged && isfinite(c) && pt.Sigma0 >= getf(opts, 'sigma_floor', -0.5);
 catch err
     switch err.identifier

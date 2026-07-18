@@ -187,9 +187,10 @@ if ischar(qsel) || isstring(qsel)
             Jpage = pt.lat.JtGamma;
             if ~pt.odd
                 % Same odd=false rule INVZT_SOLVE_POINT applies to lat.Jt before solving
-                % (R1, 2026-07-18 second review), applied here for uniformity -- a PROVABLE
-                % no-op at Gamma: invzt_solve_point already asserts JtGamma's ODD (c<->a,b)
-                % blocks vanish there by C2 symmetry, so masking changes nothing numerically.
+                % (R1, 2026-07-18 second review), applied here for uniformity -- a no-op
+                % at Gamma to numerical precision: invzt_solve_point asserts JtGamma's ODD
+                % (c<->a,b) blocks vanish there by C2 symmetry; the a<->b block has no
+                % runtime assert but is measured ~1e-19, so masking changes nothing.
                 Jpage = invzt_odd_mask(Jpage);
             end
         otherwise
