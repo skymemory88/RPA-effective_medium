@@ -8,26 +8,49 @@ fundamentally different — condition affirmatively established (full 12×12
 tensor RPA + min-eig criticality vs scalar cc channel; measured +0.016 K
 boundary difference at the identical grid). Approach A (full mirror of the
 current projected algorithm, shared helpers) explicitly selected.
+**REV 2 (2026-07-18)**, after the pre-execution external review
+`critical-t-review_by_Codex.md` (findings F1–F8, all verified against source
+and MATLAB R2025a behavior before acceptance) — dispositions in the
+"Review dispositions" section; the Component code blocks below are the
+post-review, governing versions.
 
 ## Decisions
 
-1. **Mirror the CURRENT projected algorithm, not naive bisection.** The
-   projected `invz_critical_T` was rewritten on 2026-07-09 after a rugged-
-   boundary failure (documented in the project memory and its header):
-   near the boundary the EMT self-consistency suffers critical slowing down,
-   so naive bisection latches onto spurious sign flips. The fix — sample
-   `crit` on a T-grid, let only converged/finite samples vote, take the
-   highest-T ordered→para sign change, refine by regula-falsi — is
-   transplanted wholesale with tensor classifiers.
-2. **Shared helpers** (Approach A): `invz_refine_crossing.m` moves to
+1. **Mirror the CURRENT projected algorithm's core idea, with its inherited
+   classifier gaps closed.** The projected `invz_critical_T` was rewritten on
+   2026-07-09 after a rugged-boundary failure: near the boundary the EMT
+   self-consistency suffers critical slowing down, so naive bisection latches
+   onto spurious sign flips. Transplanted: valid-samples-only T-grid voting,
+   highest-T ordered→para crossing, regula-falsi refinement, adaptive
+   Tc0-anchored window. Closed here (review F1; the projected code shares
+   these defects verbatim — noted as a possible projected-side follow-up, not
+   touched in this work): an exactly-sampled root (`crit == 0`) is recognized
+   and returned; a window whose top voter is ordered always slides UP (this
+   includes the lower para→ordered leg of a re-entrant region, which the
+   projected classifier abandons); zeros are never double-counted as two
+   crossings.
+2. **Pure decision core.** The vote-classification/slide policy lives in a
+   pure function `invzt_tc_pick(cv)` (no solves, no state) so every branch is
+   millisecond-testable on synthetic votes (review F1/F3).
+3. **Explicit window is a HARD bound** (review F4): one grid pass, no
+   sliding, `invzt:bracket` if it contains no returnable root. Only the
+   adaptive (`Tc0`-anchored) mode slides — up to 9 window attempts.
+4. **Shared helpers** (Approach A): `invz_refine_crossing.m` moves to
    `invz_common/` (pure `git mv`, same precedent as `invz_peak_energy`);
-   the driver's local `invzt_crit_at` is promoted to a module file
-   `invz_tensor/invzt_crit_at.m` shared by the finder, the driver, and the
-   proxy (exactly the role the projected `invz_crit_at.m` plays).
-3. **Driver gains the projected two-regime interface**: `Ts` (fixed-T field
-   cuts, low-T branch) + `Bs` (fixed-B temperature cuts, near-vertical
-   branch), one flat two-kind `parfor`, merged T-sorted `phase_boundary`.
-4. **A unified cross-model driver stays declined** (as in the drivers spec):
+   the driver's local `invzt_crit_at` is promoted to a module file shared by
+   the finder, the driver, and the proxy.
+5. **Driver gains the projected two-regime interface** with **namespaced
+   tolerances** (review F5): `Ts` (field cuts) + `Bs` (temperature cuts),
+   knobs `Btol` (tesla, → `invzt_critical` `tol`) and `Ttol`/`Twidth`/
+   `Tgridstep` (kelvin, → `invzt_critical_T`), merged into per-finder opts
+   at the call boundary — never one shared `tol` in two different units.
+6. **Strict input validation with safe formatting** (review F2): all
+   validators use `invzt_str`, never raw `mat2str` (which throws on structs
+   while constructing the intended error). NB `invzt_str`'s CURRENT
+   fallthrough is itself raw `mat2str`, so it too throws on structs — it is
+   HARDENED in this work (Component 2b: a class/size placeholder branch for
+   anything `mat2str` cannot format), with a fast regression assert.
+7. **A unified cross-model driver stays declined** (as in the drivers spec):
    the tensor side still has no ordered/FM solve. This work removes one of
    the two blockers noted there (the T-cut finder); revisit unification when
    FM lands.
@@ -38,59 +61,87 @@ current projected algorithm, shared helpers) explicitly selected.
   `invz_projected/invz_critical_T.m`, 108 lines): grid over `[Tlo Thi]`
   (`gridstep` 1/30 K), converged-only voters, highest-T ordered→para
   crossing, `invz_refine_crossing` refinement (`tol` 0.005 K), adaptive
-  window (top `Tc0 + 0.05`, `width` 0.5 K, slides ≤ 8×), explicit
-  `opts.window` override, `invz:multipleCrossings` warning on re-entrance
-  (returns highest-T crossing), `invz:bracket` when nothing brackets.
-  With `opts.odd` on and no `opts.Tc0` it errors `invz:oddTc0` (the
-  fallback anchor would be wrong) — the pattern the tensor version
+  window (top `Tc0 + 0.05`, `width` 0.5 K), explicit `opts.window`
+  override (which there still slides — the hard-bound contract here is a
+  deliberate improvement), `invz:multipleCrossings` warning,
+  `invz:bracket` when nothing brackets. With `opts.odd` on and no
+  `opts.Tc0` it errors `invz:oddTc0` — the pattern the tensor version
   generalizes, since the tensor branch has NO zero-field closed form at all.
+- **The projected classifier's gaps (review F1, confirmed by
+  hand-simulation):** for votes `[-1, 0, 1]`, `diff(sign(cv))` reports two
+  changes but the strict `-→+` predicate matches neither pair — an
+  exactly-sampled root produces `invz:bracket` plus a spurious
+  multiple-crossings warning; for `[+, +, -, -]` (the lower leg of a
+  re-entrant region) it breaks instead of sliding up toward the physical
+  high-T paramagnet. Both fixed in `invzt_tc_pick`.
+- **MATLAB R2025a validation behavior (review F2, confirmed):**
+  `mat2str(struct())` throws `MATLAB:mat2str:NumericInput` (so an error
+  message built with it masks the intended identifier); a vector on the
+  right of `&&` throws `MATLAB:nonLogicalConditional`; `isfinite(1+1i)` is
+  `true`. Hence: scalar/real/positive validators and `invzt_str` formatting.
+  Also the `struct('f', [a b])` constructor trap: array values create struct
+  ARRAYS — tests build malformed-opts fixtures by field assignment. And
+  `invzt_str.m` (read in full): its non-char branch is raw `mat2str(x)`, so
+  it throws on structs/cells/objects — hardened in Component 2b before any
+  validator relies on it.
+- **The projected `invz_critical_T` was NOT modified** — it shares F1's
+  exact-zero and re-entrant-lower-leg gaps verbatim; flagged as a candidate
+  follow-up, out of scope here (validated code, own test surface).
 - **`invz_refine_crossing` is generic** (closure `f(x) -> [value, ok]`,
-  skips non-converged interior samples, falls back to linear interpolation)
-  and has exactly two caller files, both in `invz_projected/`
-  (`invz_critical.m:40,51`, `invz_critical_T.m:67`). Every test/driver
-  reaching those callers already addpaths `invz_common` (established during
-  the `invz_peak_energy` move — same call graph). No name collision in
-  `invz_common/`.
+  skips non-converged interior samples via midpoint retry, falls back to
+  linear interpolation) and has exactly two caller files, both in
+  `invz_projected/` (`invz_critical.m:40,51`, `invz_critical_T.m:67`).
+  Every test/driver reaching those callers already addpaths `invz_common`
+  (established during the `invz_peak_energy` move — same call graph). No
+  name collision in `invz_common/`. Fast direct coverage of the moved
+  helper post-move: the fast interop critical-parity test exercises the
+  projected field-cut path, plus a NEW direct unit test in CORE (the
+  substantive projected T-cut tests are `INVZ_SLOW`-gated — review F8).
 - **The tensor A1 solver converges metastable PM fixed points inside the
-  ordered phase** (LOCKED convention 7; Task-6 finding): valid samples with
-  `crit < 0` exist below the boundary — so the converged-only voting grid
-  gets votes on BOTH sides of the crossing. This is the opposite of the
-  projected ODD-on situation (no metastable window → `invz_critical_T`
-  cannot bracket there, ODD-LOG T2), so the tensor T-cut is expected to work
-  with `odd` on — the smoke verifies this empirically.
+  ordered phase** (LOCKED convention 7): valid `crit < 0` votes exist below
+  the boundary — the voting grid sees both sides of the crossing. This is
+  the opposite of the projected ODD-on situation (no metastable window →
+  `invz_critical_T` cannot bracket there, ODD-LOG T2), so the tensor T-cut
+  works with `odd` on — gated by a committed `INVZ_SLOW` test, not just the
+  throwaway smoke (review F3).
 - **No `Sigma_seed` warm-start across a T-scan**: the Matsubara vector
   length is T-dependent (`invzt_critical` seeds only because "T fixed =>
-  length always fits", its header). A caller-supplied `Sigma_seed` must be
-  stripped before the T-grid solves.
-- **The tensor sample-validity rule** lives in the driver's local
-  `invzt_crit_at` today: `ok = converged && isfinite(crit) &&
+  length always fits", its header). A caller-supplied `Sigma_seed` is
+  stripped; the slow round-trip test passes a deliberately incompatible
+  seed to prove the strip.
+- **`invzt_crit_at`'s guard paths are pre-lattice**: `invzt_solve_point`
+  validates `opts.mode` and the zero-transverse-field guard BEFORE touching
+  `lat`, so sampler-contract tests run in milliseconds with dummy structs.
+- **The tensor sample-validity rule**: `ok = converged && isfinite(crit) &&
   Sigma0 >= getf(opts,'sigma_floor',-0.5)` — validity-only, deliberately no
   `crit > 0` term (each consumer applies its own phase logic: the proxy
   filters PM points itself; the T-cut finder votes by `sign(crit)`).
   Selective catch: `{invz:degenerateDoublet, invz:orderedPhase,
   invzt:a1ZeroField}` → `ok = false`; all else rethrows.
-- **Byte-parity invariant**: the drivers spec keeps its driver code blocks
-  byte-identical to the committed files. This spec's Component 4 becomes the
-  governing copy of `invzt_run_phase_diagram.m`; the drivers spec's
-  Component-1 block gets a one-line SUPERSEDED pointer.
+- **Byte-parity invariant**: this spec's Component 5 becomes the governing
+  copy of `invzt_run_phase_diagram.m`; the drivers spec's Component-1 block
+  gets a one-line SUPERSEDED pointer.
+- **The worktree carries the user's own WIP** (at spec time:
+  `invz_tensor/invzt_run_spectra.m` with in-progress production knobs, plus
+  other pre-existing modifications). Execution takes a fresh
+  `git status --short` checkpoint at every task start and stages only
+  named paths — no hard-coded dirt list (review F7).
 
 ## Components
 
 ### 1. `git mv invz_projected/invz_refine_crossing.m invz_common/invz_refine_crossing.m`
 
-Zero content change. Gate: PROJECTED 143/0/19 (its two callers are exercised
-by the critical-point tests), CORE unchanged, INTEROP unchanged.
+Zero content change. Gate: PROJECTED 143/0/19 (unchanged — the frozen
+baseline count is a repo invariant, so the new direct helper test lives in
+CORE, not in the projected suite), CORE unchanged at this task, INTEROP
+unchanged.
 
-### 2. Promote `invzt_crit_at` to `invz_tensor/invzt_crit_at.m`
+### 2. `invz_tensor/invzt_crit_at.m` (promotion)
 
 The driver's local function moves verbatim into a module file with a proper
-header; the driver's local-function section is deleted (call sites unchanged
-— same name). Header must document: (a) the tensor analogue-of-`invz_crit_at`
-role; (b) `ok` is VALIDITY-only (no `crit > 0`) and why — consumers apply
-their own phase logic (`invzt_tc_pm_extrap` filters PM points itself;
-`invzt_critical_T` votes by `sign(c)`); (c) the selective-catch contract
-(physics signals absorbed, all else rethrows); (d) the single-sourced
-`sigma_floor`.
+header; the driver's local-function section is deleted in Component 5 (call
+sites unchanged — same name; until then the identical local legally shadows
+the module file inside the script).
 
 ```matlab
 function [c, ok] = invzt_crit_at(ion, T, B, lat, opts)
@@ -131,7 +182,98 @@ end
 end
 ```
 
-### 3. `invz_tensor/invzt_critical_T.m` (new)
+### 2b. Harden `invz_tensor/invzt_str.m` (safe formatter — never throws)
+
+```matlab
+function s = invzt_str(x)
+%INVZT_STR Compact string form of x for error messages -- never throws.
+%   s = INVZT_STR(x) is char(x) when x is a char row or a scalar string,
+%   mat2str(x) for numeric/logical/string arrays, and a class/size
+%   placeholder (e.g. '<1x1 struct>') for anything mat2str cannot format --
+%   so an error MESSAGE can always be built, whatever malformed value
+%   triggered it (mat2str itself throws on structs/cells/objects, which
+%   would mask the intended error identifier; 2026-07-18 T-cut review F2).
+%   Shared error-message helper for the invz_tensor drivers -- replaces the
+%   per-file local_str / local_conv_str copies.
+if ischar(x) || (isstring(x) && isscalar(x))
+    s = char(x);
+elseif isnumeric(x) || islogical(x) || isstring(x)
+    s = mat2str(x);
+else
+    s = sprintf('<%s %s>', strjoin(cellstr(string(size(x))), 'x'), class(x));
+end
+end
+```
+
+Behavior-additive: char/string/numeric/logical inputs format exactly as
+before; only inputs that previously THREW now return a placeholder. Fast
+regression assert (`invzt_str(struct())` → `'<1x1 struct>'`) rides in the
+validation test.
+
+### 3. `invz_tensor/invzt_tc_pick.m` (new — the pure decision core)
+
+```matlab
+function [act, ka, kb, ncross] = invzt_tc_pick(cv)
+%INVZT_TC_PICK Pure crossing/slide decision on ascending-T valid crit votes.
+%   [act, ka, kb, ncross] = INVZT_TC_PICK(cv) inspects the VALID samples
+%   (criticality votes in ascending-T order: cv > 0 paramagnet, < 0 ordered,
+%   == 0 exactly critical) from one INVZT_CRITICAL_T window pass and decides:
+%     act = 'zero'    cv(ka) == 0: the sample IS the boundary; kb = NaN.
+%     act = 'bracket' voters ka, kb = ka+1 bracket the highest-T
+%                     ordered->para crossing (cv(ka) < 0 < cv(kb)).
+%     act = 'up'      the highest-T voter is ordered: the requested
+%                     highest-T ordered->para crossing lies ABOVE the
+%                     window (the physical high-T side is paramagnetic).
+%                     This includes the lower para->ordered leg of a
+%                     re-entrant region, which the projected classifier
+%                     abandons (inherited gap, closed here).
+%     act = 'down'    every voter is paramagnetic: boundary below.
+%   ncross counts the boundary indicators in the window: adjacent STRICT
+%   sign flips plus exactly-critical RUNS (a zero-run is one root, never
+%   double-counted); ncross > 1 signals candidate re-entrance (caller warns).
+%
+%   Exact roots: a sampled cv == 0 is recognized and, when it is the
+%   highest-T root, returned in preference to refining a lower interval
+%   (the projected classifier mis-reads [-1, 0, 1] as two sign changes with
+%   no returnable crossing -- inherited gap, closed here).
+%
+%   PURE: no solves, no state -- millisecond-testable on synthetic votes.
+%   Precondition: cv is a nonempty numeric vector of finite values (the
+%   caller passes only valid votes; invalid samples were already dropped).
+%
+%   See also INVZT_CRITICAL_T.
+ka = NaN;  kb = NaN;
+cv = cv(:).';                                   % row, defensively
+z      = (cv == 0);
+nzruns = sum(diff([false, z]) == 1);            % exactly-critical RUNS (roots)
+strict = sum(cv(1:end-1).*cv(2:end) < 0);       % adjacent strict sign flips
+ncross = strict + nzruns;
+if cv(end) < 0
+    act = 'up';                                 % top voter ordered: boundary above
+    return;
+end
+iz  = find(z);                                  % exact roots at samples
+upk = find(cv(1:end-1) < 0 & cv(2:end) > 0);    % strict ordered->para pairs
+if ~isempty(iz) && (isempty(upk) || iz(end) > upk(end) + 1)
+    act = 'zero';  ka = iz(end);                % highest-T root is an exact zero
+elseif ~isempty(upk)
+    act = 'bracket';  ka = upk(end);  kb = ka + 1;
+else
+    act = 'down';                               % top PM, no zeros, no up: all PM
+end
+end
+```
+
+Policy notes (each is a committed fast test case): `[-1 1]` → bracket(1,2);
+`[1 -1 1]` → bracket(2,3) with ncross 2 (re-entrance warn); `[1 2 3]` →
+down; `[-1 -2]` → up; `[1 1 -1 -1]` → up (re-entrant lower leg — the
+projected code breaks here); `[-1 0 1]` → zero(2) with ncross 1 (the
+projected code errors here); `[-1 0 0 1]` → zero(3), ncross 1; `[1 0 -1]`
+→ up (ordered above the zero ⇒ the true highest boundary is above);
+`[-1 1 -1 0 1]` → zero(4), ncross 3; singletons `1`/`-1`/`0` →
+down/up/zero(1).
+
+### 4. `invz_tensor/invzt_critical_T.m` (new)
 
 ```matlab
 function [tc, out] = invzt_critical_T(ion, B, lat, opts)
@@ -143,83 +285,119 @@ function [tc, out] = invzt_critical_T(ion, B, lat, opts)
 %   (transverse-along-a) or [Bx By Bz] (T); lat is the LOCKED lattice struct
 %   from INVZT_JQ_TENSOR.
 %
-%   ALGORITHM (transplant of the projected INVZ_CRITICAL_T, 2026-07-09 rugged-
-%   boundary fix): sample crit on a T-grid across the window, let ONLY VALID
-%   samples vote (INVZT_CRIT_AT's three-part rule -- converged, finite,
-%   Sigma0 above the sigma_floor; near the boundary the outer loop suffers
-%   critical slowing down and an invalid sample must get NO vote, or the
-%   classifier latches onto spurious sign flips), take the HIGHEST-T
-%   ordered(-) -> para(+) sign change, and refine by regula-falsi
-%   (INVZ_REFINE_CROSSING, shared with the projected finders via invz_common).
+%   ALGORITHM (transplant of the projected INVZ_CRITICAL_T's 2026-07-09
+%   rugged-boundary fix, with the inherited classifier gaps closed): sample
+%   crit on a T-grid across the window, let ONLY VALID samples vote
+%   (INVZT_CRIT_AT's three-part rule -- converged, finite, Sigma0 above the
+%   sigma_floor; near the boundary the outer loop suffers critical slowing
+%   down and an invalid sample must get NO vote, or the classifier latches
+%   onto spurious sign flips), then act on INVZT_TC_PICK's pure decision: an
+%   exactly-critical sample (crit == 0) is itself the boundary and is
+%   returned directly; a bracketing ordered->para voter pair is refined by
+%   regula-falsi (INVZ_REFINE_CROSSING, shared with the projected finders via
+%   invz_common); otherwise the ADAPTIVE window moves toward the boundary.
 %   NB unlike the projected solver, the tensor A1 map CONVERGES metastable PM
 %   fixed points inside the ordered phase (crit < 0, valid) -- so votes exist
 %   on both sides of the crossing even with odd on, where the projected T-cut
 %   cannot bracket at all (ODD-LOG T2).
 %
-%   WINDOW: opts.window = [Tlo Thi] (K) explicit; otherwise adaptive -- top
-%   anchored at opts.Tc0 + 0.05 K, spanning opts.width down, slid up/down
-%   (<= 8x) until it brackets. The tensor branch has NO zero-field closed
-%   form to fall back on (mode 'a1' forbids B = 0, invzt:a1ZeroField), so the
-%   adaptive path REQUIRES a finite opts.Tc0 -- the driver computes the
-%   small-Bx proxy once (INVZT_TC_PM_EXTRAP) and passes it (mirrors the
-%   projected invz:oddTc0 rule). Errors invzt:tcAnchor otherwise.
+%   WINDOW: opts.window = [Tlo Thi] (K) is a HARD bound -- exactly one grid
+%   pass, no sliding; if it contains no returnable root the function errors
+%   invzt:bracket (widen the window). Without opts.window the ADAPTIVE mode
+%   anchors the top at opts.Tc0 + 0.05 K, spans opts.width down, and moves
+%   (up to 9 window attempts total) following INVZT_TC_PICK: top voter
+%   ordered -> move up (this includes the lower para->ordered leg of a
+%   re-entrant region -- the physical high-T side is paramagnetic, so the
+%   requested highest-T crossing lies above); all voters PM -> move down; no
+%   voters at all -> grow down keeping the top. The tensor branch has NO
+%   zero-field closed form to fall back on (mode 'a1' forbids B = 0,
+%   invzt:a1ZeroField), so adaptive mode REQUIRES a finite positive scalar
+%   opts.Tc0 -- the driver computes the small-Bx proxy once
+%   (INVZT_TC_PM_EXTRAP) and passes it (mirrors the projected invz:oddTc0
+%   rule). Errors invzt:tcAnchor otherwise.
 %
 %   NO WARM START: any caller-supplied opts.Sigma_seed is STRIPPED before the
 %   T-grid solves -- the Matsubara vector length is T-dependent, so a seed
 %   from one temperature does not fit another (INVZT_CRITICAL may seed only
 %   because its T is fixed).
 %
-%   RE-ENTRANCE: more than one valid sign change warns invzt:multipleCrossings
-%   and returns the highest-T crossing (candidate hyperfine re-entrance is
-%   physically reported at low field -- report, never mask).
+%   RE-ENTRANCE: more than one boundary indicator among the final window's
+%   voters (INVZT_TC_PICK's ncross: strict sign flips + exactly-critical
+%   runs) warns invzt:multipleCrossings and returns the highest-T root
+%   (candidate hyperfine re-entrance is physically reported at low field --
+%   report, never mask).
 %
 %   OPTIONS (getf defaults; every other field forwards to INVZT_SOLVE_POINT):
-%     window    []     explicit [Tlo Thi] (K); validated if given.
+%     window    []     HARD [Tlo Thi] bound (K); validated; no sliding.
 %     Tc0       --     zero-field Tc anchor (K) for the adaptive window;
-%                      REQUIRED when window is absent.
-%     width     0.5    adaptive-window width (K).
-%     gridstep  1/30   coarse-grid step (K).
-%     tol       0.005  crossing refinement tolerance (K).
+%                      REQUIRED (finite positive scalar > the solve floor)
+%                      when window is absent.
+%     width     0.5    adaptive-window width (K); finite positive real scalar.
+%     gridstep  1/30   coarse-grid step (K); finite positive real scalar.
+%     tol       0.005  crossing refinement tolerance (K); finite positive
+%                      real scalar.
 %
-%   out: .Tg/.c/.ok (last window's samples), .window (final [Tlo Thi]),
-%   .ncross (valid sign changes found), .B (validated field row).
+%   out: .Tg/.c/.ok (final window's samples, incl. invalid ones), .window
+%   (final [Tlo Thi]), .ncross (boundary indicators among the voters),
+%   .B (validated field row).
 %
-%   ERRORS invzt:tcWindow (malformed opts.window), invzt:tcAnchor (no window
-%   and no finite Tc0), invzt:bracket (no valid crossing after sliding).
+%   ERRORS invzt:tcOpts (malformed width/gridstep/tol), invzt:tcWindow
+%   (malformed or below-floor opts.window), invzt:tcAnchor (adaptive mode
+%   without a usable Tc0), invzt:bracket (no returnable root: hard window
+%   without a crossing, adaptive attempts exhausted, or the window collapsed
+%   at the solve floor).
 %
-%   See also INVZT_CRITICAL (fixed-T field cut), INVZT_CRIT_AT,
-%   INVZT_TC_PM_EXTRAP, INVZ_REFINE_CROSSING, INVZ_CRITICAL_T (projected
-%   reference whose algorithm this transplants).
+%   See also INVZT_CRITICAL (fixed-T field cut), INVZT_TC_PICK,
+%   INVZT_CRIT_AT, INVZT_TC_PM_EXTRAP, INVZ_REFINE_CROSSING,
+%   INVZ_CRITICAL_T (projected reference whose algorithm this transplants).
 if nargin < 4, opts = struct(); end
 B     = invz_field_vec(B);
 width = getf(opts, 'width',    0.5);
 gstep = getf(opts, 'gridstep', 1/30);
 tol   = getf(opts, 'tol',      0.005);
 Tmin  = 0.02;                                   % single-ion solve floor
+posscal = @(x) isnumeric(x) && isreal(x) && isscalar(x) && isfinite(x) && x > 0;
+if ~(posscal(width) && posscal(gstep) && posscal(tol))
+    error('invzt:tcOpts', ['width, gridstep and tol must be finite positive ' ...
+        'real scalars; got width = %s, gridstep = %s, tol = %s.'], ...
+        invzt_str(width), invzt_str(gstep), invzt_str(tol));
+end
 if isfield(opts, 'Sigma_seed')                  % no warm start across T (see header)
     opts = rmfield(opts, 'Sigma_seed');
 end
 f = @(T) invzt_crit_at(ion, T, B, lat, opts);
 
-if isfield(opts, 'window') && ~isempty(opts.window)
+hardwin = isfield(opts, 'window') && ~isempty(opts.window);
+if hardwin
     win = opts.window;
-    if ~(isnumeric(win) && isreal(win) && numel(win) == 2 && all(isfinite(win)) ...
+    if ~(isnumeric(win) && isreal(win) && numel(win) == 2 && all(isfinite(win(:))) ...
             && win(2) > win(1) && win(1) > 0)
         error('invzt:tcWindow', ...
-            'opts.window must be finite [Tlo Thi] with 0 < Tlo < Thi; got %s.', mat2str(win));
+            'opts.window must be finite real [Tlo Thi] with 0 < Tlo < Thi; got %s.', ...
+            invzt_str(win));
+    end
+    if win(2) <= Tmin
+        error('invzt:tcWindow', ...
+            'opts.window = %s lies entirely at/below the %.3g K solve floor.', ...
+            invzt_str(win), Tmin);
     end
     Tlo = win(1);  Thi = win(2);
 else
-    if ~isfield(opts, 'Tc0') || isempty(opts.Tc0) || ~(isnumeric(opts.Tc0) && isfinite(opts.Tc0))
-        error('invzt:tcAnchor', ['invzt_critical_T needs opts.window = [Tlo Thi] or a ' ...
-            'finite opts.Tc0 anchor (e.g. the INVZT_TC_PM_EXTRAP small-Bx proxy): the ' ...
-            'tensor branch has no zero-field closed form to fall back on.']);
+    Tc0ok = isfield(opts, 'Tc0') && ~isempty(opts.Tc0) && posscal(opts.Tc0) ...
+            && opts.Tc0 > Tmin;
+    if ~Tc0ok
+        error('invzt:tcAnchor', ['invzt_critical_T needs opts.window = [Tlo Thi] ' ...
+            'or a finite positive scalar opts.Tc0 anchor > %.3g K (e.g. the ' ...
+            'INVZT_TC_PM_EXTRAP small-Bx proxy): the tensor branch has no ' ...
+            'zero-field closed form to fall back on.'], Tmin);
     end
     Thi = opts.Tc0 + 0.05;  Tlo = Thi - width;
 end
 
-for slide = 0:8
+nattempt = 1;  if ~hardwin, nattempt = 9; end   % hard window: ONE pass, no sliding
+for attempt = 1:nattempt
     Tlo = max(Tlo, Tmin);
+    if Thi <= Tlo + 1e-9, break; end            % collapsed at the floor -> invzt:bracket
     ng  = max(5, round((Thi - Tlo)/gstep) + 1);
     Tg  = linspace(Tlo, Thi, ng);
     c   = nan(1, ng);  ok = false(1, ng);
@@ -227,45 +405,52 @@ for slide = 0:8
         [c(i), ok(i)] = f(Tg(i));
     end
     Tv = Tg(ok);  cv = c(ok);                   % valid samples: the voters
-    if numel(cv) >= 2
-        sc = find(diff(sign(cv)) ~= 0);         % ordered(-) <-> para(+) transitions
-        if numel(sc) > 1
-            warning('invzt:multipleCrossings', ...
-                ['|B| = %.3f T: %d valid sign changes in [%.3f, %.3f] K ' ...
-                 '(possible re-entrance); returning the highest-T crossing.'], ...
-                norm(B), numel(sc), Tlo, Thi);
-        end
-        up = sc(sign(cv(sc)) < 0 & sign(cv(sc+1)) > 0);   % low-T ordered -> high-T para
-        if ~isempty(up)
-            k  = up(end);                       % highest-T ordered->para crossing
-            tc = invz_refine_crossing(f, Tv(k), cv(k), Tv(k+1), cv(k+1), tol);
-            out = struct('Tg', Tg, 'c', c, 'ok', ok, 'window', [Tlo Thi], ...
-                         'ncross', numel(sc), 'B', B);
-            return;
-        end
-    end
-    % No valid crossing in this window: slide toward where it must be.
-    % (Check isempty first: all([] > 0) is true in MATLAB.)
-    if isempty(cv)                              % nothing valid: keep top, grow down
-        Tlo = Tlo - width;
-    elseif all(cv > 0)                          % window all paramagnet: Tc below
-        Thi = Tlo;  Tlo = Tlo - width;
-    elseif all(cv < 0)                          % window all ordered: Tc above
-        Tlo = Thi;  Thi = Thi + width;
+    if isempty(cv)
+        act = 'grow';  ncross = 0;              % nothing valid: keep top, grow down
     else
-        break;                                  % mixed signs but no ord->para: give up
+        [act, ka, kb, ncross] = invzt_tc_pick(cv);
+    end
+    switch act
+        case {'zero', 'bracket'}
+            if ncross > 1
+                warning('invzt:multipleCrossings', ...
+                    ['|B| = %.3f T: %d boundary indicators in [%.3f, %.3f] K ' ...
+                     '(possible re-entrance); returning the highest-T root.'], ...
+                    norm(B), ncross, Tlo, Thi);
+            end
+            if strcmp(act, 'zero')
+                tc = Tv(ka);                    % exactly-critical sample IS the boundary
+            else
+                tc = invz_refine_crossing(f, Tv(ka), cv(ka), Tv(kb), cv(kb), tol);
+            end
+            out = struct('Tg', Tg, 'c', c, 'ok', ok, 'window', [Tlo Thi], ...
+                         'ncross', ncross, 'B', B);
+            return;
+        case 'up'                               % top voter ordered: boundary above
+            Tlo = Thi;  Thi = Thi + width;
+        case 'down'                             % all voters PM: boundary below
+            Thi = Tlo;  Tlo = Tlo - width;
+        case 'grow'
+            Tlo = Tlo - width;
     end
 end
-error('invzt:bracket', ...
-    '|B| = %.3f T: no valid paramagnet/ordered crossing found (last window [%.3f, %.3f] K).', ...
-    norm(B), Tlo, Thi);
+if hardwin
+    error('invzt:bracket', ...
+        ['|B| = %.3f T: no valid ordered/paramagnet root in the EXPLICIT window ' ...
+         '[%.3f, %.3f] K (hard bound, no sliding): widen opts.window.'], ...
+        norm(B), Tlo, Thi);
+else
+    error('invzt:bracket', ...
+        '|B| = %.3f T: no valid ordered/paramagnet root found (last window [%.3f, %.3f] K).', ...
+        norm(B), Tlo, Thi);
+end
 end
 ```
 
-### 4. `invz_tensor/invzt_run_phase_diagram.m` — two-regime rewiring
+### 5. `invz_tensor/invzt_run_phase_diagram.m` — two-regime rewiring
 
-Full replacement (this block becomes the governing byte-parity copy;
-the drivers spec's Component-1 block gets a SUPERSEDED pointer):
+Full replacement (this block is the governing byte-parity copy; the drivers
+spec's Component-1 block gets a SUPERSEDED pointer):
 
 ```matlab
 %INVZT_RUN_PHASE_DIAGRAM  Full-tensor 1/z PM-side phase boundary: Bc(T) + Tc(B).
@@ -282,10 +467,16 @@ the drivers spec's Component-1 block gets a SUPERSEDED pointer):
 % metastable PM points inside the ordered phase, so the T-cut brackets with
 % odd on/off alike.
 %
+% OPTION NAMESPACES: solve_opts carries solver physics knobs shared by every
+% point solve; the two finders get their OWN control knobs (Btol in tesla vs
+% Ttol/Twidth/Tgridstep in kelvin -- both finders name their option 'tol',
+% in different units, so they are merged deliberately at the call boundary,
+% never shared).
+%
 % ERROR POLICY: the sweep absorbs ONLY per-point invzt:bracket (a genuine
-% no-crossing outcome once Brange/Bs/Twin are preflighted below); every other
-% identifier that ESCAPES the finders rethrows. The finders' own internal
-% sampler additionally classifies shared-engine physics signals as
+% no-crossing outcome once Ts/Bs/Twin/Brange are preflighted below); every
+% other identifier that ESCAPES the finders rethrows. The finders' own
+% internal sampler additionally classifies shared-engine physics signals as
 % invalid/ordered votes (their committed policy, documented in their headers).
 
 addpath(fileparts(mfilename('fullpath')));
@@ -296,14 +487,22 @@ ion = invz_ion();
 
 % ---- knobs ------------------------------------------------------------------
 Ts     = linspace(0.4, 1.4, 11);       % fixed-T FIELD-CUT grid (K); low-T branch.
+                                       % [] disables field cuts.
 Bs     = linspace(0.25, 1.5, 6);       % fixed-B TEMPERATURE-CUT fields (T); the
                                        % near-vertical branch. [] disables T-cuts.
 Twin   = [];                           % [] -> adaptive T-cut window anchored at the
                                        % small-Bx proxy Tc0 (computed below); or an
-                                       % explicit [Tlo Thi] (K) forwarded to
-                                       % invzt_critical_T (skips the anchor).
+                                       % explicit HARD [Tlo Thi] bound (K) forwarded
+                                       % to invzt_critical_T (no sliding; skips the
+                                       % proxy anchor).
 Brange = [0.05 6.0];                   % field-cut [Blo Bhi] bracket (T). Blo > 0:
                                        % mode 'a1' forbids exact zero transverse field.
+Btol   = 0.02;                         % field-cut bracket tolerance (TESLA) ->
+                                       % invzt_critical opts.tol
+Ttol   = 0.005;                        % T-cut refinement tolerance (KELVIN) ->
+                                       % invzt_critical_T opts.tol
+Twidth = 0.5;                          % T-cut adaptive-window width (K)
+Tgridstep = 1/30;                      % T-cut coarse-grid step (K)
 gridN  = 16;  gridConv = 'halfopen';   % invzt_qgrid(gridN, gridConv)
 dpRng  = 30;                           % invzt_jq_tensor coupling-sum range
 useParallel = true;                    % false -> force serial
@@ -331,20 +530,26 @@ show_projected_anchor = false;         % OPT-IN cross-model comparator: the PROJ
 % -----------------------------------------------------------------------------
 
 % Preflights (invzt:bracket doubles as the finders' arg-validation id; absorbing
-% it per point without these checks would turn a typo into a silent all-NaN sweep).
+% it per point without these checks would turn a typo into a silent all-NaN
+% sweep). invzt_str, not mat2str: mat2str throws on structs while BUILDING the
+% intended error message.
 assert(isnumeric(Brange) && isreal(Brange) && numel(Brange) == 2 && ...
     all(isfinite(Brange)) && Brange(2) > Brange(1) && Brange(1) > 0, ...
     'invzt_run_phase_diagram:Brange', ...
     'Brange must be finite [Blo Bhi] with 0 < Blo < Bhi (mode ''a1'' forbids B = 0); got %s.', ...
-    mat2str(Brange));
+    invzt_str(Brange));
+assert(isempty(Ts) || (isnumeric(Ts) && isreal(Ts) && isvector(Ts) && ...
+    all(isfinite(Ts)) && all(Ts > 0)), 'invzt_run_phase_diagram:Ts', ...
+    'Ts must be empty or a finite positive real vector; got %s.', invzt_str(Ts));
 assert(isempty(Bs) || (isnumeric(Bs) && isreal(Bs) && isvector(Bs) && ...
     all(isfinite(Bs)) && all(Bs > 0)), 'invzt_run_phase_diagram:Bs', ...
-    'Bs must be empty or a finite positive vector (mode ''a1'' forbids B = 0); got %s.', ...
-    mat2str(Bs));
+    'Bs must be empty or a finite positive real vector (mode ''a1'' forbids B = 0); got %s.', ...
+    invzt_str(Bs));
 assert(isempty(Twin) || (isnumeric(Twin) && isreal(Twin) && numel(Twin) == 2 && ...
     all(isfinite(Twin)) && Twin(2) > Twin(1) && Twin(1) > 0), ...
     'invzt_run_phase_diagram:Twin', ...
-    'Twin must be [] (adaptive) or finite [Tlo Thi] with 0 < Tlo < Thi; got %s.', mat2str(Twin));
+    'Twin must be [] (adaptive) or a finite HARD [Tlo Thi] bound with 0 < Tlo < Thi; got %s.', ...
+    invzt_str(Twin));
 
 if show_projected_anchor
     addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'invz_projected'));
@@ -373,7 +578,11 @@ if need_anchor
         ['The T-cut jobs need an adaptive-window anchor but the small-Bx proxy did ' ...
          'not resolve on Ts_proxy. Extend Ts_proxy above Tc0, or set an explicit Twin.']);
 end
-topts = solve_opts;                       % T-cut finder opts: anchor or window
+
+% Per-finder opts, merged deliberately at the call boundary (both finders name
+% their tolerance 'tol' -- tesla for the field cut, kelvin for the T-cut).
+bopts = solve_opts;  bopts.tol = Btol;
+topts = solve_opts;  topts.tol = Ttol;  topts.width = Twidth;  topts.gridstep = Tgridstep;
 if ~isempty(Twin), topts.window = Twin; else, topts.Tc0 = Tc0_proxy; end
 
 % ---- one flat parfor over both cut kinds -------------------------------------
@@ -389,7 +598,7 @@ parfor (k = 1:nT+nB, nWorkers)
     % val-then-assign: keeps the sliced output unconditionally assigned.
     try
         if kind(k) == 1
-            val = invzt_critical(ion, v, lat, Brange, solve_opts);
+            val = invzt_critical(ion, v, lat, Brange, bopts);
         else
             val = invzt_critical_T(ion, v, lat, topts);
         end
@@ -463,50 +672,55 @@ current driver is DELETED (Component 2 provides it as a module file; the
 `> 1.5 K` tail (those points were guaranteed no-bracket NaNs; the T-cut
 branch now covers that region properly).
 
-### 5. Tests — `invz_tensor/tests/test_invzt_critical_T.m` (new)
+### 6. Tests — `invz_tensor/tests/test_invzt_critical_T.m` (new)
 
-Standard CORE `setupOnce` boilerplate (invz_tensor, repo root, invz_common).
-Three test functions:
+Standard CORE `setupOnce` boilerplate. **Five fast** test functions (pure
+core policy ×2, validation, sampler contract, refine-crossing helper) and
+**two `INVZ_SLOW`** integration gates (odd-off Bc↔Tc round-trip with a
+deliberately incompatible `Sigma_seed` and `out`-field assertions; a
+committed odd-on T-cut). Full test code lives in the implementation plan
+(Task 2 Step 1); the acceptance matrix:
 
-- `test_anchor_required` (fast, no solves — the guard fires before any
-  compute; `lat` may be a dummy struct):
-  `verifyError(@() invzt_critical_T(ion, 1.0, struct(), struct()), 'invzt:tcAnchor')`.
-- `test_window_validated` (fast): reversed window
-  `struct('window', [1.8 1.0])` → `verifyError(..., 'invzt:tcWindow')`.
-- `test_tcut_matches_field_cut_slow` (`INVZ_SLOW`-gated, the projected
-  crossing-consistency pattern): at 8³/`dpRng` 10–15, `odd` false for speed,
-  T* = 1.4 K: `Bstar = invzt_critical(ion, 1.4, lat, [0.05 6], o)`;
-  `tc = invzt_critical_T(ion, Bstar, lat, setfield(o, 'window', [1.0 1.8]))`
-  must return 1.4 within 0.05 K. Validates the mirror against the
-  already-validated field finder with no new reference data.
+| Area | Fast cases (synthetic, no solves) | Slow cases (INVZ_SLOW, 8³) |
+|---|---|---|
+| Crossing policy | `[-1 1]` bracket; `[1 -1 1]` highest + ncross 2; all-PM down; all-ordered up; re-entrant lower leg `[1 1 -1 -1]` up; singletons | Bc↔Tc round-trip, `AbsTol` 0.05 K |
+| Exact zeros | `[-1 0 1]` zero, ncross 1; zero-run `[-1 0 0 1]`; `[1 0 -1]` up; zero above bracket `[-1 1 -1 0 1]`; lone `0` | — |
+| Validation | `invzt_str(struct())` placeholder (the hardened formatter); `invzt:tcAnchor` (missing/vector/complex/negative/below-floor `Tc0`); `invzt:tcWindow` (reversed/struct/below-floor); `invzt:tcOpts` (zero gridstep, negative tol, Inf width) — malformed-opts fixtures built by FIELD ASSIGNMENT (the `struct('f',[a b])` constructor makes struct arrays) | hard window `[1.0 1.8]` used by the round-trip; deep-ordered hard window errors `invzt:bracket` (one pass, no sliding — F4's contract end-to-end, in the odd-on test) |
+| Sampler | zero-field absorbed (`ok=false`, `c=NaN`); bad mode rethrows `invzt:mode` — both pre-lattice, dummy `lat` | valid votes on both signs (implicit in round-trip) |
+| Helper | `invz_refine_crossing`: linear bracket to `1e-3`; interior dead-zone with midpoint recovery/interp fallback | — |
+| Seed | — | `Sigma_seed = 0.3*ones(7,1)` passed in; run must succeed (strip proven) |
+| odd-on | — | `Tc(1.5 T)` finite in `[1.35, 1.60]`, window `[1.2 1.7]` |
+| out struct | — | fields `Tg/c/ok/window/ncross/B` present, sizes consistent |
 
-CORE becomes **52 passed / 0 failed / 2 incomplete** (50 + the two fast
-tests; the slow one joins the A4 ladder test as filtered-incomplete).
+CORE becomes **55 passed / 0 failed / 3 incomplete** (50 + the five fast
+tests; the two slow tests join the A4 ladder as filtered-incomplete).
 
-### 6. Driver smoke (verification, not a committed test)
+### 7. Driver smoke (verification, not a committed test)
 
 Same-directory `sed` copy: `Ts` → `[1.2 1.4]`, `Bs` → `[0.5 1.5]`,
 `gridN` → 8, `dpRng` → 15, `useParallel` → false,
-`show_projected_anchor` → true (exercises the comparator once).
-`Ts_proxy` stays (8³ Tc0 ≈ 1.53 per the drivers-plan smoke — inside the grid).
-Assertions: ≥ 1 finite `Bc`; **both** `TcB` finite (this is the empirical
-proof the tensor T-cut brackets with `odd = true`, which the projected branch
-cannot do); `TcB(1) > TcB(2)` (Tc decreases with field — physical);
-`phase_boundary` has ≥ 3 rows; a figure exists. Delete the smoke copy after.
-Expected T-cut values: both lie between 1.40 K and the proxy Tc0 ≈ 1.53 K at
-this coarse grid (the 8³ boundary has Bc(1.4 K) = 1.916 T > 1.5 T, so both
-fields are ordered at 1.4 K and PM at Tc0) — Tc(0.5 T) near ≈ 1.50–1.53 K,
-Tc(1.5 T) near ≈ 1.42–1.50 K. Magnitudes reported, only the ordering
-`TcB(0.5 T) > TcB(1.5 T)` gated.
+`show_projected_anchor` → true. `Ts_proxy` stays (8³ Tc0 ≈ 1.53 sits inside
+it). Assertions: both `Bc` finite (warm-cache knowns ≈ 2.148/1.916 T);
+**both `TcB` finite with `odd = true`** (the driver default — the empirical
+two-branch demonstration); `TcB(1) > TcB(2)`;
+`TcB(1) <= Tc0_proxy + 0.02`; finite comparator; `phase_boundary` ≥ 3 rows;
+figure exists. Expected T-cut values: both between 1.40 K and the proxy
+Tc0 ≈ 1.53 K at this coarse grid (the 8³ boundary has Bc(1.4 K) = 1.916 T >
+1.5 T) — magnitudes reported, only the ordering gated. Durations are
+estimates, never acceptance criteria (review F8). Delete the smoke copy
+after.
 
 ## Error handling
 
-- Preflights before compute: `Brange`/`Bs`/`Twin` at the driver
-  (`invzt_run_phase_diagram:Brange/:Bs/:Twin`), window/anchor at the finder
-  (`invzt:tcWindow`/`invzt:tcAnchor`), proxy-anchor availability
-  (`invzt_run_phase_diagram:tcAnchor`).
+- Preflights before compute: `Brange`/`Ts`/`Bs`/`Twin` at the driver
+  (`invzt_run_phase_diagram:*`, `invzt_str`-formatted), controls/window/
+  anchor at the finder (`invzt:tcOpts`/`invzt:tcWindow`/`invzt:tcAnchor`),
+  proxy-anchor availability (`invzt_run_phase_diagram:tcAnchor`).
 - Per-point: only `invzt:bracket` absorbed (both cut kinds), all else
   rethrows; the sampler's selective-catch policy is unchanged (Component 2).
+- Hard window: one pass, `invzt:bracket` with a widen-the-window message.
+  Adaptive: up to 9 window attempts; collapse at the `Tmin` floor
+  terminates into `invzt:bracket` (no infinite resampling).
 - `invzt:multipleCrossings` is a warning (re-entrance is physics to report,
   never mask); `invzt:tcNoWindow` from the proxy is caught, the anchor
   assert then decides whether it matters.
@@ -515,37 +729,86 @@ Tc(1.5 T) near ≈ 1.42–1.50 K. Magnitudes reported, only the ordering
 
 1. Component 1 first: `git mv`, then PROJECTED (143/0/19) + CORE (50/0/1)
    + INTEROP (8/0/2) — all unchanged.
-2. Components 2–3 + 5: fast tests RED→GREEN where meaningful (the two error
-   guards are new behavior — write test first, watch it fail for the right
-   reason: `invzt_critical_T` undefined), then CORE 52/0/2.
-3. Slow gate: `INVZ_SLOW=1` run of the new test file only (minutes at 8³).
-4. Component 4 + smoke (Component 6). Suites re-run at the end:
-   CORE 52/0/2, INTEROP 8/0/2, PROJECTED 143/0/19.
-5. Docs: README §2 callout (T-cut no longer missing — reword the scope
-   sentence: still no ordered/FM solve; the near-vertical region is now
-   covered by fixed-B cuts), §2.1 recipe note, module map rows for
-   `invzt_critical_T` + `invzt_crit_at`, architecture table A1 row mention;
-   drivers spec Component-1 SUPERSEDED pointer; drivers spec/plan
-   quickstart counts stay (they cite their own point-in-time gates —
-   only the README's living quickstart count updates to 52/0/2).
+2. Components 2–4 + 6, TDD: fast tests written first and RED
+   (`MATLAB:UndefinedFunction` ≠ the expected identifiers), then the three
+   module files land, then fast GREEN, then the `INVZ_SLOW` gate on the new
+   file (7/0/0), then CORE **55/0/3** + INTEROP 8/0/2.
+3. Component 5 + smoke (Component 7). Suites re-run at the end:
+   CORE 55/0/3, PROJECTED 143/0/19.
+4. Docs (review F6 — full sweep, not spot edits): README §1 quickstart
+   count → 55/0/3 with the incompletes named; §2 "Drivers" callout — BOTH
+   the parenthetical ("PM-side field-cut boundary…") and the scope sentence
+   rewritten for two-regime search; §2.1 heading and intro mention both
+   finders, with a one-line T-cut example added to the recipe; the
+   zero-field note corrected (`invzt_tc_pm_extrap` is the small-Bx PROXY —
+   the only true-B=0 route in scope is the projected closed form); §7's
+   slow-gate sentence names all three `INVZ_SLOW` tests; module-map rows
+   for `invzt_critical_T`, `invzt_tc_pick`, `invzt_crit_at`; architecture
+   A1 row. Structure check asserts the stale phrases are gone (not just
+   one). Drivers spec Component-1 gets the SUPERSEDED pointer.
+5. Every task starts with a fresh `git status --short` checkpoint; only
+   named paths are staged (the worktree carries user WIP — at spec time
+   `invz_tensor/invzt_run_spectra.m` — which must never be staged or
+   reverted).
 
 ## Success criteria
 
 - `invzt_critical_T` returns Tc(B) on the tensor branch with `odd` on and
-  off; the slow crossing-consistency test round-trips Bc↔Tc within 0.05 K.
+  off; the slow round-trip and odd-on gates pass; every `invzt_tc_pick`
+  policy case from the acceptance matrix passes in milliseconds.
+- Malformed `Tc0`/window/controls produce their documented identifiers
+  (never `MATLAB:nonLogicalConditional` or a `mat2str` throw).
 - The driver produces a merged two-branch boundary in one run; smoke shows
-  both T-cut points finite and ordered correctly.
-- `invz_refine_crossing` lives in `invz_common/`; all three suites at their
-  expected counts (CORE 52/0/2, INTEROP 8/0/2, PROJECTED 143/0/19).
-- README §2 and the module map reflect the new capability.
+  both T-cut points finite (odd on) and ordered correctly.
+- `invz_refine_crossing` lives in `invz_common/` with direct CORE coverage;
+  suites at CORE 55/0/3, INTEROP 8/0/2, PROJECTED 143/0/19.
+- README reflects the new capability with no stale field-cut-only or
+  proxy-as-true-B=0 phrasing.
+
+## Review dispositions (`critical-t-review_by_Codex.md`, F1–F8)
+
+- **F1 (High) — accepted, verified by hand-simulation.** Exact-zero and
+  re-entrant-lower-leg failures confirmed; both inherited verbatim from the
+  projected `invz_critical_T` (flagged as a candidate projected-side
+  follow-up, deliberately NOT touched here). Fixed via the pure
+  `invzt_tc_pick` core with committed synthetic tests for every policy case.
+- **F2 (High) — accepted, MATLAB behavior confirmed** (`mat2str(struct())`
+  throws; vector through `&&` throws; `isfinite(1+1i)` true). Strict
+  scalar/real/positive validators, new `invzt:tcOpts` identifier,
+  `invzt_str` everywhere (the module already owned the safe formatter),
+  below-floor window rejection, floor-collapse termination, driver `Ts`
+  preflight.
+- **F3 (High) — accepted.** The pure core enables the full fast acceptance
+  matrix; sampler-contract tests ride the verified pre-lattice guard paths;
+  direct `invz_refine_crossing` test added in CORE (PROJECTED's frozen
+  count is a repo invariant); seed-strip proven by an incompatible seed in
+  the slow round-trip; odd-on T-cut is now a COMMITTED `INVZ_SLOW` test,
+  not just the throwaway smoke.
+- **F4 (Medium) — accepted, reviewer's preferred option**: explicit window
+  = hard bound, no sliding; adaptive mode slides. Documented in the finder
+  header and the driver's `Twin` knob.
+- **F5 (Medium) — accepted, collision confirmed** (`tol` = 0.02 T vs
+  0.005 K under one name). Driver knobs `Btol`/`Ttol`/`Twidth`/`Tgridstep`
+  merged into `bopts`/`topts` at the call boundary; `Ts` preflight added.
+- **F6 (Medium) — accepted**, including the reviewer's catch that the
+  README's zero-field note mislabeled the small-Bx proxy as a true-B=0
+  route. Full doc sweep in Testing item 4 with stale-phrase assertions.
+- **F7 (Low) — accepted, confirmed by `git status`** (the user's own
+  in-progress edits to `invzt_run_spectra.m` were present; the earlier
+  review file had been replaced). Hard-coded dirt lists dropped in favor of
+  per-task status checkpoints + exact-path staging.
+- **F8 (Low) — accepted**: "up to 9 window attempts" wording; Task-1
+  coverage claim corrected (fast helper coverage = interop field-cut parity
+  + the new direct CORE test); durations documented as estimates.
 
 ## Out of scope
 
 - Ordered-phase tensor solve (still the FM blocker to driver unification).
-- The projected `invz_critical_T`'s smoothness regression
-  (`test_tc_boundary_is_smooth`) — a production-sweep-scale test; the tensor
-  branch defers it until someone runs a production T-cut sweep.
-- Adaptive per-field window *learning* (each T-cut is independent; the
-  projected driver's per-field self-adaptation via slide is inherited as-is).
+- Fixing the projected `invz_critical_T`'s own exact-zero /
+  re-entrant-lower-leg gaps (F1's twins) — validated code with its own test
+  surface; flagged to the user as a candidate follow-up.
+- The projected smoothness regression (`test_tc_boundary_is_smooth`) — a
+  production-sweep-scale test; defer until someone runs a production tensor
+  T-cut sweep.
 - Warm-starting across T (documented impossibility with T-dependent
   Matsubara grids; revisit only with an interpolating seed scheme).
