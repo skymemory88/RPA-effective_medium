@@ -9,6 +9,7 @@ addpath(fullfile(here, '..', '..', '..'));                           % repo root
 addpath(fullfile(here, '..', '..', '..', 'invz_common'));            % shared single-ion engine
 addpath(fullfile(here, '..', '..', '..', 'invz_projected'));         % parity targets
 addpath(fullfile(here, '..', '..', '..', 'invz_projected', 'tests'));% invz_odd_anchors fixture
+addpath(fullfile(here, '..'));                                       % invzt_anchors fixture (Task 14)
 end
 
 function test_zero_field_closed_form_parity(testCase)
@@ -67,6 +68,32 @@ Tc_a1 = invzt_tc_pm_extrap(critfun, 1.30:1/30:1.75);
 [TcP, ~] = invz_odd_zero_field(ion, struct('mode', 'full', 'grids', {{16}}, 'dpRng', 30));
 fprintf('Tc ODD: A1 tensor(0.05 T proxy) %.4f K vs projected closed form %.4f K\n', Tc_a1, TcP(1));
 verifyTrue(testCase, isfinite(Tc_a1) && Tc_a1 > 1.3 && Tc_a1 < 1.75);
+end
+
+function test_headline_reproducibility_slow(testCase)
+% REPRODUCIBILITY GATE (Task 14). Reruns the T7 A1 proxy-Tc measurement -- the
+% IDENTICAL protocol as test_a1_smallB_tc_odd_slow above (0.05 T proxy, ODD on,
+% 16^3 legacy_inclusive/dpRng 30, mode 'a1'/nlevels 'std', invzt_tc_pm_extrap on
+% T-grid 1.30:1/30:1.75) -- and asserts it reproduces the PINNED
+% invzt_anchors().task14.a1_proxy_tc.Tc_tensor_16cubed anchor to 1%. This is a
+% RERUN-STABILITY gate: does the SAME code + SAME inputs give the SAME answer on
+% a fresh invocation (guards against cache corruption, iteration-order/seed
+% nondeterminism, accidental physics drift) -- it is explicitly NOT a magnitude/
+% physics gate (the physics acceptance already lives in the pinned anchor value
+% itself + the docs/ODD-LOG.md SSA1 entry). SKIPS by default; run once with
+% INVZ_SLOW=1 to confirm (~10 min).
+assumeTrue(testCase, ~isempty(getenv('INVZ_SLOW')), 'INVZ_SLOW only');
+A = invzt_anchors();
+pinned = A.task14.a1_proxy_tc.Tc_tensor_16cubed;
+ion = invz_ion();
+g = invzt_qgrid(A.task14.a1_proxy_tc.n, A.task14.a1_proxy_tc.grid);
+lat = invzt_jq_tensor(ion, g, struct('dpRng', A.task14.a1_proxy_tc.dpRng, 'cache', true));
+critfun = @(T) crit_ok(invzt_solve_point(ion, T, [A.task14.a1_proxy_tc.proxy_Bx_T 0 0], lat, struct('odd', true)));
+Tc_rerun = invzt_tc_pm_extrap(critfun, 1.30:1/30:1.75);
+pctdiff = 100 * abs(Tc_rerun - pinned) / pinned;
+fprintf('[reproducibility] pinned A1 proxy-Tc = %.10f K, rerun = %.10f K, diff = %.4f%% (gate: <=1%%)\n', ...
+    pinned, Tc_rerun, pctdiff);
+verifyEqual(testCase, Tc_rerun, pinned, 'RelTol', 0.01);
 end
 
 % ------------------------------------------------------------------------------
