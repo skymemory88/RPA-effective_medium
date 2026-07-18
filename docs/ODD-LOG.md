@@ -1304,3 +1304,13 @@ Plan v3/v4. Commits 0cbe8d0 (T10 oracle) / 0f4c0ad (T11 engine+perf) / b22dd70 (
   - ODD (matched truncation): dress='dominant' (E1's dominant-only rule; transverse spectator PROVABLY bare via the toy reflection symmetry) reduces to A1/E1 -- dominant-dress ratio rd(1)=1.0159, full-A3 rf(1)=1.1132; the beyond-E1 excess COLLAPSES 1.113->1.016 (86% removed) confirming the transverse-spectator dressing; residual 1.6% (band |rd-1|=0.0159<=0.05) = the constraint-8 O(1/z^2) resummation ambiguity (resum_spread_crit -3.93e-2). Full-A3 slope 2.06 (O(1/z^2)-capped, REPORT).
   SCOPE NOTE (per review): the ODD-sector HARD evidence is the single-lambda matched collapse/band + the exact rho->0 identity; the multi-lambda slope is report-only (constraint-8-capped). Do not overread as a 3-point asymptotic emergence.
   Three-state contract (v3 option-a independent Delta1): (Delta1,m0,rho)->(Delta,M2,chiperp) EXACT. pt.Kmat consumed as-is (non-Hermitian, constraint 9). dress='full' adds the genuine beyond-E1 transverse dressing (rf=1.113): A3 is MORE complete than E1.
+
+## A4 — Basis-defined state-space ladder (T13) (2026-07-18)
+
+Plan v3/v4. Commits 920f440 (feat) + 9414425 (N-adaptive fix). Tensor CORE 47/47 (invz_projected off-path; +1 = dim-6 assembly guard). INVZ_SLOW production ladder gated.
+
+**invzt_run_ladder (data-only) + invzt_rung_basis + invzt_report_ladder.** Rungs basis-content-defined, multiplet-complete: e3->3, e6->6, e17->17, xI8 = kron(.,I=7/2 8-dim); e3xI8->24, e17xI8->136 (NEVER a lowest-N eigenstate cut). Budget (12h, dense): AFFORDABLE three/e3 (0.62h), e6 (9.86h, ~10min/point but ~10h full Tc scan = user-left); REFUSE e17 (196h), e3xI8 (2524h), e6xI8 (4e4h), e17xI8=136 (5.9e5h) -- recorded in out.skipped_rungs.
+
+**HEADLINE CLIMB (anchor 2.0 K, 0.5 T, apples-to-apples full-A3/A1 ratio rf):** three rf=1.1132 -> e3 rf=1.1140 -> e6 rf=1.0263. The beyond-E1 transverse-spectator-dressing share CONVERGES 11.3% -> 2.6% as CF content grows, landing on the projected Tier-2 share (~2.8%) -- the small toys OVERESTIMATE the beyond-Gaussian content; e6's real CF basis screens it to the projected value. Virtual-completeness deficit (rung chi0 vs full-136 chi0, a DIAGNOSTIC not a bound) drops monotonically 0.041 -> 0.002. crit_shift_odd (+ = ODD lowers Tc): three/e3 +0.028/+0.031 (1.6 K, 0.1 T), e6 +0.0547 (anchor).
+
+**Cross-validation:** the A3 ladder's beyond-E1 correction converging to the projected Tier-2 2.8% is an independent confirmation that the genuine tensor 1/z self-energy reproduces the projected ODD physics once the basis is complete enough. A latent T12 eye(3) climb-breaker (crashed dim!=3) was caught by the T13 review, fixed (N-adaptive centering), proven at e6 end-to-end, and guarded by a fast structural test.
