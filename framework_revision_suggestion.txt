@@ -1,7 +1,0 @@
-1. in deriving equation 2, it seems to suggest (a_00 + a_11) = I, is that right? if so, show/derive this identity explicitly in the document
-2. section 3, before equation 7, how to obtain b(tau) = e^{-Delta * tau} and likewise b(tau)^/dagger
-3. some additional steps are needed between eq.8 and eq.9 to make the document more pedagogical
-4. delta(G(ij,tau)) in section 4 does not have an equation number
-5. insert a reminder line behind exp(i omega_n beta) = 1 (Matsubara frequencies are bosonic, i.e. omega_n = 2 n pi).
-6. show in one step how to obtain /delta G(q,iw_n) = -J(q)G_0^2(iw_n) in section 4
-
