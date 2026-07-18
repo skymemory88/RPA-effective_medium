@@ -64,8 +64,8 @@ A `/simplify` cleanup pass (4 parallel angle-agents) then removed genuine duplic
 **Deferred (documented in-code):** A3 real-axis continuation (the `invzt_chi_realaxis` A1 continuation does not extend to the full Vmat(iωn)); A3 true-zero-field Tc (the small-Bx proxy is used for every tensor Tc; only the projected closed form is truly at B=0).
 
 **Fast-follow Minors (from the final review — non-blocking, ship-as-is):**
-1. `invzt_chi_realaxis` has no `pt.mode` guard — an A3 point silently yields NaN `Sigma_w` (A1-scoped by contract; a one-line fail-loud guard would harden it).
-2. `invzt_chi_realaxis` explicit-qvec `chi_cc_q` diagnostic uses odd-on coupling regardless of `pt.odd` (harmless for the Γ-point `chi_uniform`).
+1. ~~`invzt_chi_realaxis` has no `pt.mode` guard~~ — **RESOLVED 2026-07-18** (drivers work, commit `6bfbd32`): runtime guard `invzt:realaxisMode` rejects any `pt.mode ~= 'a1'`, with a CORE regression test.
+2. ~~`invzt_chi_realaxis` explicit-qvec `chi_cc_q` uses odd-on coupling regardless of `pt.odd`~~ — **RESOLVED 2026-07-18** (commit `1ae0c7f`): the odd=false Cartesian mask is now a shared helper (`invzt_odd_mask`) applied by both `invzt_solve_point` and the continuation (the mismatch was a 17.2% response error at the review probe point, not harmless at finite q); CORE regression test pins the masked response to 1e-12.
 3. `invzt_emt_matrix.info.antisym_K` uses `pagetranspose` while its "anti-Hermitian" label implies `pagectranspose` (report-only, never asserted).
 4. `invzt_run_ladder.rung_cost_hours` labels the T11 *scan-scale* projection as "one-solve cost" (the refusal decision is correct; the label is imprecise).
 
