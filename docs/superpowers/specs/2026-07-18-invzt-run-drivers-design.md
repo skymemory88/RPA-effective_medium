@@ -174,15 +174,37 @@ end
 
 New CORE tests (regression + guard; exact code in the implementation plan):
 - `test_qsel_explicit_q_complex_response` — explicit q-list at a known PM
-  point: `~isreal(out.chi_cc_q)`, positive dissipative weight
-  (`max(imag) > 1e-6`), and χ''(ω>0) non-negativity to tolerance
-  (`min(imag) > -1e-6·max(imag)`) — a physics gate that needs no
-  reimplementation of the function's internals.
-- `test_realaxis_rejects_non_a1_point` — an `'a2'` point solve fed to
-  `invzt_chi_realaxis` must raise `invzt:realaxisMode`.
+  point: `~isreal(out.chi_cc_q)` and positive dissipative weight
+  (`max(imag) > 1e-6`) on the physical (full-Σ) call; the exact
+  χ''(ω>0) non-negativity gate runs on a second `force_sigma0 = true`
+  call (the bare-RPA limit, manifestly passive) — AS-EXECUTED AMENDMENT:
+  the gate cannot run on the full-Σ call because the frozen-Kw A1
+  continuation has a pre-existing near-resonance negative-χ'' artifact
+  (−312.9 beside a +652.5 peak at the test point; present identically in
+  the untouched `chi_uniform` path AND in the projected reference, so
+  inherited, not introduced). The function header carries the caveat;
+  "imag() = χ''" is the repository's no-extra-sign-flip convention, with
+  passivity established only in the bare-RPA limit.
+- `test_realaxis_rejects_non_a1_point` — a synthetic `pt.mode = 'a2'`
+  override of a solved a1 point fed to `invzt_chi_realaxis` must raise
+  `invzt:realaxisMode` (AS-EXECUTED AMENDMENT per second-review R6: the
+  override isolates the guard from A2 solver behavior).
+- `test_qsel_explicit_q_odd_mask` (second-review R1) — with
+  `pt.odd = false` and `force_sigma0`, the explicit-q response must equal
+  (1e-12) a manual reconstruction through `invzt_odd_mask(latq.Jt)`, and
+  differ >1% from the unmasked route.
 
-CORE suite expectation becomes **49 passed / 0 failed / 1 incomplete**
-(47 + these 2) from this component onward.
+**(c) Honor `pt.odd` at explicit q** (second-review R1, added post-execution):
+the odd=false Cartesian-off-diagonal zeroing rule is extracted from
+`invzt_solve_point` into the shared helper `invz_tensor/invzt_odd_mask.m`
+(byte-identical semantics, behavior-neutral refactor) and applied by the
+continuation when `~pt.odd`: the explicit-q `latq.Jt` (the load-bearing
+site — unmasked it gave a 17.2% response error) and the `'gamma'` `Jpage`
+(a C2 no-op at Γ, ~1e-19, noted in-code); the Cartesian-diagonal
+`'gamma_uniform'` `Jd` needs no mask by construction.
+
+CORE suite expectation: **49 passed / 0 failed / 1 incomplete** after (a)+(b)
+(47 + those 2 tests), **50 / 0 / 1** after (c) — the final gate.
 
 ### 1. `invz_tensor/invzt_run_phase_diagram.m`
 
@@ -418,6 +440,24 @@ if phi_ab ~= 0 && strcmp(transverse_mf, 'legacy_x')
          'to ''vector_ab'' (or ''none'' for a bare CF+Zeeman diagnostic). legacy_x is ' ...
          'x-only and C4-inconsistent for rotated fields.'], phi_ab);
 end
+if ~isempty(qpath)
+    % F8 convention preflight (R4, 2026-07-18 second Codex review): dispersion
+    % q-paths must exclude strict Gamma (and any Gamma-equivalent row) -- see
+    % the qpath knob comment above. Runs BEFORE any lattice/solve work.
+    if ~(isnumeric(qpath) && isreal(qpath) && ismatrix(qpath) && size(qpath, 2) == 3 ...
+            && all(isfinite(qpath(:))))
+        error('invzt_run_spectra:qpath', ['qpath must be an [nq,3] real finite numeric ' ...
+            'array of r.l.u. coordinates (see the qpath knob comment above); got a %s ' ...
+            '%s.'], class(qpath), mat2str(size(qpath)));
+    end
+    if any(invz_is_gamma_equiv(qpath, ion.tau))
+        error('invzt_run_spectra:qpathGamma', ['qpath must exclude Gamma-equivalent rows: ' ...
+            'a strict q = [0 0 0] (or any Gamma-equivalent point) is assembled with the ' ...
+            'Lorentz cavity -- the strict-uniform observable, NOT the q->0+ intrinsic limit ' ...
+            'a dispersion plot wants (see the qpath knob comment above). Start the path at ' ...
+            'finite q.']);
+    end
+end
 dhat   = [cosd(theta_c)*cosd(phi_ab), cosd(theta_c)*sind(phi_ab), sind(theta_c)];
 sfloor = getf(solve_opts, 'sigma_floor', -0.5);   % single-sourced with invzt_critical
 
@@ -557,7 +597,7 @@ Component 0 DOES get unit tests (it is module code). Verification:
    temperature below the boundary top.
 4. Exercise the opt-in anchor once (`show_projected_anchor = true`) to
    confirm the conditional `addpath` + `ion.demag` assert behave.
-5. Re-run CORE (49/0/1 from Component 0 on) and PROJECTED (143/0/19)
+5. Re-run CORE (49/0/1 after Component 0(a)+(b), 50/0/1 after 0(c) — the final gate) and PROJECTED (143/0/19)
    after the `invz_peak_energy.m` move and at the end.
 6. Update `invz_tensor/README.html` §2 to point at the real scripts,
    keeping the recipes as the "under the hood" explanation, and make its
@@ -572,7 +612,8 @@ are left to the user to kick off, same as the projected driver's own
 
 - `invzt_chi_realaxis` returns a complex `chi_cc_q` with positive
   dissipative weight at a PM point, rejects non-a1 points with
-  `invzt:realaxisMode`, and the two new CORE tests pass (49/0/1).
+  `invzt:realaxisMode`, honors `pt.odd` at explicit q via `invzt_odd_mask`,
+  and the three new CORE tests pass (final gate 50/0/1).
 - `invzt_run_phase_diagram.m` and `invzt_run_spectra.m` exist in
   `invz_tensor/`, run end-to-end at reduced size with no runtime errors
   (both branches of the spectra driver), and produce the plots described —
@@ -632,6 +673,46 @@ against source before acceptance:
   at finite q, and the driver comment documents the distinction. Renaming
   the spec to drop `-design` declined — the suffix is this repo's
   established spec-filename convention.
+
+## Second-review amendments (Codex review round 2, R1–R6, 2026-07-18)
+
+The second review was written against `266e799` (pre-execution); dispositions
+verified against the executed state:
+
+- **R1 (High) — accepted, fixed** (commit `1ae0c7f`): explicit-q continuation
+  ignored `pt.odd = false` (17.2% response error). Shared `invzt_odd_mask`
+  helper + regression test; Component 0(c) above.
+- **R2 (High) — already resolved during execution**: the very failure the
+  reviewer measured (−312.9/+652.5) was hit by the Task-1 implementer and
+  resolved by moving the causality gate to the `force_sigma0` bare-RPA call
+  (min = 0.319 ≥ 0 there — passivity established empirically in that limit,
+  so the scoped claim stays rather than dropping the gate entirely as the
+  reviewer suggested). Header carries the caveat; the reviewer's observation
+  that the projected reference also shows negative lobes (−496/+671) is
+  recorded as a shared known limitation.
+- **R3 (High) — already resolved during execution**: the invalid
+  `runtests('dir/file/testname')` selector form was hit by the Task-1
+  implementer; working forms are the `.m`-suffixed whole-file run or
+  `runtests('...file.m', 'ProcedureName', 'name')`. The plan's three
+  commands are corrected in its execution addendum.
+- **R4 (Medium) — accepted, fixed** (commit `0157477`): `qpath` preflight
+  (`invzt_run_spectra:qpath` / `invzt_run_spectra:qpathGamma`) using the
+  module's own `invz_is_gamma_equiv` gate — stricter than the suggested
+  `abs(q) <= 1e-12` (catches Γ-equivalent points). Component-2 block above
+  is regenerated byte-true from the committed driver.
+- **R5 (Medium) — two bullets accepted** (README quickstart count now 50/0/1;
+  SESSION-note items for the mode guard and the odd-off mismatch retired as
+  resolved); **third bullet refuted with evidence**: the A1 proxy-Tc
+  comparison IS grid-matched — both sides used the identical
+  `legacy_inclusive` 16³ mesh (`tests/interop/test_invzt_critical_parity.m:64`
+  explicitly passes `'legacy_inclusive'`; `tests/invzt_anchors.m:128` pins
+  `grid = 'legacy_inclusive'`; `invz_odd_zero_field` builds the byte-identical
+  `qVec_generator([-0.5 0.5])` mesh). The reviewer's premise assumed the
+  tensor default (`'halfopen'`) was used; it was explicitly overridden. The
+  README headline wording stands. (The driver's anchor caveat from F6 remains
+  correct — the DRIVER defaults to `'halfopen'`.)
+- **R6 (Low) — accepted, fixed** (commit `1ae0c7f`): mode-guard test uses a
+  synthetic `pt.mode` override, no A2 solve.
 
 ## Out of scope
 

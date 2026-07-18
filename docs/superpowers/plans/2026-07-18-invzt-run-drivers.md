@@ -74,7 +74,7 @@ end
 
 ```bash
 cd "/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Programming scripts/Matlab/Simulation/invZ expansion"
-"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests/test_invzt_chi_realaxis/test_qsel_explicit_q_complex_response'); disp(r); assert(r.Failed == 1)"
+"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests/test_invzt_chi_realaxis.m', 'ProcedureName', 'test_qsel_explicit_q_complex_response'); disp(r); assert(r.Failed == 1)"
 ```
 Expected: FAIL on the `isreal` verification (chi_cc_q is real by construction today).
 
@@ -125,7 +125,7 @@ to:
 - [ ] **Step 5: Run the regression test to verify it passes**
 
 ```bash
-"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests/test_invzt_chi_realaxis/test_qsel_explicit_q_complex_response'); disp(r); assertSuccess(r)"
+"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests/test_invzt_chi_realaxis.m', 'ProcedureName', 'test_qsel_explicit_q_complex_response'); disp(r); assertSuccess(r)"
 ```
 Expected: PASS.
 
@@ -152,7 +152,7 @@ end
 
 Run to verify it fails (no guard exists yet):
 ```bash
-"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests/test_invzt_chi_realaxis/test_realaxis_rejects_non_a1_point'); disp(r); assert(r.Failed == 1)"
+"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests/test_invzt_chi_realaxis.m', 'ProcedureName', 'test_realaxis_rejects_non_a1_point'); disp(r); assert(r.Failed == 1)"
 ```
 
 - [ ] **Step 7: Add the guard to `invzt_chi_realaxis.m`**
@@ -543,3 +543,39 @@ Report at handoff: (a) `invz_projected/README.html` carries one line from this w
 - All smoke runs use the **same-directory temp-copy** pattern (`sed` a reduced-knob copy next to the original, run, delete): the drivers' `mfilename('fullpath')`-relative `addpath` lines only work from inside `invz_tensor/`, and the production knobs (16³ grid, 25-point Ts, 40-field sweep) are hours of compute that stay "left to the user" per repo precedent.
 - Production-knob defaults are deliberately committed **unexecuted at full scale** — identical precedent to `invz_run_phase_diagram.m`, whose committed default sweep is also an hours-long run.
 - Smoke gates are SEMANTIC where it matters (Codex F2): positive spectral weight and an uncensored peak on the q-path, not merely "finite" (zeros are finite).
+
+---
+
+## Execution addendum (2026-07-18, post-completion)
+
+All five tasks executed via subagent-driven development; every task review
+clean. Commit map (base `266e799`):
+
+- Task 1 → `6bfbd32` (chi_realaxis complex fix + A1 guard; 1 fix round for a
+  header caveat). AS-EXECUTED AMENDMENT: the brief's global χ''(ω>0) gate on
+  the full-Σ call over-asserted — a pre-existing frozen-Kw near-resonance
+  negative-χ'' artifact (−312.9 beside +652.5; identical in untouched
+  `chi_uniform`; also present in the projected reference) forced the
+  causality gate onto a `force_sigma0` bare-RPA call, where it is exact
+  (measured min 0.319 ≥ 0). Spec rev 3 Component 0 records this.
+- Task 2 → `eb8df66` (peak-energy move; pure rename, zero findings)
+- Task 3 → `2463a72` (phase driver; byte-identical to spec, zero findings)
+- Task 4 → `145562f` (spectra driver; byte-identical to spec, zero findings)
+- Task 5 → `98126ac` (README trio; all edits byte-exact, zero findings)
+
+Second Codex review (R1–R6, written pre-execution against `266e799`)
+processed post-completion — dispositions in spec rev 3's "Second-review
+amendments" section:
+
+- `1ae0c7f` — R1 (shared `invzt_odd_mask`, explicit-q honors `pt.odd`;
+  TDD regression) + R6 (mode-guard test isolated from the A2 solver)
+- `0157477` — R4 (Γ-excluded q-path preflight,
+  `invzt_run_spectra:qpath`/`:qpathGamma`)
+- R2/R3 had already been hit and resolved during Task-1 execution (the
+  three single-test commands in this plan are corrected above to the
+  `ProcedureName` form per R3); R5's count/session-note bullets are fixed
+  in the docs, its "grid-matched" bullet was refuted with evidence
+  (both sides of that comparison used `legacy_inclusive` 16³).
+
+Final gates after the R-wave: CORE **50 / 0 / 1**, INTEROP 8 / 0 / 2,
+PROJECTED 143 / 0 / 19.

@@ -71,7 +71,7 @@
 
 <p><strong>Fast check &mdash; the default gate (CORE, ~1&ndash;2 min warm-cache).</strong> The tensor unit tests, run with <code>invz_projected</code> <em>off</em> the path:</p>
 <pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests'); disp(r); assertSuccess(r)"</code></pre>
-<p>&rarr; expected <strong>47 passed / 0 failed / 1 incomplete</strong> (the incomplete is the <code>INVZ_SLOW</code>-gated A4 production-ladder test).</p>
+<p>&rarr; expected <strong>50 passed / 0 failed / 1 incomplete</strong> (the incomplete is the <code>INVZ_SLOW</code>-gated A4 production-ladder test; the count includes the three 2026-07-18 regression tests added with the drivers &mdash; complex explicit-q response, A1-scope guard, odd-mask parity).</p>
 
 <p><strong>Interop parity (optional)</strong> &mdash; live cross-checks against <code>invz_projected</code>:</p>
 <pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests/interop'); disp(r); assertSuccess(r)"</code></pre>
