@@ -20,6 +20,46 @@ diagrammatics). Full measurement record: `../docs/ODD-LOG.md` §A0–§A4.
 in place; the emergent-boundary test (framework §11.8) passes in two sectors (exact scalar
 identity + matched-truncation ODD collapse). See "Headline results" and "Open items".
 
+## Running the suites (quickstart)
+
+**Prerequisites:** MATLAB **R2025a** (the module uses `pagemtimes`/`pagemldivide`); run every command **from the repository root** (the path contains spaces — keep the whole command quoted exactly as shown); **Python is not needed at run time** (the vertex oracle is the committed JSON fixture — MATLAB never calls Python).
+
+**Fast check — the default gate (CORE, ~1–2 min warm-cache).** The tensor unit tests, run with `invz_projected` *off* the path:
+```
+"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests'); disp(r); assertSuccess(r)"
+```
+→ expected **47 passed / 0 failed / 1 incomplete** (the incomplete is the `INVZ_SLOW`-gated A4 production-ladder test).
+
+**Interop parity (optional) — live cross-checks against `invz_projected`:**
+```
+"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests/interop'); disp(r); assertSuccess(r)"
+```
+→ expected **8 / 0 / 2**.
+
+**Projected regression (must stay identical to the pre-tensor baseline):**
+```
+"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_projected/tests'); disp(r); assertSuccess(r)"
+```
+→ expected **143 / 0 / 19**.
+
+**Full run including the slow gates** (`INVZ_SLOW=1`; adds the 16³/dpRng-30 reproducibility gate and the slow spectra/critical benchmarks — minutes; NB the A4 `e6` production rung is ~10 h if reached, see "Open items"). Prefix any of the above, e.g.:
+```
+INVZ_SLOW=1 "/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests'); disp(r); assertSuccess(r)"
+```
+
+The first cold run of a grid-dependent test recomputes the dipole/coupling sums into `invz_tensor/cache/` (gitignored; a few minutes at 16³/dpRng-30); subsequent runs are warm. Detailed path-isolation / boilerplate / grid-contract rationale is under **"Suite topology"** below.
+
+**Run one computation (not a test)** — a mode-`'a1'` point solve, from the repo root:
+```matlab
+addpath(pwd); addpath('invz_common'); addpath('invz_tensor');   % root: MF_dipole/exchange/qVec_generator; shared engine; module
+ion = invz_ion();
+g   = invzt_qgrid(8, 'halfopen');                                % Γ-excluded 8³ grid
+lat = invzt_jq_tensor(ion, g, struct('dpRng', 15, 'cache', true));
+pt  = invzt_solve_point(ion, 2.0, [0.5 0 0], lat, struct('mode', 'a1', 'odd', true));
+fprintf('crit = %+.4f (>0 = PM),  Sigma0 = %.4f,  converged = %d\n', pt.crit, pt.Sigma0, pt.converged);
+```
+Swap `'mode','a3'` for the genuine tensor self-energy, add `'nlevels','e3'` for an A4 rung, `'dress','dominant'` for the E1-matched truncation — see **"The mode ladder"**.
+
 ## Architecture — staged A0 → A4
 
 | Stage | What it is | Key functions |
