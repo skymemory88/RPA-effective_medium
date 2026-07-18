@@ -119,11 +119,20 @@ end
 mode = char(mode);
 emt_rank_tol = getf(opts, 'rank_tol', 1e-12);
 
-% nlevels routes the single-ion construction: 'three' -> the explicit three-state toy
-% (invzt_threestate) for ALL modes (a1/a2/a3), hyperfine EXCLUDED at this rung; 'std'
-% (default) -> the full electronuclear invz_single_ion.
+% nlevels routes the single-ion construction:
+%   'three'          -> the explicit three-state toy (invzt_threestate) for ALL modes
+%                       (a1/a2/a3), hyperfine EXCLUDED at this rung;
+%   'eN' / 'eNxI8'   -> A4 state-space ladder rung (Task 13): the field/MF single-ion
+%                       Hamiltonian is built and diagonalized IN the multiplet-complete
+%                       reduced CF basis (invzt_rung_basis); 'xI8' tensors with the full
+%                       I=7/2 nuclear space. The two-level driver tl comes from the
+%                       ELECTRONIC ground doublet of the SAME reduced CF basis (hyp=false),
+%                       mirroring invz_twolevel;
+%   'std'  (default) -> the full electronuclear invz_single_ion.
 nlevels    = getf(opts, 'nlevels', 'std');
-threestate = strcmp(char(nlevels), 'three');
+nlch       = char(nlevels);
+threestate = strcmp(nlch, 'three');
+isrung     = ~threestate && ~strcmp(nlch, 'std') && ~isempty(regexp(nlch, '^e\d+(xI8)?$', 'once'));
 
 B = invz_field_vec(B);                     % scalar -> [B 0 0]; 3-vector passes through
 
@@ -157,6 +166,22 @@ if threestate
                      'transverse_mf',  getf(opts, 'transverse_mf', 'none'), 'hz', 0);
     si = invzt_threestate(ion, T, B, ts_opts);
     tl = local_tl_from_si(si, T);
+elseif isrung
+    % A4 ladder rung: build the field/MF single-ion Hamiltonian and diagonalize it IN the
+    % multiplet-complete reduced CF basis (Rayleigh-Ritz truncation). si is the reduced
+    % electronuclear (xI8) or electronic response the A1/A2/A3 chain dresses. tl (the
+    % two-level self-energy driver) is read off the ELECTRONIC ground doublet of the same
+    % reduced CF basis (hyp=false), the rung analogue of invz_twolevel -- so as the basis
+    % grows (e3 -> e6 -> e17 -> e17xI8 = 136) tl converges to the full electronic doublet.
+    rb = invzt_rung_basis(ion, nlch);
+    si = local_rung_si(ion, T, B, rb, rb.hyp, tmf, Jxx0);
+    if rb.hyp
+        rb_el = invzt_rung_basis(ion, rb.base_label);
+        si_el = local_rung_si(ion, T, B, rb_el, false, tmf, Jxx0);
+        tl = local_tl_from_si(si_el, T);
+    else
+        tl = local_tl_from_si(si, T);
+    end
 else
     si = invz_single_ion(ion, T, B, struct('hyp', hyp, 'transverse_mf', tmf, 'Jxx0', Jxx0));
     tl = invz_twolevel(ion, T, B, struct('Jxx0', Jxx0, 'transverse_mf', tmf));
@@ -423,6 +448,79 @@ end
 tl.n01 = tanh(tl.Delta/(2*C.kB*T));
 tl.g0  = 2*tl.n01/tl.Delta;
 tl.transverse_mf = 'toy';
+end
+
+function si = local_rung_si(ion, T, B, rb, hyp, tmf, Jxx0)
+% Build the field/MF single-ion Hamiltonian and diagonalize it IN the reduced rung basis
+% rb.projector ("build the Hamiltonian in the reduced basis", Task 13). Mirrors
+% invz_single_ion's transverse mean-field fixed point (legacy_x / vector_ab / none) with
+% every operator projected P'*op*P first (Rayleigh-Ritz in the truncated CF [x nuclear]
+% basis). Paramagnetic rung: hz = 0. Returns a COMPLETE si struct (same field surface as
+% invz_single_ion), so it drops straight into invz_chi0z / invzt_chi0_split / the vertex.
+%
+% JzJz_fluct uses the REDUCED-basis intermediate sum sum_a p_a (Mz*Mz)_aa (Mz the reduced
+% matrix elements), NOT the full P'*Jz^2*P: the sum rule is a consistency test of the
+% reduced response, so the fluctuation it closes against must run over the SAME reduced
+% intermediate states the reduced chi0 sums (they coincide at the full basis, where Mz is
+% square-unitary). The missing full-vs-reduced fluctuation is the virtual content the
+% driver's chi0_virtual_deficit diagnoses.
+C = invz_const();
+B = invz_field_vec(B);
+oJ = stevens_ops(ion.J);
+B44s = 0;  if isfield(ion, 'B44s'), B44s = ion.B44s; end
+Hcf = ion.B20*oJ.O20 + ion.B40*oJ.O40 + ion.B44*oJ.O44 + B44s*oJ.O44s ...
+    + ion.B60*oJ.O60 + ion.B64c*oJ.O64c + ion.B64s*oJ.O64s;
+if hyp
+    oI = stevens_ops(ion.I);  nI = size(oI.Jz, 1);
+    kJ = @(M) kron(M, eye(nI));
+    Hhf = ion.A*(kron(oJ.Jx, oI.Jx) + kron(oJ.Jy, oI.Jy) + kron(oJ.Jz, oI.Jz));
+else
+    kJ = @(M) M;  Hhf = 0;
+end
+Jx = kJ(oJ.Jx);  Jy = kJ(oJ.Jy);  Jz = kJ(oJ.Jz);
+H0full = kJ(Hcf) + Hhf - ion.gL*C.muB*(B(1)*Jx + B(2)*Jy + B(3)*Jz);
+% --- project every operator into the reduced rung basis -------------------------------
+P = rb.projector;
+H0  = P'*H0full*P;   H0  = (H0 + H0')/2;
+Jxr = P'*Jx*P;       Jyr = P'*Jy*P;      Jzr = P'*Jz*P;
+beta = 1/(C.kB*T);
+vecmf  = strcmp(tmf, 'vector_ab');
+nonemf = strcmp(tmf, 'none');
+hx = 0;  hy = 0;  hz = 0;                        % paramagnetic rung: no longitudinal MF
+converged = false;  it = 0;
+for it = 1:200                                   % transverse mean-field fixed point (hx[,hy])
+    H = H0 - hx*Jxr - hy*Jyr - hz*Jzr;  H = (H + H')/2;
+    [Vr, Dr] = eig(H, 'vector');  [E, ixe] = sort(real(Dr));  Vr = Vr(:, ixe);
+    p = exp(-beta*(E - E(1)));  p = p/sum(p);
+    if nonemf
+        hxn = 0;  hyn = 0;
+    else
+        hxn = Jxx0*(real(diag(Vr'*Jxr*Vr)).'*p);
+        hyn = 0;
+        if vecmf, hyn = Jxx0*(real(diag(Vr'*Jyr*Vr)).'*p); end
+    end
+    dmf = max([abs(hxn - hx), abs(hyn - hy)]);
+    if dmf < 1e-12, hx = hxn;  hy = hyn;  converged = true;  break; end
+    hx = hxn;  hy = hyn;
+end
+% recompute all fields ONCE from the converged (hx, hy)
+H = H0 - hx*Jxr - hy*Jyr - hz*Jzr;  H = (H + H')/2;
+[Vr, Dr] = eig(H, 'vector');  [E, ixe] = sort(real(Dr));  Vr = Vr(:, ixe);
+p = exp(-beta*(E - E(1)));  p = p/sum(p);
+si.E  = E - E(1);
+si.V  = Vr;
+si.P  = p;
+si.Mx = Vr'*Jxr*Vr;  si.My = Vr'*Jyr*Vr;  si.Mz = Vr'*Jzr*Vr;
+si.Jexp = [real(diag(si.Mx)).'*p; real(diag(si.My)).'*p; real(diag(si.Mz)).'*p];
+si.hx = hx;  si.hy = hy;  si.hz = hz;
+jz2 = real(diag(si.Mz*si.Mz)).'*p;               % reduced-basis intermediate sum (see header)
+si.JzJz_fluct = jz2 - si.Jexp(3)^2;
+si.mf_converged = converged;
+si.mf_iters = it;
+si.E0 = E(1);
+si.transverse_mf = tmf;
+si.rung = rb.rung;
+si.dim_actual = rb.dim_actual;
 end
 
 function s = local_str(x)
