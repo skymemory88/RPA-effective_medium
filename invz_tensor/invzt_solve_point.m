@@ -199,14 +199,12 @@ if ~chi_rest
     crest_cc = zeros(nwn, 1);
 end
 
-% --- odd = false: zero the Cartesian-off-diagonal entries of a COPY of lat.Jt.
-%     cart = mod(i-1,3) is the Cartesian index of composite row/col i; keep only
-%     same-Cartesian entries (all aa/bb/cc sublattice couplings, drop ca/cb/ab...).
+% --- odd = false: zero the Cartesian-off-diagonal entries of a COPY of lat.Jt
+%     (all aa/bb/cc sublattice couplings kept, ca/cb/ab... dropped). Shared
+%     rule -- see INVZT_ODD_MASK for the exact semantics.
 lat_eff = lat;
 if ~odd
-    cart = mod((0:11).', 3);
-    keepmask = (cart == cart.');                         % [12,12] logical
-    lat_eff.Jt = lat.Jt .* keepmask;                     % broadcasts over pages
+    lat_eff.Jt = invzt_odd_mask(lat.Jt);
 end
 
 % --- C2 assertion: the Gamma-point ODD (c<->a,b) blocks vanish (< 1e-10*Jcc0) ---
