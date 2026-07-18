@@ -132,31 +132,46 @@ for ir = 1:numel(rungs)
 end
 
 % --- assemble the scalar-struct/array-field output -------------------------------------
+% Empty-safe (Minor #1): when EVERY requested rung is budget-refused (e.g. rungs={'e17'}),
+% R is an empty struct array -- {R.name}/[R.field] would error, so build empty column
+% fields directly and still return a clean struct carrying skipped_rungs + meta.
 nr = numel(R);
 out = struct();
-out.rungs = {R.name}.';
-out.dim_actual = colv([R.dim_actual]);
-out.multiplet_complete = colv(logical([R.multiplet_complete]));
-out.N = colv([R.N]);
-out.npaths = colv([R.npaths]);
-out.projected_hours = colv([R.projected_hours]);
-out.crit_shift_odd = colv([R.crit_shift_odd]);
-out.crit_oddoff = colv([R.crit_oddoff]);
-out.crit_oddon  = colv([R.crit_oddon]);
-out.converged = colv(logical([R.converged]));
-out.rf = colv([R.rf]);
-out.rd = colv([R.rd]);
-out.matched_collapse = colv([R.matched_collapse]);
-out.a1_odd_shift = colv([R.a1_odd_shift]);
-out.eps_el = colv([R.eps_el]);
-out.eps_cross = colv([R.eps_cross]);
-out.sumrule_rel = colv([R.sumrule_rel]);
-out.resum_spread = colv([R.resum_spread]);
-out.chi0_virtual_deficit = colv([R.chi0_virtual_deficit]);
-out.chi0_rung_ccdiag = colv([R.chi0_rung_ccdiag]);
-out.t_sec = colv([R.t_sec]);
-out.tc_proxy = colv([R.tc_proxy]);
-if nr > 0, out.tc_used = reshape([R.tc_used], 2, nr).'; else, out.tc_used = zeros(0, 2); end
+if nr > 0
+    out.rungs = {R.name}.';
+    out.dim_actual = colv([R.dim_actual]);
+    out.multiplet_complete = colv(logical([R.multiplet_complete]));
+    out.N = colv([R.N]);
+    out.npaths = colv([R.npaths]);
+    out.projected_hours = colv([R.projected_hours]);
+    out.crit_shift_odd = colv([R.crit_shift_odd]);
+    out.crit_oddoff = colv([R.crit_oddoff]);
+    out.crit_oddon  = colv([R.crit_oddon]);
+    out.converged = colv(logical([R.converged]));
+    out.rf = colv([R.rf]);
+    out.rd = colv([R.rd]);
+    out.matched_collapse = colv([R.matched_collapse]);
+    out.a1_odd_shift = colv([R.a1_odd_shift]);
+    out.eps_el = colv([R.eps_el]);
+    out.eps_cross = colv([R.eps_cross]);
+    out.sumrule_rel = colv([R.sumrule_rel]);
+    out.resum_spread = colv([R.resum_spread]);
+    out.chi0_virtual_deficit = colv([R.chi0_virtual_deficit]);
+    out.chi0_rung_ccdiag = colv([R.chi0_rung_ccdiag]);
+    out.t_sec = colv([R.t_sec]);
+    out.tc_proxy = colv([R.tc_proxy]);
+    out.tc_used = reshape([R.tc_used], 2, nr).';
+else
+    out.rungs = cell(0, 1);
+    for f = {'dim_actual','N','npaths','projected_hours','crit_shift_odd','crit_oddoff', ...
+             'crit_oddon','rf','rd','matched_collapse','a1_odd_shift','eps_el','eps_cross', ...
+             'sumrule_rel','resum_spread','chi0_virtual_deficit','chi0_rung_ccdiag','t_sec','tc_proxy'}
+        out.(f{1}) = zeros(0, 1);
+    end
+    out.multiplet_complete = false(0, 1);
+    out.converged = false(0, 1);
+    out.tc_used = zeros(0, 2);
+end
 out.skipped_rungs = skipped;
 % provenance (no file writes): the report serializer + controller consume this.
 out.meta = struct('T', T, 'B', B(:).', 'ngrid', ngrid, 'conv', conv, 'dpRng', dpRng, ...
