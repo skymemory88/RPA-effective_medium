@@ -111,12 +111,13 @@ chi_rest  = ~isfield(opts, 'chi_rest') || isempty(opts.chi_rest) || ~isequal(opt
 chi0_diag = isfield(opts, 'chi0_diag') && ~isempty(opts.chi0_diag) && ~isequal(opts.chi0_diag, false);
 odd = ~isfield(opts, 'odd') || isempty(opts.odd) || ~isequal(opts.odd, false);
 
-if ~(ischar(mode) || isstring(mode)) || ~strcmp(char(mode), 'a1')
-    error('invzt:mode', ['invzt_solve_point currently implements mode ''a1'' only ' ...
-        '(the A1 projected-1/z bridge; T9/T12 add ''a2''/''a3''); got %s.'], ...
-        local_str(mode));
+if ~(ischar(mode) || isstring(mode)) || ~ismember(char(mode), {'a1','a2'})
+    error('invzt:mode', ['invzt_solve_point currently implements modes ''a1'' ' ...
+        '(A1 projected-1/z bridge) and ''a2'' (A2 direct matrix effective medium; ' ...
+        'T12 adds ''a3''); got %s.'], local_str(mode));
 end
 mode = char(mode);
+emt_rank_tol = getf(opts, 'rank_tol', 1e-12);
 
 B = invz_field_vec(B);                     % scalar -> [B 0 0]; 3-vector passes through
 
@@ -193,6 +194,7 @@ end
 denom = @(s) reshape(1 + s, 1, 1, nwn);
 converged = false;
 Gloc = nan(nwn, 1);  K = nan(nwn, 1);  diag4 = nan(4, nwn);  lam = [NaN; NaN];
+Kmat = [];  emtinfo = struct();                          % A2: matrix medium (mode 'a2' only)
 sg = struct('alpha', NaN, 'gamma', nan(nwn,1), 'Sigma', nan(nwn,1));
 Fhist = cell(1, 0);  Xhist = cell(1, 0);
 for outer = 1:maxo
@@ -201,10 +203,18 @@ for outer = 1:maxo
     if chi0_diag
         for n = 1:nwn, ctil(:,:,n) = diag(diag(ctil(:,:,n))); end
     end
-    [Gcc, diag4] = invzt_gcc_lattice(ctil, lat_eff);    % weighted site-diagonal cc
-    Gloc  = -Gcc(:);                                     % site-local effective medium
-    G0til = -(cdom_cc ./ (1 + Sigma) + crest_cc);        % = -real(ctil_cc)
-    K = 1 ./ Gloc - 1 ./ G0til;                          % LOCKED K bookkeeping
+    if strcmp(mode, 'a1')
+        [Gcc, diag4] = invzt_gcc_lattice(ctil, lat_eff);    % weighted site-diagonal cc
+        Gloc  = -Gcc(:);                                     % site-local effective medium
+        G0til = -(cdom_cc ./ (1 + Sigma) + crest_cc);        % = -real(ctil_cc)
+        K = 1 ./ Gloc - 1 ./ G0til;                          % LOCKED K bookkeeping
+    else   % mode 'a2': A2 DIRECT matrix effective medium (K = ctil^-1 - chibar^-1)
+        [Kmat, chibar, emtinfo] = invzt_emt_matrix(ctil, lat_eff, ...
+            struct('rank_tol', emt_rank_tol));
+        K = real(squeeze(Kmat(3,3,:)));                      % +K_cc (LOCKED POSITIVE, v2 sign)
+        Gloc = -real(squeeze(chibar(3,3,:)));                % = -chi_bar_cc (= -Gcc)
+        diag4 = emtinfo.diag4_cc;                            % per-sublattice cc medium (S4 report)
+    end
     lam = invz_lambdas(K, g, wts, beta, [1 2]);
     sg  = invz_sigma(tl, lam, K, g, beta);
     f = sg.Sigma - Sigma;                               % fixed-point residual
@@ -247,6 +257,8 @@ pt.Sigma  = Sigma;
 pt.alpha  = sg.alpha;
 pt.lambda = lam;
 pt.K = K;
+pt.Kmat = Kmat;                                          % A2: [3,3,nwn] matrix medium K (mode 'a2'; [] for 'a1'), for A3
+pt.emt = emtinfo;                                         % A2: projector/persub_spread/diag4_cc/Herm diagnostics
 pt.G = Gloc;                                             % G = Gloc (effective medium)
 pt.tl = tl;
 pt.si = si;
