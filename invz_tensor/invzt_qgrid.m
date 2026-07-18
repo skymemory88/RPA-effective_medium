@@ -65,7 +65,7 @@ switch conv
     otherwise
         error('invzt:qgridConv', ...
             'conv must be ''halfopen'' or ''legacy_inclusive''; got %s.', ...
-            local_conv_str(conv));
+            invzt_str(conv));
 end
 
 keep = any(abs(qvec) > 1e-12, 2);     % drop the Gamma row (every component ~0)
@@ -97,7 +97,7 @@ switch convstr
     case 'halfopen',         c = 1;
     case 'legacy_inclusive', c = 2;
     otherwise
-        error('invzt:conv', 'Unknown grid convention %s.', local_conv_str(convstr));
+        error('invzt:conv', 'Unknown grid convention %s.', invzt_str(convstr));
 end
 end
 
@@ -107,12 +107,4 @@ function h = qgrid_hash(n, convcode, qvec)
 % and content all participate.
 v = [n; convcode; qvec(:)];
 h = sprintf('%dv_%08x', numel(v), typecast(single(sum(v.*(1:numel(v))')), 'uint32'));
-end
-
-function s = local_conv_str(x)
-if ischar(x) || (isstring(x) && isscalar(x))
-    s = char(x);
-else
-    s = mat2str(x);
-end
 end

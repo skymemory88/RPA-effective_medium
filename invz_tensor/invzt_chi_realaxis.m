@@ -108,7 +108,7 @@ if ~isequal(odd_req, pt.odd)
     error('invzt:oddMismatch', ['opts.odd (%s) must equal pt.odd (%s): ' ...
         'invzt_chi_realaxis continues the SAME converged A1 point, whose ' ...
         'Sigma/alpha/lambda/K already bake in the odd flag used at solve ' ...
-        'time.'], local_str(odd_req), local_str(pt.odd));
+        'time.'], invzt_str(odd_req), invzt_str(pt.odd));
 end
 B = invz_field_vec(B);   %#ok<NASGU> % validated for interface parity only; see header
 
@@ -132,10 +132,7 @@ end
 if ~chi_rest
     crest = zeros(size(crest));
 end
-ctil = zeros(3, 3, nw);
-for k = 1:nw
-    ctil(:,:,k) = cdom(:,:,k) / (1 + Sw(k)) + crest(:,:,k);
-end
+ctil = cdom ./ reshape(1 + Sw, 1, 1, nw) + crest;       % Sw [nw,1] -> [1,1,nw] broadcast
 
 % --- q-selection: page invzt_chi_rpa, project the S4-uniform mode ------------
 Jaa0 = pt.lat.info.Jaa0;
@@ -145,6 +142,11 @@ Jd = kron(ones(4)/4, diag([Jaa0, Jaa0, Jcc0]));          % Task-4 uniform page
 
 out.chi_uniform = zeros(3, 3, nw);
 out.chi_cc_q = [];
+% Resolve the S4-uniform-mode page ONCE: Jd for 'gamma_uniform' AND the explicit-qvec
+% branch (the uniform mode is a q-grid-independent quantity), JtGamma only for 'gamma'.
+% The chi_uniform loop then runs ONCE; the explicit-qvec branch adds the extra chi_cc_q.
+Jpage = Jd;
+explicitq = false;
 if ischar(qsel) || isstring(qsel)
     qsel = char(qsel);
     switch qsel
@@ -156,22 +158,21 @@ if ischar(qsel) || isstring(qsel)
             error('invzt:qsel', ['opts.qsel must be ''gamma_uniform'', ''gamma'', ' ...
                 'or an [nq,3] numeric qvec; got string ''%s''.'], qsel);
     end
-    for k = 1:nw
-        X = invzt_chi_rpa(ctil(:,:,k), Jpage);
-        out.chi_uniform(:,:,k) = u' * X * u;
-    end
 else
     if ~(isnumeric(qsel) && ismatrix(qsel) && size(qsel, 2) == 3)
         error('invzt:qsel', ['opts.qsel must be ''gamma_uniform'', ''gamma'', ' ...
-            'or an [nq,3] numeric qvec; got a %s.'], local_str(qsel));
+            'or an [nq,3] numeric qvec; got a %s.'], invzt_str(qsel));
     end
+    explicitq = true;
     qvec = qsel;
     nq   = size(qvec, 1);
     latq = invzt_jq_tensor(ion, qvec, struct('dpRng', dpRng, 'cache', cacheq));
     out.chi_cc_q = zeros(nq, nw);
-    for k = 1:nw
-        Xu = invzt_chi_rpa(ctil(:,:,k), Jd);
-        out.chi_uniform(:,:,k) = u' * Xu * u;
+end
+for k = 1:nw
+    X = invzt_chi_rpa(ctil(:,:,k), Jpage);
+    out.chi_uniform(:,:,k) = u' * X * u;
+    if explicitq
         Xq = invzt_chi_rpa(ctil(:,:,k), latq.Jt);        % [12,12,nq]
         for iq = 1:nq
             acc = 0;
@@ -183,16 +184,4 @@ else
     end
 end
 out.Sigma_w = Sw;
-end
-
-% ------------------------------- local helpers ----------------------------------
-
-function s = local_str(x)
-if islogical(x)
-    s = mat2str(x);
-elseif ischar(x) || (isstring(x) && isscalar(x))
-    s = char(x);
-else
-    s = mat2str(x);
-end
 end

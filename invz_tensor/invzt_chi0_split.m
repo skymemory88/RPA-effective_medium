@@ -135,20 +135,23 @@ inel = abs(dE) > degtol;
 M = {si.Mx, si.My, si.Mz};
 z = z(:); nz = numel(z);
 c = zeros(3,3,nz);
+% loop-invariants (independent of the mu,nu Cartesian indices): hoist ONCE
+keep = inel & domMask;
+dEi  = dE(keep);
+if elast
+    P2    = repmat(p, 1, n);              % P2(a,b) = p(a)
+    emask = (~inel) & domMask;
+    idx0  = abs(z) < ztol;
+end
 for mu = 1:3
     for nu = 1:3
         Nmn  = M{mu} .* (M{nu}.');            % M_mu(a,b)*M_nu(b,a)
-        keep = inel & domMask;
-        dEi  = dE(keep);
         wi   = Nmn(keep) .* dp(keep);
         for iz = 1:nz
             c(mu,nu,iz) = sum(wi ./ (dEi - z(iz)));
         end
         if elast
-            P2 = repmat(p, 1, n);              % P2(a,b) = p(a)
-            emask = (~inel) & domMask;
             el = beta*(sum(Nmn(emask).*P2(emask)) - Jbar(mu)*Jbar(nu));
-            idx0 = abs(z) < ztol;
             c(mu,nu,idx0) = c(mu,nu,idx0) + el;
         end
     end

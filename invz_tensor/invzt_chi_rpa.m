@@ -18,9 +18,6 @@ function X = invzt_chi_rpa(chi0, Jt)
 %
 %   See also INVZT_JQ_TENSOR, INVZT_GCC_LATTICE.
 X0 = kron(eye(4), chi0);
-nq = size(Jt, 3);
-X = zeros(12, 12, nq);
-for iq = 1:nq
-    X(:,:,iq) = (eye(12) - X0*Jt(:,:,iq)) \ X0;
-end
+A  = eye(12) - pagemtimes(X0, Jt);      % X0 [12,12] broadcasts over Jt's nq pages
+X  = pagemldivide(A, X0);               % X = (I - X0*J)\X0 per page (X0 broadcasts; R2025a)
 end
