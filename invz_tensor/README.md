@@ -55,6 +55,8 @@ identity + matched-truncation ODD collapse). See "Headline results" and "Open it
 | `invzt_rung_basis.m` | T13 | Basis-content-defined A4 rung → projector + basis energies (multiplet-complete) |
 | `invzt_run_ladder.m` | T13 | A4 ladder driver (data-only, budget-refusing) |
 | `invzt_report_ladder.m` | T13 | Serializes a completed A4 run into an ODD-LOG-pasteable text report (writes no files) |
+| `invzt_active_projector.m` | T9/T12 (`/simplify`) | Shared frequency-consistent active-subspace projector (union-of-ranges rank-reveal); called by `invzt_emt_matrix` + `invzt_sigma_tensor` |
+| `invzt_str.m` | `/simplify` | Shared value→display-string coercion for error messages (replaced 4 per-file copies) |
 | `README.md` | T15 | This file |
 
 ### Shared engine and oracle
@@ -69,7 +71,7 @@ identity + matched-truncation ODD collapse). See "Headline results" and "Open it
 | Path | Role |
 |---|---|
 | `invzt_anchors.m` | Plain fixture (not a test; `runtests` on a folder does not collect it) — tensor-owned pinned digit anchors, measured independently on this tree so CORE tests never depend on `invz_projected/tests` at run time |
-| `test_invzt_qgrid.m`†, `test_invzt_jq_tensor.m`, `test_invzt_chi_rpa.m`, `test_invzt_chi0_split.m` | A0/A1 building blocks |
+| `test_invzt_jq_tensor.m` (also holds the q-grid convention tests), `test_invzt_chi_rpa.m`, `test_invzt_chi0_split.m` | A0/A1 building blocks |
 | `test_invzt_solve_point.m`, `test_invzt_critical.m` | A1 bridge solver + critical finder |
 | `test_invzt_chi_realaxis.m` | A1 real-axis continuation |
 | `test_invzt_emt_matrix.m` | A2 matrix effective medium |
@@ -81,7 +83,7 @@ identity + matched-truncation ODD collapse). See "Headline results" and "Open it
 | `fixtures/vertex_oracle.json` | T10 — the mpmath vertex oracle (138/138 checks) |
 | `exploratory/explore_tensor_blocks.m`, `exploratory/freeze_projected_baseline.m`, `exploratory/perf_vertex_scaling.m` | Read-only measurement scripts (not tests); provenance for the anchors, the frozen baseline, and the T11 performance gate |
 
-† present as of the A0/T3 measurement; see `invz_tensor/tests/` for the exact current file if this listing drifts.
+(The q-grid convention tests — `test_qgrid_conventions` etc. — are local functions inside `test_invzt_jq_tensor.m`, per the T3 plan; there is no separate `test_invzt_qgrid.m`.)
 
 ## The mode ladder
 
