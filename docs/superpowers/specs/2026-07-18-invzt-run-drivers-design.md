@@ -3,18 +3,25 @@
 Date: 2026-07-18. Branch: `invz-1z-lihof4`. Status: design approved by user
 (conversation of 2026-07-18); scope and the peak-picker sharing decision were
 each confirmed via an explicit multiple-choice pick — see Decisions below.
-REVISED 2026-07-18 after a source-verification pass (subagent review) that
-found a runtime-fatal defect in the first draft's `Tc0`-proxy handle plus
-four smaller issues — see "Revision notes" at the end.
+REVISED twice on 2026-07-18: first after a source-verification pass
+(subagent review) that found a runtime-fatal defect in the first draft's
+`Tc0`-proxy handle; second after an external review
+(`invzt_driver_review_by_Codex.md`, findings F1–F8) whose blocker F1 —
+the explicit-q branch of `invzt_chi_realaxis` real-projects the response,
+making every q-path χ'' map identically zero — adds a prerequisite
+Component 0 below. Full finding dispositions: "Review amendments" section.
 
 ## Decisions (user-approved, govern over any conflicting prose below)
 
 1. **Scope: tensor-only drivers, PM-side, as-is.** Ship two new scripts in
    `invz_tensor/`, honestly scoped to what `invzt_solve_point` /
    `invzt_critical` / `invzt_chi_realaxis` support today. No new tensor
-   solver physics (no ordered-phase branch, no `invzt_critical_T`) as a
-   prerequisite. `invz_projected`'s own drivers and module code stay
-   unmodified except for the one `git mv` in item 2.
+   solver *physics* (no ordered-phase branch, no `invzt_critical_T`) as a
+   prerequisite. One narrow, non-physics module fix IS in scope
+   (Component 0: the `invzt_chi_realaxis` explicit-q complex-response
+   contract — a one-line projection bug plus a scope guard, gated by new
+   CORE regression tests). `invz_projected`'s own drivers and module code
+   stay unmodified except for the one `git mv` in item 2.
 2. **`invz_peak_energy.m` moves to `invz_common/`** (`git mv`, zero logic
    change) so both `invz_projected` and the new `invzt_run_spectra.m` call
    the one shared copy, matching the precedent already set by the 16
@@ -39,21 +46,23 @@ plumbing, and are out of scope here (Decision 1).
 
 ## Solution overview
 
-Two new files, `invz_tensor/invzt_run_phase_diagram.m` and
-`invz_tensor/invzt_run_spectra.m`, structurally mirroring their projected
-counterparts but reduced to the PM-side field-cut-only physics the tensor
-branch actually has, plus a few tensor-only knobs (`mode`/`nlevels`/`dress`)
+One prerequisite module fix (Component 0), then two new files,
+`invz_tensor/invzt_run_phase_diagram.m` and `invz_tensor/invzt_run_spectra.m`,
+structurally mirroring their projected counterparts but reduced to the
+PM-side field-cut-only physics the tensor branch actually has, plus
+tensor-only knobs (`mode`/`nlevels`; `dress` only where A3 is reachable)
 the projected driver has no equivalent of. One shared numeric helper
 (`invz_peak_energy.m`) moves to `invz_common/` so `invzt_run_spectra.m` can
-use it without depending on `invz_projected`.
+use it without a projected dependency.
 
 Both drivers stay **self-contained by default**: neither requires
 `invz_projected` on the path unless the user opts into the cross-model
-comparison anchor (Component 1, `show_projected_anchor`).
+comparison anchor (Component 2, `show_projected_anchor`).
 
 ## Verified facts this design rests on
 
-Checked against source during the revision pass; no longer assumptions:
+Checked against source (two verification passes + the Codex review); no
+longer assumptions:
 
 - **The `invz_peak_energy.m` move is safe.** All ten tests that invoke
   `invz_spectra_map` / `invz_spectra_qpath` / `invz_chi_tensor_ref` share an
@@ -67,26 +76,113 @@ Checked against source during the revision pass; no longer assumptions:
   — no sign flip. The projected chain un-flips its internal `G`-language at
   `chit = (-G0)./(1+Sw)`, and `invz_spectra_map.m:143` builds the plotted
   `S.chiz` as `imag(o.chi_cc_q(1,:)).'` with no extra minus; the tensor
-  chain (`invzt_chi0_split` → `invzt_chi_rpa` → `u'*X*u`) introduces no
-  additional sign. `test_invzt_rpa_parity.m` compares both un-negated.
+  `chi_uniform` chain (`invzt_chi0_split` → `invzt_chi_rpa` → `u'*X*u`)
+  introduces no additional sign. `test_invzt_rpa_parity.m` compares both
+  un-negated.
+- **`out.chi_cc_q` is (pre-fix) real by construction — Codex F1,
+  confirmed.** The explicit-q branch accumulates
+  `acc = acc + real(Xq(3*(s-1)+3, 3*(s-1)+3, iq))` — a transplant of
+  `invzt_gcc_lattice`'s Matsubara-axis pattern (where `real()` is a
+  legitimate noise-clean) onto the real axis, where it deletes the entire
+  dissipative part. No production code consumes tensor `chi_cc_q` today;
+  the only CORE test on it asserts size/finiteness (zeros pass — Codex F2),
+  and the interop test's `imag(op.chi_cc_q(1,:))` is the **projected**
+  function's complex output, which is exactly the contract the tensor side
+  must match. Component 0 fixes this.
 - **`invzt_tc_pm_extrap` does NOT guard its `critfun`.** It calls
   `[c(i), okv(i)] = critfun(Tg(i))` bare (line 46); any exception propagates
   and aborts the whole call. The projected analogue's effective critfun,
-  `invz_crit_at.m`, supplies its own *selective* try/catch. The driver must
-  do the same — see Component 1.
+  `invz_crit_at.m`, supplies its own *selective* try/catch. The driver's
+  local `invzt_crit_at` does the same — see Component 1.
 - **`invzt_solve_point` throws on a realistic sweep.** It contains no
   try/catch. Sweep-plausible identifiers: `invzt:a1ZeroField` (transverse
   field below 1e-6 T), and — propagated from `invz_common/invz_twolevel.m`
   — `invz:degenerateDoublet` (splitting < 1e-4 meV) and `invz:orderedPhase`
-  (|m| > 1e-3). Note that a *failed PM fixed point* deep in the ordered
-  phase does NOT throw: it returns `pt.converged = false` cleanly.
+  (|m| > 1e-3). A *failed PM fixed point* deep in the ordered phase does
+  NOT throw: it returns `pt.converged = false` cleanly. It records the
+  physics layer in `pt.mode` (`invzt_solve_point.m:370`) — the hook for
+  Component 0's scope guard.
+- **`invzt:bracket` doubles as `invzt_critical`'s argument-validation
+  identifier** (Codex F5, confirmed at `invzt_critical.m:61-63`): a
+  malformed or reversed `Brange` raises the same id as a genuine
+  no-crossing window. A driver that absorbs `invzt:bracket` per point must
+  therefore preflight `Brange` itself, or a reversed bracket becomes a
+  silent all-NaN sweep.
+- **`invzt_critical`'s nested `sample()` absorbs every non-`invzt:*`
+  exception as an invalid/ordered vote** (Codex F7, confirmed at
+  `invzt_critical.m:130-142`) — its committed T7 "non-convergence = phase
+  signal" policy. The drivers' fail-loud guarantee is therefore scoped:
+  *the driver rethrows every non-bracket error that escapes
+  `invzt_critical`; the finder's own broader internal classification stands
+  as designed.* `sigma_floor` is an existing `invzt_critical` option
+  (default −0.5) — the drivers read the same name from `solve_opts` so the
+  floor is single-sourced.
 - **`invz_odd_zero_field` requires `ion.demag == 0`** for every `mode`
-  (including `'off'`) — the guard lives in its callee `invz_odd_blocks.m`
-  (`invz:oddDemag`) and fires before any mode branch. Its `mode` values are
-  `'off' | 'full' | 'uniform_only' | 'qstruct_only'`; `mode='full'` solves
-  **seven** variants per grid, so it is not a cheap anchor.
+  (guard in its callee `invz_odd_blocks.m`, fires before any mode branch),
+  solves **seven** variants per grid at `mode='full'`, and always builds
+  its own **legacy endpoint-inclusive `[-0.5, 0.5]` mesh** via
+  `qVec_generator` (Codex F6) — a different quadrature convention from the
+  tensor driver's `'halfopen'` grid even at equal nominal N.
+- **Strict Γ in an explicit q-list is accepted, not rejected** —
+  `invzt_jq_tensor` assembles Γ-equivalent points with the Lorentz cavity
+  (`invz_is_gamma_equiv` gate), i.e. a strict-uniform-mode page, which is
+  the strict-q=0 *observable*, not the q→0⁺ intrinsic limit (the projected
+  README §1.6 distinction). Convention decision (Codex F8): dispersion
+  q-paths in the drivers, recipes, and smoke tests are **Γ-excluded**;
+  every example starts at finite q.
 
 ## Components
+
+### 0. Prerequisite fix: `invzt_chi_realaxis` explicit-q complex contract
+
+Two changes to `invz_tensor/invzt_chi_realaxis.m`, both TDD-gated by new
+CORE tests in `invz_tensor/tests/test_invzt_chi_realaxis.m`:
+
+**(a) Keep the explicit-q response complex** (fixes Codex F1). In the
+explicit-q accumulation loop, drop the `real()` projection and preallocate
+complex:
+
+```matlab
+% before (bug -- Matsubara-pattern transplant, deletes chi'' on the real axis):
+out.chi_cc_q = zeros(nq, nw);
+...
+acc = acc + real(Xq(3*(s-1)+3, 3*(s-1)+3, iq));
+
+% after:
+out.chi_cc_q = complex(zeros(nq, nw));
+...
+acc = acc + Xq(3*(s-1)+3, 3*(s-1)+3, iq);
+```
+
+Update the function header's `chi_cc_q` description: COMPLEX per-q
+sublattice-averaged site-diagonal cc response; `imag()` is the positive
+χ'' — contract parity with the projected `invz_chi_realaxis`'s `chi_cc_q`
+(whose `imag` the interop suite already consumes).
+
+**(b) Enforce the documented A1-only scope** (fixes Codex F3 at the callee,
+so every caller is protected):
+
+```matlab
+ptmode = getf(pt, 'mode', 'a1');
+if ~strcmp(ptmode, 'a1')
+    error('invzt:realaxisMode', ['invzt_chi_realaxis is the A1 scalar-Sigma ' ...
+        'continuation ONLY (LOCKED scope; see the SCOPE box in this header): ' ...
+        'got pt.mode = ''%s''. Re-solve the point with mode ''a1''. Continuing ' ...
+        'the A2/A3 matrix objects is an open item (README section 10).'], ptmode);
+end
+```
+
+New CORE tests (regression + guard; exact code in the implementation plan):
+- `test_qsel_explicit_q_complex_response` — explicit q-list at a known PM
+  point: `~isreal(out.chi_cc_q)`, positive dissipative weight
+  (`max(imag) > 1e-6`), and χ''(ω>0) non-negativity to tolerance
+  (`min(imag) > -1e-6·max(imag)`) — a physics gate that needs no
+  reimplementation of the function's internals.
+- `test_realaxis_rejects_non_a1_point` — an `'a2'` point solve fed to
+  `invzt_chi_realaxis` must raise `invzt:realaxisMode`.
+
+CORE suite expectation becomes **49 passed / 0 failed / 1 incomplete**
+(47 + these 2) from this component onward.
 
 ### 1. `invz_tensor/invzt_run_phase_diagram.m`
 
@@ -101,6 +197,13 @@ Checked against source during the revision pass; no longer assumptions:
 % design, the same way invz_run_phase_diagram's ODD-overlay branch leaves its
 % own near-Tc0 region blank. There is also no ordered-phase tensor solve, so
 % nothing below the boundary is computed at all.
+%
+% ERROR POLICY: the sweep absorbs ONLY per-point invzt:bracket (a genuine
+% no-crossing outcome once Brange itself has been preflighted below); every
+% other identifier that ESCAPES invzt_critical rethrows. invzt_critical's
+% own internal sampler additionally classifies shared-engine physics signals
+% (and other non-invzt errors) as ordered votes -- its committed T7 policy,
+% documented in its header, not overridden here.
 
 addpath(fileparts(mfilename('fullpath')));
 addpath(fullfile(fileparts(mfilename('fullpath')), '..'));
@@ -116,6 +219,8 @@ gridN  = 16;  gridConv = 'halfopen';   % invzt_qgrid(gridN, gridConv)
 dpRng  = 30;                           % invzt_jq_tensor coupling-sum range
 useParallel = true;                    % false -> force serial
 solve_opts  = struct('mode', 'a1', 'odd', true, 'nlevels', 'std', 'dress', 'full');
+                                       % sigma_floor may be added here too; defaults to
+                                       % invzt_critical's own -0.5 (single-sourced below)
 
 show_proxy_anchor     = true;          % tensor-native small-Bx Tc(0) proxy
                                        % (invzt_tc_pm_extrap). Costs ~numel(Ts)
@@ -131,6 +236,15 @@ show_projected_anchor = false;         % OPT-IN cross-model comparator: the PROJ
                                        % this driver's structural tensor `odd` flag --
                                        % a comparator, NOT the same quantity.
 % -----------------------------------------------------------------------------
+
+% Brange preflight (invzt:bracket doubles as invzt_critical's arg-validation
+% id; absorbing it per point without this check would turn a reversed/typo'd
+% bracket into a silent all-NaN sweep).
+assert(isnumeric(Brange) && isreal(Brange) && numel(Brange) == 2 && ...
+    all(isfinite(Brange)) && Brange(2) > Brange(1) && Brange(1) > 0, ...
+    'invzt_run_phase_diagram:Brange', ...
+    'Brange must be finite [Blo Bhi] with 0 < Blo < Bhi (mode ''a1'' forbids B = 0); got %s.', ...
+    mat2str(Brange));
 
 if show_projected_anchor
     addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'invz_projected'));
@@ -155,11 +269,11 @@ parfor (k = 1:nT, nWorkers)
     try
         val = invzt_critical(ion, Ts(k), lat, Brange, solve_opts);
     catch err
-        % invzt:bracket is a genuine per-point outcome (the window did not
-        % bracket a crossing at this T -- expected near Tc0, where the
-        % boundary is near-vertical). Anything else (invzt:mode, a bad lat,
-        % ...) is a MISCONFIGURATION that would otherwise silently produce a
-        % whole sweep of NaNs, so it rethrows.
+        % invzt:bracket here is a genuine per-point outcome (Brange was
+        % preflighted above, so this window simply lacks a crossing at this
+        % T -- expected near Tc0, where the boundary is near-vertical).
+        % Anything else is a MISCONFIGURATION that would otherwise silently
+        % produce a whole sweep of NaNs, so it rethrows.
         if ~strcmp(err.identifier, 'invzt:bracket'), rethrow(err); end
         fprintf('  T = %.2f K: no bracket in [%.2f %.2f] T (left NaN)\n', ...
                 Ts(k), Brange(1), Brange(2));
@@ -186,8 +300,13 @@ if show_projected_anchor
     % against a projected ODD-off anchor (or vice versa) would be misleading.
     anchor_mode = 'off';
     if ~isfield(solve_opts, 'odd') || ~isequal(solve_opts.odd, false), anchor_mode = 'full'; end
+    % Same NOMINAL N and dipole cutoff as this driver's lat -- but NB the
+    % projected engine always builds its own legacy endpoint-inclusive
+    % [-0.5, 0.5] mesh (a different quadrature convention from 'halfopen'),
+    % on a different model with a different ODD treatment: a cross-model
+    % COMPARATOR, never the same quantity.
     Tc0_closed = invz_odd_zero_field(ion, struct('mode', anchor_mode, ...
-        'grids', {{gridN}}, 'dpRng', dpRng, 'cache', true));   % same grid/dpRng as lat
+        'grids', {{gridN}}, 'dpRng', dpRng, 'cache', true));
 end
 
 figure; hold on;
@@ -198,7 +317,7 @@ if isfinite(Tc0_proxy)
 end
 if isfinite(Tc0_closed)
     plot(0, Tc0_closed, 'ks', 'MarkerFaceColor', 'c', ...
-         'DisplayName', 'projected closed-form T_c(0) (comparator)');
+         'DisplayName', 'projected closed-form T_c(0) (comparator; legacy-inclusive mesh)');
 end
 xlabel('B_c (T)'); ylabel('T (K)');
 title('LiHoF_4 full-tensor 1/z phase boundary (PM side, field-cuts only)');
@@ -216,8 +335,9 @@ function [c, ok] = invzt_crit_at(ion, T, B, lat, opts)
 try
     pt = invzt_solve_point(ion, T, B, lat, opts);
     c  = pt.crit;
-    % Same three-part sample-validity rule as invzt_critical's header.
-    ok = pt.converged && isfinite(c) && pt.Sigma0 >= -0.5;
+    % Same three-part sample-validity rule as invzt_critical, with the SAME
+    % single-sourced floor (invzt_critical's opts.sigma_floor, default -0.5).
+    ok = pt.converged && isfinite(c) && pt.Sigma0 >= getf(opts, 'sigma_floor', -0.5);
 catch err
     switch err.identifier
         case {'invz:degenerateDoublet', 'invz:orderedPhase', 'invzt:a1ZeroField'}
@@ -238,6 +358,17 @@ end
 % so unlike invz_run_spectra this driver cannot sweep ACROSS Bc to show the soft
 % mode hardening on both sides. Fields that land on the ordered side (or fail the
 % sample-validity rule) are masked to NaN with a console note.
+%
+% solve_opts.mode must be 'a1' (enforced below AND by invzt_chi_realaxis's own
+% invzt:realaxisMode guard): the real-axis continuation exists only for the A1
+% scalar Sigma. There is consequently no 'dress' knob here -- it is A3-only.
+%
+% ERROR POLICY: field sweep -- per-field selective masking (physics signals and
+% invalid samples become NaN columns with a console note; everything else
+% rethrows). q-path view -- FAIL LOUD by design: the whole product hinges on the
+% single Bq point, so an invalid point raises invzt:qpathNotPM (with converged/
+% crit/Sigma0) instead of drawing an empty map, and any physics throw from the
+% one solve propagates for the same reason.
 
 addpath(fileparts(mfilename('fullpath')));
 addpath(fullfile(fileparts(mfilename('fullpath')), '..'));
@@ -261,23 +392,34 @@ theta_c = 0.0;  phi_ab = 0.0;          % field-direction tilt knobs (deg). Porte
 transverse_mf = 'legacy_x';            % 'legacy_x' | 'none' | 'vector_ab'
 gridN = 16; gridConv = 'halfopen'; dpRng = 30;
 useParallel = true;
-solve_opts = struct('mode', 'a1', 'odd', true, 'nlevels', 'std', 'dress', 'full', ...
+solve_opts = struct('mode', 'a1', 'odd', true, 'nlevels', 'std', ...
                     'transverse_mf', transverse_mf);
 
 % ---- q-path view: set qpath non-empty to switch views ------------------------
-qpath = [];                            % [] = field sweep; [nq x 3] r.l.u. = q-path view
-% qpath = [linspace(0, 0.5, 41).' zeros(41, 2)];   % Gamma -> (0.5,0,0)
+qpath = [];                            % [] = field sweep; [nq x 3] r.l.u. = q-path view.
+                                       % Keep q-paths GAMMA-EXCLUDED: a strict q = [0 0 0]
+                                       % is assembled with the Lorentz cavity (the strict-
+                                       % uniform observable), NOT the q->0+ intrinsic limit
+                                       % a dispersion plot wants -- start at finite q.
+% qpath = [linspace(0.1, 0.5, 41).' zeros(41, 2)];   % example: toward (0.5,0,0)
 Bq    = 2.0;                           % T -- fixed field for the q-path view
 wq    = linspace(0, 0.6, 400).';       % meV -- own frequency grid for the q-path view
 % -----------------------------------------------------------------------------
 
+if ~strcmp(getf(solve_opts, 'mode', 'a1'), 'a1')
+    error('invzt_run_spectra:mode', ['invzt_run_spectra requires solve_opts.mode = ' ...
+        '''a1'' (got ''%s''): invzt_chi_realaxis is the A1 scalar-Sigma continuation ' ...
+        'ONLY. A2/A3 real-axis continuation is an open item (README section 10).'], ...
+        char(getf(solve_opts, 'mode', 'a1')));
+end
 if phi_ab ~= 0 && strcmp(transverse_mf, 'legacy_x')
     error('invzt_run_spectra:transverseMF', ...
         ['phi_ab = %.3g deg needs the vector transverse mean field: set transverse_mf ' ...
          'to ''vector_ab'' (or ''none'' for a bare CF+Zeeman diagnostic). legacy_x is ' ...
          'x-only and C4-inconsistent for rotated fields.'], phi_ab);
 end
-dhat = [cosd(theta_c)*cosd(phi_ab), cosd(theta_c)*sind(phi_ab), sind(theta_c)];
+dhat   = [cosd(theta_c)*cosd(phi_ab), cosd(theta_c)*sind(phi_ab), sind(theta_c)];
+sfloor = getf(solve_opts, 'sigma_floor', -0.5);   % single-sourced with invzt_critical
 
 g   = invzt_qgrid(gridN, gridConv);
 lat = invzt_jq_tensor(ion, g, struct('dpRng', dpRng, 'cache', true));
@@ -285,11 +427,16 @@ lat = invzt_jq_tensor(ion, g, struct('dpRng', dpRng, 'cache', true));
 if ~isempty(qpath)
     % ---------------- q-path dispersion at one fixed field --------------------
     pt = invzt_solve_point(ion, T, Bq*dhat, lat, solve_opts);
-    assert(pt.converged && isfinite(pt.crit) && pt.crit > 0, 'invzt:qpathOrdered', ...
-        'B = %.2f T at T = %.2f K is not a valid PM point (crit = %.4g).', Bq, T, pt.crit);
+    if ~(pt.converged && isfinite(pt.crit) && pt.crit > 0 && pt.Sigma0 >= sfloor)
+        error('invzt:qpathNotPM', ['q-path point B = %.2f T, T = %.2f K is not a ' ...
+            'valid PM sample (converged = %d, crit = %.4g, Sigma0 = %.4g): the whole ' ...
+            'q-path product hinges on this one point, so failing loudly beats ' ...
+            'drawing an empty map. Raise Bq, raise T, or check the knobs.'], ...
+            Bq, T, pt.converged, pt.crit, pt.Sigma0);
+    end
     out = invzt_chi_realaxis(ion, T, Bq*dhat, pt, wq, ...
             struct('qsel', qpath, 'dpRng', dpRng, 'eta', eta));
-    chipp_q = imag(out.chi_cc_q);                 % [nq, nw], already positive chi''
+    chipp_q = imag(out.chi_cc_q);                 % [nq, nw] positive chi'' (Component 0)
     figure; imagesc(wq, 1:size(chipp_q, 1), chipp_q); set(gca, 'YDir', 'normal');
     xlabel('\omega (meV)'); ylabel('q index along path'); colorbar;
     title(sprintf('tensor 1/z \\chi''''_{cc}(q,\\omega), T = %.2f K, B = %.2f T', T, Bq));
@@ -306,11 +453,11 @@ else
         col = nan(numel(w), 1);
         try
             pt = invzt_solve_point(ion, T, fields(k)*dhat, lat, solve_opts);
-            % Same three-part sample-validity rule as invzt_critical's header
-            % (converged, finite positive crit, Sigma0 floor) -- reused rather
-            % than a looser ad hoc check, so the spurious negative-Sigma fixed
-            % point invzt_critical warns about never reaches the plot.
-            if pt.converged && isfinite(pt.crit) && pt.crit > 0 && pt.Sigma0 >= -0.5
+            % Same three-part sample-validity rule as invzt_critical (converged,
+            % finite positive crit, single-sourced Sigma0 floor) -- so the
+            % spurious negative-Sigma fixed point invzt_critical warns about
+            % never reaches the plot.
+            if pt.converged && isfinite(pt.crit) && pt.crit > 0 && pt.Sigma0 >= sfloor
                 o = invzt_chi_realaxis(ion, T, fields(k)*dhat, pt, w, ...
                         struct('qsel', 'gamma_uniform', 'eta', eta));
                 col = squeeze(imag(o.chi_uniform(3, 3, :)));   % already positive chi''
@@ -351,11 +498,6 @@ else
 end
 ```
 
-The q-path view is a real branch selected by `qpath`, with its own `Bq`/`wq`
-knobs, rather than commented-out scaffolding — the first draft's commented
-block referenced an undefined `Bq` and reused the field-sweep `w`, so it
-would not actually have run if uncommented.
-
 ### 3. `invz_peak_energy.m` → `invz_common/`
 
 `git mv invz_projected/invz_peak_energy.m invz_common/invz_peak_energy.m`,
@@ -369,41 +511,58 @@ confirms it.
 Summary of the conventions used above, all inherited from existing module
 practice rather than newly invented:
 
-- **Per-point boundary failure** (`invzt:bracket`): reported, left `NaN`,
-  sweep continues. Every other identifier rethrows, so a misconfiguration
-  fails loudly on the first point instead of producing a silent all-NaN plot.
-- **Physics signals** (`invz:degenerateDoublet`, `invz:orderedPhase`,
-  `invzt:a1ZeroField`): absorbed into `ok = false` / a masked column, never
-  an error — mirroring `invz_crit_at.m`'s selective pattern.
-- **Invalid-but-non-throwing samples** (`pt.converged == false`, non-finite
-  or non-positive `crit`, `Sigma0` below the `-0.5` spurious-fixed-point
-  floor): masked with a console note, reusing `invzt_critical`'s own
-  three-part sample-validity rule verbatim.
+- **Configuration preflights fail loud before any compute**: malformed
+  `Brange` (`invzt_run_phase_diagram:Brange`), non-a1 `solve_opts.mode`
+  (`invzt_run_spectra:mode` at the driver, `invzt:realaxisMode` at the
+  callee), `phi_ab ~= 0` under `legacy_x`
+  (`invzt_run_spectra:transverseMF`), anchor with `ion.demag ~= 0`
+  (`invzt:anchorDemag`).
+- **Per-point boundary failure** (`invzt:bracket`, post-preflight):
+  reported, left `NaN`, sweep continues. Every other identifier *that
+  escapes `invzt_critical`* rethrows. (Inside `invzt_critical`, the nested
+  sampler's committed policy additionally reads shared-engine physics
+  signals — and other non-`invzt:*` exceptions — as ordered votes; that
+  internal classification is out of the drivers' hands and stands as
+  designed.)
+- **Field-sweep physics signals** (`invz:degenerateDoublet`,
+  `invz:orderedPhase`, `invzt:a1ZeroField`) and **invalid-but-non-throwing
+  samples** (`pt.converged == false`, non-finite/non-positive `crit`,
+  `Sigma0` below the single-sourced `sigma_floor`): masked column with a
+  console note, never an error.
+- **q-path invalid point**: deliberate FAIL LOUD (`invzt:qpathNotPM` with
+  `converged`/`crit`/`Sigma0` in the message) — one invalid `Bq`
+  invalidates the whole product, so no empty map is ever drawn; physics
+  throws from that single solve propagate for the same reason.
 - **`invzt:tcNoWindow`** from the `Tc0` proxy: caught, anchor skipped, rest
   of the plot still renders.
-- **`phi_ab ~= 0` with `transverse_mf = 'legacy_x'`**: hard error, ported
-  verbatim from the projected driver (pure input validation).
 
 ## Testing / verification
 
-Neither new file gets a MATLAB unit test — matching precedent: the existing
-`invz_run_phase_diagram.m` / `invz_run_spectra.m` have none either (drivers
-are verified by running them, not by `runtests`). Verification for this task:
+The drivers themselves get no MATLAB unit tests — matching precedent (the
+projected `invz_run_*.m` have none; drivers are verified by running them).
+Component 0 DOES get unit tests (it is module code). Verification:
 
-1. Run both scripts at reduced size (`gridN = 8`, `numel(Ts) ~ 4`,
+1. Component 0 first, TDD: the complex-response regression test must FAIL
+   against the current `real()` code, then pass after the fix; the
+   `invzt:realaxisMode` guard test likewise. CORE becomes 49/0/1.
+2. Run both drivers at reduced size (`gridN = 8`, `numel(Ts) ~ 4`,
    `numel(fields) ~ 5`, `useParallel = false`) via `matlab -batch` from the
    repo root; confirm they complete without error and produce non-empty
-   figures. Exercise the q-path branch too (set `qpath` non-empty) — it is
-   now a real code path, not a comment.
-2. Exercise the opt-in anchor once (`show_projected_anchor = true`) to
+   figures. Exercise the spectra q-path branch too.
+3. Smoke assertions are SEMANTIC, not just structural (Codex F2): the
+   q-path smoke requires positive spectral weight
+   (`max(chipp_q(:)) > 1e-6`) and at least one finite `Epeak_q` (if all
+   censored, widen `wq` — do not weaken the gate); the field-sweep smoke
+   requires at least one finite column AND at least one masked column at a
+   temperature below the boundary top.
+4. Exercise the opt-in anchor once (`show_projected_anchor = true`) to
    confirm the conditional `addpath` + `ion.demag` assert behave.
-3. Re-run the CORE suite (`runtests('invz_tensor/tests')`, expect 47/0/1)
-   and the PROJECTED regression gate (`runtests('invz_projected/tests')`,
-   expect 143/0/19) after the `invz_peak_energy.m` move.
-4. Update `invz_tensor/README.html` §2 ("Getting a phase diagram or a
-   susceptibility spectrum") to point at the real scripts instead of the
-   "no turnkey driver" framing, keeping the existing recipe prose as the
-   "what these scripts do under the hood" explanation.
+5. Re-run CORE (49/0/1 from Component 0 on) and PROJECTED (143/0/19)
+   after the `invz_peak_energy.m` move and at the end.
+6. Update `invz_tensor/README.html` §2 to point at the real scripts,
+   keeping the recipes as the "under the hood" explanation, and make its
+   q-path recipe Γ-excluded (start at 0.1) so spec, plan, README, and smoke
+   are identical (Codex F8).
 
 Full-resolution production sweeps (the real `gridN = 16`+ / dense-`Ts` runs)
 are left to the user to kick off, same as the projected driver's own
@@ -411,14 +570,68 @@ are left to the user to kick off, same as the projected driver's own
 
 ## Success criteria
 
+- `invzt_chi_realaxis` returns a complex `chi_cc_q` with positive
+  dissipative weight at a PM point, rejects non-a1 points with
+  `invzt:realaxisMode`, and the two new CORE tests pass (49/0/1).
 - `invzt_run_phase_diagram.m` and `invzt_run_spectra.m` exist in
   `invz_tensor/`, run end-to-end at reduced size with no runtime errors
-  (both branches of the spectra driver), and produce the plots described.
+  (both branches of the spectra driver), and produce the plots described —
+  with the q-path smoke showing genuinely nonzero χ''.
 - Both drivers run with `invz_projected` absent from the path under their
   default knobs.
-- `invz_peak_energy.m` lives in `invz_common/`; `invz_projected/tests`
-  (143/0/19) and `invz_tensor/tests` (47/0/1) both still pass unchanged.
-- `invz_tensor/README.html` §2 reflects the new scripts.
+- `invz_peak_energy.m` lives in `invz_common/`; PROJECTED (143/0/19) and
+  INTEROP (8/0/2) unchanged.
+- `invz_tensor/README.html` §2 reflects the new scripts and the Γ-excluded
+  q-path convention.
+
+## Review amendments (Codex review, 2026-07-18)
+
+Dispositions of `invzt_driver_review_by_Codex.md` F1–F8, each verified
+against source before acceptance:
+
+- **F1 (Blocker) — accepted.** `chi_cc_q` real-projection confirmed at the
+  explicit-q accumulation. → Component 0(a) + regression test. The spec's
+  earlier "verified fact" about the sign convention covered only
+  `chi_uniform`; corrected above.
+- **F2 (High) — accepted.** Structural-only smoke/unit gates would have
+  certified the F1 zero-map. → semantic assertions (Testing item 3) + the
+  Component 0 regression test. The reviewer's optional manual
+  `invzt_chi_rpa` cross-projection was replaced by a χ''(ω>0)
+  non-negativity physics gate — decisive without reimplementing the
+  function's internals in the test.
+- **F3 (High) — accepted, both layers.** Driver preflight
+  (`invzt_run_spectra:mode`) + callee guard (`invzt:realaxisMode`,
+  Component 0(b)); `dress` removed from the spectra driver's knobs (A3-only,
+  dead under forced a1; still exposed in the phase driver where A3 runs).
+- **F4 (Medium) — accepted.** q-path validity now includes the `Sigma0`
+  floor; policy decision: FAIL LOUD (`invzt:qpathNotPM`) for the q-path,
+  per-column masking only for the multi-field sweep; floor single-sourced
+  as `solve_opts.sigma_floor` (existing `invzt_critical` option name,
+  default −0.5) across both drivers and the proxy helper.
+- **F5 (Medium) — accepted.** `Brange` preflight added before the `parfor`.
+  Splitting `invzt_critical`'s arg-validation identifier from its
+  no-crossing identifier is noted as a possible module follow-up, not done
+  here (out of driver scope).
+- **F6 (Medium) — accepted as a wording/labeling fix.** The anchor comment
+  and plot legend now state: same nominal N and dipole cutoff, projected
+  legacy-inclusive mesh, different model and ODD treatment — comparator
+  only. Running the tensor curve on `'legacy_inclusive'` when the anchor is
+  enabled was considered and declined: the anchor is already declared a
+  cross-model comparator, and quadrature is the smallest of its three
+  differences.
+- **F7 (Medium) — spec qualified; callee change declined.** The drivers'
+  fail-loud guarantee is now explicitly scoped to errors that escape
+  `invzt_critical`. Narrowing `invzt_critical`'s internal absorbed set
+  would alter its committed T7 "non-convergence = phase signal" policy —
+  a module-behavior change with its own test surface, out of scope for a
+  driver task.
+- **F8 (Low) — accepted.** Convention decision: dispersion q-paths are
+  Γ-excluded (strict Γ is *accepted* by `invzt_jq_tensor` but assembles the
+  Lorentz-cavity strict-uniform page — the strict-q=0 observable, not the
+  q→0⁺ limit); spec, plan, README recipe, and smoke now all start q-paths
+  at finite q, and the driver comment documents the distinction. Renaming
+  the spec to drop `-design` declined — the suffix is this repo's
+  established spec-filename convention.
 
 ## Out of scope
 
@@ -430,33 +643,10 @@ are left to the user to kick off, same as the projected driver's own
   point / model toggle — considered and explicitly declined for now (the
   adapter work is only worth it once the tensor branch has FM + T-cut
   support; revisit then).
+- Narrowing `invzt_critical`'s internal non-`invzt:*` absorption, or
+  splitting its arg-validation identifier from `invzt:bracket` (Codex
+  F5/F7 module-side suggestions) — noted as possible module follow-ups.
+- A2/A3 real-axis continuation (the reason for the a1-only guards).
 - Warm-starting `Sigma_seed` across sweep points (the projected drivers do
   not do this either; `invzt_critical` warm-starts only *within* one
   bisection).
-
-## Revision notes (2026-07-18, post source-verification)
-
-The first draft was reviewed against source. Changes:
-
-1. **Fixed a runtime-fatal defect.** The draft's `Tc0` proxy used
-   `@(T) crit_ok(invzt_solve_point(...))`, where `crit_ok` received an
-   already-computed `pt` — so a throw inside `invzt_solve_point` escaped
-   before any guard ran, and `invzt_tc_pm_extrap` has no try/catch of its
-   own. Replaced with a proper `invzt_crit_at` local function carrying the
-   selective try/catch, mirroring `invz_crit_at.m`.
-2. **Inverted the error-catch rule.** The draft caught *all* `invzt:*` and
-   NaN-ed, which would swallow config errors (`invzt:mode`) into a silent
-   all-NaN sweep. Now only `invzt:bracket` is absorbed.
-3. **Fixed the `parfor` slicing pattern** to the val-then-assign form the
-   projected driver uses, so the sliced output is always assigned.
-4. **Corrected the projected anchor**: made it opt-in (default off) with a
-   conditional `addpath`, added the required `ion.demag == 0` assert, and
-   tied its `mode` to the driver's own `odd` setting instead of hardcoding
-   `'full'`. Also documented that it is a *different* ODD treatment — a
-   comparator, not the same quantity.
-5. **Smaller:** dropped the magic `Ts(Ts <= 1.6)` cutoff (pass the full
-   grid; the function filters internally); made `peak_wmin` a knob with a
-   non-zero default so the hyperfine line does not win the peak pick;
-   promoted the q-path view from broken commented scaffolding to a real
-   `qpath`-selected branch with its own `Bq`/`wq`; added `parfor` +
-   `eta` to the spectra driver for parity with the projected one.
