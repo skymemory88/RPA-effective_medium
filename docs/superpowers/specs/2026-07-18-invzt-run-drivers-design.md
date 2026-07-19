@@ -208,6 +208,12 @@ CORE suite expectation: **49 passed / 0 failed / 1 incomplete** after (a)+(b)
 
 ### 1. `invz_tensor/invzt_run_phase_diagram.m`
 
+**SUPERSEDED (2026-07-18, T-cut extension):** the governing byte-parity copy
+of this driver now lives in
+`docs/superpowers/specs/2026-07-18-invzt-critical-t-design.md` Component 5
+(two-regime `Ts` + `Bs` sweep with per-finder tolerances). The block below is
+the as-first-shipped field-cut-only version, kept for the execution record.
+
 ```matlab
 %INVZT_RUN_PHASE_DIAGRAM  Full-tensor 1/z PM-side phase boundary Bc(T).
 %
