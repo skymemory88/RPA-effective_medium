@@ -972,6 +972,19 @@ after.
   Caller-seed stripping and its poisonous-seed test are unchanged (the
   chain's FIRST/top sample is cold, so an unstripped caller seed still
   poisons exactly that endpoint).
+- **E2 (2026-07-19, controller probe after the E1 fix):** cross-finder
+  path hysteresis in the shallow-crit corner. At 8³/dpRng-15, odd on, the
+  T-cut's warm-tracked profile at B = 1.5 T is smooth and monotone with a
+  single clean crossing at ≈ 1.35–1.36 K (ncross = 1) — yet the field cut
+  puts Bc(1.4 K) at 1.916 T, i.e. calls (1.4 K, 1.5 T) ordered while the
+  T-cut chain measures crit = +0.005 there. |crit| ≲ 0.01 across the whole
+  contested region: the A1 fixed point near the boundary depends on the
+  warm-start path, so the two scan directions disagree by ~50 mK / ~0.4 T
+  in this near-degenerate corner AT THIS COARSE GRID. Reported, never
+  tuned (repo rule): the designed odd-off round-trip is EXACT (1.4000 K),
+  gates unchanged; re-examine at production 16³/dpRng-30 where the shallow
+  region should shrink. The odd-on slow gate's thin pass margin (1.3518 vs
+  the 1.35 floor) is this same effect.
 
 ## Out of scope
 
