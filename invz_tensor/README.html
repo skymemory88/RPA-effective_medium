@@ -71,7 +71,7 @@
 
 <p><strong>Fast check &mdash; the default gate (CORE, ~1&ndash;2 min warm-cache).</strong> The tensor unit tests, run with <code>invz_projected</code> <em>off</em> the path:</p>
 <pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests'); disp(r); assertSuccess(r)"</code></pre>
-<p>&rarr; expected <strong>55 passed / 0 failed / 3 incomplete</strong> (the incompletes are the <code>INVZ_SLOW</code>-gated A4 production-ladder test, the T-cut crossing-consistency round-trip, and the odd-on T-cut gate; the count includes the 2026-07-18 regression tests added with the drivers and the T-cut finder &mdash; complex explicit-q response, A1-scope guard, odd-mask parity, the <code>invzt_tc_pick</code> policy/zero suites, validation identifiers, sampler contract, and the <code>invz_refine_crossing</code> helper test).</p>
+<p>&rarr; expected <strong>55 passed / 0 failed / 4 incomplete</strong> (the incompletes are the <code>INVZ_SLOW</code>-gated A4 production-ladder test, the T-cut crossing-consistency round-trip, the odd-on T-cut gate, and the adaptive-slide gate; the count includes the 2026-07-18 regression tests added with the drivers and the T-cut finder &mdash; complex explicit-q response, A1-scope guard, odd-mask parity, the <code>invzt_tc_pick</code> policy/zero suites, validation identifiers, sampler contract, and the <code>invz_refine_crossing</code> helper test).</p>
 
 <p><strong>Interop parity (optional)</strong> &mdash; live cross-checks against <code>invz_projected</code>:</p>
 <pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_tensor/tests/interop'); disp(r); assertSuccess(r)"</code></pre>
@@ -273,7 +273,7 @@ imagesc(w, 1:size(chipp_q,1), chipp_q); xlabel('\omega (meV)'); ylabel('q index'
 <p><strong>PROJECTED</strong> (regression gate &mdash; must stay identical to the pre-<code>invz_tensor</code> frozen baseline):</p>
 <pre><code>"/Applications/MATLAB_R2025a.app/bin/matlab" -batch "r = runtests('invz_projected/tests'); disp(r); assertSuccess(r)"</code></pre>
 
-<p>Slow gates are prefixed <code>INVZ_SLOW=1</code> (tests use <code>assumeTrue(testCase, ~isempty(getenv('INVZ_SLOW')), 'INVZ_SLOW only')</code>) &mdash; this covers the A4 production ladder run (see "Open items"), the T-cut crossing-consistency round-trip, and the odd-on T-cut gate (test_invzt_critical_T).</p>
+<p>Slow gates are prefixed <code>INVZ_SLOW=1</code> (tests use <code>assumeTrue(testCase, ~isempty(getenv('INVZ_SLOW')), 'INVZ_SLOW only')</code>) &mdash; this covers the A4 production ladder run (see "Open items") and the three T-cut gates (crossing-consistency round-trip, odd-on, adaptive-slide; test_invzt_critical_T).</p>
 
 <p>CORE test boilerplate (no <code>invz_projected</code> on path):</p>
 <pre><code>function setupOnce(~)

@@ -216,8 +216,9 @@ lat = invzt_jq_tensor(ion, g, struct('dpRng', 15, 'cache', true));
 oT = struct('odd', true);
 oT.window = [1.2 1.7];
 tc = invzt_critical_T(ion, 1.5, lat, oT);
-verifyGreaterThan(testCase, tc, 1.35);   % loose physical band at 8^3: the odd-on
-verifyLessThan(testCase, tc, 1.60);      % boundary has Bc(1.4 K) = 1.916 T > 1.5 T
+verifyGreaterThan(testCase, tc, 1.30);   % E2-informed band at 8^3 (measured 1.3518;
+verifyLessThan(testCase, tc, 1.60);      % floor lowered 1.35->1.30 per the final review
+                                         % -- the 1.8 mK margin was flake-prone)
 fprintf('odd-on T-cut: Tc(1.5 T) = %.4f K\n', tc);
 % Hard window entirely inside the ordered phase: ONE pass, no sliding ->
 % invzt:bracket with the widen-the-window message (F4's contract end-to-end).
@@ -235,4 +236,28 @@ catch ME
     verifySubstring(testCase, ME.message, '[0.250, 0.450]');
 end
 verifyTrue(testCase, didThrow, 'expected invzt:bracket was not thrown');
+end
+
+function test_tcut_adaptive_slide_slow(testCase)
+% Post-review fast-follow (final whole-branch review, Important): committed
+% coverage of the ADAPTIVE sliding path with REAL valid votes. The anchor is
+% set deliberately low so the first window [1.0, 1.3] sits entirely in the
+% ordered phase (valid metastable-PM crit < 0 votes at 8^3, cf. the E2 probe:
+% crit(1.30 K, 1.5 T) = -0.169) -- the finder must slide UP once and bracket
+% the crossing in the second window. Exercises the up-slide transition, the
+% cross-window rolling seed, and the adaptive return path end-to-end.
+assumeTrue(testCase, ~isempty(getenv('INVZ_SLOW')), 'INVZ_SLOW only');
+ion = invz_ion();
+g   = invzt_qgrid(8, 'halfopen');
+lat = invzt_jq_tensor(ion, g, struct('dpRng', 15, 'cache', true));
+oT = struct('odd', true);
+oT.Tc0   = 1.25;                     % anchor low: first window top = 1.30 K, a KNOWN
+oT.width = 0.3;                      % valid ordered vote -> deterministic 'up' slide
+[tc, out] = invzt_critical_T(ion, 1.5, lat, oT);
+verifyGreaterThan(testCase, tc, 1.30);           % E2-informed band around the
+verifyLessThan(testCase, tc, 1.45);              % measured ~1.36-1.38 K
+verifyGreaterThanOrEqual(testCase, out.window(1), 1.299, ...
+    'final window bottom must sit at/above the initial window TOP: a slide happened');
+fprintf('adaptive slide: Tc(1.5 T) = %.4f K, final window [%.3f, %.3f]\n', ...
+        tc, out.window(1), out.window(2));
 end

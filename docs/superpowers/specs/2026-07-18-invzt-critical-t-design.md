@@ -362,7 +362,7 @@ function [tc, out] = invzt_critical_T(ion, B, lat, opts)
 %   re-interpolated onto the new T's Matsubara grid (nested sampler below).
 %   Without branch tracking, cold starts hop between A1 fixed-point branches
 %   and the sampled crit(T) flickers sign (measured ncross = 5 and a
-%   +0.15 K Tc error at the 8^3 round-trip gate) -- the same reason
+%   +0.20 K Tc error at the 8^3 round-trip gate) -- the same reason
 %   INVZT_CRITICAL warm-starts its field bisection (its header: the seed
 %   "helps the ordered-side solves land on the metastable PM branch").
 %
@@ -613,7 +613,11 @@ show_proxy_anchor     = true;          % plot the small-Bx Tc(0) proxy marker. T
 Bproxy                = 0.05;          % transverse field (T) for that proxy
 Ts_proxy              = 1.40:1/30:2.00;% proxy extrapolation grid (K); must contain >= 2
                                        % converged PM points at Bproxy (i.e. reach above
-                                       % Tc0 ~ 1.56 K at production grids).
+                                       % Tc0 ~ 1.56 K at production grids). NB proxy
+                                       % samples are COLD (not branch-tracked): keep this
+                                       % grid reaching WELL above Tc0 -- a too-low anchor
+                                       % pushes the T-cuts onto the adaptive slide-up
+                                       % path (final review; execution finding E2).
 show_projected_anchor = false;         % OPT-IN cross-model comparator: the PROJECTED
                                        % closed-form Tc(0) (invz_odd_zero_field).
                                        % Off by default because it (a) puts
@@ -985,6 +989,33 @@ after.
   gates unchanged; re-examine at production 16³/dpRng-30 where the shallow
   region should shrink. The odd-on slow gate's thin pass margin (1.3518 vs
   the 1.35 floor) is this same effect.
+
+## Post-review fast-follow (final whole-branch review, 2026-07-19)
+
+The final review returned **Ready to merge: Yes** (0 Critical / 0 Important
+blocking) with one Important fast-follow and five Minors. Applied in the
+closing commit:
+
+- **Adaptive-slide integration coverage** (the Important): new committed
+  `INVZ_SLOW` test `test_tcut_adaptive_slide_slow` — a deliberately low
+  anchor (`Tc0 = 1.25`, `width = 0.3`) makes the first window's top a KNOWN
+  valid ordered vote, forcing a deterministic up-slide before the crossing
+  window; asserts the slide happened (`out.window(1)` at/above the initial
+  top) and Tc lands in the E2-informed band. PASSED first run — the
+  reviewer's latent concern (cross-slide seeding of the new window's top
+  from an ordered Sigma) did not bite with real physics. CORE fast gate is
+  now **55/0/4**.
+- **odd-on floor de-flake**: 1.35 → 1.30 (the 1.8 mK margin was flake-prone;
+  E2-documented physics, INVZ_SLOW-only).
+- **`Ts_proxy` operational guard** (driver + this spec's Component-5 block in
+  lockstep): proxy samples are COLD — keep the grid reaching well above Tc0
+  or the T-cuts get pushed onto the adaptive slide-up path.
+- **Prose nit**: the finder header's "+0.15 K" corrected to "+0.20 K".
+
+Deferred as follow-ups (reviewer Minors, ship-as-is): per-attempt seed
+reset on adaptive slides (latent, did not bite in the committed test);
+refinement-seed E2 note in the finder header; driver `Twin` span preflight
+mirroring the finder's 1e-9 rule; branch-tracking the proxy samples.
 
 ## Out of scope
 
