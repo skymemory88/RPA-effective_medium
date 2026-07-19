@@ -46,7 +46,7 @@ function [tc, out] = invzt_critical_T(ion, B, lat, opts)
 %   re-interpolated onto the new T's Matsubara grid (nested sampler below).
 %   Without branch tracking, cold starts hop between A1 fixed-point branches
 %   and the sampled crit(T) flickers sign (measured ncross = 5 and a
-%   +0.15 K Tc error at the 8^3 round-trip gate) -- the same reason
+%   +0.20 K Tc error at the 8^3 round-trip gate) -- the same reason
 %   INVZT_CRITICAL warm-starts its field bisection (its header: the seed
 %   "helps the ordered-side solves land on the metastable PM branch").
 %

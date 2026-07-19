@@ -62,7 +62,11 @@ show_proxy_anchor     = true;          % plot the small-Bx Tc(0) proxy marker. T
 Bproxy                = 0.05;          % transverse field (T) for that proxy
 Ts_proxy              = 1.40:1/30:2.00;% proxy extrapolation grid (K); must contain >= 2
                                        % converged PM points at Bproxy (i.e. reach above
-                                       % Tc0 ~ 1.56 K at production grids).
+                                       % Tc0 ~ 1.56 K at production grids). NB proxy
+                                       % samples are COLD (not branch-tracked): keep this
+                                       % grid reaching WELL above Tc0 -- a too-low anchor
+                                       % pushes the T-cuts onto the adaptive slide-up
+                                       % path (final review; execution finding E2).
 show_projected_anchor = false;         % OPT-IN cross-model comparator: the PROJECTED
                                        % closed-form Tc(0) (invz_odd_zero_field).
                                        % Off by default because it (a) puts

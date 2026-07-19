@@ -718,3 +718,24 @@ The `git diff --cached --name-status` must list exactly: `M	invz_tensor/README.h
 - Production sweeps at the committed knobs (16³, 11 field cuts + 6 T-cuts) remain "left to the user", per repo precedent.
 - During Task 2 the driver's local `invzt_crit_at` deliberately coexists with the new module file (locals shadow path functions inside the script; the code is identical) — flag it in neither task as a defect; Task 3 removes the local.
 - The projected `invz_critical_T` carries the same F1 classifier gaps this work fixes on the tensor side — deliberately untouched (validated code, own test surface); noted in the spec as a candidate follow-up for the user.
+
+---
+
+## Execution addendum (2026-07-19, post-completion)
+
+All four tasks executed via subagent-driven development; every task review
+clean. Commit map (base `47b798e`): Task 1 → `8bcac5e`; Task 2 → `2412205`
+(one BLOCKED round → spec rev 5, execution finding **E1**: descending
+branch-tracked rolling seed after the gates caught crit(T) sign-flicker
+from cold-start branch hopping — round-trip then EXACT at 1.4000 K);
+controller probe → **E2** recorded (`b7ec35b`: cross-finder path hysteresis
+~50 mK in the shallow-crit odd-on corner at 8³; report-never-tune);
+Task 3 → `9be4b79` (smoke first-run clean; proxy extrapolation-grid
+sensitivity logged as an E2-family observation); Task 4 → `0d5fc2e`.
+Final whole-branch review (opus): **Ready to merge: Yes**; its Important
+fast-follow (committed adaptive-slide gate) + three Minors applied in the
+closing commit — CORE fast gate now **55/0/4** (the plan's historical
+"55/0/3" gates describe execution time; the test-file block in Task 2
+Step 1 predates the fast-follow additions, see the spec's "Post-review
+fast-follow" section for the deltas). Suites at close: CORE 55/0/4,
+INTEROP 8/0/2, PROJECTED 143/0/19.
