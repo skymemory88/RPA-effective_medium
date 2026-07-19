@@ -8,7 +8,7 @@
 
 **Tech Stack:** MATLAB R2025a; existing primitives `invzt_solve_point`, `invzt_critical`, `invzt_tc_pm_extrap`, `invzt_qgrid`, `invzt_jq_tensor`, `invzt_str`; shared engine in `invz_common/`.
 
-**Spec (source of record):** `docs/superpowers/specs/2026-07-18-invzt-critical-t-design.md` **rev 4** (post `critical-t-review_by_Codex.md` rounds 1–3 — dispositions F1–F8, R1–R6, and T1–T3 baked in). All code blocks below are copied from it verbatim; if they diverge, the spec governs.
+**Spec (source of record):** `docs/superpowers/specs/2026-07-18-invzt-critical-t-design.md` **rev 5** (rounds 1–3 dispositions F1–F8/R1–R6/T1–T3 + execution finding E1: descending branch-tracked rolling seed — cold starts hop A1 fixed-point branches and make crit(T) flicker sign). All code blocks below are copied from it verbatim; if they diverge, the spec governs.
 
 ## Global Constraints
 
@@ -16,9 +16,9 @@
 - Repository root: `/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Programming scripts/Matlab/Simulation/invZ expansion` (all `cd` commands below mean this directory).
 - Single-test selector form that works on this install: `runtests('<file>.m', 'ProcedureName', '<name>')` — the `dir/file/testname` slash form is INVALID here.
 - Suite expectations: CORE `runtests('invz_tensor/tests')` → **50 / 0 / 1 before Task 2, 55 / 0 / 3 from Task 2 on**; INTEROP `runtests('invz_tensor/tests/interop')` → **8 / 0 / 2**; PROJECTED `runtests('invz_projected/tests')` → **143 / 0 / 19** (frozen — no new tests go in the projected suite).
-- **Byte-parity invariant:** the committed `invz_tensor/invzt_run_phase_diagram.m` must be byte-identical to the spec rev 4's Component-5 fenced ```matlab block (Task 4 marks the drivers spec's Component-1 block SUPERSEDED).
+- **Byte-parity invariant:** the committed `invz_tensor/invzt_run_phase_diagram.m` must be byte-identical to the spec rev 5's Component-5 fenced ```matlab block (Task 4 marks the drivers spec's Component-1 block SUPERSEDED).
 - Error policy (spec, non-negotiable): driver preflights fail loud before compute (`invzt_run_phase_diagram:Brange/:Ts/:Bs/:Twin/:Btol/:Ttol/:Twidth/:Tgridstep/:tcAnchor`, all `invzt_str`-formatted — never `mat2str`, which throws on structs while building the message); the sweep absorbs **only** per-point `invzt:bracket`; `invzt_crit_at`'s selective catch stays exactly `{invz:degenerateDoublet, invz:orderedPhase, invzt:a1ZeroField}` → `ok=false`, all else rethrows; `parfor` sliced outputs use val-then-assign.
-- `invzt_critical_T`: explicit `opts.window` is a HARD bound (one pass, no sliding, and the exit happens BEFORE any slide so errors report the window actually sampled — R2); adaptive mode requires a finite positive scalar `opts.Tc0` (`invzt:tcAnchor`), makes up to 9 window attempts, terminates the no-valid `grow` path at the 0.02 K floor (R3), and accumulates re-entrance indicators across attempts (`nseen` — R5); `width`/`gridstep`/`tol` are validated finite positive real scalars (`invzt:tcOpts`); caller-supplied `Sigma_seed` is stripped (proven by a length-MATCHED poisonous seed — a wrong-length seed is silently ignored by the solver, R1).
+- `invzt_critical_T`: explicit `opts.window` is a HARD bound (one pass, no sliding, and the exit happens BEFORE any slide so errors report the window actually sampled — R2); adaptive mode requires a finite positive scalar `opts.Tc0` (`invzt:tcAnchor`), makes up to 9 window attempts, terminates the no-valid `grow` path at the 0.02 K floor (R3), and accumulates re-entrance indicators across attempts (`nseen` — R5); `width`/`gridstep`/`tol` are validated finite positive real scalars (`invzt:tcOpts`); caller-supplied `Sigma_seed` is stripped (proven by a length-MATCHED poisonous seed — a wrong-length seed is silently ignored by the solver, R1); the finder threads its OWN rolling seed, sampling the grid DESCENDING in T and re-interpolating the previous valid Sigma onto each new Matsubara grid (E1 — without branch tracking, crit(T) flickers sign and the gates fail).
 - **Worktree hygiene (per-task checkpoint, no hard-coded dirt list):** start EVERY task with `git status --short`, note the unrelated dirty/untracked paths present at that moment, and stage only the exact paths named in the task's commit step. The worktree carries the user's own WIP — at plan time this includes `invz_tensor/invzt_run_spectra.m` (in-progress production knobs) — which must NEVER be staged, reverted, or edited. Never `git add -A` / `git commit -a`.
 - MATLAB test-fixture trap: `struct('f', [a b])` creates a struct ARRAY — malformed-opts fixtures in tests are built by field assignment (`o = struct(); o.window = [1.8 1.0];`).
 
@@ -252,9 +252,10 @@ function test_crit_at_contract(testCase)
 % paths fire inside invzt_solve_point BEFORE any lattice access, so a dummy
 % lat keeps these at millisecond cost.
 ion = invz_ion();
-[c, ok] = invzt_crit_at(ion, 1.6, [0 0 0], struct(), struct());   % zero transverse field
+[c, ok, pt0] = invzt_crit_at(ion, 1.6, [0 0 0], struct(), struct());  % zero transverse field
 verifyFalse(testCase, ok);
 verifyTrue(testCase, isnan(c));                                   % invzt:a1ZeroField absorbed
+verifyEqual(testCase, pt0, struct());                             % absorbed sample: empty pt (E1)
 o = struct(); o.mode = 'bogus';
 verifyError(testCase, @() invzt_crit_at(ion, 1.6, [2 0 0], struct(), o), ...
     'invzt:mode');                                                % misconfiguration rethrows
@@ -362,17 +363,17 @@ Expected: **4 failed, 1 passed, 2 incomplete**. The two `invzt_tc_pick` tests, t
 
 - [ ] **Step 3: Create `invz_tensor/invzt_tc_pick.m`**
 
-Exact content — the spec rev 4's Component-3 code block, verbatim (from `function [act, ka, kb, ncross] = invzt_tc_pick(cv)` to its final `end`). Extract the fenced block with sed/awk and `diff` against your written file — expect byte-identical.
+Exact content — the spec rev 5's Component-3 code block, verbatim (from `function [act, ka, kb, ncross] = invzt_tc_pick(cv)` to its final `end`). Extract the fenced block with sed/awk and `diff` against your written file — expect byte-identical.
 
 - [ ] **Step 4: Create `invz_tensor/invzt_crit_at.m` and harden `invz_tensor/invzt_str.m`**
 
-`invzt_crit_at.m`: exact content — the spec rev 4's Component-2 code block, verbatim. Same extraction + `diff` verification.
+`invzt_crit_at.m`: exact content — the spec rev 5's Component-2 code block, verbatim. Same extraction + `diff` verification.
 
-`invzt_str.m`: replace its body with the spec rev 4's Component-2b code block, verbatim (the change is behavior-additive: char/string/numeric/logical inputs format exactly as before; only inputs that previously THREW — structs/cells/objects — now return a `'<1x1 struct>'`-style placeholder).
+`invzt_str.m`: replace its body with the spec rev 5's Component-2b code block, verbatim (the change is behavior-additive: char/string/numeric/logical inputs format exactly as before; only inputs that previously THREW — structs/cells/objects — now return a `'<1x1 struct>'`-style placeholder).
 
 - [ ] **Step 5: Create `invz_tensor/invzt_critical_T.m`**
 
-Exact content — the spec rev 4's Component-4 code block, verbatim (~190 lines). Same extraction + `diff` verification. Load-bearing structure to sanity-check after transcription: control-knob validation (`invzt:tcOpts`) BEFORE the `Sigma_seed` strip and `f` closure; hard-window branch (`invzt:tcWindow`, incl. the below-floor check) vs adaptive branch (`invzt:tcAnchor` requires finite positive scalar `Tc0 > Tmin`); `nattempt = 1` for hard windows vs 9 adaptive attempts; the floor-collapse `break`; `winS` (last SAMPLED window) captured each attempt AFTER the floor-collapse guard (T2 -- a collapse reports the previous really-sampled window) and used in ALL reporting; `nseen` accumulating `ncross` across attempts and feeding the warning + `out.ncross` (R5); the `invzt_tc_pick` return switch (`zero` returns `Tv(ka)` directly, `bracket` refines); `if hardwin, break; end` BEFORE the slide switch (R2 — the one-pass contract keeps the reported window unmutated); the `grow` branch's floor termination (R3); the two distinct `invzt:bracket` messages built from `winS`.
+Exact content — the spec rev 5's Component-4 code block, verbatim (~190 lines). Same extraction + `diff` verification. Load-bearing structure to sanity-check after transcription: control-knob validation (`invzt:tcOpts`) BEFORE the `Sigma_seed` strip and `f` closure; hard-window branch (`invzt:tcWindow`, incl. the below-floor check) vs adaptive branch (`invzt:tcAnchor` requires finite positive scalar `Tc0 > Tmin`); `nattempt = 1` for hard windows vs 9 adaptive attempts; the floor-collapse `break`; `winS` (last SAMPLED window) captured each attempt AFTER the floor-collapse guard (T2 -- a collapse reports the previous really-sampled window) and used in ALL reporting; `nseen` accumulating `ncross` across attempts and feeding the warning + `out.ncross` (R5); the DESCENDING `for i = ng:-1:1` sampling loop + the nested `sample()` with its rolling `wn_prev`/`Sig_prev` seed state advanced only on VALID samples (E1); the `invzt_tc_pick` return switch (`zero` returns `Tv(ka)` directly, `bracket` refines); `if hardwin, break; end` BEFORE the slide switch (R2 — the one-pass contract keeps the reported window unmutated); the `grow` branch's floor termination (R3); the two distinct `invzt:bracket` messages built from `winS`.
 
 - [ ] **Step 6: Run the fast tests to verify they pass**
 
@@ -443,7 +444,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 3: Driver rewiring — two-regime sweep + smoke
 
 **Files:**
-- Modify: `invz_tensor/invzt_run_phase_diagram.m` (FULL replacement with the spec rev 4's Component-5 block; the local `invzt_crit_at` at the bottom is deleted — Task 2's module file takes over, same name, same code)
+- Modify: `invz_tensor/invzt_run_phase_diagram.m` (FULL replacement with the spec rev 5's Component-5 block; the local `invzt_crit_at` at the bottom is deleted — Task 2's module file takes over, same name, same code)
 - Temporary (deleted before commit): `invz_tensor/smoke_invzt_run_phase_diagram.m`
 
 **Interfaces:**
@@ -457,7 +458,7 @@ cd "/Users/yikaiyang/Library/CloudStorage/OneDrive-Nexus365/Programming scripts/
 ```
 (Reminder: `invz_tensor/invzt_run_spectra.m` is the user's WIP — do not touch.)
 
-The new file content is the spec rev 4's Component-5 fenced ```matlab block, verbatim — extract and `diff`, expect byte-identical (it is the governing byte-parity copy from now on). Key structural points to sanity-check: `Btol`/`Ttol`/`Twidth`/`Tgridstep` knobs with the units-in-caps comments; `Ts` preflight alongside `Brange`/`Bs`/`Twin` (Twin additionally required to reach above the 0.02 K solve floor) plus finite-positive-real-scalar preflights for `Btol`/`Ttol`/`Twidth`/`Tgridstep` (R4 — `invzt_critical` does not validate its `opts.tol` at all), all `invzt_str`-formatted; proxy computed before the sweep when `show_proxy_anchor || (~isempty(Bs) && isempty(Twin))` with the `invzt_run_phase_diagram:tcAnchor` assert; `bopts`/`topts` assembled at the call boundary; flat two-kind `parfor` with val-then-assign and `invzt:bracket`-only absorption; T-cut plot branch; merged `phase_boundary`; NO local function at the bottom.
+The new file content is the spec rev 5's Component-5 fenced ```matlab block, verbatim — extract and `diff`, expect byte-identical (it is the governing byte-parity copy from now on). Key structural points to sanity-check: `Btol`/`Ttol`/`Twidth`/`Tgridstep` knobs with the units-in-caps comments; `Ts` preflight alongside `Brange`/`Bs`/`Twin` (Twin additionally required to reach above the 0.02 K solve floor) plus finite-positive-real-scalar preflights for `Btol`/`Ttol`/`Twidth`/`Tgridstep` (R4 — `invzt_critical` does not validate its `opts.tol` at all), all `invzt_str`-formatted; proxy computed before the sweep when `show_proxy_anchor || (~isempty(Bs) && isempty(Twin))` with the `invzt_run_phase_diagram:tcAnchor` assert; `bopts`/`topts` assembled at the call boundary; flat two-kind `parfor` with val-then-assign and `invzt:bracket`-only absorption; T-cut plot branch; merged `phase_boundary`; NO local function at the bottom.
 
 - [ ] **Step 2: Generate the reduced-size smoke copy (same directory)**
 

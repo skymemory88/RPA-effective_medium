@@ -32,6 +32,19 @@ fast tests via the B = 0 all-invalid trick (pre-lattice `invzt:a1ZeroField`
 makes every sample invalid — no physics solves); wording/id-list drift
 cleaned (the seed is length-MATCHED and poisonous-VALUED, not
 "incompatible").
+**REV 5 (2026-07-19, execution finding E1)**: the Task-2 integration gates
+caught a real algorithm gap none of the three reviews saw — with all
+transcriptions byte-verified and every synthetic test green, the sampled
+`crit(T)` at fixed field flipped sign FIVE times (round-trip returned
+1.596 K vs the field-cut's 1.4 K; the odd-on gate exceeded the zero-field
+Tc). Root cause: cold-started solves hop between A1 fixed-point branches —
+the field-cut finder only works because it WARM-STARTS every sample
+(`invzt_critical`'s header: the seed "helps the ordered-side solves land on
+the metastable PM branch"). Fix, mirroring that precedent: the T-grid is
+sampled DESCENDING in T (paramagnet first) with a rolling seed
+re-interpolated onto each new T's Matsubara grid (`invzt_crit_at` gains a
+third `pt` output to expose the converged `Sigma`); caller seeds are still
+stripped.
 
 ## Decisions
 
@@ -165,14 +178,17 @@ sites unchanged — same name; until then the identical local legally shadows
 the module file inside the script).
 
 ```matlab
-function [c, ok] = invzt_crit_at(ion, T, B, lat, opts)
+function [c, ok, pt] = invzt_crit_at(ion, T, B, lat, opts)
 %INVZT_CRIT_AT One tensor criticality sample: crit at (T, B) + sample VALIDITY.
-%   [c, ok] = INVZT_CRIT_AT(ion, T, B, lat, opts) solves one A1 tensor point
-%   (INVZT_SOLVE_POINT, opts forwarded verbatim) and returns the criticality
-%   scalar c = pt.crit plus ok, the three-part sample-validity verdict
-%   (converged, finite crit, Sigma0 >= getf(opts,'sigma_floor',-0.5) -- the
-%   floor single-sourced with INVZT_CRITICAL, rejecting the spurious
-%   negative-Sigma fixed point).
+%   [c, ok, pt] = INVZT_CRIT_AT(ion, T, B, lat, opts) solves one A1 tensor
+%   point (INVZT_SOLVE_POINT, opts forwarded verbatim) and returns the
+%   criticality scalar c = pt.crit plus ok, the three-part sample-validity
+%   verdict (converged, finite crit, Sigma0 >= getf(opts,'sigma_floor',-0.5)
+%   -- the floor single-sourced with INVZT_CRITICAL, rejecting the spurious
+%   negative-Sigma fixed point). The third output pt is the solved point
+%   struct (an EMPTY struct when the sample was absorbed by the catch below)
+%   -- INVZT_CRITICAL_T's branch-tracked sampler reads pt.Sigma from it for
+%   its rolling warm-start seed (execution finding E1).
 %
 %   ok is VALIDITY-only -- deliberately NO crit > 0 term. Each consumer
 %   applies its own phase logic: INVZT_TC_PM_EXTRAP filters the PM points
@@ -196,6 +212,7 @@ catch err
     switch err.identifier
         case {'invz:degenerateDoublet', 'invz:orderedPhase', 'invzt:a1ZeroField'}
             c = NaN;  ok = false;      % phase/physics signal, not an error
+            pt = struct();             % absorbed sample: no point to expose
         otherwise
             rethrow(err);              % misconfiguration: surface it
     end
@@ -337,10 +354,17 @@ function [tc, out] = invzt_critical_T(ion, B, lat, opts)
 %   (INVZT_TC_PM_EXTRAP) and passes it (mirrors the projected invz:oddTc0
 %   rule). Errors invzt:tcAnchor otherwise.
 %
-%   NO WARM START: any caller-supplied opts.Sigma_seed is STRIPPED before the
-%   T-grid solves -- the Matsubara vector length is T-dependent, so a seed
-%   from one temperature does not fit another (INVZT_CRITICAL may seed only
-%   because its T is fixed).
+%   SEEDING (execution finding E1): any caller-supplied opts.Sigma_seed is
+%   STRIPPED (the Matsubara vector length is T-dependent, so a caller's seed
+%   fits at most ONE of the sampled temperatures) -- but the finder threads
+%   its OWN rolling seed: the grid is sampled DESCENDING in T (paramagnet
+%   first) and each solve is seeded with the previous valid Sigma
+%   re-interpolated onto the new T's Matsubara grid (nested sampler below).
+%   Without branch tracking, cold starts hop between A1 fixed-point branches
+%   and the sampled crit(T) flickers sign (measured ncross = 5 and a
+%   +0.15 K Tc error at the 8^3 round-trip gate) -- the same reason
+%   INVZT_CRITICAL warm-starts its field bisection (its header: the seed
+%   "helps the ordered-side solves land on the metastable PM branch").
 %
 %   RE-ENTRANCE: boundary indicators (INVZT_TC_PICK's ncross: strict sign
 %   flips + exactly-critical runs) are ACCUMULATED across adaptive attempts
@@ -393,10 +417,12 @@ if ~(posscal(width) && posscal(gstep) && posscal(tol))
         'real scalars; got width = %s, gridstep = %s, tol = %s.'], ...
         invzt_str(width), invzt_str(gstep), invzt_str(tol));
 end
-if isfield(opts, 'Sigma_seed')                  % no warm start across T (see header)
+if isfield(opts, 'Sigma_seed')                  % caller seeds fit ONE T only (see header)
     opts = rmfield(opts, 'Sigma_seed');
 end
-f = @(T) invzt_crit_at(ion, T, B, lat, opts);
+Ecut_used = getf(opts, 'Ecut', 40);             % must match the solver's Matsubara grid
+wn_prev = [];  Sig_prev = [];                   % rolling branch-tracking seed state
+f = @(T) sample(T);
 
 hardwin = isfield(opts, 'window') && ~isempty(opts.window);
 if hardwin
@@ -437,9 +463,9 @@ for attempt = 1:nattempt
     ng  = max(5, round((Thi - Tlo)/gstep) + 1);
     Tg  = linspace(Tlo, Thi, ng);
     c   = nan(1, ng);  ok = false(1, ng);
-    for i = 1:ng
-        [c(i), ok(i)] = f(Tg(i));
-    end
+    for i = ng:-1:1                             % DESCENDING T: the first (cold)
+        [c(i), ok(i)] = f(Tg(i));               % solve sits on the PM-most point;
+    end                                         % lower samples ride the rolling seed
     Tv = Tg(ok);  cv = c(ok);                   % valid samples: the voters
     if isempty(cv)
         act = 'grow';  ncross = 0;              % nothing valid: keep top, grow down
@@ -492,6 +518,28 @@ else
         '|B| = %.3f T: no valid ordered/paramagnet root found (last sampled window [%.3f, %.3f] K).', ...
         norm(B), winS(1), winS(2));
 end
+
+% ------------------------------ nested sampler --------------------------------
+    function [c1, ok1] = sample(T)
+    %SAMPLE Branch-tracked criticality sample: INVZT_CRIT_AT + a rolling seed.
+    %   Seeds each solve with the previous VALID Sigma re-interpolated onto
+    %   this T's Matsubara grid (linear in the frequency values; the short
+    %   tail beyond the previous grid's top is clamped to its last value --
+    %   Sigma decays there). The state advances only on valid samples, so an
+    %   absorbed/invalid solve never poisons the seed chain.
+        oi = opts;
+        if ~isempty(Sig_prev)
+            wn_i = invz_matsubara(T, Ecut_used);
+            sd = interp1(wn_prev, Sig_prev, wn_i, 'linear');
+            sd(wn_i > wn_prev(end)) = Sig_prev(end);
+            oi.Sigma_seed = sd(:);
+        end
+        [c1, ok1, pt] = invzt_crit_at(ion, T, B, lat, oi);
+        if ok1 && isfield(pt, 'Sigma') && ~isempty(pt.Sigma) && all(isfinite(pt.Sigma))
+            wn_prev  = invz_matsubara(T, Ecut_used);
+            Sig_prev = pt.Sigma(:);
+        end
+    end
 end
 ```
 
@@ -911,6 +959,19 @@ after.
   (same B = 0 trick, `Tc0` just above the floor); the plan's error-policy
   list gains the four driver control ids; every "incompatible seed" phrase
   corrected to length-MATCHED / poisonous-VALUED.
+
+## Execution findings
+
+- **E1 (2026-07-19, caught by the Task-2 integration gates — the reason
+  those gates exist):** byte-verified transcriptions + all-green synthetic
+  tests, yet `crit(T)` at fixed field flipped sign 5× (round-trip 1.596 K
+  vs 1.4 K; odd-on above the zero-field Tc). Cold-started samples hop
+  between A1 fixed-point branches; the field-cut finder avoids this only
+  via its warm-start seed. Fixed with the descending branch-tracked rolling
+  seed (Component 4's nested sampler; `invzt_crit_at` third output).
+  Caller-seed stripping and its poisonous-seed test are unchanged (the
+  chain's FIRST/top sample is cold, so an unstripped caller seed still
+  poisons exactly that endpoint).
 
 ## Out of scope
 
