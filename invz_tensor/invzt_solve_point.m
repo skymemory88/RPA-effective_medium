@@ -329,9 +329,9 @@ end                                                          % end mode branch
 % PSD). crit > 0 in the PM phase. A3 also reports the Cartesian-Dyson-vs-additive
 % resummation SPREAD in crit (constraint 8: the O(1/z^2) method error bar).
 rank_tol = 1e-12;
-[crit, crit_clipped_mass, crit_active_rank] = local_crit(ctil0, lat.JtGamma, rank_tol);
+[crit, crit_clipped_mass, crit_active_rank] = invzt_crit_static(ctil0, lat.JtGamma, rank_tol);
 if strcmp(mode, 'a3')
-    crit_add = local_crit(ctil0_add, lat.JtGamma, rank_tol);
+    crit_add = invzt_crit_static(ctil0_add, lat.JtGamma, rank_tol);
     resum_spread_crit = crit - crit_add;
 end
 
@@ -393,21 +393,6 @@ v = v(:);
 h = sprintf('%dv_%08x', numel(v), typecast(single(sum(v.*(1:numel(v))')), 'uint32'));
 end
 
-function [crit, cmass, arank] = local_crit(ctil0, JtGamma, rank_tol)
-% Task-6 criticality: min eig of I - S*JtGamma*S with S the rank-clipped PSD square
-% root of C12 = kron(eye(4), ctil0) (Hermitian eigendecomposition, NOT sqrtm). crit
-% shares the zeros of I - C12*JtGamma on the active subspace; crit > 0 in the PM phase.
-C12 = kron(eye(4), (ctil0 + ctil0')/2);
-[U, D] = eig((C12 + C12')/2);
-d = real(diag(D));
-clip = d < rank_tol;
-cmass = sum(abs(d(clip)));
-arank = sum(~clip);
-d(clip) = 0;
-S = U * diag(sqrt(max(d, 0))) * U';
-M = eye(size(S,1)) - S*JtGamma*S;
-crit = min(real(eig((M + M')/2)));
-end
 
 function A = herm_real(A)
 % Real symmetric (Hermitian) part -- the static renormalized chi is Hermitian at
