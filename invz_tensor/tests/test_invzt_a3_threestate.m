@@ -221,7 +221,103 @@ fprintf('[nonsym array-K] |arr - fhandle| = %.2e (match); |arr - no-transpose| =
     max(abs(outA.val(:) - outF.val(:))), max(abs(outA.val(:) - outB.val(:))));
 end
 
+function test_a3_dominant_compact_matches_zeropad(testCase)
+% 7C Step-1 REGRESSION: the compact cc;cc-only dominant vertex (which never forms the
+% 5-D pad complex(zeros(npair,nc,nc,nwn,nl))) must reproduce the OLD zero-pad + general
+% contraction to 1e-12 on the T = 2 K three-state fixture, for BOTH Vmat(3,3,:) and the
+% downstream chi_til.
+%
+% REGRESSION-REFERENCE CHOICE (documented, brief's "better" option): a self-contained
+% LOCAL reference implementation of the OLD zero-pad contraction inside the test at the
+% toy size -- NOT frozen magic numbers. invzt_sigma_tensor's final iteration sets
+% out.Vmat = contract_vertex_cc(G4cc, out.Kmat); we rebuild G4dom via invzt_gamma4,
+% zero-pad it into the full 5-D array, and run a local copy of the OLD general
+% contract_vertex against the SAME converged medium out.Kmat -> Vref. Because the two
+% contractions are evaluated on ONE shared (G4, Kmat), the comparison is exact and
+% independent of iteration counts. The compact G4cc is bit-identical to reshape(G4dom)
+% (the l-tiling only partitions an l-independent walk). chi_til is then reconstructed
+% from Vref via a local copy of the (UNCHANGED) resum_dyson bracket at the converged
+% medium: with the solve driven to tol_outer = 1e-13 the reported chi_til equals this
+% reference to ~1e-13.
+ion = invz_ion();  T = 2.0;  B = [0.5 0 0];
+si = invzt_threestate(ion, T, B, struct());
+g6 = invzt_qgrid(6, 'halfopen');
+lat = invzt_jq_tensor(ion, g6, struct('dpRng', 10, 'cache', true));
+lat_eff = lat;  lat_eff.Jt = invzt_odd_mask(lat.Jt);        % odd = false (PM baseline)
+[wn, ~, beta] = invz_matsubara(T, 40);
+nwn = numel(wn);  Lmax = nwn - 1;  nl = 2*Lmax + 1;
+next = (0:nwn-1).';  lvals = (-Lmax:Lmax).';
+
+out = invzt_sigma_tensor(si, T, lat_eff, wn, beta, ...
+    struct('dress', 'dominant', 'tol_outer', 1e-13, 'max_outer', 2000));
+
+% --- LOCAL reference: OLD zero-pad + general contraction at the converged medium ---
+Esplit = 0.4653;                                            % = invzt_sigma_tensor default
+di = find(si.E(:) < Esplit);
+Ed = si.E(di) - si.E(di(1));
+pd = si.P(di);  pd = pd / sum(pd);
+Mzd = si.Mz(di, di);
+opc = Mzd - real(sum(pd .* diag(Mzd)))*eye(numel(di));
+G4dom = invzt_gamma4(struct('E', Ed, 'p', pd), struct('c', opc), ...
+    {{'c','c'}}, {'c'}, next, lvals, beta);                 % [1,1,1,nwn,nl]
+G4full = complex(zeros(9, 3, 3, nwn, nl));
+G4full(9, 3, 3, :, :) = reshape(G4dom, [1, 1, 1, nwn, nl]); % cc;cc slot (ext pair 9 = {c,c})
+mu_i = [1 1 1 2 2 2 3 3 3];  nu_i = [1 2 3 1 2 3 1 2 3];    % invzt_sigma_tensor ext ordering
+Vref = local_contract_general_zeropad(G4full, out.Kmat, mu_i, nu_i, Lmax, nwn, 3, beta);
+
+dV = max(abs(out.Vmat(:) - Vref(:)));
+verifyEqual(testCase, out.Vmat, Vref, 'AbsTol', 1e-12);
+
+% --- downstream chi_til from the SAME (unchanged) symmetric bracket on Vref ---
+G0 = -invz_chi0z(si, T, 1i*wn, struct('elastic', true));
+P  = invzt_active_projector(G0, 1e-12);
+chi_til_ref = local_resum_dyson(G0, Vref, P);
+dChi = max(abs(out.chi_til(:) - chi_til_ref(:)));
+verifyEqual(testCase, out.chi_til, chi_til_ref, 'AbsTol', 1e-10);
+
+fprintf(['[compact-vs-zeropad] dominant di=%d states, converged=%d in %d iters | ' ...
+    'max|Vmat_compact - Vmat_zeropad| = %.2e (<1e-12) | max|dchi_til| = %.2e (<1e-10)\n'], ...
+    numel(di), out.converged, out.outer_iters, dV, dChi);
+end
+
 % ============================== helpers ============================== %
+function Vmat = local_contract_general_zeropad(G4, Kmat, mu_i, nu_i, Lmax, nwn, nc, beta)
+% Faithful local copy of the PRE-7C general contract_vertex (full 5-D broadcast path):
+% the reference the compact contract_vertex_cc must reproduce. Karr negative-l uses the
+% LOCKED transpose relation K_{rho sigma}(-l) = K_{sigma rho}(+l).
+nl = 2*Lmax + 1;
+Karr = complex(zeros(nc, nc, nl));
+for li = 1:nl
+    l = li - Lmax - 1;
+    if l >= 0
+        Karr(:, :, li) = Kmat(:, :, l + 1);
+    else
+        Karr(:, :, li) = Kmat(:, :, -l + 1).';
+    end
+end
+Kb = reshape(Karr, [nc, nc, 1, nl]);
+Vmat = complex(zeros(3, 3, nwn));
+for ip = 1:numel(mu_i)
+    G4p   = reshape(G4(ip, :, :, :, :), [nc, nc, nwn, nl]);
+    contr = sum(sum(sum(G4p .* Kb, 1), 2), 4);
+    Vmat(mu_i(ip), nu_i(ip), :) = reshape(contr, [1, 1, nwn]) / (2*beta);
+end
+end
+
+function chi_til = local_resum_dyson(G0, Vmat, P)
+% Faithful local copy of invzt_sigma_tensor's resum_dyson (UNCHANGED by 7C): symmetric
+% bracket chi_til = -G0*((G0+V)\G0) restricted to range(P).
+nwn = size(Vmat, 3);  r = size(P, 2);
+chi_til = complex(zeros(3, 3, nwn));
+if r == 0, return; end
+for k = 1:nwn
+    G0p = P' * G0(:,:,k) * P;
+    Vp  = P' * Vmat(:,:,k) * P;
+    G0til_p = G0p * ((G0p + Vp) \ G0p);
+    chi_til(:,:,k) = -P * G0til_p * P';
+end
+end
+
 function Jnu = local_cc_branches(lat)
 % Flattened sorted eigenvalues of the 4x4 cc blocks over all q (the scalar mode
 % spectrum invz_emt_scalar averages uniformly; matches invzt_emt_matrix's BZ+
