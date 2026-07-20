@@ -250,10 +250,9 @@ function test_a3d_production_point(tc)
 % production build ~= 7.4 h -- launch via nohup outside an interactive session;
 % see ODD-LOG SS A-ordered. NOT run in an interactive/CI harness (the build dies
 % silently mid-run). The 7C compact vertex + budget guards keep it feasible offline.
-if isempty(getenv('INVZ_SLOW'))
-    fprintf('test_a3d_production_point SKIPPED (set INVZ_SLOW=1 to run; ~7.4 h)\n');
-    return;
-end
+% assumeTrue (not early-return) so the skip REGISTERS as Incomplete -- repo slow-gate
+% convention (test_invzt_a4_ladder, test_invzt_critical_T/_parity).
+assumeTrue(tc, ~isempty(getenv('INVZ_SLOW')), 'INVZ_SLOW only');
 ion = tc.TestData.ion;
 g16 = invzt_qgrid(16, 'halfopen');
 lat16 = invzt_jq_tensor(ion, g16, struct('dpRng', 30, 'cache', true));
