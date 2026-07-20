@@ -2,11 +2,21 @@ function tests = test_invzt_chi_realaxis
 tests = functiontests(localfunctions);
 end
 
-function setupOnce(~)
+function setupOnce(tc)
 here = fileparts(mfilename('fullpath'));
 addpath(fullfile(here, '..'));                          % invz_tensor
 addpath(fullfile(here, '..', '..'));                    % repo root: MF_dipole, exchange, qVec_generator
 addpath(fullfile(here, '..', '..', 'invz_common'));     % shared single-ion engine
+% TestData fixture for the ordered-branch tests below (Task 4): the 16^3
+% halfopen / dpRng 30 lattice matches invzt_solve_point_ordered's own test
+% fixture (test_invzt_solve_point_ordered.m setupOnce) -- the grid the
+% measured ordered anchors (m0 ~ 3.66/2.25 at 3.5/4.4 T, Bc ~ 4.65-4.70 T)
+% were taken on. The pre-existing PM tests above build their own small
+% 6^3/explicit-q lattices locally and do not touch TestData.
+ion = invz_ion();
+g   = invzt_qgrid(16, 'halfopen');
+tc.TestData.ion = ion;
+tc.TestData.lat = invzt_jq_tensor(ion, g, struct('dpRng', 30, 'cache', true));
 end
 
 % ------- brief Step 1 tests, transcribed verbatim (task-8-brief.md) -------
@@ -204,4 +214,72 @@ w = (0.1:0.1:0.3).';
 verifyError(testCase, ...
     @() invzt_chi_realaxis(ion, T, B, pt2, w, struct('odd', false)), ...
     'invzt:realaxisMode');
+end
+
+% ------- Task 4: ordered-branch tests (task-4-brief.md Step 1, verbatim) -------
+
+function test_ordered_sigma_w_exact_formula(tc)
+% THE ordered-continuation gate (review P1-1). out.Sigma_w must equal the
+% moment-form expression assembled from the SAME pt fields; and that expression
+% must differ MATERIALLY from the PM expression here, so the pre-change code
+% (which applies the PM formula to an ordered pt without error) FAILS this test.
+ion = tc.TestData.ion;  lat = tc.TestData.lat;  T = 0.1;
+pt = invzt_solve_point_ordered(ion, T, [3.5 0 0], lat, struct());
+verifyTrue(tc, pt.is_ordered && pt.converged);        % anchor MUST hold (not assume)
+w = [0; 0.10; 0.31; 0.45];  eta = 2e-3;  z = w + 1i*eta;
+o = invzt_chi_realaxis(ion, T, [3.5 0 0], pt, w, struct('qsel', 'gamma_uniform', 'eta', eta));
+tl = pt.tl;  g = invz_g(tl, z);  pref = tl.M2/tl.n01^2;
+gamma0 = pref*(pt.lambda(1) - (1 - tl.n01^2)*pt.K(1));     % frozen Kw: gamma_w == gamma0
+Sw_ord = (pt.alpha - pt.alpha_m) + gamma0*(1 - 2*tl.m^2/tl.M2) .* g;
+Sw_pm  = pt.alpha + gamma0 .* g;
+verifyGreaterThan(tc, max(abs(Sw_ord - Sw_pm)), 1e-4);     % formulas differ materially here
+verifyEqual(tc, o.Sigma_w, Sw_ord, 'AbsTol', 1e-12, 'RelTol', 1e-10);   % exact algebra
+fprintf('ordered Sigma_w gate: max|ord-pm| = %.4g, m=%.4f, alpha_m=%.4g\n', ...
+    max(abs(Sw_ord - Sw_pm)), tl.m, pt.alpha_m);
+end
+
+function test_ordered_point_spectra(tc)
+% Broad ordered-spectrum sanity: finite, non-negative up to the frozen-Kw
+% caveat, soft mode inside (0.05, 0.6) meV.
+ion = tc.TestData.ion;  lat = tc.TestData.lat;  T = 0.1;
+pt = invzt_solve_point_ordered(ion, T, [3.5 0 0], lat, struct());
+verifyTrue(tc, pt.is_ordered && pt.converged);
+w = linspace(0, 0.6, 601).';
+o = invzt_chi_realaxis(ion, T, [3.5 0 0], pt, w, struct('qsel', 'gamma_uniform', 'eta', 2e-3));
+c = squeeze(imag(o.chi_uniform(3,3,:)));
+verifyTrue(tc, all(isfinite(c)));
+Ep = invz_peak_energy(c, w, 0.05);
+verifyTrue(tc, isfinite(Ep) && Ep > 0.05 && Ep < 0.6);
+verifyGreaterThan(tc, min(c), -0.05*max(c));
+fprintf('ordered realaxis @ 3.5T: Epeak=%.4f meV, max chi''''=%.4g, min=%.3g\n', Ep, max(c), min(c));
+end
+
+function test_ordered_mode_softens_toward_Bc(tc)
+% FM-side soft-mode direction: the mode SOFTENS approaching Bc (4.65-4.70 T)
+% from below -- E(3.5 T) > E(4.4 T) > 0.
+ion = tc.TestData.ion;  lat = tc.TestData.lat;  T = 0.1;
+w = linspace(0, 0.6, 601).';
+E = nan(1, 2);  Bs = [3.5 4.4];
+for k = 1:2
+    pt = invzt_solve_point_ordered(ion, T, [Bs(k) 0 0], lat, struct());
+    verifyTrue(tc, pt.is_ordered && pt.converged);
+    o = invzt_chi_realaxis(ion, T, [Bs(k) 0 0], pt, w, struct('qsel', 'gamma_uniform', 'eta', 2e-3));
+    E(k) = invz_peak_energy(squeeze(imag(o.chi_uniform(3,3,:))), w, 0.05);
+end
+verifyGreaterThan(tc, E(1), E(2));
+fprintf('FM soft mode: E(3.5T)=%.4f > E(4.4T)=%.4f meV\n', E(1), E(2));
+end
+
+function test_ordered_force_sigma0_bare_rpa(tc)
+% BRANCH-INDEPENDENT regression only (review P1-1: force_sigma0 bypasses BOTH
+% formulas, so this cannot gate the ordered continuation): bare RPA of the
+% ORDERED chi0 stays non-negative.
+ion = tc.TestData.ion;  lat = tc.TestData.lat;  T = 0.1;
+pt = invzt_solve_point_ordered(ion, T, [3.5 0 0], lat, struct());
+verifyTrue(tc, pt.is_ordered && pt.converged);
+w = linspace(0, 0.6, 301).';
+o = invzt_chi_realaxis(ion, T, [3.5 0 0], pt, w, ...
+    struct('qsel', 'gamma_uniform', 'eta', 2e-3, 'force_sigma0', true));
+c = squeeze(imag(o.chi_uniform(3,3,:)));
+verifyGreaterThan(tc, min(c), -1e-10*max(abs(c)));
 end

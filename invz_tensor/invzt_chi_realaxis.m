@@ -1,13 +1,24 @@
 function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
-%INVZT_CHI_REALAXIS Tensor real-axis spectra: A1 scalar-Sigma continuation ONLY.
+%INVZT_CHI_REALAXIS Tensor real-axis spectra: A1 scalar-Sigma continuation.
 %   out = INVZT_CHI_REALAXIS(ion, T, B, pt, w, opts) continues the converged
-%   A1 fixed point pt (INVZT_SOLVE_POINT) to the real frequency axis
-%   z = w + 1i*eta (elastic OFF) via the SAME scalar self-energy continuation
-%   as the projected INVZ_CHI_REALAXIS's paramagnetic branch (A1 tensor solves
-%   are PM-only -- INVZT_SOLVE_POINT never returns an is_ordered point -- so
-%   there is no ordered-phase branch here, unlike the projected reference):
+%   A1 fixed point pt (INVZT_SOLVE_POINT, PM, or INVZT_SOLVE_POINT_ORDERED,
+%   ordered) to the real frequency axis z = w + 1i*eta (elastic OFF) via the
+%   SAME scalar self-energy continuation pattern as the projected
+%   INVZ_CHI_REALAXIS: PM continues its non-ordered branch bit-for-bit;
+%   ordered continues the projected HTML-eq-37 moment form (both frozen
+%   static K, Kw seeded at Gamma):
 %
+%     PM (pt.is_ordered false/absent):
 %       Sigma_w = pt.alpha + pref*(pt.lambda(1) - (1-n01^2)*Kw) .* g(z)
+%     ordered (pt.is_ordered true, INVZT_SOLVE_POINT_ORDERED's pt):
+%       Sigma_w = (pt.alpha - pt.alpha_m)
+%                 + (gamma_w - (2*tl.m^2/tl.M2)*gamma0) .* g(z),
+%       gamma_w = pref*(pt.lambda(1) - (1-n01^2)*Kw),
+%       gamma0  = pref*(pt.lambda(1) - (1-n01^2)*pt.K(1))
+%       (with the frozen static Kw = pt.K(1) seeding used here, gamma_w ==
+%       gamma0 identically; both symbols are kept for parity with the
+%       projected realaxis_sigma, whose npass/Jfull re-solve makes them
+%       differ -- a possible future port, not done here)
 %
 %   pref = pt.tl.M2/pt.tl.n01^2, Kw = pt.K(1) (the converged static/n=0 K,
 %   FROZEN across the whole w grid -- not re-solved on the real axis; see
@@ -15,15 +26,23 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 %   Kw-seeding pattern (INVZ_CHI_REALAXIS's "no opts.Jfull" single-shot path).
 %
 %   The renormalized LOCAL tensor response ctil(w) [3,3,nw] is REBUILT (not
-%   reused from pt, which only carries it on the Matsubara grid) from a fresh
-%   INVZT_CHI0_SPLIT(pt.si, T, z, ...) at z = w+1i*eta with elastic OFF, and
-%   combined with the SAME dominant/rest rule used inside INVZT_SOLVE_POINT:
+%   reused from pt, which only carries it on the Matsubara grid), at
+%   z = w+1i*eta with elastic OFF, by a branch-dependent rule:
 %
-%       ctil(:,:,k) = cdom(:,:,k)/(1+Sigma_w(k)) + crest(:,:,k)
+%     PM:       [cdom, crest] = INVZT_CHI0_SPLIT(pt.si, T, z, ...);
+%               ctil(:,:,k) = cdom(:,:,k)/(1+Sigma_w(k)) + crest(:,:,k)
+%               (the SAME dominant/rest rule used inside INVZT_SOLVE_POINT;
+%               crest zeroed when chi_rest is false, matching the converged
+%               point's own pt.chi_rest by default).
+%     ordered:  c0w = INVZ_CHI0Z(pt.si, T, z, struct('elastic', false));
+%               ctil(:,:,k) = c0w(:,:,k) / (1+Sigma_w(k))
+%               (WHOLE-CC rebuild, no dominant/rest split -- 2026-07-20
+%               amendment, matching INVZT_SOLVE_POINT_ORDERED's own WHOLE-CC
+%               Matsubara medium; the exact tensor analog of the projected
+%               ordered chit = -G0/(1+Sigma_w)).
 %
-%   (crest zeroed when chi_rest is false, matching the converged point's own
-%   pt.chi_rest by default). ctil is then paged through INVZT_CHI_RPA against
-%   a q-selection (opts.qsel):
+%   ctil is then paged through INVZT_CHI_RPA against a q-selection
+%   (opts.qsel) -- this stage is IDENTICAL for both branches:
 %
 %     'gamma_uniform' (DEFAULT) -- the Task-4 uniform page
 %         Jd = kron(ones(4)/4, diag([Jaa0, Jaa0, Jcc0]))
@@ -70,22 +89,29 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 %     out.Sigma_w     [nw,1]   : the A1 scalar self-energy continuation.
 %
 %   B : scalar (transverse-along-a, historical) or [Bx By Bz] (T); validated
-%       (INVZ_FIELD_VEC) for interface parity with INVZT_SOLVE_POINT and the
-%       projected INVZ_CHI_REALAXIS, but NOT otherwise consumed here: pt.si /
-%       pt.tl already encode the field-dependent physics from the original
-%       solve (mode 'a1' is PM-only, so there is no ordered-phase branch that
-%       would need a fresh field-dependent single-ion rebuild).
+%       (INVZ_FIELD_VEC) for interface parity with INVZT_SOLVE_POINT/
+%       INVZT_SOLVE_POINT_ORDERED and the projected INVZ_CHI_REALAXIS, but NOT
+%       otherwise consumed here (PM or ordered alike): pt.si/pt.tl already
+%       encode the field-dependent physics from the original solve, so no
+%       fresh field-dependent single-ion rebuild is needed on the real axis.
 %
 %   OPTIONS (getf defaults):
 %     eta          5e-3            : Im(z) = w + 1i*eta.
 %     qsel         'gamma_uniform' : 'gamma_uniform' | 'gamma' | [nq,3] qvec.
 %     dpRng        30              : explicit-qvec branch only (INVZT_JQ_TENSOR).
 %     cache        true            : explicit-qvec branch only (INVZT_JQ_TENSOR).
-%     chi_rest     pt.chi_rest     : false zeroes crest (matches the solve by
-%                                    default; override only for diagnostics).
-%     Esplit       0.4653          : dominant/rest split energy (meV), passed
-%                                    to INVZT_CHI0_SPLIT (matches
-%                                    INVZT_SOLVE_POINT's own default).
+%     chi_rest     pt.chi_rest     : PM branch only -- false zeroes crest
+%                                    (matches the solve by default; override
+%                                    only for diagnostics). Ignored on the
+%                                    ordered branch (WHOLE-CC rebuild, no
+%                                    dominant/rest split; pt.chi_rest is
+%                                    always true for an ordered pt, so the
+%                                    default read is safe but unused there).
+%     Esplit       0.4653          : PM branch only -- dominant/rest split
+%                                    energy (meV), passed to INVZT_CHI0_SPLIT
+%                                    (matches INVZT_SOLVE_POINT's own
+%                                    default). Ignored on the ordered branch
+%                                    (no split; see chi_rest above).
 %     odd          pt.odd          : must equal pt.odd -- mismatch errors
 %                                    'invzt:oddMismatch' (Sigma_w/alpha/lambda/K
 %                                    already bake in the odd flag used at solve
@@ -106,16 +132,17 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 %                                    isolating the bare-chi0 RPA limit used by
 %                                    the exact-identity gate.
 %
-%   SCOPE (v2, LOCKED): this is the A1 scalar-Sigma analytic continuation
-%   ONLY. It does NOT extend to A2/A3: continuing the full Vmat(i*omega_n)
-%   needs either direct real-axis kernel evaluation (the tensor kernels
-%   accept complex frequency arguments) or a fitted continuation -- a
-%   separate future work item
+%   SCOPE (v2, LOCKED): A1 scalar-Sigma continuation, PM AND ordered
+%   branches (Task 4, 2026-07-20); A2/A3 continuation remains the open item:
+%   continuing the full Vmat(i*omega_n) needs either direct real-axis kernel
+%   evaluation (the tensor kernels accept complex frequency arguments) or a
+%   fitted continuation -- a separate future work item
 %   (docs/superpowers/plans/2026-07-17-invz-tensor-full.md Task 8, Task 12).
 %
-%   See also INVZT_SOLVE_POINT, INVZT_CHI_RPA, INVZT_CHI0_SPLIT,
-%   INVZT_JQ_TENSOR, INVZT_GCC_LATTICE, INVZ_CHI_REALAXIS (projected
-%   Kw-seeding reference / interop peak-parity target).
+%   See also INVZT_SOLVE_POINT, INVZT_SOLVE_POINT_ORDERED, INVZT_CHI_RPA,
+%   INVZT_CHI0_SPLIT, INVZ_CHI0Z, INVZT_JQ_TENSOR, INVZT_GCC_LATTICE,
+%   INVZ_CHI_REALAXIS (projected Kw-seeding reference / interop peak-parity
+%   target).
 if nargin < 6, opts = struct(); end
 eta      = getf(opts, 'eta', 5e-3);
 qsel     = getf(opts, 'qsel', 'gamma_uniform');
@@ -146,24 +173,37 @@ B = invz_field_vec(B);   %#ok<NASGU> % validated for interface parity only; see 
 w  = w(:);  nw = numel(w);
 z  = w + 1i*eta;
 
-% --- A1 scalar-Sigma continuation (Kw-seeding pattern, mirrors the projected
-%     INVZ_CHI_REALAXIS's non-ordered branch exactly) --------------------------
+% --- A1 scalar-Sigma continuation (Kw-seeding pattern; PM = projected non-ordered
+%     branch, ordered = projected HTML-eq-37 moment form, both frozen static K) ---
+ordered = isfield(pt, 'is_ordered') && pt.is_ordered;
 tl   = pt.tl;
 g    = invz_g(tl, z);
 pref = tl.M2 / tl.n01^2;
 Kw   = pt.K(1) * ones(nw, 1);
 if force_sigma0
     Sw = zeros(nw, 1);
+elseif ordered
+    gamma_w = pref*(pt.lambda(1) - (1 - tl.n01^2)*Kw);
+    gamma0  = pref*(pt.lambda(1) - (1 - tl.n01^2)*pt.K(1));
+    Sw = (pt.alpha - pt.alpha_m) + (gamma_w - (2*tl.m^2/tl.M2)*gamma0) .* g;
 else
     Sw = pt.alpha + pref*(pt.lambda(1) - (1 - tl.n01^2)*Kw) .* g;
 end
 
-% --- rebuild ctil(w) on the real axis (elastic OFF), dominant/rest split ------
-[cdom, crest] = invzt_chi0_split(pt.si, T, z, struct('Esplit', Esplit, 'elastic', false));
-if ~chi_rest
-    crest = zeros(size(crest));
+% --- rebuild ctil(w) on the real axis (elastic OFF) ---------------------------
+if ordered
+    % WHOLE-CC rebuild (2026-07-20 amendment, matching Task 3's whole-cc medium):
+    % no dominant/rest split -- the exact tensor analog of the projected ordered
+    % chit = -G0/(1+Sigma_w).
+    c0w  = invz_chi0z(pt.si, T, z, struct('elastic', false));   % full local chi0, elastic OFF
+    ctil = c0w ./ reshape(1 + Sw, 1, 1, nw);                    % Sw [nw,1] -> [1,1,nw] broadcast
+else
+    [cdom, crest] = invzt_chi0_split(pt.si, T, z, struct('Esplit', Esplit, 'elastic', false));
+    if ~chi_rest
+        crest = zeros(size(crest));
+    end
+    ctil = cdom ./ reshape(1 + Sw, 1, 1, nw) + crest;       % Sw [nw,1] -> [1,1,nw] broadcast
 end
-ctil = cdom ./ reshape(1 + Sw, 1, 1, nw) + crest;       % Sw [nw,1] -> [1,1,nw] broadcast
 
 % --- q-selection: page invzt_chi_rpa, project the S4-uniform mode ------------
 Jaa0 = pt.lat.info.Jaa0;
