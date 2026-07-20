@@ -232,6 +232,26 @@
     }
    }
   },
+  "jensen_2lvl_ordered_b14": {
+   "beta": 14.0,
+   "E": [
+    0.0,
+    1.0
+   ],
+   "Delta": 1.0,
+   "M2": 0.81,
+   "m": 0.6
+  },
+  "jensen_2lvl_ordered_b3": {
+   "beta": 3.0,
+   "E": [
+    0.0,
+    1.0
+   ],
+   "Delta": 1.0,
+   "M2": 0.81,
+   "m": 0.6
+  },
   "degenerate_doublet_3lvl": {
    "beta": 1.7,
    "E": [
@@ -1316,6 +1336,48 @@
    "l": 0,
    "value_re": -0.001968071151296102,
    "value_im": -6.993672181794814e-19
+  },
+  {
+   "tags": "V;cc;jensen2lvlord_b14;subtract=all",
+   "n": 0,
+   "l": 0,
+   "value_re": 0.32195806674458605,
+   "value_im": -3.3721574369803362e-34
+  },
+  {
+   "tags": "V;cc;jensen2lvlord_b14;subtract=all",
+   "n": 1,
+   "l": 0,
+   "value_re": 0.22759252456430387,
+   "value_im": -8.097579017634444e-17
+  },
+  {
+   "tags": "V;cc;jensen2lvlord_b14;subtract=all",
+   "n": 2,
+   "l": 0,
+   "value_re": 0.1091370843331512,
+   "value_im": -1.963771797986622e-16
+  },
+  {
+   "tags": "V;cc;jensen2lvlord_b3;subtract=all",
+   "n": 0,
+   "l": 0,
+   "value_re": -0.0634261821329827,
+   "value_im": 4.747325771291966e-35
+  },
+  {
+   "tags": "V;cc;jensen2lvlord_b3;subtract=all",
+   "n": 1,
+   "l": 0,
+   "value_re": -0.019049455868558357,
+   "value_im": 2.7341346512118574e-17
+  },
+  {
+   "tags": "V;cc;jensen2lvlord_b3;subtract=all",
+   "n": 2,
+   "l": 0,
+   "value_re": -0.00468317948867818,
+   "value_im": 4.978316394008257e-18
   },
   {
    "tags": "F;aa;aa;degenerate_doublet_3lvl",

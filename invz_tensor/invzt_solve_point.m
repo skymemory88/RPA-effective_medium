@@ -221,7 +221,7 @@ end
 % A3 self-energy fields (populated only in mode 'a3'; NaN/[] otherwise).
 Vmat = [];  chi_til = [];  Sigma_cc_equiv = nan(nwn, 1);
 resum_spread_crit = NaN;  eps_el = NaN;  eps_cross = NaN;  a3_active_rank = NaN;
-ctil0_add = [];  a3_dress = '';
+c_d = NaN;  ctil0_add = [];  a3_dress = '';
 
 if strcmp(mode, 'a3')
     % ===== A3: genuine tensor 1/z self-energy from the exact four-point vertex =====
@@ -256,7 +256,15 @@ if strcmp(mode, 'a3')
     end
     ctil0_add = herm_real(st.chi_til_add(:,:,1));       % static additive renormalized 3x3
     % monitors: elastic-sector control (constraint 7) and cross-Cartesian leakage
-    eps_el    = beta * abs(K(1)) * si.JzJz_fluct;
+    % c_d = ELASTIC-ONLY static cc weight (chi0's z~0 elastic term enters as
+    % beta*c_d, read off the elastic-on/off difference of the SAME chi0 convention
+    % the solve consumes). Review P1-4 (2026-07-19): the previous formula used the
+    % FULL equal-time variance si.JzJz_fluct -- an upper bound; prior logged eps_el
+    % values are upper bounds (ODD-LOG, Task 8).
+    c0_el     = invz_chi0z(si, T, 1i*wn(1), struct('elastic', true));
+    c0_inel   = invz_chi0z(si, T, 1i*wn(1), struct('elastic', false));
+    c_d       = real(c0_el(3,3,1) - c0_inel(3,3,1)) / beta;
+    eps_el    = beta * abs(K(1)) * c_d;
     eps_cross = a3_eps_cross(Kmat, emt_rank_tol);
 else
 % --- a1/a2 outer self-consistent Sigma loop: Anderson-accelerated damped mixing ---
@@ -376,7 +384,8 @@ pt.Sigma_cc_equiv    = Sigma_cc_equiv;      % +V_cc/G0_cc (v3 POSITIVE sign; DIA
 pt.Vmat              = Vmat;                 % [3,3,nwn] tensor self-energy correction (V=G0.Sigma)
 pt.chi_til           = chi_til;             % [3,3,nwn] Dyson renormalized local chi
 pt.resum_spread_crit = resum_spread_crit;   % crit(dyson) - crit(additive) -- O(1/z^2) error bar
-pt.eps_el            = eps_el;              % beta*|K_cc(0)|*<dJz^2> elastic-sector control (constraint 7)
+pt.eps_el            = eps_el;              % beta*|K_cc(0)|*c_d elastic-sector control (constraint 7)
+pt.c_d               = c_d;                 % elastic-only static cc weight (chi0 elastic-on/off diff)/beta
 pt.eps_cross         = eps_cross;          % cross-Cartesian (c<->a,b) leakage in K, relative
 pt.a3_active_rank    = a3_active_rank;      % resummation active-subspace rank
 pt.a3_dress          = a3_dress;           % 'full' | 'dominant' (E1-matched truncation)

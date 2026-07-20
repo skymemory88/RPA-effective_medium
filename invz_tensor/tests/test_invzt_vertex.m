@@ -90,7 +90,10 @@ opts.ext   = {{'c', 'c'}};
 worst = 0; nrow = 0;
 for i = 1:numel(fx.vertex_rows)
     row = fx.vertex_rows(i);
-    if ~startsWith(row.tags, 'V;cc;jensen2lvl'), continue; end
+    % NOTE: the exact-match prefix (trailing ';') is required -- without it this
+    % filter would ALSO swallow the 'V;cc;jensen2lvlord_b14/b3;...' ordered rows
+    % (round-2 P1-6: an over-broad filter must not silently mix systems).
+    if ~startsWith(row.tags, 'V;cc;jensen2lvl;'), continue; end
     out = invzt_vertex4(es, ops, Kf, row.n, beta, opts);
     v   = out.val(1, 1);
     ref = row.value_re + 1i * row.value_im;
@@ -98,7 +101,48 @@ for i = 1:numel(fx.vertex_rows)
     verifyLessThan(testCase, e, 1e-9, sprintf('V;cc;jensen n=%d', row.n));
     worst = max(worst, e); nrow = nrow + 1;
 end
+verifyGreaterThan(testCase, nrow, 0, 'no V;cc;jensen2lvl rows matched (filter regression)');
 fprintf('[dense V jensen] %d rows, worst rel residual = %.3e\n', nrow, worst);
+end
+
+% ===================================================================== %
+% 3b. DENSE contracted V vs oracle (ordered two-level Jensen system rows)
+% ===================================================================== %
+function test_dense_V_jensen_ordered_vs_oracle(testCase)
+% Ordered two-level oracle rows (split doublet, diagonal +-m, off-diagonal M; a3d
+% prereq, J 2.26-2.29). TWO scalar-beta systems (_b14, _b3; round-2 P1-6 -- sysdata
+% expects scalar S.beta). Same dense four-point contraction path as the PM Jensen
+% test above; this is a pure dense-vs-dense oracle gate (NOT the moment-form
+% approximation diagnostic -- that is test_jensen_ordered_static_diagnostic below).
+fx = testCase.TestData.fx;
+W = 1.3;
+for tagc = {'b14', 'b3'}
+    tag = tagc{1};
+    S    = fx.systems.(['jensen_2lvl_ordered_' tag]);
+    beta = S.beta; Ecc = S.E(:);
+    pcc  = boltz(Ecc, beta);
+    X    = centered([S.m sqrt(S.M2); sqrt(S.M2) -S.m], pcc);
+    es   = struct('E', Ecc, 'p', pcc);
+    ops  = struct('c', X);
+    Kf   = @(ri, si, l) kjen(ri, si, l, beta, W);
+    opts = struct('stage', 'V', 'Lmax', 400);
+    opts.comps = {'c'};
+    opts.ext   = {{'c', 'c'}};
+    prefix = ['V;cc;jensen2lvlord_' tag ';'];
+    worst = 0; nrow = 0;
+    for i = 1:numel(fx.vertex_rows)
+        row = fx.vertex_rows(i);
+        if ~startsWith(row.tags, prefix), continue; end
+        out = invzt_vertex4(es, ops, Kf, row.n, beta, opts);
+        v   = out.val(1, 1);
+        ref = row.value_re + 1i * row.value_im;
+        e   = relerr(v, ref);
+        verifyLessThan(testCase, e, 1e-9, sprintf('%s n=%d', row.tags, row.n));
+        worst = max(worst, e); nrow = nrow + 1;
+    end
+    verifyGreaterThan(testCase, nrow, 0, sprintf('no ordered V rows matched tag %s (filter regression)', tag));
+    fprintf('[dense V jensen ordered %s] %d rows, worst rel residual = %.3e\n', tag, nrow, worst);
+end
 end
 
 % ===================================================================== %
@@ -168,6 +212,59 @@ Vme = out.val(1, :).';
 verifyEqual(testCase, Vme, Vjen, 'RelTol', 1e-6);
 fprintf('[Jensen bridge] Delta=%.4f meV, max rel diff V vs G0*Sigma = %.3e\n', ...
     Delta, max(abs(Vme - Vjen) ./ max(1, abs(Vjen))));
+end
+
+% ===================================================================== %
+% 5b. Ordered two-level Jensen DIAGNOSTIC: STATIC gate (n=0) + finite-freq REPORT
+% ===================================================================== %
+function test_jensen_ordered_static_diagnostic(testCase)
+% Ordered moment-form comparison (J 2.26-2.29) -- STATIC GATE + FINITE-FREQUENCY
+% REPORT (round-2 P0-2: the moment form is n=0-exact/finite-n-approximate BY
+% DERIVATION -- g(wm+-wn) -> g(wm) -- so equality at n>0 must NOT be gated).
+% This is an approximation diagnostic for a3d, NOT a correctness gate on the
+% dense vertex (that gate is the oracle-row test above).
+Delta = 1.0;  M2 = 0.81;  m = 0.6;  W = 1.3;
+for ib = 1:2
+    betas = [14, 3];  beta = betas(ib);
+    n01 = tanh(beta*Delta/2);
+    tl = struct('Delta', Delta, 'M2', M2, 'm', m, 'n01', n01, 'g0', 2*n01/Delta);
+    Lmax = 400; kk = (0:Lmax).'; wts = [1; 2*ones(Lmax, 1)];
+    wln = 2*pi*kk/beta;  Kint = 0.37 ./ (1 + (wln/W).^2);
+    gint = invz_g(tl, 1i*wln);
+    lam = invz_lambdas(Kint, gint, wts, beta, [1 2 3]);
+    next = [0; 1; 2];  wext = 2*pi*next/beta;
+    Kext = 0.37 ./ (1 + (wext/W).^2);
+    gext = invz_g(tl, 1i*wext);
+    sig = invz_sigma_ordered(tl, lam, Kext, gext, beta);
+    h0  = beta*(1 - n01^2);                      % elastic term (J 2.8), n = 0 slot only
+    G0  = -M2*gext;  G0(1) = G0(1) - m^2*h0;     % ordered bare propagator (J 2.7)
+    Vjen = G0 .* sig.Sigma;
+    % independent: exact four-point contraction, m != 0 (centered operator)
+    Ecc = [0; Delta];  pcc = boltz(Ecc, beta);
+    X   = centered([m sqrt(M2); sqrt(M2) -m], pcc);
+    es  = struct('E', Ecc, 'p', pcc);  ops = struct('c', X);
+    Kf  = @(ri, si, l) kjen(ri, si, l, beta, W);
+    opts = struct('stage', 'V', 'Lmax', 400);
+    opts.comps = {'c'};  opts.ext = {{'c', 'c'}};
+    out = invzt_vertex4(es, ops, Kf, next.', beta, opts);
+    Vme = out.val(1, :).';
+    res = abs(Vme - Vjen) ./ max(abs(Vjen), 1e-300);
+    if ib == 1
+        % n = 0 STATIC GATE, low-elastic-weight regime. Tolerance derived from
+        % the omitted elastic/static-resummation scale (30x margin over the
+        % omitted-term ratio; floor 1e-4). Measured naive residual: 3.13e-5.
+        tol0 = max(1e-4, 30 * m^2*h0 / (M2*abs(gext(1))));
+        verifyLessThan(testCase, res(1), tol0);
+        % derivation-shape check: the n=0 identity is MUCH better than the
+        % n>0 static-value approximation (their measured ratio is ~1e3).
+        verifyLessThan(testCase, res(1), 0.1*res(2));
+        fprintf('[ordered static gate bD=14] res(n=0)=%.3e (tol %.3e); REPORT n=1: %.3e, n=2: %.3e\n', ...
+            res(1), tol0, res(2), res(3));
+    else
+        fprintf(['[ordered diagnostic bD=3, REPORT ONLY] res = [%.3e %.3e %.3e] -- ' ...
+            'elastic-sector resummation ambiguity (constraint 7), a3d input\n'], res);
+    end
+end
 end
 
 % ===================================================================== %
