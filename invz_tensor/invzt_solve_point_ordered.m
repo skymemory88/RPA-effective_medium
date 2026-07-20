@@ -23,11 +23,12 @@ function pt = invzt_solve_point_ordered(ion, T, B, lat, opts)
 %   options here (invzt:orderedSplitKnobs), not silently accepted knobs.
 %
 %   SCOPE: TRANSVERSE fields only (spontaneous route; invzt:orderedLongitudinal
-%   otherwise -- no forced_moment port, 2026-07-19 decision). Modes: 'a1' (this
-%   task) and, once Task 7D lands, 'a3d' (full-response dominant-vertex,
-%   Matsubara-only); full-dress 'a3' is PERMANENTLY rejected (invzt:orderedMode,
-%   136-state vertex budget-refused). nlevels 'std' only
-%   (invzt:orderedNlevels). Option-A parity with the projected ordered solver:
+%   otherwise -- no forced_moment port, 2026-07-19 decision). Modes: 'a1' (moment
+%   form, Task 3) and 'a3d' (full-response fixed-rank dominant-VERTEX hybrid,
+%   Matsubara-only, Task 7D -- see the a3d branch below); full-dress 'a3' is
+%   PERMANENTLY rejected (invzt:orderedMode, 136-state vertex budget-refused).
+%   nlevels 'std' only (invzt:orderedNlevels). Option-A parity with the projected
+%   ordered solver:
 %   m0 is the BARE mean-field order parameter -- it onsets at the MF boundary
 %   (~5.0 T at 0.1 K, MEASURED 2026-07-19), well above the tensor crit = 0 QPT
 %   (4.65-4.70 T). A converged ordered point is therefore NOT evidence of being
@@ -50,18 +51,28 @@ function pt = invzt_solve_point_ordered(ion, T, B, lat, opts)
 %   fixed set: m0, is_ordered=false, converged=false, Sigma0=NaN, crit=NaN,
 %   si, tl=[], moment_branch. Always check pt.is_ordered AND pt.converged.
 %
+%   MODE 'a3d' surface (round-2 P0-1, HONEST). The dense vertex does NOT produce the
+%   Jensen moment-form objects, so alpha/alpha_m/lambda/Sigma/Sigma0 = NaN -- consumers
+%   read the DIAGNOSTIC pt.Sigma_cc_equiv(1) EXPLICITLY. Extra fields: Vcc [nwn,1]
+%   (cc vertex self-energy correction), chi_til [3,3,nwn] (the ONE hybrid response),
+%   Kmat, Sigma_cc_equiv, eps_el/c_d (7A elastic-sector control), vb (16-state basis
+%   diagnostics), a3d (vertex provenance + reeval seed). opts.reeval = <a3d pt> skips
+%   the fixed point and evaluates the map ONCE at the returned state. a3d ignores the
+%   moment-form knobs; it forwards mix_outer/tol_outer/max_outer/Vmat_seed/Lmax/tile_nl
+%   and the invzt:orderedA3Budget guards to invzt_sigma_tensor.
+%
 %   See also INVZT_SOLVE_POINT, INVZ_SOLVE_POINT_ORDERED (projected reference),
 %   INVZ_SIGMA_ORDERED, INVZ_TWOLEVEL_ORDERED, INVZT_GCC_LATTICE,
 %   INVZT_CRIT_STATIC, INVZT_SOLVE_AUTO.
 if nargin < 5, opts = struct(); end
 mode   = getf(opts, 'mode', 'a1');
-% At Task-3 time only 'a1' exists; Task 7D extends this gate to accept 'a3d'
-% (full-response dominant-vertex, Matsubara-only). 'a3' (full dress) stays
-% rejected PERMANENTLY: the 136-state vertex is budget-refused (A4 ladder gate).
-if ~ismember(char(mode), {'a1'})            % Task 7D: {'a1','a3d'}
-    error('invzt:orderedMode', ['invzt_solve_point_ordered implements mode ''a1'' ' ...
-        '(and ''a3d'' once Task 7D lands) -- got ''%s''. Full-dress ordered ''a3'' ' ...
-        'is permanently out of scope: the 136-state vertex is budget-refused.'], char(mode));
+% Modes: 'a1' (moment form, Task 3) and 'a3d' (full-response dominant-vertex,
+% Matsubara-only, Task 7D). 'a3' (full 136-state dress) stays rejected PERMANENTLY:
+% the 136-state vertex is budget-refused (A4 ladder gate).
+if ~ismember(char(mode), {'a1', 'a3d'})
+    error('invzt:orderedMode', ['invzt_solve_point_ordered implements modes ''a1'' ' ...
+        'and ''a3d'' -- got ''%s''. Full-dress ordered ''a3'' is permanently out of ' ...
+        'scope: the 136-state vertex is budget-refused.'], char(mode));
 end
 Ecut   = getf(opts, 'Ecut', 40);
 hyp    = getf(opts, 'hyp', true);
@@ -145,6 +156,138 @@ if ~(oddmag < 1e-10*abs(lat.info.Jcc0))
         oddmag, 1e-10*abs(lat.info.Jcc0));
 end
 
+if strcmp(char(mode), 'a3d')
+    % ============================ a3d branch (Task 7D) ==============================
+    %  Full-response, fixed-rank, FIELD-ADAPTED dominant-vertex hybrid, Matsubara-only.
+    %
+    %  ONE consistent response everywhere (round-2 P1-3), "dominant dressed, rest bare":
+    %      chi_til = chi_full + (chi_dom_til - chi_dom)
+    %  with chi_full = bare FULL ordered local response (all n_full states, = c0 above),
+    %  chi_dom = bare response of the fixed 16-state vertex basis, chi_dom_til = the
+    %  vertex-DRESSED dominant response. THIS chi_til -- not two maps -- feeds (i) the
+    %  EMT medium, (ii) pt.chi_til, and (iii) invzt_crit_static.
+    %
+    %  chi_dom_til SEMANTICS (verified against the code, 7D). invzt_sigma_tensor's
+    %  st.chi_til is -G0*((G0+Vmat)\G0) with G0 = -invz_chi0z(<arg-1 si>) -- it is
+    %  built from the FIRST argument, NOT restricted by opts.dom_basis (dom_basis only
+    %  selects the four-point VERTEX subspace). With a FULL si, st.chi_til is the
+    %  whole-cc Dyson response (invzt_solve_point documents exactly this at its dominant
+    %  branch, lines 247-256, and deliberately avoids it). To make st.chi_til the
+    %  DOMINANT-only dressed response we pass the reduced 16-state si_vb (= vb.si_vertex)
+    %  as arg 1 AND vb as opts.dom_basis: then G0, the internal medium, and the vertex
+    %  are all the SAME 16-state basis, st.chi_til == chi_dom_til, and chi_dom == -st.G0
+    %  exactly (same si_vb, same elastic, same grid). This is the natural vb analog of
+    %  the PM path's cdom/(1+Sigma)+crest reconstruction (a1's front half here supplies
+    %  the FULL c0 = chi_full).
+    %
+    %  tl (built above) is NOT consumed by the a3d self-energy -- it is retained on pt
+    %  only for interface parity with the a1 surface (and invzt_chi_realaxis rejection).
+
+    % --- fixed-rank field-adapted 16-state vertex basis (7B) -----------------------
+    vb    = invzt_ordered_vertex_basis(ion, T, si, struct());
+    si_vb = vb.si_vertex;                          % reduced si-like struct (7B built it)
+
+    % --- the three ingredients of the ONE hybrid response --------------------------
+    chi_full    = c0;                              % bare FULL response (elastic ON, above)
+    chi_dom     = invz_chi0z(si_vb, T, 1i*wn, struct('elastic', true));   % bare dominant
+
+    % --- vertex solve on the dominant basis: st.chi_til IS chi_dom_til --------------
+    st_opts = struct('dress', 'dominant', 'dom_basis', vb, 'rank_tol', rank_tol);
+    for f = {'mix_outer', 'tol_outer', 'max_outer', 'Vmat_seed', 'tile_nl', ...
+             'Lmax', 'max_vertex_states', 'max_vertex_work', 'max_vertex_bytes'}
+        if isfield(opts, f{1}), st_opts.(f{1}) = opts.(f{1}); end
+    end
+    % reeval hook (7E fixed-point gate): seed the converged Vmat and take ONE outer
+    % pass, so the returned Vcc/chi_til are the map evaluated once at the reeval state.
+    reev = isfield(opts, 'reeval') && ~isempty(opts.reeval) && isstruct(opts.reeval);
+    if reev
+        rp = opts.reeval;
+        if isfield(rp, 'a3d') && isstruct(rp.a3d) && isfield(rp.a3d, 'Vmat')
+            st_opts.Vmat_seed = rp.a3d.Vmat;
+        end
+        st_opts.max_outer = 1;
+    end
+    st = invzt_sigma_tensor(si_vb, T, lat_eff, wn, beta, st_opts);
+    chi_dom_til = st.chi_til;                       % dominant DRESSED [3,3,nwn]
+
+    % --- THE HYBRID (one response everywhere) --------------------------------------
+    chi_til = chi_full + (chi_dom_til - chi_dom);   % [3,3,nwn]
+
+    % --- medium: ONE consistent EMT closure of the hybrid --------------------------
+    [Kmat, chi_bar, emtinfo] = invzt_emt_matrix(chi_til, lat_eff, struct('rank_tol', rank_tol));
+    Gloc = -real(squeeze(chi_bar(3, 3, :)));  Gloc = Gloc(:);
+    Kcc  = real(squeeze(Kmat(3, 3, :)));
+
+    % --- crit from the RETURNED hybrid chi_til (herm-real static block) -------------
+    [crit, crit_clipped_mass, crit_active_rank] = ...
+        invzt_crit_static(herm_real(chi_til(:, :, 1)), lat.JtGamma, rank_tol);
+
+    % --- Sigma_cc_equiv (DIAGNOSTIC): vertex self-energy vs the MATCHING dominant G0 -
+    G0cc = squeeze(st.G0(3, 3, :));
+    ok   = abs(G0cc) > rank_tol;
+    Sigma_cc_equiv = nan(nwn, 1);
+    Sigma_cc_equiv(ok) = squeeze(st.Vmat(3, 3, ok)) ./ G0cc(ok);   % +V/G0 (v3 POSITIVE)
+    Vcc  = squeeze(st.Vmat(3, 3, :));  Vcc = Vcc(:);
+
+    % --- eps_el / c_d: 7A elastic-sector control on the FULL ordered si -------------
+    c0_el   = invz_chi0z(si, T, 1i*wn(1), struct('elastic', true));
+    c0_inel = invz_chi0z(si, T, 1i*wn(1), struct('elastic', false));
+    c_d     = real(c0_el(3, 3, 1) - c0_inel(3, 3, 1)) / beta;
+    eps_el  = beta * abs(Kcc(1)) * c_d;
+
+    phys_finite = all(isfinite(chi_til(:))) && all(isfinite(Vcc)) && all(isfinite(Gloc));
+    sumrule_rel = abs(sum(wts.*Gloc)/beta + si.JzJz_fluct) / max(abs(si.JzJz_fluct), 1e-12);
+
+    % --- assemble the HONEST a3d surface -------------------------------------------
+    %  alpha/alpha_m/lambda/Sigma/Sigma0 are Jensen moment-form objects the dense
+    %  vertex does NOT produce -- fabricating them is forbidden (round-2 P0-1). NaN.
+    %  Consumers use pt.Sigma_cc_equiv(1) EXPLICITLY (it is a diagnostic, not Sigma0).
+    pt = struct();
+    pt.m0     = m0;
+    pt.is_ordered = true;
+    pt.moment_branch = 'spontaneous';
+    pt.Sigma0 = NaN;                               % honest: a1 moment-form object only
+    pt.Sigma  = nan(nwn, 1);
+    pt.alpha  = NaN;
+    pt.alpha_m = NaN;
+    pt.lambda = nan(3, 1);
+    pt.K = Kcc;                                     % hybrid-medium cc kernel (meaningful)
+    pt.G = Gloc;
+    pt.tl = tl;                                     % parity only (not used by a3d self-energy)
+    pt.si = si;
+    pt.chi0cc0 = real(chi_full(3, 3, 1));
+    pt.crit = crit;
+    pt.crit_clipped_mass = crit_clipped_mass;
+    pt.crit_active_rank  = crit_active_rank;
+    pt.sumrule_rel = sumrule_rel;
+    pt.converged = st.converged && phys_finite;
+    pt.outer_iters = st.outer_iters;
+    pt.diag4_spread = a3d_diag4_spread(emtinfo);
+    pt.mode = 'a3d';
+    pt.odd  = odd;
+    pt.chi_rest = true;                            % WHOLE response carried (parity)
+    pt.mspec = [];
+    pt.Jxx0_used = Jxx0;
+    pt.J0z_used  = J0z;
+    pt.nlevels = 'std';
+    pt.lat = struct('qvec_hash', hash_vec(lat.qvec(:)), 'conv', lat.conv, ...
+        'JtGamma', lat.JtGamma, 'info', lat.info, 'Jxx0_used', Jxx0);
+    % --- a3d-specific surface (round-2 P0-1) ---------------------------------------
+    pt.Vcc = Vcc;                                  % [nwn,1] cc vertex self-energy correction
+    pt.chi_til = chi_til;                          % [3,3,nwn] the ONE hybrid response
+    pt.Kmat = Kmat;                                % full non-Hermitian medium kernel
+    pt.Sigma_cc_equiv = Sigma_cc_equiv;            % [nwn,1] DIAGNOSTIC (vs dominant G0)
+    pt.eps_el = eps_el;
+    pt.c_d    = c_d;
+    pt.vb = vb;                                    % full basis-diagnostics struct
+    pt.a3d = struct('Vmat', st.Vmat, 'st_converged', st.converged, ...
+        'st_outer_iters', st.outer_iters, 'st_active_rank', st.active_rank, ...
+        'st_dress', st.dress, 'reeval', reev, ...
+        'n_full', vb.n_full, 'n_vertex', vb.n_vertex, 'chi_share', vb.chi_share, ...
+        'var_share', vb.var_share, 'p_mass', vb.p_mass, 'gap_kBT', vb.gap_kBT);
+    return;
+end
+
 % --- outer moment-form loop: damped mixing, CHECK-BEFORE-MIX (P2-2) --------------
 Sigma = zeros(nwn, 1);
 denom = @(s) reshape(1 + s, 1, 1, nwn);
@@ -212,4 +355,23 @@ function h = hash_vec(v)
 % Weak grid-identity hash, same formula as invz_cache_key / invzt_solve_point.
 v = v(:);
 h = sprintf('%dv_%08x', numel(v), typecast(single(sum(v.*(1:numel(v))')), 'uint32'));
+end
+
+function A = herm_real(A)
+% Real symmetric (Hermitian) part -- the static renormalized chi is Hermitian at
+% wn = 0 (the gyrotropic anti-Hermitian part vanishes there); used for crit. Same
+% definition as invzt_solve_point's local herm_real (the crit gate must match).
+A = real((A + A')/2);
+end
+
+function s = a3d_diag4_spread(emtinfo)
+% S4 sublattice spread of the cc effective medium (a3d analog of the a1
+% diag4_spread from invzt_gcc_lattice). emtinfo.diag4_cc is the sublattice-resolved
+% cc medium [4,nwn]; NaN if the EMT did not report it.
+if isstruct(emtinfo) && isfield(emtinfo, 'diag4_cc') && ~isempty(emtinfo.diag4_cc)
+    d = real(emtinfo.diag4_cc);
+    s = max(max(d, [], 1) - min(d, [], 1));
+else
+    s = NaN;
+end
 end
