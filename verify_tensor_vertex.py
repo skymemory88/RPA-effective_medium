@@ -665,6 +665,9 @@ def run_checks():
     print("\n== 4. two-level Jensen limit: V_n == G0_n * Sigma_n (J 2.17-2.19) ==")
     check4(beta)
 
+    print("\n== 4b. ordered two-level oracle rows (a3d prereq, J 2.26-2.29) ==")
+    check4_ordered()
+
     print("\n== 5. degeneracy regularity: E1=E2 doublet, finite + quadrature agreement ==")
     check5()
     set_beta(beta)
@@ -724,6 +727,48 @@ def check4(beta):
     fx["systems"]["jensen_2lvl"] = {"beta": beta, "E": Ecc, "Delta": Delta, "M2": M2,
                                     "K": [Kfun_scalar(k) for k in range(0, 65)],
                                     "ops": {"c": {"re": np.real(X).tolist(), "im": np.imag(X).tolist()}}}
+
+
+def check4_ordered():
+    # Ordered two-level (split doublet, diagonal moment +-m, off-diagonal M): the
+    # minimal system whose vertex carries the moment/elastic paths of J 2.26-2.29.
+    # TWO scalar-beta systems (sysdata expects scalar S.beta):
+    #   _b14: beta*Delta = 14 -> 1 - n01^2 = 3.3261e-6 (elastic sector ~dead)
+    #   _b3 : beta*Delta = 3  -> elastic sector alive (REPORT rows for the
+    #         elastic-resummation ambiguity, constraint 7)
+    # Operator centered by the THERMAL MEAN exactly as jensen_2lvl centers its
+    # operator; the system dict records m as the UNcentered diagonal (+m on the
+    # ground state), matching tl.m = ground-state diagonal element.
+    #
+    # subtract='all' is the LOCKED-correct connected-Gamma4 convention: check4
+    # already established it (against the PM Jensen closed form) for THIS SAME
+    # contraction formula (F minus all three Wick pairings) -- the formula is an
+    # algebraic identity of the vertex, independent of the operator's m, so no
+    # per-system re-derivation of 'conv' is needed here. There is no closed-form
+    # Jensen reference for m!=0 to gate against in the first place -- that
+    # comparison is the MATLAB-side a3d STATIC DIAGNOSTIC
+    # (test_jensen_ordered_static_diagnostic in test_invzt_vertex.m), self-contained
+    # and not fixture-driven.
+    Delta_o, M_o, m_o = 1.0, 0.9, 0.6
+    M2_o = M_o**2
+    Ecc = [0.0, Delta_o]
+    W = 1.3
+    Lmax = 400
+    conv = 'all'
+    for tag_b, beta_o in (("b14", 14.0), ("b3", 3.0)):
+        pcc = boltz(Ecc, beta_o)
+        X = centered(np.array([[m_o, M_o], [M_o, -m_o]]), pcc)
+
+        def Kfun(ri, si, l, beta_o=beta_o):
+            wl = 2 * math.pi * l / beta_o
+            return 0.37 / (1 + (wl / W)**2) if (ri == 0 and si == 0) else 0.0
+
+        for n in [0, 1, 2]:
+            Vv = V_contract_f(X, X, [X], Kfun, Ecc, pcc, beta_o, n, Lmax, subtract=conv)
+            print(f"  V_cc({n}) [ordered beta={beta_o:g}, subtract={conv}] = {complex(Vv):+.10e}")
+            fx["vertex_rows"].append(row(f"V;cc;jensen2lvlord_{tag_b};subtract={conv}", n, 0, Vv))
+        fx["systems"][f"jensen_2lvl_ordered_{tag_b}"] = {
+            "beta": float(beta_o), "E": Ecc, "Delta": Delta_o, "M2": M2_o, "m": m_o}
 
 
 def check5():
