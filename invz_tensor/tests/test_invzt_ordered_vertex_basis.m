@@ -43,6 +43,8 @@ si = ordered_si(tc, 3.0);
 vb = invzt_ordered_vertex_basis(tc.TestData.ion, tc.TestData.T, si, struct());
 verifyEqual(tc, vb.n_full, numel(si.E));
 verifyEqual(tc, vb.n_vertex, 16);
+verifyEqual(tc, size(vb.Mx), [16 16]);
+verifyEqual(tc, size(vb.My), [16 16]);
 verifyEqual(tc, size(vb.Mz), [16 16]);
 verifyEqual(tc, numel(vb.E), 16);
 verifyEqual(tc, numel(vb.p), 16);
@@ -50,32 +52,47 @@ verifyEqual(tc, size(vb.V16), [numel(si.E) 16]);
 verifyTrue(tc, all(isfinite(vb.E)));
 verifyLessThan(tc, abs(sum(vb.p) - 1), 1e-12);
 verifyTrue(tc, isfinite(vb.gap_16_17) && vb.gap_16_17 > 0);
-fprintf('7B @3T: chi_share = %.5f (> 0.9), gap_16_17 = %.6f meV\n', ...
-    vb.chi_share, vb.gap_16_17);
+% (8) the full 3x3 truncated response tensor is present and each block Hermitian (a
+% truncated principal block of a Hermitian matrix is Hermitian).
+verifyEqual(tc, vb.Mx, vb.Mx', 'AbsTol', 1e-12);
+verifyEqual(tc, vb.My, vb.My', 'AbsTol', 1e-12);
+verifyEqual(tc, vb.Mz, vb.Mz', 'AbsTol', 1e-12);
+% (6) soft coverage gate + report the new isolation/convergence diagnostics.
+fprintf(['7B @3T: chi_share = %.5f (> 0.9), var_share = %.5f, p_mass = %.6f (> 0.99), ' ...
+    'gap_16_17 = %.6f meV, gap_ratio = %.4f, gap_kBT = %.2f\n'], ...
+    vb.chi_share, vb.var_share, vb.p_mass, vb.gap_16_17, vb.gap_ratio, vb.gap_kBT);
 verifyGreaterThan(tc, vb.chi_share, 0.9);          % DIRECTION GATE (do NOT loosen)
+verifyGreaterThan(tc, vb.p_mass, 0.99);            % soft coverage gate
+verifyTrue(tc, isfinite(vb.var_share) && vb.var_share > 0 && vb.var_share <= 1);
 end
 
 function test_field_continuity(tc)
-% (2) field-continuity: no cutoff-induced jumps + smooth subspace tracking to the QPT.
+% (2)/(7) field-continuity via the constructor's OWN opts.vb_prev path (exercises the new
+% code): no cutoff-induced jumps + smooth subspace tracking to the QPT. REPORT the full
+% diagnostic table (chi_share/var_share/p_mass/gap_ratio/gap_kBT + subspace overlap).
 Bs = [3.0 3.5 4.0 4.4 4.65];
 cs = zeros(size(Bs));
-Vs = cell(size(Bs));
+ov = nan(size(Bs));
+vb_prev = [];
+fprintf('  B(T)   chi_share  var_share   p_mass   gap_ratio  gap_kBT   min_ov  proj_dist\n');
 for k = 1:numel(Bs)
     si = ordered_si(tc, Bs(k));
-    vb = invzt_ordered_vertex_basis(tc.TestData.ion, tc.TestData.T, si, struct());
+    o = struct();
+    if ~isempty(vb_prev), o.vb_prev = vb_prev; end
+    vb = invzt_ordered_vertex_basis(tc.TestData.ion, tc.TestData.T, si, o);
     verifyEqual(tc, vb.n_vertex, 16);
     verifyTrue(tc, all(isfinite(vb.E)));
     cs(k) = vb.chi_share;
-    Vs{k} = vb.V16;
-    fprintf('B=%.2f T: chi_share=%.5f gap_16_17=%.6f\n', Bs(k), vb.chi_share, vb.gap_16_17);
+    ov(k) = vb.min_subspace_overlap;               % NaN at k = 1 (no prev)
+    fprintf('%5.2f  %9.5f  %9.5f  %8.6f  %8.4f  %7.2f  %7.5f  %8.2e\n', ...
+        Bs(k), vb.chi_share, vb.var_share, vb.p_mass, vb.gap_ratio, vb.gap_kBT, ...
+        vb.min_subspace_overlap, vb.projector_distance);
+    vb_prev = vb;
 end
-ov = zeros(1, numel(Bs)-1);
-for k = 1:numel(Bs)-1
-    ov(k) = min(svd(Vs{k}' * Vs{k+1}));            % smallest principal-angle cosine
-    fprintf('subspace overlap B=%.2f->%.2f : min svd = %.5f\n', Bs(k), Bs(k+1), ov(k));
-end
+ov = ov(2:end);                                    % drop the leading NaN
 fprintf('max adjacent |Δchi_share| = %.5f (< 0.05); min subspace overlap = %.5f (> 0.9)\n', ...
     max(abs(diff(cs))), min(ov));
+verifyTrue(tc, all(isfinite(ov)));
 verifyLessThan(tc, max(abs(diff(cs))), 0.05);
 verifyGreaterThan(tc, min(ov), 0.9);
 end
