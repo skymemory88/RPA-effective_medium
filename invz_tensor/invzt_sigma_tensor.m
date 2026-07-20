@@ -20,6 +20,14 @@ function out = invzt_sigma_tensor(si, T, lat_eff, wn, beta, opts)
 %     opts    : mix_outer (0.5), tol_outer (1e-9), max_outer (150), rank_tol (1e-12),
 %               Lmax (nwn-1 -- the internal l-sum then spans the SAME grid the scalar
 %               invz_lambdas sums, so the two-level limit is exact), Vmat_seed [].
+%               DOMINANT/COMPACT path (dress='dominant') ONLY: dom_basis [] (explicit
+%               fixed-rank field-adapted vertex basis, Task 7B vb struct with E/p/Mz;
+%               when [] the legacy E < Esplit content cut is used), tile_nl (128; l-tile
+%               width for the compact G4cc build -- part of the vertex cache key), and
+%               the budget guards max_vertex_states (16), max_vertex_work (5e11 = 6*N^4*
+%               nwn*nl), max_vertex_bytes (4e9), each failing invzt:orderedA3Budget
+%               BEFORE any allocation. The compact path stores only the cc;cc slot
+%               [nwn,nl] and never forms the ~1.42 GB five-D pad (round-2 P1-1/P1-2).
 %
 %   THE A3 MAP (one outer iteration; the fixed-point variable is Vmat).
 %     (0) es = (si.E, si.P); ops.{a,b,c} = CENTERED si.{Mx,My,Mz} (delta-J: the vertex
@@ -120,27 +128,78 @@ for ip = 1:npair, mu_i(ip) = idx.(ext{ip}{1});  nu_i(ip) = idx.(ext{ip}{2}); end
 % invzt_vertex4 stage 'Gamma', gated by test_invzt_a3_threestate). Cached across
 % solves at the same toy: the same (T,B,toy) drives every odd-on/off and lambda-scaled
 % A3 solve (Gamma4 depends on the single ion only, NOT the lattice).
+G4   = [];      % full-dress five-D vertex (npair,nc,nc,nwn,nl); used only when ~dom
+G4cc = [];      % compact cc;cc vertex [nwn,nl]; used only in the dominant/compact path
 if dom
-    % DOMINANT-TRANSITION dressing (E1): restrict the cc self-energy to the dominant
-    % transition -- the ground doublet (states with E < Esplit) -- with SPECTATOR-
-    % normalized populations p~ = p/(p_dom sum) (constraint 3). This is the two-level
-    % Gamma4 (the |3> multi-level cc paths are dropped, exactly as E1's dominant-only
-    % rule does), placed in the cc;cc slot of a full-shaped G4; the transverse a,b
-    % spectator stays bare. Reproduces invz_sigma's two-level self-energy at the medium
-    % K_cc, i.e. A1/E1, so the framework 11.8 emergence gate is a MATCHED truncation.
-    Esplit = getf(opts, 'Esplit', 0.4653);
-    di = find(si.E(:) < Esplit);
-    if numel(di) < 2
-        error('invzt:domGroup', 'dominant group (E < %.4g) has %d < 2 states.', Esplit, numel(di));
+    % DOMINANT-TRANSITION dressing (E1): restrict the cc self-energy to a dominant
+    % low-energy SUBSPACE, dressing ONLY the cc;cc slot (transverse a,b spectator stays
+    % bare). Only that one slot is ever consumed by the contraction, so 7C keeps the
+    % compact G4cc [nwn,nl] and NEVER forms the five-D pad complex(zeros(npair,nc,nc,
+    % nwn,nl)) (~1.42 GB at the 0.1 K production grid, round-2 P1-1/P1-2). Two content
+    % selectors pick the dominant subspace:
+    %   (LEGACY, default) the E < Esplit energy cut of the single-ion spectrum -- the
+    %       ground doublet (>=2 states) with SPECTATOR-normalized populations. PM a3
+    %       gates run this path; it is bit-for-bit unchanged from the pre-7C code.
+    %   (opts.dom_basis) an EXPLICIT fixed-rank field-adapted vertex basis (Task 7B's vb;
+    %       struct with fields E [nv], p [nv], Mz [nv,nv]) -- the ordered a3d route.
+    %       Centered by the LOCKED consumer rule Mz - <Jz>_p * I (7B header). When
+    %       dom_basis is ABSENT the legacy Esplit path is untouched.
+    tile_nl    = getf(opts, 'tile_nl',           128);   % l-tile width for the G4cc build
+    max_states = getf(opts, 'max_vertex_states',  16);   % dominant-subspace dimension cap
+    max_work   = getf(opts, 'max_vertex_work',  5e11);   % 6*N^4*nwn*nl kernel-eval cap
+    max_bytes  = getf(opts, 'max_vertex_bytes', 4e9);    % compact + tile-temporary byte cap
+    if isfield(opts, 'dom_basis') && ~isempty(opts.dom_basis)
+        db = opts.dom_basis;
+        for f = {'E','p','Mz'}
+            if ~isfield(db, f{1})
+                error('invzt:domBasis', ['opts.dom_basis must carry fields E, p, Mz ' ...
+                    '(Task 7B vb surface); missing ''%s''.'], f{1});
+            end
+        end
+        Ed  = db.E(:) - db.E(1);                         % ground-shift (idempotent if pre-shifted)
+        pd  = db.p(:);  pd = pd / sum(pd);               % subspace-normalized populations
+        Mzd = db.Mz;
+        if ~isequal(size(Mzd), [numel(Ed), numel(Ed)])
+            error('invzt:domBasis', 'opts.dom_basis.Mz must be %dx%d; got %s.', ...
+                numel(Ed), numel(Ed), mat2str(size(Mzd)));
+        end
+    else
+        Esplit = getf(opts, 'Esplit', 0.4653);
+        di = find(si.E(:) < Esplit);
+        if numel(di) < 2
+            error('invzt:domGroup', 'dominant group (E < %.4g) has %d < 2 states.', Esplit, numel(di));
+        end
+        Ed  = si.E(di) - si.E(di(1));
+        pd  = si.P(di);  pd = pd / sum(pd);              % spectator normalization
+        Mzd = si.Mz(di, di);
     end
-    Ed = si.E(di) - si.E(di(1));
-    pd = si.P(di);  pd = pd / sum(pd);                 % spectator normalization
-    Mzd = si.Mz(di, di);
-    ops_d = struct('c', Mzd - real(sum(pd .* diag(Mzd)))*eye(numel(di)));
-    G4dom = gamma4_cached(struct('E', Ed, 'p', pd), ops_d, {'c'}, next, lvals, beta);
-    G4 = complex(zeros(npair, nc, nc, nwn, nl));
-    ipcc = find(mu_i == 3 & nu_i == 3);                % cc;cc slot
-    G4(ipcc, 3, 3, :, :) = reshape(G4dom, [1, 1, 1, nwn, nl]);
+    ops_d = struct('c', Mzd - real(sum(pd .* diag(Mzd)))*eye(numel(Ed)));   % consumer centering
+
+    % --- budget guards (dominant/compact path ONLY; the full-dress branch keeps its
+    %     existing behavior). ALL fail with invzt:orderedA3Budget BEFORE any allocation.
+    Nd = numel(Ed);
+    if Nd > max_states
+        error('invzt:orderedA3Budget', ['dominant vertex has %d states > ' ...
+            'max_vertex_states = %d.'], Nd, max_states);
+    end
+    work = 6 * Nd^4 * nwn * nl;                          % 6 time-orderings * N^4 * grid
+    if work > max_work
+        error('invzt:orderedA3Budget', ['estimated vertex work %.3e ' ...
+            '(6*N^4*nwn*nl; N=%d, nwn=%d, nl=%d) exceeds max_vertex_work = %.3e.'], ...
+            work, Nd, nwn, nl, max_work);
+    end
+    tcols = min(max(round(tile_nl), 1), nl);
+    % peak bytes: the persistent compact array [nwn,nl] + the per-tile [nwn*tcols,1]
+    % complex temporaries of the gamma4 walk (<=16 live, a conservative upper bound).
+    est_bytes = 16*nwn*nl + 16 * 16*nwn*tcols;
+    if est_bytes > max_bytes
+        error('invzt:orderedA3Budget', ['estimated vertex bytes %.3e (compact [nwn,nl] ' ...
+            '+ tile temporaries, tile_nl=%d) exceed max_vertex_bytes = %.3e.'], ...
+            est_bytes, tcols, max_bytes);
+    end
+
+    % compact cc;cc build, tiled over l (peak temporaries ~ nwn*tile_nl, not nwn*nl):
+    G4cc = gamma4cc_cached(struct('E', Ed, 'p', pd), ops_d, next, lvals, beta, tcols);
 else
     G4 = gamma4_cached(es, ops, labs, next, lvals, beta);
 end
@@ -168,7 +227,11 @@ Vnew = Vmat;
 for outer = 1:maxo
     chi_til = resum_dyson(G0p_all, Vmat, P);                    % symmetric bracket
     [Kmat, chi_bar, emtinfo] = invzt_emt_matrix(chi_til, lat_eff, struct('rank_tol', rtol));
-    Vnew = contract_vertex(G4, Kmat, mu_i, nu_i, Lmax, nwn, nc, beta, dom);
+    if dom
+        Vnew = contract_vertex_cc(G4cc, Kmat, Lmax, nwn, beta); % compact cc;cc-only
+    else
+        Vnew = contract_vertex(G4, Kmat, mu_i, nu_i, Lmax, nwn, nc, beta);
+    end
     f  = Vnew - Vmat;
     dV = max(abs(f(:)));
     if dV < tolo, converged = true; break; end
@@ -218,8 +281,8 @@ for k = 1:nwn
 end
 end
 
-% ----- cheap K-contraction of the precomputed Gamma4 (bit-identical to vertex4 'V') -----
-function Vmat = contract_vertex(G4, Kmat, mu_i, nu_i, Lmax, nwn, nc, beta, dom)
+% ----- cheap K-contraction of the precomputed full-dress Gamma4 (bit-identical to vertex4 'V') -----
+function Vmat = contract_vertex(G4, Kmat, mu_i, nu_i, Lmax, nwn, nc, beta)
 nl = 2*Lmax + 1;
 % Build Karr[nc,nc,nl] indexed l = -Lmax..Lmax (l>=0 direct; l<0 transpose relation
 % K_{rho sigma}(-l) = K_{sigma rho}(+l)) -- Kmat(:,:,m) is Matsubara index m-1 = |l|.
@@ -232,23 +295,32 @@ for li = 1:nl
         Karr(:, :, li) = Kmat(:, :, -l + 1).';  % plain transpose (constraint 9)
     end
 end
-if dom
-    % DOMINANT-ONLY dressing (E1): the vertex self-energy lives in the cc channel ALONE.
-    % Restrict BOTH the internal contraction (Karr -> cc component only) AND the external
-    % legs (compute V_cc only); every transverse/cross Vmat component stays 0 (bare
-    % spectator). V_cc = (1/2beta) sum_l K_cc(l) Gamma4_{cc;cc}(n,l).
-    Kd = complex(zeros(nc, nc, nl));  Kd(3,3,:) = Karr(3,3,:);  Karr = Kd;
-    iplist = find(mu_i == 3 & nu_i == 3);       % external cc pair only
-else
-    iplist = 1:numel(mu_i);
-end
 Kb = reshape(Karr, [nc, nc, 1, nl]);            % broadcast over the frequency axis
 Vmat = complex(zeros(3, 3, nwn));
-for ip = iplist(:).'
+for ip = 1:numel(mu_i)
     G4p   = reshape(G4(ip, :, :, :, :), [nc, nc, nwn, nl]);
     contr = sum(sum(sum(G4p .* Kb, 1), 2), 4);  % [1,1,nwn,1]
     Vmat(mu_i(ip), nu_i(ip), :) = reshape(contr, [1, 1, nwn]) / (2*beta);
 end
+end
+
+% ----- compact cc;cc-only contraction (DOMINANT/ordered a3d path; 7C) --------------------
+function Vmat = contract_vertex_cc(G4cc, Kmat, Lmax, nwn, beta)
+% Only the cc self-energy is dressed, so this is the SINGLE-slot reduction of
+% contract_vertex above with G4 zero everywhere except the cc;cc slot = G4cc [nwn,nl]:
+%     V_cc(n) = (1/2beta) sum_{l=-Lmax..Lmax} K_cc(l) G4cc(n,l),
+% with the LOCKED negative-l relation K_{rho sigma}(-l) = K_{sigma rho}(+l); for the
+% (c,c) element that transpose is the identity, so K_cc(l) = Kmat(3,3,|l|+1). Same
+% uniform l-weight and (1/2beta) prefactor as the general branch; every transverse/cross
+% Vmat component stays exactly 0 (bare spectator).
+nl  = 2*Lmax + 1;
+Kcc = complex(zeros(1, nl));
+for li = 1:nl
+    l = li - Lmax - 1;
+    Kcc(li) = Kmat(3, 3, abs(l) + 1);
+end
+Vmat = complex(zeros(3, 3, nwn));
+Vmat(3, 3, :) = reshape(sum(G4cc .* Kcc, 2) / (2*beta), [1, 1, nwn]);   % sum_l G4cc(n,l) Kcc(l)
 end
 
 % ----- session cache of Gamma4 (keyed+verified by the toy signature) -----
@@ -272,4 +344,37 @@ end
 G4 = invzt_gamma4(es, ops, ext, comps, next, lvals, beta);
 CACHE(end+1) = struct('key', key, 'sig', sig, 'G4', G4);  %#ok<AGROW>
 if numel(CACHE) > 6, CACHE(1) = []; end                    % bounded (each ~18 MB)
+end
+
+% ----- session cache + TILED build of the compact cc;cc Gamma4 (7C) -----
+function G4cc = gamma4cc_cached(es, ops, next, lvals, beta, tile_nl)
+% Build the COMPACT cc;cc connected Gamma4 as [nwn, nl] WITHOUT ever forming the
+% five-D pad: only the cc;cc slot is consumed by the dominant vertex. The (n,l) walk
+% is l-independent in its O(N^4) part, so the columns are evaluated in l-tiles of
+% tile_nl to bound peak temporaries (~ nwn*tile_nl instead of nwn*nl), then stacked.
+% Bit-identical to one non-tiled invzt_gamma4({c},{{c,c}}) reshaped to [nwn,nl].
+% Session-persistent and signature-verified; EVERY tiling parameter (tile_nl) is part
+% of the cache key, so a differently-tiled request never returns a mismatched entry.
+persistent CACHE
+if isempty(CACHE), CACHE = struct('key', {}, 'sig', {}, 'G4cc', {}); end
+nwn = numel(next);  nl = numel(lvals);
+if isempty(tile_nl) || ~(isscalar(tile_nl) && tile_nl >= 1), tile_nl = nl; end
+tile_nl = min(round(tile_nl), nl);
+O   = ops.c;
+sig = [es.E(:); es.p(:); beta; next(:); lvals(:); real(O(:)); imag(O(:)); tile_nl];
+key = sprintf('cc%dv_%08x', numel(sig), typecast(single(sum(sig.*(1:numel(sig))')), 'uint32'));
+for i = 1:numel(CACHE)
+    if strcmp(CACHE(i).key, key) && isequal(CACHE(i).sig, sig)
+        G4cc = CACHE(i).G4cc;  return;
+    end
+end
+G4cc = complex(zeros(nwn, nl));
+ext = {{'c','c'}};  comps = {'c'};
+for c0 = 1:tile_nl:nl
+    c1  = min(c0 + tile_nl - 1, nl);
+    G4t = invzt_gamma4(es, ops, ext, comps, next, lvals(c0:c1), beta);   % [1,1,1,nwn,ntile]
+    G4cc(:, c0:c1) = reshape(G4t, [nwn, c1 - c0 + 1]);
+end
+CACHE(end+1) = struct('key', key, 'sig', sig, 'G4cc', G4cc);  %#ok<AGROW>
+if numel(CACHE) > 6, CACHE(1) = []; end                       % bounded (each ~18 MB compact)
 end
