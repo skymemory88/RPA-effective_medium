@@ -1,20 +1,31 @@
 %INVZT_RUN_SPECTRA  Full-tensor 1/z chi''_cc spectra vs transverse field, or along a q-path.
 %
-% SCOPE: PARAMAGNETIC SIDE ONLY. invzt_solve_point has no ordered-phase branch,
-% so unlike invz_run_spectra this driver cannot sweep ACROSS Bc to show the soft
-% mode hardening on both sides. Fields that land on the ordered side (or fail the
-% sample-validity rule) are masked to NaN with a console note.
+% SCOPE: BOTH PHASES, ACROSS Bc. Each point is solved with invzt_solve_auto
+% (Task 5), which runs the PM and ordered legs and assigns the phase by
+% STABILITY, not moment onset: the PM leg's three-part validity rule
+% (converged, finite crit > 0, Sigma0 >= floor) decides FIRST -- its crit > 0
+% IS the tensor QPT criterion -- and the ordered leg is consulted only when
+% the PM sample is invalid. Unlike its PM-only predecessor, this driver
+% therefore sweeps straight across Bc and shows the soft mode hardening on
+% BOTH sides. Fields where neither leg is accepted (near-Bc Option-A window,
+% or a solver failure) are masked to NaN with a structured console note.
+%
+% TRANSVERSE ONLY: theta_c (the field's tilt out of the ab-plane) must stay at
+% 0 -- a nonzero Bz routes into invzt:orderedLongitudinal, rethrown by
+% invzt_solve_auto rather than absorbed, since no tensor forced-moment route
+% exists here (2026-07-19 scope decision).
 %
 % solve_opts.mode must be 'a1' (enforced below AND by invzt_chi_realaxis's own
 % invzt:realaxisMode guard): the real-axis continuation exists only for the A1
 % scalar Sigma. There is consequently no 'dress' knob here -- it is A3-only.
 %
 % ERROR POLICY: field sweep -- per-field selective masking (physics signals and
-% invalid samples become NaN columns with a console note; everything else
-% rethrows). q-path view -- FAIL LOUD by design: the whole product hinges on the
-% single Bq point, so an invalid point raises invzt:qpathNotPM (with converged/
-% crit/Sigma0) instead of drawing an empty map, and any physics throw from the
-% one solve propagates for the same reason.
+% invalid samples become NaN columns with a structured per-leg console note;
+% everything else rethrows). q-path view -- FAIL LOUD by design: the whole
+% product hinges on the single Bq point, so a point where both legs fail
+% raises invzt:qpathInvalid (with both legs' converged/crit/m0/err) instead of
+% drawing an empty map, and any physics throw from either solve propagates for
+% the same reason.
 
 addpath(fileparts(mfilename('fullpath')));
 addpath(fullfile(fileparts(mfilename('fullpath')), '..'));
@@ -23,23 +34,37 @@ addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'invz_common'));
 ion = invz_ion();
 
 % ---- knobs (mirroring invz_run_spectra's names where the concept carries over) --
-T      = 1.6;                          % K
-fields = linspace(0.3, 4.5, 40);       % T -- keep on the PM side (see SCOPE above)
-w      = linspace(0, 0.6, 400).';      % meV, uniform spacing (invz_peak_energy assumes it)
-eta    = 5e-3;                         % meV, real-axis Lorentzian HWHM
-sliceMax  = 6;                         % field count at/below which line slices are drawn
-peak_wmin = 0.02;                      % meV -- lower bound for the peak pick. NON-ZERO by
-                                       % default to exclude the low-frequency hyperfine
-                                       % line, mirroring invz_spectra_map's opts.peak_wmin;
-                                       % set 0 to pick over the whole w grid.
-theta_c = 0.0;  phi_ab = 0.0;          % field-direction tilt knobs (deg). Ported as-is:
-                                       % invzt_solve_point already takes a full [Bx By Bz]
-                                       % and forwards transverse_mf.
-transverse_mf = 'legacy_x';            % 'legacy_x' | 'none' | 'vector_ab'
+T = 0.1;                            % K
+fields = linspace(3.0, 7.0, 101);   % T -- SPANS the QPT (crit = 0 bracket 4.65-4.70 T at
+                                    % 0.1 K): stability-based auto solve assigns FM below,
+                                    % PM above (invzt_solve_auto; NOT the bare-MF moment,
+                                    % which persists to ~5.0 T -- review P0-1)
+w = linspace(0, 0.6, 601).';        % meV, uniform (invz_peak_energy assumes it). Window must
+                                    % contain the soft mode: 0.26-0.34 meV on the PM side at
+                                    % 4.8-6 T (measured 2026-07-19) -- the old 0-0.025 meV
+                                    % port of the projected GHz window cut 97% of the weight.
+eta = 2e-3;                         % meV, real-axis Lorentzian HWHM. MUST stay >= the w step
+                                    % (1e-3 here) or peaks alias between grid points (measured
+                                    % 10x peak-height error at eta/step = 0.16); guarded below.
+sliceMax = 6;                       % field count at/below which line slices are drawn
+peak_wmin = 0.05;                   % meV -- excludes the low-frequency hyperfine line so
+                                    % Epeak tracks the SOFT MODE (the 0.003-0.009 meV
+                                    % hyperfine feature dominates the raw max below ~5 T).
+theta_c = 0.0;  phi_ab = 0.0;       % tilt knobs (deg). theta_c ~= 0 gives Bz ~= 0 ->
+                                    % invzt:orderedLongitudinal (no tensor forced-moment
+                                    % route; 2026-07-19 scope).
+transverse_mf = 'legacy_x';         % 'legacy_x' | 'none' | 'vector_ab'
 gridN = 16; gridConv = 'halfopen'; dpRng = 30;
 useParallel = true;
 solve_opts = struct('mode', 'a1', 'odd', true, 'nlevels', 'std', ...
                     'transverse_mf', transverse_mf);
+
+if eta < (w(2) - w(1))
+    error('invzt_run_spectra:etaStep', ['eta = %.3g meV < w step = %.3g meV: a ' ...
+        'Lorentzian narrower than the sampling aliases between grid points ' ...
+        '(measured 10x peak-height error at eta/step = 0.16, 2026-07-19). Raise ' ...
+        'eta or refine w.'], eta, w(2) - w(1));
+end
 
 % ---- q-path view: set qpath non-empty to switch views ------------------------
 qpath = [];                            % [] = field sweep; [nq x 3] r.l.u. = q-path view.
@@ -51,6 +76,13 @@ qpath = [];                            % [] = field sweep; [nq x 3] r.l.u. = q-p
 Bq    = 2.0;                           % T -- fixed field for the q-path view
 wq    = linspace(0, 0.6, 400).';       % meV -- own frequency grid for the q-path view
 % -----------------------------------------------------------------------------
+
+if eta < (wq(2) - wq(1))
+    error('invzt_run_spectra:etaStep', ['eta = %.3g meV < wq step = %.3g meV: a ' ...
+        'Lorentzian narrower than the sampling aliases between grid points ' ...
+        '(measured 10x peak-height error at eta/step = 0.16, 2026-07-19). Raise ' ...
+        'eta or refine wq.'], eta, wq(2) - wq(1));
+end
 
 if ~strcmp(getf(solve_opts, 'mode', 'a1'), 'a1')
     error('invzt_run_spectra:mode', ['invzt_run_spectra requires solve_opts.mode = ' ...
@@ -90,54 +122,64 @@ lat = invzt_jq_tensor(ion, g, struct('dpRng', dpRng, 'cache', true));
 
 if ~isempty(qpath)
     % ---------------- q-path dispersion at one fixed field --------------------
-    pt = invzt_solve_point(ion, T, Bq*dhat, lat, solve_opts);
-    if ~(pt.converged && isfinite(pt.crit) && pt.crit > 0 && pt.Sigma0 >= sfloor)
-        error('invzt:qpathNotPM', ['q-path point B = %.2f T, T = %.2f K is not a ' ...
-            'valid PM sample (converged = %d, crit = %.4g, Sigma0 = %.4g): the whole ' ...
-            'q-path product hinges on this one point, so failing loudly beats ' ...
-            'drawing an empty map. Raise Bq, raise T, or check the knobs.'], ...
-            Bq, T, pt.converged, pt.crit, pt.Sigma0);
+    [pt, phaseq, diq] = invzt_solve_auto(ion, T, Bq*dhat, lat, solve_opts);
+    if phaseq == 0
+        error('invzt:qpathInvalid', ['q-path point B = %.2f T, T = %.2f K failed both ' ...
+            'legs [PM: conv=%d crit=%.4g err=%s | ORD: conv=%d m0=%.4g crit=%.4g err=%s]: ' ...
+            'the whole q-path product hinges on this one point, so failing loudly beats ' ...
+            'drawing an empty map.'], Bq, T, diq.para.converged, diq.para.crit, ...
+            diq.para.err, diq.ordered.converged, diq.ordered.m0, diq.ordered.crit, ...
+            diq.ordered.err);
     end
     out = invzt_chi_realaxis(ion, T, Bq*dhat, pt, wq, ...
             struct('qsel', qpath, 'dpRng', dpRng, 'eta', eta));
     chipp_q = imag(out.chi_cc_q);                 % [nq, nw] positive chi'' (Component 0)
     figure; imagesc(wq, 1:size(chipp_q, 1), chipp_q); set(gca, 'YDir', 'normal');
     xlabel('\omega (meV)'); ylabel('q index along path'); colorbar;
-    title(sprintf('tensor 1/z \\chi''''_{cc}(q,\\omega), T = %.2f K, B = %.2f T', T, Bq));
+    title(sprintf('tensor 1/z \\chi''''_{cc}(q,\\omega), T = %.2f K, B = %.2f T (phase %d)', ...
+        T, Bq, phaseq));
     Epeak_q = invz_peak_energy(chipp_q.', wq, peak_wmin);   % columns must be per-q
     figure; plot(1:numel(Epeak_q), Epeak_q, 'o-');
     xlabel('q index along path'); ylabel('E_{peak} (meV)');
+    title(sprintf('q-path E_{peak}, T = %.2f K, B = %.2f T (phase %d)', T, Bq, phaseq));
 else
-    % ---------------- field sweep at the uniform mode -------------------------
+    % ---------------- field sweep at the uniform mode, ACROSS Bc ---------------
     nWorkers = 0;
     if useParallel && ~isempty(ver('parallel')), nWorkers = Inf; end
     nf = numel(fields);
-    chipp = nan(numel(w), nf);
+    chipp  = nan(numel(w), nf);
+    phasev = zeros(1, nf);          % 1 = ordered, 2 = PM, 0 = masked
+    critv  = nan(1, nf);            % branch stability of the ACCEPTED leg (review re-plan #4)
     parfor (k = 1:nf, nWorkers)
-        col = nan(numel(w), 1);
+        col = nan(numel(w), 1);  ph = 0;  ck = NaN;
         try
-            pt = invzt_solve_point(ion, T, fields(k)*dhat, lat, solve_opts);
-            % Same three-part sample-validity rule as invzt_critical (converged,
-            % finite positive crit, single-sourced Sigma0 floor) -- so the
-            % spurious negative-Sigma fixed point invzt_critical warns about
-            % never reaches the plot.
-            if pt.converged && isfinite(pt.crit) && pt.crit > 0 && pt.Sigma0 >= sfloor
+            [pt, ph, di] = invzt_solve_auto(ion, T, fields(k)*dhat, lat, solve_opts);
+            if ph > 0
+                ck = pt.crit;
                 o = invzt_chi_realaxis(ion, T, fields(k)*dhat, pt, w, ...
                         struct('qsel', 'gamma_uniform', 'eta', eta));
-                col = squeeze(imag(o.chi_uniform(3, 3, :)));   % already positive chi''
+                col = squeeze(imag(o.chi_uniform(3, 3, :)));
             else
-                fprintf('  B = %.2f T: ordered / non-converged / invalid (masked)\n', fields(k));
+                % Structured per-leg outcomes (P2-1): a leg that RETURNED but was
+                % rejected is described by its numbers, not a blank error string.
+                fprintf(['  B = %.2f T: masked -- PM(att=%d conv=%d crit=%.4g err=%s) ' ...
+                         'ORD(att=%d conv=%d m0=%.4g crit=%.4g err=%s)\n'], fields(k), ...
+                    di.para.attempted, di.para.converged, di.para.crit, di.para.err, ...
+                    di.ordered.attempted, di.ordered.converged, di.ordered.m0, ...
+                    di.ordered.crit, di.ordered.err);
             end
         catch err
             switch err.identifier
-                case {'invz:degenerateDoublet', 'invz:orderedPhase', 'invzt:a1ZeroField'}
+                case {'invz:degenerateDoublet', 'invzt:a1ZeroField'}
                     fprintf('  B = %.2f T: %s (masked)\n', fields(k), err.identifier);
                 otherwise
                     rethrow(err);
             end
         end
-        chipp(:, k) = col;
+        chipp(:, k) = col;  phasev(k) = ph;  critv(k) = ck;
     end
+    fprintf('phase summary: %d ordered / %d PM / %d masked of %d fields\n', ...
+        sum(phasev == 1), sum(phasev == 2), sum(phasev == 0), nf);
 
     if nf <= sliceMax
         figure; hold on;  co = lines(nf);
@@ -150,13 +192,14 @@ else
     else
         figure; imagesc(fields, w, chipp); set(gca, 'YDir', 'normal');
         xlabel('B (T)'); ylabel('\omega (meV)'); colorbar;
-        title(sprintf('tensor 1/z \\chi''''_{cc}(B,\\omega), T = %.2f K', T));
+        title(sprintf('tensor 1/z \\chi''''_{cc}(B,\\omega), T = %.2f K, across B_c', T));
     end
 
     Epeak = invz_peak_energy(chipp, w, peak_wmin);
     figure; plot(fields, Epeak, 'o-');
     xlabel('B (T)'); ylabel('E_{peak} (meV)');
     title(sprintf('\\chi''''_{cc} peak energy vs field, T = %.2f K', T));
+    if any(phasev == 1) && any(phasev == 2), xline(fields(find(phasev == 2, 1)), '--', 'B_c'); end
     % Gaps are CENSORED peaks (boundary max / non-positive column) or masked
     % ordered points -- do not interpolate over them.
 end
