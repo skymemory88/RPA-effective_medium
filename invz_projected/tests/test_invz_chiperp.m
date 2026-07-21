@@ -12,7 +12,9 @@ end
 function test_anchors_and_symmetry(testCase)
 ion = invz_ion();  A = invz_odd_anchors();
 [Xp, info] = invz_chiperp(ion, 1.53, [0 0 0], struct());
-verifyEqual(testCase, Xp, A.chiperp_1p53K_0T, 'RelTol', 1e-9);
+% AbsTol floor for the nominally-zero off-diagonals (machine noise on a nominal zero can
+% never satisfy RelTol); the ~17.6 diagonals stay governed by RelTol (1e-9*17.6 >> 1e-12).
+verifyEqual(testCase, Xp, A.chiperp_1p53K_0T, 'RelTol', 1e-9, 'AbsTol', 1e-12);
 verifyEqual(testCase, Xp(1,1), Xp(2,2), 'AbsTol', 1e-10*abs(Xp(1,1)));   % C4 at Bx = 0
 verifyEqual(testCase, Xp, Xp.', 'AbsTol', 1e-15);
 verifyLessThan(testCase, info.asym, 1e-8*abs(Xp(1,1)));
