@@ -156,6 +156,13 @@ else
     S = invz_spectra_map(ion, T, fields, wMeV, ...
             struct('parallel', useParallel, 'eta', eta, 'field_dir', dhat, 'solve_opts', solve_opts));
 
+    fprintf('Bc_auto (bare-MF dispatch; RPA proxy only where the ordered EMT converged) ~ %s T | Bc_1z (renormalized) ~ %s T  (sweep midpoints; masked/suspect columns widen the bracket)\n', ...
+            num2str(S.Bc_auto), num2str(S.Bc_1z));
+    if any(S.suspect)
+        fprintf('WARNING: %d suspect column(s) (auto-PM with crit <= 0 -- spurious below-Bc PM points; masked): |B| = %s T\n', ...
+                nnz(S.suspect), mat2str(S.fields(S.suspect), 3));
+    end
+
     if numel(fields) <= sliceMax
         figure; hold on;  co = lines(numel(fields));
         for k = 1:numel(fields)
@@ -166,7 +173,7 @@ else
     else
         Splot = S;  Splot.w = S.w * eScale;    % display-only copy; solve above always ran in meV
         figure('Position', [100 100 1150 460]);
-        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z, T = %.2f K%s', T, tiltStr), eUnit);
+        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z (own phase; FM side diagnostic below B_c^{1/z}), T = %.2f K%s', T, tiltStr), eUnit);
         ax2 = subplot(1, 2, 2);  invz_plot_spectra_map(ax2, Splot, Splot.chirpa, sprintf('RPA, T = %.2f K%s', T, tiltStr), eUnit);
     end
 
@@ -179,6 +186,8 @@ else
         ylabel(strrep(eLabel, '\omega', 'E_{peak}'));
         title(sprintf('\\chi''''_{cc} peak energy vs field, T = %.2f K%s', T, tiltStr));
         legend show;
+        if isfinite(S.Bc_auto), xline(S.Bc_auto, '--', 'B_c^{auto}', 'HandleVisibility', 'off'); end
+        if isfinite(S.Bc_1z),   xline(S.Bc_1z,   ':',  'B_c^{1/z}', 'HandleVisibility', 'off'); end
         % Gaps are CENSORED peaks (invz_peak_energy: boundary max or non-positive/non-finite
         % column) -- same convention as the q-path E_peak(q) stream, do not interpolate over them.
     end
