@@ -1,5 +1,5 @@
 function sig = invz_sigma_ordered(tl, lam, K, g, beta)
-%INVZ_SIGMA_ORDERED Ordered-phase (m~=0) Jensen self-energy, HTML eqs 37-38 (J 2.26-2.27).
+%INVZ_SIGMA_ORDERED Ordered-phase (m~=0) Jensen self-energy, framework SS9.2, J 2.26-2.27.
 %   Sigma(iwn) = (alpha - alpha_m) + [ gamma(iwn) - (2 m^2 / M^2) gamma(0) ] g(iwn)   (eq 37)
 %   alpha_m = (m^2/n01^2){ lambda_2 - g0*lambda_1 + (4/g0) lambda_3
 %                          - (1-n01^2)(1 + 1/2 beta Delta n01) K(0) g0 }               (eq 38)

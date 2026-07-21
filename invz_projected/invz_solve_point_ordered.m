@@ -3,7 +3,7 @@ function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 % Bx: scalar (transverse, historical) or [Bx By Bz] vector (T).
 % Ordered-phase counterpart of invz_solve_point: the single-ion problem is solved with the
 % longitudinal ORDERING mean field (spontaneous moment m0 = <Jz>), the self-energy uses the
-% elastic-sector form (invz_sigma_ordered, HTML eqs 37-38), and the whole thing is iterated
+% elastic-sector form (invz_sigma_ordered, framework SS9.2, J 2.26-2.27), and the whole thing is iterated
 % against the effective medium exactly as in the paramagnet.
 %
 % opts.forced_moment (logical, default false): when true (set by invz_solve_auto's
@@ -24,7 +24,7 @@ function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 % moment_branch -- tl = [] on early returns (no two-level params were built).
 %
 % SCOPE NOTE (Option A): for the spontaneous route, m0 is the bare mean-field order parameter
-% (the applied-field/H_MF self-consistency of HTML eqs 41-43 is deferred), so it onsets at the
+% (the applied-field/H_MF self-consistency (framework SS9.3, J 2.31-2.33) is deferred), so it onsets at the
 % mean-field boundary, slightly above the true 1/z boundary; the gap matters only near B_c,
 % not deep in the ordered phase.
 %
