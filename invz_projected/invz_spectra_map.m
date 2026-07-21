@@ -29,9 +29,12 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %   S.suspect flags the spurious PM columns (S.phase = 2 with finite crit <= 0). Masking
 %   before peak extraction: chiz is NaN where phase_1z = 0; chirpa is NaN where there is
 %   NO accepted auto state (S.phase = 0 -- the legacy Sigma-zero fallback is computed but
-%   no longer surfaced) or S.suspect. S.crit_pm is the per-field PM 1/z mass
+%   no longer surfaced), S.suspect, or a non-finite PM mass (valid_auto_pm requires
+%   S.phase = 2 AND finite crit_pm > 0, so a phase-2 column with non-finite crit_pm is
+%   masked the same as suspect). S.crit_pm is the per-field PM 1/z mass
 %   1 + Sigma0 - J0eff*chi0cc0 (NaN
-%   where no PM solve returned); S.Bc_auto (anchored only on valid, non-suspect PM
+%   where no PM solve returned a mass -- a failed auto column may still record a finite
+%   value here, diagnostic only); S.Bc_auto (anchored only on valid, non-suspect PM
 %   points) / S.Bc_1z are sweep-midpoint boundary
 %   estimates (NaN when the sweep does not bracket the flip; precision = half the gap
 %   between the bracketing labelled fields, so masked or suspect columns between them
