@@ -90,3 +90,40 @@ verifyTrue(testCase, isnan(invz_boundary_field(fieldsU, logical([1 1 0 0]), fals
 % the 1/z map itself must still be a well-formed spectrum
 verifyTrue(testCase, any(isfinite(S.chiz(:))));
 end
+
+function test_split_window_exercised(testCase)
+% Re-review findings 3-4: the split must be EXERCISED at probe-qualified anchors
+% (Blow 2.85 T: auto ordered, PM crit -0.058 -> 1/z diagnostic; Bwin 3.30 T: auto ordered,
+% PM crit +0.087 -> 1/z PM = the disagreement; Bhigh 5.50 T: auto PM, crit +0.47), and the
+% window column must BE the strict-PM spectrum, not merely carry the label. Probe log:
+% docs/superpowers/plans/2026-07-21-invzp-qcp-stage1-split-overlays.md Task 1b.
+ion = invz_ion();
+T = 0.31;
+fields = [2.85 3.30 5.50];               % Blow | Bwin | Bhigh
+w = (0.02:0.02:0.6).';
+info = struct('Jcc0', 6.4e-3);
+Jnu  = linspace(-2e-3, 6.0e-3, 24).';
+S = invz_spectra_map(ion, T, fields, w, ...
+                     struct('Jnu', Jnu, 'info', info, 'verbose', false));
+
+verifyEqual(testCase, S.phase,    [1 1 2]);       % auto: ordered | ordered | PM
+verifyEqual(testCase, S.phase_1z, [1 2 2]);       % 1/z: diagnostic | PM (window!) | PM
+verifyLessThan(testCase,    S.crit_pm(1), -0.03); % sign margins, not near-zero values
+verifyGreaterThan(testCase, S.crit_pm(2),  0.03);
+verifyGreaterThan(testCase, S.crit_pm(3),  0.03);
+
+% State-use check (re-review finding 4): reconstruct the strict-PM spectrum at Bwin
+% through the same serial code path and require S.chiz to BE it.
+sopts = struct('hyp', true, 'J0eff', info.Jcc0, 'Jxx0', ion.Jxx0, 'bz_tol', 1e-9);
+ptp = invz_solve_point(ion, T, [3.30 0 0], Jnu, sopts);
+verifyEqual(testCase, S.Sigma0(2), ptp.Sigma0, 'RelTol', 1e-10);   % PM leg's Sigma0 returned
+copts = struct('Jsel', info.Jcc0, 'eta', 5e-3, 'Jxx0', ion.Jxx0, 'Jshape', 0, 'hyp', true, ...
+               'transverse_mf', 'legacy_x', 'si', ptp.si);
+o = invz_chi_realaxis(ion, T, [3.30 0 0], ptp, w, copts);
+verifyEqual(testCase, S.chiz(:, 2), imag(o.chi_cc_q(1, :)).', 'RelTol', 1e-8, 'AbsTol', 1e-12);
+
+% both boundaries bracketed by this 3-point sweep, renormalized below the auto/bare one:
+% Bc_auto = (3.30+5.50)/2 = 4.4;  Bc_1z = (2.85+3.30)/2 = 3.075
+verifyTrue(testCase, isfinite(S.Bc_auto) && isfinite(S.Bc_1z));
+verifyLessThan(testCase, S.Bc_1z, S.Bc_auto);
+end
