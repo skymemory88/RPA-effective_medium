@@ -55,15 +55,19 @@ end
 
 function test_failed_longitudinal_masks_not_crashes(testCase)
 % Spec test 8 (review finding 5): a non-converged longitudinal point must yield a
-% masked 1/z column plus an RPA-only overlay -- and must NOT abort the parfor by
-% falling through to the strict-paramagnet invz_twolevel gate.
+% masked 1/z column -- and must NOT abort the parfor by falling through to the
+% strict-paramagnet invz_twolevel gate. Stage-1 QCP split (re-review R3-1,
+% docs/superpowers/plans/2026-07-21-invzp-qcp-stage1-split-overlays.md): a fully
+% masked auto state (phase = 0, no accepted state at all) now masks BOTH overlays --
+% the legacy Sigma-zero fallback display that one_field still computes internally is
+% no longer surfaced when there is nothing accepted to anchor it to.
 ion = invz_ion();  w = (0.02:0.02:0.6).';
 fx = fixture();  fx.field_dir = [cosd(1) 0 sind(1)];
 fx.solve_opts = struct('max_outer', 1);            % cripple the outer EMT loop
 S = invz_spectra_map(ion, 0.31, 2.0, w, fx);
 verifyEqual(testCase, S.phase, 0);
 verifyTrue(testCase, all(~isfinite(S.chiz(:))));   % 1/z column masked
-verifyTrue(testCase, any(isfinite(S.chirpa(:))));  % RPA overlay from the failed pto
+verifyTrue(testCase, all(~isfinite(S.chirpa(:)))); % phase = 0 -> RPA overlay masked too
 end
 
 function test_qpath_scalar_vs_vector_and_metadata(testCase)
