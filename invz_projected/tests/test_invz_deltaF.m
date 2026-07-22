@@ -42,7 +42,7 @@ function test_two_routes_closed_model(testCase)
 % (leading-order-in-coupling scaling) and (2) the approximation-fingerprint regression,
 % both in place of the retired equality gate. See invzp_QCP_diagnosis.md and
 % invz_deltaF_ordered.m for the full scope-limitation record.
-T = 0.31;  C = invz_const();  beta = 1/(C.kB*T); %#ok<NASGU>
+T = 0.31;
 D0 = 0.2;  M0op = 3.0;  J0eff = 6.4e-3;
 Jnu = linspace(-4e-3, 4.0e-3, 24).';                  % ZERO-MEAN: enforces Jensen's
 verifyLessThan(testCase, abs(mean(Jnu)), 1e-15);      % no-self-site identity J(ii) = 0
@@ -163,7 +163,7 @@ for outer = 1:200
     if ~med.converged, break; end
     K = med.K;
     [K0s, ~, so] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu, K0s, beta, ...
-                                           J0eff, gi, ge, struct());
+                                           J0eff, gi, ge, struct('warn', false));
     K(1) = K0s;
     lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
     sg  = invz_sigma_ordered(tl, lam, K, g, beta);
@@ -174,7 +174,7 @@ end
 % Simultaneous FINAL tuple: refresh the static slot at the final Sigma, keep ITS K0,
 % then REVALIDATE lambdas and the ordered Sigma target against the exported K.
 [K0s, ~, so] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu, K0s, beta, ...
-                                       J0eff, gi, ge, struct());
+                                       J0eff, gi, ge, struct('warn', false));
 K(1) = K0s;
 lam_chk = invz_lambdas(K, g, wts, beta, [1 2 3]);
 sg_chk  = invz_sigma_ordered(tl, lam_chk, K, g, beta);

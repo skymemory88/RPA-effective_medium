@@ -18,9 +18,11 @@ function [K0, Gstat, out] = invz_emt_static_ordered(tl, lam, Sigma0, Jnu_flat, K
 % struct() at call sites): resid_tol (default 1e-10, meV^-1 -- the PRIMARY convergence
 % criterion AND the documented closure-residual acceptance threshold callers gate on),
 % tol (default 0 -- an OPTIONAL absolute |dK0| stall floor; 0 means machine-resolution-only,
-% see below), maxit (default 200), mix (default 0.5). out.converged is measured on the
-% EXPORTED (K0, Gstat, resid) tuple (out.resid < rtol), so it can never disagree with
-% out.resid.
+% see below), maxit (default 200), mix (default 0.5), warn (default true -- emits the
+% invz:emtStatic non-convergence warning; in-loop sweep callers pass false because they
+% gate on out.converged and would otherwise flood the console). out.converged is measured
+% on the EXPORTED (K0, Gstat, resid) tuple (out.resid < rtol), so it can never disagree
+% with out.resid.
 % Amendment round 1 (controller resolution of the round-2 P0-2 BLOCKED escalation): the
 % original |dK0|-only stopping test under-delivers closure by the map's local conditioning
 % (resid/|dK0| ~ 1.8e5 at the gate-C2 operating point), so the residual itself -- the
@@ -37,6 +39,7 @@ rtol  = getf(opts, 'resid_tol', 1e-10);  % PRIMARY: closure-residual convergence
 tol   = getf(opts, 'tol', 0);            % optional ABSOLUTE |dK0| stall floor (0 = machine-only)
 maxit = getf(opts, 'maxit', 200);
 mix   = getf(opts, 'mix', 0.5);
+warn  = getf(opts, 'warn', true);            % emit the invz:emtStatic non-convergence warning
 Jf = Jnu_flat(:);
 K0 = K0_seed;
 for it = 1:maxit
@@ -58,7 +61,7 @@ out.D_uni = 1 + (J0eff - K0)*Gstat;
 out.resid = abs(mean(Gq) - Gstat);
 out.iters = it;
 out.converged = out.resid < rtol;        % measured on the EXPORTED tuple
-if ~out.converged
+if warn && ~out.converged
     warning('invz:emtStatic', 'static closure not converged after %d iterations: resid = %.3g', it, out.resid);
 end
 end
