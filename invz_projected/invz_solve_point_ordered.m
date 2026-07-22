@@ -185,6 +185,7 @@ if strcmp(omode, 'jensen')
     % Static-sector closure insertion (Task 3's eval_node statement order, P1-F/P1-A):
     % full-electronuclear split weights from the FINAL si, mode-switched chain rule.
     eso = getf(opts, 'emt_static', struct());
+    eso.warn = false;   % solver gates on so.converged; suppress the per-node console flood
     c0i = invz_chi0z(si, T, 1i*wn(1), struct('elastic', false));   % static inelastic only
     G0inel0 = -real(c0i(3,3,1));                                   % fixed-Hamiltonian slot
     X = real(c0(:, :, 1));                                         % static chi tensor (chi=-G)

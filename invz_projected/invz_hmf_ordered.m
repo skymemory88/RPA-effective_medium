@@ -29,6 +29,7 @@ mixo  = getf(opts, 'mix_outer', 0.7);
 tolo  = getf(opts, 'tol_outer', 1e-8);
 maxo  = getf(opts, 'max_outer', 200);                % ALIGNED with both solvers' default
 eso   = getf(opts, 'emt_static', struct());          % static-closure opts, threaded (P1-F)
+eso.warn = false;   % node loop gates on so.converged; suppress the per-node console flood
 
 % single-ion opts for FIXED-FIELD nodes: NO 'order' (P0-1); forward mf knobs (P1-6)
 sibase = struct('hyp', hyp, 'Jxx0', Jxx0, 'transverse_mf', tmf);
@@ -175,7 +176,7 @@ if isempty(idx), return; end                          % no nonzero root: PM side
 a = hgrid(idx);  b = hgrid(idx+1);  Fa = F(idx);  h0a = h0(idx);  ra = rv(idx);
 for it = 1:12
     c = 0.5*(a + b);
-    [rc, mc, ~, ~, Dc, ~, ~, okc, Sigma, K0s] = eval_node(c, Sigma, K0s);
+    [rc, mc, ~, ~, ~, ~, ~, okc, Sigma, K0s] = eval_node(c, Sigma, K0s);
     if ~okc                                           % round-5 P1-A: a failed bisection node
         prof.status = 'node_failed';  hmf_star = NaN; % TERMINATES the solve -- never a root
         return;                                       % from a partial bracket
@@ -204,9 +205,9 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
     % pass; the extension's 3-node prepends stay inline (unchanged).
     n = numel(hgrid);
     [rv, mv, S0v, K0v, Dv, Gbv, Gsv] = deal(nan(1, n));  cnv = false(1, n);
-    for k = 1:n
-        [rv(k), mv(k), S0v(k), K0v(k), Dv(k), Gbv(k), Gsv(k), cnv(k), Sigma, K0s] = ...
-            eval_node(hgrid(k), Sigma, K0s);
+    for is = 1:n
+        [rv(is), mv(is), S0v(is), K0v(is), Dv(is), Gbv(is), Gsv(is), cnv(is), Sigma, K0s] = ...
+            eval_node(hgrid(is), Sigma, K0s);
     end
     end
 
@@ -266,15 +267,15 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
     end
     [K0s, Gsk, so] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
                                              beta, J0eff, G0inel0, G0el0, eso);
-    K(1) = K0s;                                       % round-4 P1-B: the final refresh runs
-    % on the newly mixed Sigma(1), so its closed K0 differs from the seed -- KEEP it, and
-    % report the SAME value the returned Gstat/r/D_uni were computed with.
     ctol = getf(eso, 'resid_tol', 1e-10);              % documented closure tolerance (meV^-1),
     % matching invz_emt_static_ordered's own default so the outer gate never disagrees
     % with the inner closure's own converged flag.
     ok = ok && so.converged && isfinite(so.resid) && so.resid < ctol;
     % round-5 P1-B: the final refresh must ITSELF converge and close -- an unconverged
     % refresh makes this node not-ok (callers then mark node_failed), never silent export.
+    % round-4 P1-B: the final refresh runs on the newly mixed Sigma(1), so its closed K0
+    % differs from the seed -- KEEP it, and report the SAME value the returned
+    % Gstat/r/D_uni were computed with (exported below as K0k = K0s).
     rk = so.r;  S0k = Sigma(1);  K0k = K0s;  Dk = so.D_uni;  Gbk = G0bare0;
     end
 end

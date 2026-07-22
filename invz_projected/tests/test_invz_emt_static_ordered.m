@@ -69,3 +69,21 @@ med = invz_emt_scalar(-tl0.M2*tl0.g0, 0, Jnu, struct());
                                       -tl0.M2*tl0.g0, 0, struct());
 verifyEqual(testCase, K00, med.K(1), 'RelTol', 1e-9);
 end
+
+function test_warn_flag_controls_nonconvergence(testCase)
+% M1: the invz:emtStatic non-convergence warning is emitted by default and suppressed by
+% opts.warn=false. Non-convergence forced deterministically via an unreachable resid_tol.
+% Fixture reused verbatim from test_closure_residual_is_enforced (genuinely ordered,
+% full-electronuclear-scale weights).
+T = 0.31;  C = invz_const();  beta = 1/(C.kB*T);
+tl = ordered_tl(0.15);                                    % genuinely ordered (m > 0)
+Sigma0 = 0.2;  lam = [0.01; 0.003];
+Jnu = linspace(-2e-3, 6.0e-3, 24).';
+gi = -230.0;  ge = -12.0;                                 % full-scale test weights
+optNoConv  = struct('resid_tol', 1e-30, 'maxit', 4);            % can never close -> not converged
+optQuiet   = struct('resid_tol', 1e-30, 'maxit', 4, 'warn', false);
+verifyWarning(testCase, @() invz_emt_static_ordered(tl, lam, Sigma0, Jnu, 0, beta, 6.4e-3, gi, ge, optNoConv), 'invz:emtStatic');
+[~,~,o1] = invz_emt_static_ordered(tl, lam, Sigma0, Jnu, 0, beta, 6.4e-3, gi, ge, optNoConv);
+verifyFalse(testCase, o1.converged);                            % contract still surfaces it
+verifyWarningFree(testCase, @() invz_emt_static_ordered(tl, lam, Sigma0, Jnu, 0, beta, 6.4e-3, gi, ge, optQuiet));
+end
