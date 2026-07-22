@@ -38,6 +38,28 @@ function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 % dominated, insensitive to the cc order parameter — never solved self-consistently
 % with the moment). pt gains pt.odd = struct('d','Xp') on the full solve path only
 % (early returns keep their fixed field set). Flag off: byte-identical pre-ODD path.
+%
+% Jensen ordered mode (Stage-2 task 4, opt-in): opts.ordered_mode = 'bare' (default) runs the
+% SCOPE-NOTE bare mean-field order parameter above, unchanged. opts.ordered_mode = 'jensen'
+% instead imposes the H_MF applied-field/self-consistency root (invz_hmf_ordered, framework
+% SS9.3, J 2.31-2.33) as a FIXED longitudinal field (siopts.hz_fixed, order = false -- P0-1:
+% the ordering update is NOT re-applied on top of the imposed root) and closes the final
+% Sigma<->EMT loop with the SAME static-sector elastic closure used by that machinery's nodes
+% (invz_emt_static_ordered), so pt.G(1) is the CLOSED ELASTIC static function -- NOT the
+% ordinary-Dyson value invz_emt_scalar alone would produce at omega = 0. In jensen mode pt
+% additionally carries pt.ordered_mode, pt.hmf (the refined root, meV), pt.hmf_prof (the
+% invz_hmf_ordered profile), pt.D_uni = 1 + (J0eff - K(1))*pt.G(1) (the ordered static
+% inverse response AT THE FINAL STATE -- the pole observable), and pt.final_resid (the
+% closure-residual revalidation of the exported (Sigma, K, lambda) tuple, required <
+% opts.tol_outer for pt.converged -- the tuple is thereby closure-consistent to the STATED
+% OUTER TOLERANCE, not exactly self-consistent). pt.is_ordered is gated on H_MF ROOT
+% EXISTENCE (isfinite(hmf_star)), NOT on m_tol, with a paramagnetic early return (existing
+% struct shape, pt.hmf_status carrying the invz_hmf_ordered status) when no root exists.
+% jensen mode is TRANSVERSE/SPONTANEOUS only: opts.forced_moment true, or an explicit
+% longitudinal field |Bx(3)| > opts.bz_tol (default 1e-9), raises 'invz:orderedMode'.
+% CONTRACT (P2-G): pt.crit KEEPS its historical ordinary-Dyson definition
+% (1 + Sigma0 - J0eff*chi0cc0) as a legacy diagnostic in EITHER mode -- it is NOT the ordered
+% pole mass below the boundary; pt.D_uni is. Callers must not conflate the two.
 if nargin < 5, opts = struct(); end
 Ecut  = getf(opts, 'Ecut', 40);
 hyp   = getf(opts, 'hyp', true);
@@ -96,6 +118,34 @@ siopts = struct('hyp', hyp, 'order', true, 'J0z', J0eff, 'Jxx0', Jxx0, 'transver
 for f = {'mz_seed', 'mf_maxit', 'mf_mix'}                  % diagnostic pass-throughs (tests)
     if isfield(opts, f{1}), siopts.(f{1}) = opts.(f{1}); end
 end
+
+omode = getf(opts, 'ordered_mode', 'bare');
+if ~any(strcmp(omode, {'bare', 'jensen'}))
+    error('invz:orderedMode', 'ordered_mode must be ''bare'' or ''jensen''.');
+end
+if strcmp(omode, 'jensen')
+    if fmom || abs(Bx(3)) > getf(opts, 'bz_tol', 1e-9)
+        error('invz:orderedMode', 'ordered_mode ''jensen'' is transverse/spontaneous only.');
+    end
+    hopts = opts;                                    % FULL numerical context (P1-6) ...
+    hopts.J0eff = J0eff;                             % ... with the ODD-shifted coupling
+    for f = {'ordered_mode', 'forced_moment'}        % ... and mode fields stripped
+        if isfield(hopts, f{1}), hopts = rmfield(hopts, f{1}); end
+    end
+    [hstar, hprof] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, hopts);
+    if ~isfinite(hstar)
+        si = invz_single_ion(ion, T, Bx, struct('hyp', hyp, 'hz_fixed', 0, ...
+                                                'Jxx0', Jxx0, 'transverse_mf', tmf));
+        pt = early_return(0, si, 'none');            % paramagnetic: PM leg owns this field
+        pt.ordered_mode = omode;  pt.hmf_status = hprof.status;
+        if strcmp(hprof.status, 'unresolved')
+            pt.converged = false;                    % round-3 P0-3: ordering was PREDICTED
+        end                                          % but unbracketed -- NOT a PM verdict;
+        return;                                      % the map masks this column
+    end
+    siopts.hz_fixed = hstar;                         % impose the jensen molecular field ...
+    siopts.order = false;                            % ... WITHOUT the ordering update (P0-1)
+end
 si = invz_single_ion(ion, T, Bx, siopts);
 branch = 'spontaneous';  if fmom, branch = 'field_induced'; end
 if fmom && Bx(3) ~= 0 && si.mf_converged && abs(si.Jexp(3)) > 1e-10 && sign(si.Jexp(3)) ~= sign(Bx(3))
@@ -118,6 +168,7 @@ end
 m0 = si.Jexp(3);
 pt.m0 = m0;
 pt.is_ordered = fmom || abs(m0) > mtol;
+if strcmp(omode, 'jensen'), pt.is_ordered = true; end      % root existence gates jensen (P1-4)
 if ~pt.is_ordered
     pt = early_return(m0, si, 'none');                     % paramagnetic point: use invz_solve_point
     return;
@@ -130,15 +181,69 @@ g   = real(invz_g(tl, 1i*wn));
 
 Sigma = zeros(size(wn));  K = zeros(size(wn));
 converged = false;
-for outer = 1:maxo
-    eopts.K0 = K;
-    med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
-    K   = med.K;
-    lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
-    sg  = invz_sigma_ordered(tl, lam, K, g, beta);
-    dS  = max(abs(sg.Sigma - Sigma));
-    Sigma = Sigma + mixo*(sg.Sigma - Sigma);
-    if dS < tolo, converged = true; break; end
+if strcmp(omode, 'jensen')
+    % Static-sector closure insertion (Task 3's eval_node statement order, P1-F/P1-A):
+    % full-electronuclear split weights from the FINAL si, mode-switched chain rule.
+    eso = getf(opts, 'emt_static', struct());
+    c0i = invz_chi0z(si, T, 1i*wn(1), struct('elastic', false));   % static inelastic only
+    G0inel0 = -real(c0i(3,3,1));                                   % fixed-Hamiltonian slot
+    X = real(c0(:, :, 1));                                         % static chi tensor (chi=-G)
+    switch tmf
+        case 'none'
+            fb = 0;
+        case 'legacy_x'
+            fb = X(3, 1) * (Jxx0 / (1 - Jxx0*X(1, 1))) * X(1, 3);
+        case 'vector_ab'
+            t = [1 2];
+            fb = X(3, t) * (Jxx0 * ((eye(2) - Jxx0*X(t, t)) \ X(t, 3)));
+        otherwise
+            error('invz:transverseMF', 'unknown transverse_mf ''%s''', tmf);
+    end
+    G0bare0 = -(X(3, 3) + fb);
+    G0el0   = G0bare0 - G0inel0;                                   % elastic + feedback (SS4a)
+    K0s = 0;  lam = [0; 0; 0];
+    for outer = 1:maxo
+        % (1) dynamic sector -- MIRRORS the bare loop's emt call verbatim
+        eopts.K0 = K;
+        med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
+        K   = med.K;
+        % (2) static sector (P0-2/P0-A), threaded opts (P1-F):
+        [K0s, ~, sout] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
+                                                 beta, J0eff, G0inel0, G0el0, eso);
+        K(1) = K0s;
+        % (3)-(5) lambdas, ordered Sigma, damped mix -- MIRRORS the bare loop's statements
+        lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
+        sg  = invz_sigma_ordered(tl, lam, K, g, beta);
+        dS  = max(abs(sg.Sigma - Sigma));
+        Sigma = Sigma + mixo*(sg.Sigma - Sigma);
+        if dS < tolo && sout.converged, converged = true; break; end
+    end
+    % Final post-loop static refresh (round-4 P1-B / round-5 P1-B): KEEPS its newly
+    % closed K0 (computed on the just-mixed Sigma(1)), written to K(1) before packing;
+    % gated on its OWN convergence/residual, folded into pt.converged below.
+    [K0s, Gstat, so] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
+                                               beta, J0eff, G0inel0, G0el0, eso);
+    K(1) = K0s;
+    ctol = getf(eso, 'resid_tol', 1e-10);
+    staticok = so.converged && isfinite(so.resid) && so.resid < ctol;
+    % Residual-only lambda/Sigma revalidation (round-5 P2): the exported tuple is
+    % closure-consistent to the STATED OUTER TOLERANCE, not exactly self-consistent.
+    lam_check   = invz_lambdas(K, g, wts, beta, [1 2 3]);
+    Sigma_check = invz_sigma_ordered(tl, lam_check, K, g, beta);
+    final_resid = max(abs(Sigma_check.Sigma - Sigma));
+    med.G(1) = Gstat;                                  % elastic static function (P1-D),
+                                                        % not the ordinary Dyson value
+else
+    for outer = 1:maxo
+        eopts.K0 = K;
+        med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
+        K   = med.K;
+        lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
+        sg  = invz_sigma_ordered(tl, lam, K, g, beta);
+        dS  = max(abs(sg.Sigma - Sigma));
+        Sigma = Sigma + mixo*(sg.Sigma - Sigma);
+        if dS < tolo, converged = true; break; end
+    end
 end
 pt.Sigma0 = Sigma(1);  pt.alpha = sg.alpha;  pt.alpha_m = sg.alpha_m;  pt.lambda = lam;
 pt.K = K;  pt.G = med.G;  pt.Sigma = Sigma;  pt.tl = tl;  pt.si = si;
@@ -150,6 +255,17 @@ pt.outer_iters = outer;
 pt.moment_branch = branch;
 if oddOn
     pt.odd = struct('d', d, 'Xp', Xp);         % T1.4 diagnostics (absent when flag off)
+end
+if strcmp(omode, 'jensen')
+    pt.final_resid = final_resid;
+    pt.converged = pt.converged && staticok && (pt.final_resid < tolo);
+    pt.ordered_mode = omode;  pt.hmf = hstar;  pt.hmf_prof = hprof;
+    pt.D_uni = 1 + (J0eff - K(1))*med.G(1);          % pole observable AT THE FINAL STATE
+    % CONTRACT (P2-G): pt.crit keeps its historical ordinary-Dyson definition and is NOT
+    % the ordered pole mass below the boundary -- pt.D_uni is (see docstring).
+    if abs(pt.si.hz - hstar) > 1e-12
+        error('invz:hzFixed', 'jensen final state did not hold hmf: %.6g vs %.6g', pt.si.hz, hstar);
+    end
 end
 end
 
