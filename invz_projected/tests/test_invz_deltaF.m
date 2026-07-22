@@ -11,14 +11,16 @@ end
 
 function test_bare_limit_deltaF_zero(testCase)
 % Route A with force_bare: dh = h0 - hmf = 0 identically, so BOTH dF and the
-% truncation tail estimate are exactly zero (P0-3: the round-1 draft asserted
-% tail > 0, which contradicts dh == 0).
+% non-claiming endpoint diagnostic are exactly zero (P0-3: the round-1 draft asserted
+% tail > 0, which contradicts dh == 0). Field names per the dF_partial contract
+% (stage-2 task 6b, step 1): out.dF_partial, out.endpoint_dh.
 ion = invz_ion();  T = 0.31;
 Jnu = linspace(-2e-3, 6.0e-3, 24).';
 [dF, out] = invz_deltaF_ordered(ion, T, [2.85 0 0], Jnu, ...
     struct('J0eff', 6.4e-3, 'Jxx0', ion.Jxx0, 'hyp', true, 'force_bare', true));
 verifyEqual(testCase, dF, 0, 'AbsTol', 1e-12);
-verifyEqual(testCase, out.tail_est, 0, 'AbsTol', 1e-15);
+verifyEqual(testCase, out.dF_partial, 0, 'AbsTol', 1e-12);
+verifyEqual(testCase, out.endpoint_dh, 0, 'AbsTol', 1e-15);
 end
 
 function test_two_routes_agree(testCase)

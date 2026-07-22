@@ -50,7 +50,20 @@ hmf_star = NaN;
 sibo = sibase;  sibo.order = true;  sibo.J0z = J0eff;
 sib = invz_single_ion(ion, T, Bx, sibo);
 if ~(sib.mf_converged && abs(sib.Jexp(3)) > 1e-6), return; end     % bare does not order
-hmax = hfac * abs(sib.hz);
+% Ceiling selection (kept SEPARATE from the bare-order check above -- third §7 review
+% P1): opts.hmax_abs, when supplied, is an EXACT OVERRIDE (hmax = hmax_abs), never a
+% `min` cap -- a cap would not give a COMMON cutoff across states with different bare
+% hz (Task 6b Step 1). A nonpositive/nonfinite value is a caller error, not silently
+% clamped.
+if isfield(opts, 'hmax_abs')
+    hmax_abs = opts.hmax_abs;
+    if ~(isscalar(hmax_abs) && isfinite(hmax_abs) && hmax_abs > 0)
+        error('invz:hmfOpts', 'hmax_abs must be a positive finite scalar: got %s', mat2str(hmax_abs));
+    end
+    hmax = hmax_abs;
+else
+    hmax = hfac * abs(sib.hz);
+end
 if isnan(hmin_abs), hmin_abs = 1e-10*hmax; end
 
 % --- Matsubara grid, weights, beta: MIRROR invz_solve_point_ordered's setup block
