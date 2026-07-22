@@ -124,6 +124,8 @@ What Stage 1 does NOT discharge: regression 4 (an RPA dispatcher independent of 
 
 ### Stage 2: implement the full ordered 1/z thermodynamics
 
+STATUS: implemented on the projected path (docs/superpowers/plans/2026-07-22-invzp-stage2-ordered-thermodynamics.md).
+
 For the 1/z FM side, two missing pieces must BOTH be implemented (citations use Jensen's original equation numbers -- the HTML numbers moved in an uncommitted revision, see the verification record):
 
 - the ordered elastic static sector, J 2.28--2.29 (framework Section 9.2): the zero-frequency single-site function \(G(0)\) with the \(\xi\) resummation, inserted into the effective-medium form at \(\omega_n = 0\). `invz_sigma_ordered` implements only the ordered self-energy and \(\alpha_m\) (J 2.26--2.27); until J 2.28--2.29 exist, the simple ordered `pt.crit` must not be treated as the complete Jensen ordered inverse response;
@@ -158,7 +160,7 @@ This display correction is independent of the projected QCP phase-consistency pr
 ## Required regression tests for a future fix
 
 1. RPA FM and PM poles meet at `Bc_rpa` using RPA-consistent states, evaluated on the intrinsic (demag-free) response -- the demag-corrected strict-uniform observable saturates rather than diverging.
-2. 1/z FM and PM poles meet at `Bc_1z` using the full nonlinear ordered 1/z state. (Blocked on Stage 2: whichever route is chosen must include J 2.28--2.29 and J 2.31--2.34; until then the ordered-side 1/z branch is labelled diagnostic and this test is waived, not weakened.)
+2. 1/z FM and PM poles meet at `Bc_1z` using the full nonlinear ordered 1/z state. (Delivered by the Stage-2 plan on the projected path: enforced by test_invz_qcp_closure, INVZ_SLOW-gated, via the static inverse response -- pole-based, per Stage 3's argmax warning.)
 3. `Bc_rpa` and `Bc_1z` are permitted to differ and are reported separately.
 4. Zeroing `Sigma` in a 1/z-selected state is not accepted as the RPA phase dispatcher near either boundary.
 5. Pole trajectories are invariant, within tolerance, under forward/reverse field sweeps and frequency-grid refinement.

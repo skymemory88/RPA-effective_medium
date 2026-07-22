@@ -89,6 +89,11 @@ verifyEqual(testCase, invz_boundary_field(fieldsU, logical([1 1 0 0]), logical([
 verifyTrue(testCase, isnan(invz_boundary_field(fieldsU, logical([1 1 0 0]), false(1, 4))));
 % the 1/z map itself must still be a well-formed spectrum
 verifyTrue(testCase, any(isfinite(S.chiz(:))));
+
+% ordered_mode is driver-owned (stage-2 P1-6): a caller-supplied value must error
+verifyError(testCase, @() invz_spectra_map(ion, T, fields, w, ...
+    struct('Jnu', Jnu, 'info', info, 'verbose', false, ...
+           'solve_opts', struct('ordered_mode', 'jensen'))), 'invz:solveOpts');
 end
 
 function test_split_window_exercised(testCase)

@@ -9,9 +9,10 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %   Returned maps (columns = fields):
 %     S.chiz   [nw x nB]  1/z-renormalized chi''_cc at the 1/z theory's OWN phase: the
 %                         strict-PM state wherever it is stable (crit > 0, i.e. above
-%                         Bc_1z), the bare-MF moment-form state below Bc_1z (DIAGNOSTIC
-%                         there -- the complete ordered 1/z state is Stage 2 of
-%                         invzp_QCP_diagnosis.md and does not exist yet)
+%                         Bc_1z), and below Bc_1z -- under opts.ordered_1z = 'jensen'
+%                         (default) -- the Jensen-consistent ordered 1/z state (J 2.28-2.33,
+%                         diagnosis Stage 2 delivered on the projected path), or under the
+%                         'bare' escape hatch the retired Stage-1 bare-MF diagnostic
 %     S.chirpa [nw x nB]  bare-RPA chi''_cc          (Sigma = 0, matching phase)
 %     With ion.demag ~= 0 both are the demag-corrected MEASURED observable (via
 %     info.Jshape_cc, saturating instead of diverging); demag = 0 gives the intrinsic response.
@@ -23,9 +24,15 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %   EMT converged to the bare boundary -- an RPA-independent dispatcher is a scheduled
 %   follow-up (diagnosis regression 4 stays OPEN), hence the boundary output is named
 %   Bc_auto, never Bc_rpa. S.phase_1z is the 1/z leg's own label (2 = stable PM 1/z state
-%   used for S.chiz, ALWAYS gated on crit > 0; 1 = bare-MF ordered diagnostic below
-%   Bc_1z; 0 = no valid 1/z label: masked column OR a spurious converged PM point with
-%   crit <= 0; mirrors S.phase under a longitudinal tilt -- no strict-PM phase there).
+%   used for S.chiz, ALWAYS gated on crit > 0; 1 = under 'jensen' the CONSISTENT ordered
+%   1/z state (root-existence gated, not a diagnostic) -- under 'bare' the retired
+%   Stage-1 bare-MF diagnostic; 0 = no valid 1/z label: masked column (including a jensen
+%   solve whose H_MF root does not exist, or whose static closure failed) OR a spurious
+%   converged PM point with crit <= 0 -- jensen failure NEVER silently falls back to
+%   'bare' at a field where jensen actually applies; mirrors S.phase under a
+%   longitudinal tilt -- no strict-PM phase there, and jensen (transverse/spontaneous
+%   only by construction) is never attempted, so a tilted field-induced moment always
+%   uses the bare diagnostic below Bc_1z regardless of opts.ordered_1z).
 %   S.suspect flags the spurious PM columns (S.phase = 2 with finite crit <= 0). Masking
 %   before peak extraction: chiz is NaN where phase_1z = 0; chirpa is NaN where there is
 %   NO accepted auto state (S.phase = 0 -- the legacy Sigma-zero fallback is computed but
@@ -40,7 +47,11 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %   between the bracketing labelled fields, so masked or suspect columns between them
 %   widen it -- refine with invz_critical for a solver-grade Bc). S.Sigma0 is the Sigma0
 %   of the state used for
-%   S.chiz. S.Epeak/S.Epeak_rpa (censored, parabolic-refined peak energy;
+%   S.chiz. S.m_1z [1 x nB] is the ordered moment of the jensen 1/z state (NaN under
+%   'bare' and on all non-ordered columns). S.D_ord [1 x nB] is the ordered static
+%   inverse response 1 + (J0eff - K(1))*G(1) AT THE FINAL jensen STATE -- the pole
+%   observable, which vanishes at Bc_1z from below so the FM and PM 1/z branches close
+%   at the same field (NaN under 'bare' and on all non-ordered columns). S.Epeak/S.Epeak_rpa (censored, parabolic-refined peak energy;
 %   NaN at a non-positive or boundary maximum, via invz_peak_energy, shared with
 %   invz_spectra_qpath). Fields with no solution at all (e.g. the degenerate doublet at
 %   Bx -> 0) are left NaN and masked out.
@@ -65,6 +76,13 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %                              Validated envelope: ac-plane directions [cos(theta) 0 sin(theta)] with theta_c <= 5 deg (see docs/SESSION-2026-07-16-field-angle.md); By ~= 0 now errors under the legacy x-only transverse MF (invz:transverseMF) and is validated under vector_ab (peak observables, all tested in-plane angles; see docs/SESSION-2026-07-16-inplane-rotation.md); demag ~= 0 with tilt is unvalidated.
 %     .bz_tol    (1e-9)        T; dead band on Bz -- resolved ONCE, applied to the field table
 %                              BEFORE any solve, and forwarded to invz_solve_auto/one_field.
+%     .ordered_1z ('jensen')   the 1/z leg's ordered-side solve below Bc_1z: 'jensen' (default)
+%                              is the Stage-2 consistent ordered 1/z state (invz_solve_point_ordered
+%                              opts.ordered_mode = 'jensen'); 'bare' reproduces the retired
+%                              Stage-1 bare-MF diagnostic verbatim. Error invz:ordered1z if
+%                              neither. This is driver-owned: solve_opts.ordered_mode is
+%                              reserved and errors invz:solveOpts (P1-6) so the auto/overlay
+%                              leg can never be flipped by a caller.
 %     .solve_opts (struct())   merged into the per-field invz_solve_auto opts; fields
 %                              J0eff/Jxx0/hyp are reserved (driver-owned) -> error invz:solveOpts.
 %                              transverse_mf ('legacy_x' | 'none' | 'vector_ab', default
@@ -75,7 +93,7 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %                              rotation.
 %
 %   Returns S.transverse_mf: the resolved MF mode string (echoes opts.solve_opts.transverse_mf,
-%   default 'legacy_x').
+%   default 'legacy_x'). Returns S.ordered_1z: echoes opts.ordered_1z ('jensen' or 'bare').
 %
 %   Cost is one 1/z solve per field (~15-25 min for a 61-point sweep on a 16^3 grid, single
 %   core). Compute S once, then replot freely (invz_plot_spectra_map / invz_run_spectra).
@@ -93,6 +111,10 @@ fdir  = getf(opts, 'field_dir', [1 0 0]);
 bztol = getf(opts, 'bz_tol', 1e-9);
 sxtra = getf(opts, 'solve_opts', struct());
 invz_check_solve_opts(sxtra);
+o1z = getf(opts, 'ordered_1z', 'jensen');
+if ~any(strcmp(o1z, {'jensen', 'bare'}))
+    error('invz:ordered1z', 'ordered_1z must be ''jensen'' or ''bare''.');
+end
 if ~isnumeric(fdir) || ~isreal(fdir) || numel(fdir) ~= 3 || ~all(isfinite(fdir)) || norm(fdir(:)) == 0
     error('invz:fieldDir', 'field_dir must be a nonzero finite real 3-vector.');
 end
@@ -122,6 +144,7 @@ Jshape = 0;         if isfield(info, 'Jshape_cc'), Jshape = info.Jshape_cc; end
 chizM   = nan(nw, nB);   chirpaM = nan(nw, nB);
 Sig0    = nan(1, nB);    phaseC  = zeros(1, nB);
 ph1z    = zeros(1, nB);  critPM  = nan(1, nB);
+m1zM    = nan(1, nB);    DordM   = nan(1, nB);
 
 % nWorkers = 0 forces serial execution even inside a parfor, and works without the
 % Parallel Computing Toolbox; Inf lets parfor use (and auto-create) the pool.
@@ -132,8 +155,8 @@ sopts = sxtra;
 sopts.hyp = hyp;  sopts.J0eff = Jcc0;  sopts.Jxx0 = Jaa0;  sopts.bz_tol = bztol;
 
 parfor (k = 1:nB, nWorkers)
-    [chizM(:, k), chirpaM(:, k), Sig0(k), phaseC(k), ph1z(k), critPM(k)] = ...
-        one_field(ion, T, BvecM(k, :), Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol);
+    [chizM(:, k), chirpaM(:, k), Sig0(k), phaseC(k), ph1z(k), critPM(k), m1zM(k), DordM(k)] = ...
+        one_field(ion, T, BvecM(k, :), Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol, o1z);
     if verbose
         ph = {'masked', 'moment-form', 'paramagnet'};
         fprintf('  |B| = %5.2f T : auto-state %-11s 1z-state %-11s Sigma0 = %s\n', ...
@@ -143,9 +166,9 @@ end
 
 S = struct();
 S.fields = fields;  S.w = w;  S.T = T;  S.info = info;
-S.field_dir = fdir;  S.Bvec = BvecM;  S.transverse_mf = tmf;
+S.field_dir = fdir;  S.Bvec = BvecM;  S.transverse_mf = tmf;  S.ordered_1z = o1z;
 S.Sigma0 = Sig0;  S.phase = phaseC;   % auto (ordered-first bare-MF) dispatch -- see header
-S.phase_1z = ph1z;  S.crit_pm = critPM;
+S.phase_1z = ph1z;  S.crit_pm = critPM;  S.m_1z = m1zM;  S.D_ord = DordM;
 S.suspect = (phaseC == 2) & isfinite(critPM) & (critPM <= 0);   % spurious below-Bc auto-PM
 % Validity masks BEFORE the spectra are packed and the peaks extracted (re-review
 % findings 2, R3-1; R4-3 hardening): chiz is masked where there is no valid 1/z label;
@@ -165,9 +188,11 @@ S.Epeak_rpa = invz_peak_energy(chirpaM, w, wmin);
 end
 
 % -------------------------------------------------------------------------------------------
-function [chiz, chirpa, Sigma0, phase, phase_1z, crit_pm] = one_field(ion, T, B, Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol)
+function [chiz, chirpa, Sigma0, phase, phase_1z, crit_pm, m_1z, D_ord] = one_field(ion, T, B, Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol, o1z)
 %ONE_FIELD chi''_cc(omega) at one field -- TWO independently phased legs (QCP Stage 1,
-% docs/superpowers/plans/2026-07-21-invzp-qcp-stage1-split-overlays.md):
+% docs/superpowers/plans/2026-07-21-invzp-qcp-stage1-split-overlays.md; ordered 1/z leg
+% below Bc_1z upgraded to the Stage-2 jensen solve, docs/superpowers/plans/
+% 2026-07-22-invzp-stage2-ordered-thermodynamics.md):
 %   auto/overlay leg (chirpa): the ordered-first invz_solve_auto selection (bare-MF
 %     moment), UNCHANGED -- phase = 1 moment-form (FM or field-induced), 2 strict PM,
 %     0 masked, historical semantics. The Sigma = 0 overlay built from it approximates
@@ -176,17 +201,28 @@ function [chiz, chirpa, Sigma0, phase, phase_1z, crit_pm] = one_field(ion, T, B,
 %     stays open), hence the driver reports Bc_auto, never Bc_rpa.
 %   1/z leg (chiz): the 1/z theory's own stability. Wherever the strict-PM solve converges
 %     with crit = 1 + Sigma0 - J0eff*chi0cc0 > 0, the PM state is the consistent 1/z state
-%     (phase_1z = 2) even though the bare-MF leg still orders; below Bc_1z the bare-MF
-%     ordered 1/z curve is kept as a DIAGNOSTIC (phase_1z = 1) until the full ordered 1/z
-%     state exists (diagnosis Stage 2). EVERY phase_1z = 2 label is gated on crit > 0;
-%     phase_1z = 0 means no valid 1/z label (masked column OR a spurious converged PM
-%     point with crit <= 0). Longitudinal tilts have no strict-PM phase
-%     (rounded crossover): phase_1z mirrors phase there.
+%     (phase_1z = 2) even though the bare-MF leg still orders; below Bc_1z, TRANSVERSE ONLY
+%     (B(3) == 0) -- under o1z = 'jensen' (default) -- the CONSISTENT ordered 1/z state is
+%     solved (invz_solve_point_ordered opts.ordered_mode = 'jensen', J 2.28-2.33; diagnosis
+%     Stage 2 delivered), gated on H_MF root existence and static-closure convergence,
+%     NEVER a silent fallback to the bare diagnostic on failure (phase_1z stays 0 and the
+%     column is masked instead); under o1z = 'bare' the retired Stage-1 bare-MF diagnostic
+%     is kept verbatim. EVERY phase_1z = 2 label is gated on crit > 0; phase_1z = 0 means
+%     no valid 1/z label (masked column OR a spurious converged PM point with crit <= 0).
+%     Longitudinal tilts have no strict-PM phase (rounded crossover): phase_1z mirrors
+%     phase there, and ALWAYS uses the bare diagnostic below Bc_1z regardless of o1z --
+%     jensen is transverse/spontaneous only by invz_solve_point_ordered's own scope
+%     contract (invz:orderedMode on any |B(3)| > bz_tol), so a tilted field-induced
+%     moment is never even offered to it (this mirrors the strict-PM probe above, which
+%     likewise only runs at B(3) == 0).
 % crit_pm: PM 1/z mass at this field (NaN where no PM solve was attempted or returned).
+% m_1z/D_ord: jensen ordered moment / ordered static inverse response (pole observable) at
+%     this field -- NaN except on a converged jensen-ordered column (phase_1z = 1, o1z =
+%     'jensen'); always NaN under o1z = 'bare'.
 % Jsel = Jcc0 is the strict-uniform observable, so the demag correction Jshape applies.
 nw = numel(w);
 chiz = nan(nw, 1);  chirpa = nan(nw, 1);  Sigma0 = NaN;  phase = 0;
-phase_1z = 0;  crit_pm = NaN;
+phase_1z = 0;  crit_pm = NaN;  m_1z = NaN;  D_ord = NaN;
 tmf = getf(sopts, 'transverse_mf', 'legacy_x');
 % transverse_mf here so any fallback single-ion rebuild inside invz_chi_realaxis (when a
 % branch below can't supply si) uses the SAME MF model as the solve, not the 'legacy_x'
@@ -221,14 +257,39 @@ if phase == 1                                     % --- moment-form branch (FM o
         c0opts = copts;  c0opts.npass = 1;        % RPA overlay stays on the bare-MF state
         o0 = invz_chi_realaxis(ion, T, B, invz_zero_sigma_overlay(pt), w, c0opts);
         chirpa = imag(o0.chi_cc_q(1, :)).';
-    else                                     % --- below Bc_1z: ordered 1/z, DIAGNOSTIC ---
-        phase_1z = 1;  Sigma0 = pt.Sigma0;
-        o  = invz_chi_realaxis(ion, T, B, pt, w, copts);   % reuses pt.si (moment-form eigenstates)
-        chiz = imag(o.chi_cc_q(1, :)).';
-        pt0 = invz_zero_sigma_overlay(pt);
-        c0opts = copts;  c0opts.npass = 1;  c0opts.chi0cc_w = o.chi0cc_w;   % share bare cc
-        o0  = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
-        chirpa = imag(o0.chi_cc_q(1, :)).';
+    else                                     % --- below Bc_1z: ordered 1/z leg ---
+        % jensen is TRANSVERSE/SPONTANEOUS only (invz_solve_point_ordered's own scope
+        % guard, invz:orderedMode, on any |B(3)| > bz_tol): a longitudinal tilt's
+        % field-induced moment falls through to the bare diagnostic below, matching
+        % the auto/overlay leg's own B(3) == 0 gate on the strict-PM probe above --
+        % NOT a "jensen failed" masked column, since jensen is never attempted there.
+        if strcmp(o1z, 'jensen') && B(3) == 0   % Stage 2: consistent ordered state (H_MF)
+            so2 = sopts;  so2.ordered_mode = 'jensen';
+            ptj = [];
+            try
+                ptj = invz_solve_point_ordered(ion, T, B, Jnu, so2);
+            catch err
+                if ~strncmp(err.identifier, 'invz:', 5), rethrow(err); end
+            end
+            if ~isempty(ptj) && ptj.is_ordered && ptj.converged && isfinite(ptj.Sigma0)
+                phase_1z = 1;  Sigma0 = ptj.Sigma0;  m_1z = ptj.m0;  D_ord = ptj.D_uni;
+                oj = invz_chi_realaxis(ion, T, B, ptj, w, copts);   % jensen si differs from
+                chiz = imag(oj.chi_cc_q(1, :)).';                   % the auto pt's -- no sharing
+            end                              % else phase_1z stays 0 -> chiz column masked
+            pt0 = invz_zero_sigma_overlay(pt);                      % overlay: UNCHANGED auto state
+            c0opts = copts;  c0opts.npass = 1;
+            o0  = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
+            chirpa = imag(o0.chi_cc_q(1, :)).';
+        else                                 % 'bare', or a longitudinal tilt under 'jensen':
+                                              % Stage-1 diagnostic escape hatch
+            phase_1z = 1;  Sigma0 = pt.Sigma0;
+            o  = invz_chi_realaxis(ion, T, B, pt, w, copts);
+            chiz = imag(o.chi_cc_q(1, :)).';
+            pt0 = invz_zero_sigma_overlay(pt);
+            c0opts = copts;  c0opts.npass = 1;  c0opts.chi0cc_w = o.chi0cc_w;
+            o0  = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
+            chirpa = imag(o0.chi_cc_q(1, :)).';
+        end
     end
     return;
 end
