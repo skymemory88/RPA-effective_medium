@@ -3,8 +3,11 @@ function [dF, out] = invz_deltaF_ordered(ion, T, Bx, Jnu_flat, opts)
 % integral over the H_MF profile. NOT dF(m=0) -- the hybrid's saturation-normalized
 % absolute free energy is outside its validated domain (route-A divergence recorded in
 % the task-6 execution record); cross-state comparison is meaningful only at a COMMON
-% cutoff (use opts.hmax_abs). The J 2.34 two-route identity is validated in the closed
-% 2x2 model (test_invz_deltaF).
+% cutoff (use opts.hmax_abs). The closed 2x2 model (test_invz_deltaF) is the DESIGNATED
+% DIAGNOSTIC ROUTE for the J 2.34 two-route comparison -- an order-consistency check plus
+% a non-gating approximation-fingerprint regression, never "validated" (blocker-review
+% resolution, plan SS7b: the ~13.7% residual is a documented same-retained-order
+% static-elastic approximation, not a demonstrated defect).
 %   dF = -int_0^{hmax} (h0(h') - hmf(h')) d<Jz>'
 % evaluated on the invz_hmf_ordered profile as -trapz(m, h0 - hgrid), truncated at the
 % profile's cutoff (opts.hmax_fac, or the exact opts.hmax_abs override -- see

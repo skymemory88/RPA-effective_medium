@@ -126,6 +126,8 @@ What Stage 1 does NOT discharge: regression 4 (an RPA dispatcher independent of 
 
 STATUS: implemented on the projected path (docs/superpowers/plans/2026-07-22-invzp-stage2-ordered-thermodynamics.md).
 
+The J 2.34 two-route comparison in the closed 2x2 model shows a ~13.7% same-retained-order static-elastic approximation residual (scale-free in the coupling; Jensen's own full-machinery published check achieved 2-3% on the physical HoF3 lattice at low T, with his stated high-T elastic caveat). The implemented J 2.26-2.29 chain is not shown defective; thermodynamic cross-route closure is carried as a KNOWN APPROXIMATION LIMITATION, scientifically unvalidated pending the published-benchmark (HoF3) discriminator -- a follow-up task. Exact limits, convergence, and leading-order scaling ARE enforced in test_invz_deltaF.
+
 For the 1/z FM side, two missing pieces must BOTH be implemented (citations use Jensen's original equation numbers -- the HTML numbers moved in an uncommitted revision, see the verification record):
 
 - the ordered elastic static sector, J 2.28--2.29 (framework Section 9.2): the zero-frequency single-site function \(G(0)\) with the \(\xi\) resummation, inserted into the effective-medium form at \(\omega_n = 0\). `invz_sigma_ordered` implements only the ordered self-energy and \(\alpha_m\) (J 2.26--2.27); until J 2.28--2.29 exist, the simple ordered `pt.crit` must not be treated as the complete Jensen ordered inverse response;
