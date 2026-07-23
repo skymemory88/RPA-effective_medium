@@ -102,7 +102,9 @@ end
 % Picard loop re-converges around whatever Sigma(1)/lam it is handed, so it measures internal
 % self-consistency, not global correctness (contract Sec. 4/9) -- this is asserted
 % explicitly, not merely tolerated, so a future change that made B spuriously fail here would
-% also be caught.
+% also be caught. Review-fix (Minor #1): the collateral D failure the docstring above and the
+% contract's Sec. 9 table already claim (rD=8.1e-6) was previously unpinned by assertion; now
+% asserted directly, not merely documented.
 % ===========================================================================================
 function test_sigma_perturbation_fails_A_and_C(testCase)
 [node, state] = build_fixture();
@@ -115,8 +117,68 @@ res = invz_ordered_residual(node, pstate);
 
 verifyFalse(testCase, res.blockA.pass);
 verifyFalse(testCase, res.blockC.pass);
+verifyFalse(testCase, res.blockD.pass);
 verifyTrue(testCase, res.blockB.pass);
 verifyFalse(testCase, res.accepted);
+end
+
+% ===========================================================================================
+% Review-fix (Important finding): Block B's relative-scale term (scaleB_rel*abs(Gstat)) is
+% never load-bearing on the plain fixture above -- there, the recomputed static residual
+% (rB ~= 6.82e-11, contract Sec. 9) already clears the bare absolute gate
+% (scaleB_abs = rtolB = 1e-10) BY ITSELF, so passB would come out identically true even if
+% scaleB_rel were deleted or negated. This test constructs a genuine state where the relative
+% term is PROVABLY the deciding factor.
+%
+% Construction (genuine, not fabricated): start from the same accepted fixture
+% (Gstat ~= -310, the O(100-500) near-pole regime stage2c-context.md and the contract target).
+% Perturb ONLY the continuation seed state.K0s by a tiny, physically-plausible amount (1e-7
+% meV, ~3e-5 relative to K0s ~= 3.6e-3 meV) and cap the static closure's own Picard loop at
+% node.eso.maxit = 22. Block B's fresh invz_emt_static_ordered re-solve (contract Sec. 4:
+% independent recomputation, never reused from any cached solve) needs ~28 iterations to
+% re-close this perturbation to its own rtol = 1e-10 (confirmed empirically); capped at 22, it
+% returns a genuine INTERMEDIATE so.resid -- real Picard-iteration output, not an invented
+% number. Nothing in invz_ordered_residual.m (the Block B formula, scaleB_abs, or scaleB_rel)
+% is touched here -- only the node/state inputs fed to the existing, unmodified checker.
+% ===========================================================================================
+function test_blockB_relative_scale_is_load_bearing(testCase)
+[node, state] = build_fixture();
+
+pnode = node;  pnode.eso.maxit = 22;               % cap the static closure's own Picard loop
+pstate = state;  pstate.K0s = state.K0s + 1e-7;    % tiny K0 seed perturbation
+
+res = invz_ordered_residual(pnode, pstate);
+
+% Independent recomputation of Gstat, mirroring invz_ordered_residual's own local_blockB call
+% exactly (contract Sec. 4), so the window claim below is verified OUTSIDE the checker too,
+% not merely trusted from res.blockB.pass alone.
+[~, Gstat_indep, ~] = invz_emt_static_ordered(pnode.tl, pstate.lam(1:2), pstate.Sigma(1), ...
+    pnode.Jnu_flat, pstate.K0s, pnode.beta, pnode.J0eff, pnode.G0inel0, pnode.G0el0, pnode.eso);
+verifyGreaterThan(testCase, abs(Gstat_indep), 100, ...
+    'fixture must stay in the O(100+) near-pole Gstat regime this test targets');
+
+% (1) The combined (abs+rel) gate ACCEPTS this state.
+verifyTrue(testCase, res.blockB.pass, sprintf(['block B should pass under the combined ' ...
+    'abs+rel gate: resid=%.6e scale_abs=%.3e scale_rel=%.3e Gstat=%.6e'], ...
+    res.blockB.resid, res.blockB.scale_abs, res.blockB.scale_rel, Gstat_indep));
+
+% (2) The bare-absolute criterion ALONE would REJECT this same state -- proving the relative
+% term (scaleB_rel*abs(Gstat)) is the deciding factor, not vestigial.
+verifyGreaterThan(testCase, res.blockB.resid, res.blockB.scale_abs, sprintf(...
+    'resid=%.6e must exceed the bare absolute gate=%.3e for the relative term to be load-bearing', ...
+    res.blockB.resid, res.blockB.scale_abs));
+
+% Independently-reconstructed window bound, using Gstat_indep rather than trusting the
+% checker's own internal arithmetic a second time.
+window_hi = res.blockB.scale_abs + res.blockB.scale_rel * abs(Gstat_indep);
+verifyLessThan(testCase, res.blockB.resid, window_hi, ...
+    'resid must fall strictly inside the combined-gate window for pass to be non-vacuous');
+
+% Corroborating evidence (contract Sec. 4): the closure's OWN pure-absolute flag
+% (so.resid < rtolB) legitimately reads false here even though the combined gate accepts --
+% "that is the combined gate doing its job, not a contradiction".
+verifyFalse(testCase, res.blockB.converged, ...
+    'so.converged (pure-absolute) should read false while the combined gate still accepts');
 end
 
 % ===========================================================================================
@@ -205,6 +267,26 @@ verifyTrue(testCase, isnan(res.blockA.resid));
 verifyFalse(testCase, res.blockA.pass);
 verifyTrue(testCase, isnan(res.blockC.resid));
 verifyFalse(testCase, res.blockC.pass);
+
+% Review-fix (Minor #4): the Sigma-space corruption above never reaches Block D's OWN
+% robust_max_abs call (Block D's first operand is state.K, untouched by a Sigma corruption)
+% -- so Block D's independent use of the NaN-propagating helper was not yet pinned. A
+% state.K-space single-frequency NaN corruption (Sigma/lam/K0s left untouched) exercises it
+% directly: rD = robust_max_abs(K(2:end), medD.K(2:end)) must see the corrupted K(2:end) and
+% propagate NaN, exactly like Blocks A/C above did for a corrupted Sigma.
+pstateK = state;  pstateK.K(3) = NaN;
+resK = invz_ordered_residual(node, pstateK);
+verifyFalse(testCase, resK.finite);
+verifyFalse(testCase, resK.accepted);
+verifyTrue(testCase, isnan(resK.blockD.resid));
+verifyFalse(testCase, resK.blockD.pass);
+
+% Blocks A/B never read state.K (contract Sec. 3/4), so they must be bit-identical to the
+% unperturbed baseline -- confirming this corruption is invisible to them, exactly as (ii-b)
+% already establishes for a non-NaN K corruption.
+res0 = invz_ordered_residual(node, state);
+verifyEqual(testCase, resK.blockA.resid, res0.blockA.resid);
+verifyEqual(testCase, resK.blockB.resid, res0.blockB.resid);
 end
 
 % ===========================================================================================
