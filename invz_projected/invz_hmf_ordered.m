@@ -16,13 +16,17 @@ function [hmf_star, prof, trc] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
 % failed to converge/close. Both map to a NaN hmf_star and MUST be read by callers as
 % converged = false, never as a PM label.
 %
-% Third output trc (stage-2c task 0, diagnostic-only): opts.trace -- absent/false/empty
-% by default -- gates a BEHAVIOUR-NEUTRAL trace of this function's OWN node loop
-% (eval_node/run_sweep, including the h=0 predictor call). Every trace statement is
+% Third output trc (stage-2c task 0, diagnostic-only; RELOCATED task 1b-ii-A): opts.trace --
+% absent/false/empty by default -- gates a BEHAVIOUR-NEUTRAL trace of this function's node
+% loop (eval_node/run_sweep, including the h=0 predictor call). Every trace statement is
 % guarded by `if tracing`; hmf_star/prof are bit-identical whether or not opts.trace is
-% set. The one UNCONDITIONAL change is capturing Gstat from the per-iteration static call
-% inside eval_node instead of discarding it via `~`: that costs nothing regardless of
-% tracing (invz_emt_static_ordered always computes it, independent of nargout). When
+% set. eval_node's own per-node solve (Sigma<->EMT loop + post-loop static refresh) is now
+% ONE call to the shared invz_ordered_node_solve (sopts.trace=tracing forwarded through);
+% trc.nodes/trc.iters are rebuilt from that call's info/info.iters, field-for-field, in
+% eval_node itself. The one UNCONDITIONAL change (now inside the solver's own per-iteration
+% step) is capturing Gstat from the per-iteration static call instead of discarding it via
+% `~`: that costs nothing regardless of tracing (invz_emt_static_ordered always computes
+% it, independent of nargout). When
 % tracing is off, trc is a small fixed placeholder (schema_version, enabled=false, empty
 % meta/nodes/iters); callers that never request the 3rd output (all existing callers) are
 % unaffected either way. When on: trc.nodes has one record per eval_node CALL (id, h,
@@ -308,77 +312,65 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
     G0bare0 = -(X(3, 3) + fb);
     G0el0   = G0bare0 - G0inel0;                                   % elastic + feedback (SS4a)
     g  = real(invz_g(tl, 1i*wn));
-    if isempty(Sigma), Sigma = zeros(size(wn)); end
-    K = zeros(size(wn));  lam = [0; 0; 0];  ok = false;
-    for outer = 1:maxo
-        % (1) dynamic sector -- MIRROR invz_solve_point_ordered's emt call verbatim
-        eopts.K0 = K;
-        med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
-        K   = med.K;
-        % (2) static sector (P0-2/P0-A), threaded opts (P1-F):
-        % Gstat capture (stage-2c task 0): was previously discarded via `~`; this call
-        % already computes it regardless of nargout (invz_emt_static_ordered.m:57), so
-        % naming it Gs_it costs nothing and changes no numerical value anywhere below.
-        [K0s, Gs_it, sout] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
-                                                 beta, J0eff, G0inel0, G0el0, eso);
-        K(1) = K0s;
-        % (3)-(5) lambdas, ordered Sigma, damped mix -- MIRROR the solver's statements
-        lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
-        sg  = invz_sigma_ordered(tl, lam, K, g, beta);
-        dS  = max(abs(sg.Sigma - Sigma));
-        if tracing                                 % stage-2c task 0: per-iteration record
-            % raw map residual dS (pre-mix, matching dS's own definition) + raw static
-            % residual sout.resid; static Dq = 1+(J(q)-K0)*Gstat over ALL flat modes.
-            Dq = 1 + (Jnu_flat(:) - K0s) .* Gs_it;
-            irec = struct('node_id', nrec.id, 'outer', outer, 'resid_map', dS, ...
-                'resid_static', sout.resid, 'K0', K0s, 'D_uni', sout.D_uni, ...
-                'Dq_min', min(Dq), 'Dq_max', max(Dq), 'Dq_neg_count', nnz(Dq <= 0), ...
-                'idx_pos_flat', NaN, 'Dq_pos_val', NaN, ...
-                'idx_neg_flat', NaN, 'Dq_neg_val', NaN, ...
-                'converged_flag', sout.converged);
-            posmask = Dq > 0;
-            if any(posmask)
-                ix = find(posmask);  [vmin, jm] = min(Dq(ix));
-                irec.idx_pos_flat = ix(jm);  irec.Dq_pos_val = vmin;
-            end
-            negmask = ~posmask;                    % Dq <= 0: the non-positive/unstable side
-            if any(negmask)
-                ix = find(negmask);  [vmax, jm] = max(Dq(ix));   % closest to zero from below
-                irec.idx_neg_flat = ix(jm);  irec.Dq_neg_val = vmax;
-            end
+    % --- stage-2c task 1b-ii-A: ONE call to the shared, checker-gated node solver ----------
+    % (replaces the old inline cold-init + 7-step loop + post-loop refresh + ad hoc ctol
+    % gate: invz_ordered_node_solve runs that SAME map verbatim and gates acceptance on the
+    % complete residual checker, invz_ordered_residual -- see both files' headers.)
+    Sigma_in = Sigma;  K0s_in = K0s;      % P0-3: capture the INPUT seed BEFORE the call --
+                                          % the last-good continuation state to roll back to
+                                          % if this node is not accepted (a failed node must
+                                          % NOT export its own iterate as the next warm start).
+    node = struct('tl', tl, 'G0', G0, 'g', g, 'wts', wts, 'wn', wn, 'beta', beta, ...
+        'J0eff', J0eff, 'G0inel0', G0inel0, 'G0el0', G0el0, 'G0bare0', G0bare0, ...
+        'eso', eso, 'eopts', eopts, 'Jnu_flat', Jnu_flat);
+    if isempty(Sigma_in)                 % this file's OWN cold-start criterion (unchanged)
+        seed = [];
+    else
+        seed = struct('Sigma', Sigma_in, 'K0s', K0s_in);
+    end
+    sopts = struct('mix_outer', mixo, 'max_outer', maxo, 'tol_outer', tolo, ...
+        'cold_retry', true, 'trace', tracing);
+    [state, info] = invz_ordered_node_solve(node, seed, sopts);
+
+    % checker-gated acceptance: info.accepted is the COMPLETE invz_ordered_residual verdict,
+    % replacing the old in-loop `dS<tolo && sout.converged` + post-loop `so.converged &&
+    % so.resid<ctol` gate -- that logic now lives entirely in the solver/checker.
+    rk = info.so.r;  S0k = state.Sigma(1);  K0k = state.K0s;  Dk = info.so.D_uni;
+    Gbk = G0bare0;   Gsk = info.so.Gstat;   ok = info.accepted;
+
+    % P0-3 seed-safety: thread the ACCEPTED state forward; a non-accepted node instead
+    % returns the INPUT Sigma/K0s UNCHANGED (rollback -- a cold input, i.e. Sigma_in = [],
+    % rolls back to cold, matching the pre-existing cold criterion for the next node).
+    if ok
+        Sigma = state.Sigma;  K0s = state.K0s;
+    else
+        Sigma = Sigma_in;  K0s = K0s_in;
+    end
+
+    if tracing                                     % stage-2c task 1b-ii-A: node record
+        nrec.outer_iters   = info.outer_iters;      % finalize -- relocated to source info/state
+        nrec.dS_break      = info.loop_converged;
+        nrec.outer_hit_max = ~info.loop_converged && info.outer_iters == maxo;
+        nrec.ok_final      = info.accepted;
+        switch info.term_reason                    % solver vocabulary -> this file's own
+            case 'accepted',                    nrec.term_reason = 'converged';
+            case 'loop_converged_not_accepted', nrec.term_reason = 'refresh_failed';
+            case 'max_iter',                    nrec.term_reason = 'max_iter';
+            otherwise,                          nrec.term_reason = info.term_reason;
+        end
+        nrec.K0 = state.K0s;  nrec.D_uni = info.so.D_uni;  nrec.resid_static = info.so.resid;
+        if isempty(trc.nodes), trc.nodes = nrec; else, trc.nodes(end+1) = nrec; end
+
+        for ii = 1:numel(info.iters)                % per-outer-iteration records, relocated
+            src = info.iters(ii);                   % from info.iters (the solver's own trace)
+            irec = struct('node_id', nrec.id, 'outer', src.outer, 'resid_map', src.dS, ...
+                'resid_static', src.resid_static, 'K0', src.K0, 'D_uni', src.D_uni, ...
+                'Dq_min', src.Dq_min, 'Dq_max', src.Dq_max, 'Dq_neg_count', src.Dq_neg_count, ...
+                'idx_pos_flat', src.idx_pos_flat, 'Dq_pos_val', src.Dq_pos_val, ...
+                'idx_neg_flat', src.idx_neg_flat, 'Dq_neg_val', src.Dq_neg_val, ...
+                'converged_flag', src.converged_flag);
             if isempty(trc.iters), trc.iters = irec; else, trc.iters(end+1) = irec; end
         end
-        Sigma = Sigma + mixo*(sg.Sigma - Sigma);
-        if dS < tolo && sout.converged, ok = true; break; end
     end
-    if tracing                                     % stage-2c task 0: pre-refresh outer-loop
-        nrec.dS_break      = ok;                    % verdict -- did the in-loop break fire
-        nrec.outer_iters   = outer;
-        nrec.outer_hit_max = ~ok && (outer == maxo);
-    end
-    [K0s, Gsk, so] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
-                                             beta, J0eff, G0inel0, G0el0, eso);
-    ctol = getf(eso, 'resid_tol', 1e-10);              % documented closure tolerance (meV^-1),
-    % matching invz_emt_static_ordered's own default so the outer gate never disagrees
-    % with the inner closure's own converged flag.
-    ok = ok && so.converged && isfinite(so.resid) && so.resid < ctol;
-    % round-5 P1-B: the final refresh must ITSELF converge and close -- an unconverged
-    % refresh makes this node not-ok (callers then mark node_failed), never silent export.
-    % round-4 P1-B: the final refresh runs on the newly mixed Sigma(1), so its closed K0
-    % differs from the seed -- KEEP it, and report the SAME value the returned
-    % Gstat/r/D_uni were computed with (exported below as K0k = K0s).
-    if tracing                                     % stage-2c task 0: node record finalize
-        nrec.ok_final = ok;
-        if ok
-            nrec.term_reason = 'converged';
-        elseif nrec.dS_break
-            nrec.term_reason = 'refresh_failed';   % in-loop break fired but the post-loop
-        else                                        % refresh/residual gate then failed it
-            nrec.term_reason = 'max_iter';
-        end
-        nrec.K0 = K0s;  nrec.D_uni = so.D_uni;  nrec.resid_static = so.resid;
-        if isempty(trc.nodes), trc.nodes = nrec; else, trc.nodes(end+1) = nrec; end
-    end
-    rk = so.r;  S0k = Sigma(1);  K0k = K0s;  Dk = so.D_uni;  Gbk = G0bare0;
     end
 end
