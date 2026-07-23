@@ -572,6 +572,32 @@ function delete_if_exists(p)
 if exist(p, 'file'), delete(p); end
 end
 
+% ===========================================================================================
+% REGRESSION (controller fix, stage-2c task 2b matrix-run pass): the TOP-LEVEL
+% invz_task2_matrix was never called by any test -- the suite only exercised
+% invz_task2_matrix_enumerate/_run directly, always with an explicit NON-EMPTY cell_filter.
+% That left the DEFAULT (unfiltered, full-matrix) option path -- the exact path the controller
+% runs -- unexercised, and it was broken: run_opts was built with
+% struct(..., 'cell_filter', getf(opts,'cell_filter',{}), ...), and MATLAB's struct()
+% CONSTRUCTOR treats a cell value as an array generator, so struct('cell_filter', {}) produced
+% a 0x0 EMPTY STRUCT ARRAY rather than a scalar struct. Every downstream getf(run_opts,...)
+% then failed with "Insufficient number of outputs from right hand side of equal sign"
+% (observed: the real full-matrix launch died instantly at invz_task2_matrix_run.m:44).
+% opts.dry_run reaches that construction without paying for 40 real solves.
+% ===========================================================================================
+function test_toplevel_default_opts_builds_scalar_run_opts(testCase)
+s = invz_task2_matrix(struct('dry_run', true));      % NO cell_filter => the default path
+verifyTrue(testCase, isstruct(s.run_opts) && isscalar(s.run_opts), ...
+    'run_opts must be a SCALAR struct on the default path (struct(...,{}) empty-array gotcha)');
+verifyTrue(testCase, iscell(s.run_opts.cell_filter) && isempty(s.run_opts.cell_filter), ...
+    'default cell_filter must survive as an EMPTY CELL (= run every enumerated cell)');
+verifyEqual(testCase, s.n_total_enumerated, 40, ...
+    'the default path must still enumerate the full 40-cell matrix');
+% the default checkpoint target is the controller''s real (git-ignored) results file
+verifyTrue(testCase, ischar(s.run_opts.results_path) || isstring(s.run_opts.results_path));
+verifyTrue(testCase, contains(char(s.run_opts.results_path), 'task2_matrix_results.mat'));
+end
+
 function cleanup_shadow_path(shadow_dir)
 %CLEANUP_SHADOW_PATH onCleanup helper for test_resolve_cell_cfg_absorbs_nontask2_materialization_error:
 % removes shadow_dir from the MATLAB path (if present) and deletes it, so the shadowed
