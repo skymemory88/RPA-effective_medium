@@ -1,4 +1,4 @@
-function [hmf_star, prof] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
+function [hmf_star, prof, trc] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
 %INVZ_HMF_ORDERED Jensen applied-field/H_MF self-consistency, spontaneous root (SS9.3, J 2.31-2.33).
 %   h0(hmf) = int_0^hmf r(h') dh',   r = G0(0;h')/Gtil0(0;h')
 % with Gtil0 built on the STATIC-CLOSURE K0 (invz_emt_static_ordered, P0-2), evaluated on
@@ -15,6 +15,27 @@ function [hmf_star, prof] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
 % predictor, a profile node, a bisection iterate, or the final root evaluation --
 % failed to converge/close. Both map to a NaN hmf_star and MUST be read by callers as
 % converged = false, never as a PM label.
+%
+% Third output trc (stage-2c task 0, diagnostic-only): opts.trace -- absent/false/empty
+% by default -- gates a BEHAVIOUR-NEUTRAL trace of this function's OWN node loop
+% (eval_node/run_sweep, including the h=0 predictor call). Every trace statement is
+% guarded by `if tracing`; hmf_star/prof are bit-identical whether or not opts.trace is
+% set. The one UNCONDITIONAL change is capturing Gstat from the per-iteration static call
+% inside eval_node instead of discarding it via `~`: that costs nothing regardless of
+% tracing (invz_emt_static_ordered always computes it, independent of nargout). When
+% tracing is off, trc is a small fixed placeholder (schema_version, enabled=false, empty
+% meta/nodes/iters); callers that never request the 3rd output (all existing callers) are
+% unaffected either way. When on: trc.nodes has one record per eval_node CALL (id, h,
+% phase in {predictor,sweep,extend,redensify,bisect,root}, seed_kind cold/warm +
+% seed_from node id, outer_iters, term_reason in {converged,max_iter,refresh_failed,
+% bare_shortcut}, K0, D_uni, resid_static); trc.iters has one record per OUTER Sigma<->K
+% iteration across all nodes (node_id back-link, the RAW map residual `dS` and the RAW
+% static-closure residual `sout.resid`, K0, D_uni, min/max/neg-count of the static
+% Dq = 1+(J(q)-K0)*Gstat, and the closest-to-zero positive/negative Dq flat indices +
+% values). trc.meta carries this call's own (T, Bx, J0eff, Jnu_flat, opts) -- q/branch
+% lattice provenance is NOT available here (flat-Jnu interface, unchanged) and is
+% reconstructed by the caller; see invz_projected/invz_ordered_trace.m, the packaging
+% helper that adds qc/unflattened-Jnu/hashes and documents the versioned schema in full.
 if nargin < 5, opts = struct(); end
 J0eff = opts.J0eff;                                  % required, no default (caller-owned)
 Jxx0  = getf(opts, 'Jxx0', ion.Jxx0);
@@ -45,6 +66,23 @@ prof = struct('hgrid', [], 'r', [], 'h0', [], 'm', [], 'Sigma0', [], 'K0', [], .
               'redensified', false, ...
               'm_star', NaN, 'D_uni_star', NaN, 'r_star', NaN, 'Gstat_star', NaN);
 hmf_star = NaN;
+
+% --- Trace hook init (stage-2c task 0; diagnostic-only, DEFAULT OFF -- see the header
+% block above). tracing/trc are assigned unconditionally, BEFORE the first possible early
+% return below, so trc is always well-formed regardless of which exit path fires.
+% node_seq/cur_phase are bookkeeping-only counters shared with eval_node/run_sweep below
+% via ordinary nested-function workspace sharing -- the SAME mechanism this file already
+% uses (read-only) for mixo/tolo/maxo/Jxx0/tmf etc.; no new production dependency.
+tracing = isfield(opts, 'trace') && ~isempty(opts.trace) && ~isequal(opts.trace, false);
+trc = struct('schema_version', 1, 'enabled', tracing, 'meta', struct(), ...
+             'nodes', struct([]), 'iters', struct([]));
+if tracing
+    optsRec = opts;
+    if isfield(optsRec, 'trace'), optsRec = rmfield(optsRec, 'trace'); end
+    trc.meta = struct('T', T, 'Bx', Bx, 'J0eff', J0eff, 'Jnu_flat', Jnu_flat(:), 'opts', optsRec);
+end
+node_seq  = 0;    % running eval_node CALL counter (assigns nrec.id; bookkeeping only)
+cur_phase = '';   % phase tag for the NEXT eval_node call, set at each call site below
 
 % Bracket ceiling from the BARE ordered fixed point: SAME MF option base plus
 % order=true and J0z (P1-F -- the bracket runs under the caller's MF knobs too).
@@ -78,6 +116,7 @@ eopts = getf(opts, 'emt', struct());
 %   slope_pred = r(0) + J0eff*G0bare(0) = 1 + Sigma0(0) - J0eff*chi_path(0)   (= crit, SS5)
 % predicts root existence INDEPENDENTLY of any sampled profile value.
 Sigma = [];  K0s = 0;                                % warm-start carriers across nodes
+if tracing, cur_phase = 'predictor'; end             % stage-2c task 0: node phase tag (bookkeeping only)
 [r0n, ~, S0pm, K0pm, ~, Gb0, ~, ok0, Sigma, K0s] = eval_node(0, Sigma, K0s);
 % A predictor-node convergence failure is NOT one of the three enumerated
 % 'node_failed' triggers (round-5 P2: profile/bisection/final-evaluation), and it is
@@ -102,6 +141,7 @@ ratio = hfrac^(1/(nH-1));
 hgrid = hmax * ratio.^((nH-1):-1:0);                 % geometric, clustered at 0 (P1-4)
 prof.hmin_initial = hgrid(1);
 
+if tracing, cur_phase = 'sweep'; end                 % stage-2c task 0: node phase tag (bookkeeping only)
 [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s);
 
 if ok0
@@ -119,6 +159,7 @@ while ok0 && slope_pred < 0 && all(F >= 0) && hgrid(1) > hmin_abs
     n_extend = n_extend + 1;
     hext = hgrid(1) * ratio.^(3:-1:1);                % three more decades-fraction nodes
     [re, me, S0e, K0e, De, Gbe, Gse] = deal(nan(1, 3));  ce = false(1, 3);
+    if tracing, cur_phase = 'extend'; end             % stage-2c task 0: node phase tag (bookkeeping only)
     for k = 1:3
         [re(k), me(k), S0e(k), K0e(k), De(k), Gbe(k), Gse(k), ce(k), Sigma, K0s] = ...
             eval_node(hext(k), Sigma, K0s);
@@ -140,6 +181,7 @@ if n_extend > 0 && any(F < 0)
     hfrac_eff = max(hmin_abs/hmax, 0.25*hgrid(idx0)/hmax);
     ratio2 = hfrac_eff^(1/(nH-1));
     hgrid = hmax * ratio2.^((nH-1):-1:0);
+    if tracing, cur_phase = 'redensify'; end          % stage-2c task 0: node phase tag (bookkeeping only)
     [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s);
     h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end);
     F  = h0 - J0eff*mv;
@@ -174,6 +216,7 @@ if isempty(idx), return; end                          % no nonzero root: PM side
 % bracketing nodes, fresh node solve per iterate, cumulative h0 via local trapezoid
 % panel from the bracket's left node.
 a = hgrid(idx);  b = hgrid(idx+1);  Fa = F(idx);  h0a = h0(idx);  ra = rv(idx);
+if tracing, cur_phase = 'bisect'; end                % stage-2c task 0: node phase tag (bookkeeping only)
 for it = 1:12
     c = 0.5*(a + b);
     [rc, mc, ~, ~, ~, ~, ~, okc, Sigma, K0s] = eval_node(c, Sigma, K0s);
@@ -192,6 +235,7 @@ if (b - a) >= trt*b                                   % round-5 P1-A: tol_root n
     return;
 end
 hmf_star = 0.5*(a + b);
+if tracing, cur_phase = 'root'; end                  % stage-2c task 0: node phase tag (bookkeeping only)
 [r_s, m_s, ~, ~, D_s, ~, Gs_s, ok_s] = eval_node(hmf_star, Sigma, K0s);
 if ~ok_s
     prof.status = 'node_failed';  hmf_star = NaN;  return;
@@ -214,6 +258,17 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
     function [rk, mk, S0k, K0k, Dk, Gbk, Gsk, ok, Sigma, K0s] = eval_node(hp, Sigma, K0s)
     % One fixed-field node: si (hz_fixed, NO order), tl, c0/G0, then the ordered
     % Sigma<->EMT loop WITH the static-sector closure each pass (Interfaces bullet).
+    if tracing                                     % stage-2c task 0: node identity + seed
+        node_seq = node_seq + 1;                   % provenance, captured BEFORE Sigma is
+        nrec = struct('id', node_seq, 'h', hp, 'phase', cur_phase, ...             % touched
+            'seed_kind', 'warm', 'seed_from', node_seq - 1, ...    % single sequential thread
+            'outer_iters', NaN, 'outer_hit_max', false, 'dS_break', false, ...
+            'ok_final', false, 'term_reason', '', 'K0', NaN, 'D_uni', NaN, ...
+            'resid_static', NaN);
+        if isempty(Sigma)                          % this file's OWN cold-start criterion
+            nrec.seed_kind = 'cold';  nrec.seed_from = NaN;
+        end
+    end
     sio = sibase;  sio.hz_fixed = hp;
     si = invz_single_ion(ion, T, Bx, sio);
     if abs(si.hz - hp) > 1e-12
@@ -222,7 +277,13 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
     tl = invz_twolevel_ordered(ion, T, Bx, hp, struct('Jxx0', Jxx0, 'transverse_mf', tmf));
     mk = si.Jexp(3);
     if fbare
-        rk = 1;  S0k = 0;  K0k = 0;  Dk = NaN;  Gbk = NaN;  Gsk = NaN;  ok = true;  return;
+        rk = 1;  S0k = 0;  K0k = 0;  Dk = NaN;  Gbk = NaN;  Gsk = NaN;  ok = true;
+        if tracing                                 % stage-2c task 0: degenerate node record
+            nrec.outer_iters = 0;  nrec.outer_hit_max = false;  nrec.dS_break = false;
+            nrec.ok_final = true;  nrec.term_reason = 'bare_shortcut';
+            if isempty(trc.nodes), trc.nodes = nrec; else, trc.nodes(end+1) = nrec; end
+        end
+        return;
     end
     c0 = invz_chi0z(si, T, 1i*wn, struct('elastic', true));
     G0 = -real(squeeze(c0(3,3,:)));
@@ -255,15 +316,45 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
         med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
         K   = med.K;
         % (2) static sector (P0-2/P0-A), threaded opts (P1-F):
-        [K0s, ~, sout] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
+        % Gstat capture (stage-2c task 0): was previously discarded via `~`; this call
+        % already computes it regardless of nargout (invz_emt_static_ordered.m:57), so
+        % naming it Gs_it costs nothing and changes no numerical value anywhere below.
+        [K0s, Gs_it, sout] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
                                                  beta, J0eff, G0inel0, G0el0, eso);
         K(1) = K0s;
         % (3)-(5) lambdas, ordered Sigma, damped mix -- MIRROR the solver's statements
         lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
         sg  = invz_sigma_ordered(tl, lam, K, g, beta);
         dS  = max(abs(sg.Sigma - Sigma));
+        if tracing                                 % stage-2c task 0: per-iteration record
+            % raw map residual dS (pre-mix, matching dS's own definition) + raw static
+            % residual sout.resid; static Dq = 1+(J(q)-K0)*Gstat over ALL flat modes.
+            Dq = 1 + (Jnu_flat(:) - K0s) .* Gs_it;
+            irec = struct('node_id', nrec.id, 'outer', outer, 'resid_map', dS, ...
+                'resid_static', sout.resid, 'K0', K0s, 'D_uni', sout.D_uni, ...
+                'Dq_min', min(Dq), 'Dq_max', max(Dq), 'Dq_neg_count', nnz(Dq <= 0), ...
+                'idx_pos_flat', NaN, 'Dq_pos_val', NaN, ...
+                'idx_neg_flat', NaN, 'Dq_neg_val', NaN, ...
+                'converged_flag', sout.converged);
+            posmask = Dq > 0;
+            if any(posmask)
+                ix = find(posmask);  [vmin, jm] = min(Dq(ix));
+                irec.idx_pos_flat = ix(jm);  irec.Dq_pos_val = vmin;
+            end
+            negmask = ~posmask;                    % Dq <= 0: the non-positive/unstable side
+            if any(negmask)
+                ix = find(negmask);  [vmax, jm] = max(Dq(ix));   % closest to zero from below
+                irec.idx_neg_flat = ix(jm);  irec.Dq_neg_val = vmax;
+            end
+            if isempty(trc.iters), trc.iters = irec; else, trc.iters(end+1) = irec; end
+        end
         Sigma = Sigma + mixo*(sg.Sigma - Sigma);
         if dS < tolo && sout.converged, ok = true; break; end
+    end
+    if tracing                                     % stage-2c task 0: pre-refresh outer-loop
+        nrec.dS_break      = ok;                    % verdict -- did the in-loop break fire
+        nrec.outer_iters   = outer;
+        nrec.outer_hit_max = ~ok && (outer == maxo);
     end
     [K0s, Gsk, so] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
                                              beta, J0eff, G0inel0, G0el0, eso);
@@ -276,6 +367,18 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
     % round-4 P1-B: the final refresh runs on the newly mixed Sigma(1), so its closed K0
     % differs from the seed -- KEEP it, and report the SAME value the returned
     % Gstat/r/D_uni were computed with (exported below as K0k = K0s).
+    if tracing                                     % stage-2c task 0: node record finalize
+        nrec.ok_final = ok;
+        if ok
+            nrec.term_reason = 'converged';
+        elseif nrec.dS_break
+            nrec.term_reason = 'refresh_failed';   % in-loop break fired but the post-loop
+        else                                        % refresh/residual gate then failed it
+            nrec.term_reason = 'max_iter';
+        end
+        nrec.K0 = K0s;  nrec.D_uni = so.D_uni;  nrec.resid_static = so.resid;
+        if isempty(trc.nodes), trc.nodes = nrec; else, trc.nodes(end+1) = nrec; end
+    end
     rk = so.r;  S0k = Sigma(1);  K0k = K0s;  Dk = so.D_uni;  Gbk = G0bare0;
     end
 end
