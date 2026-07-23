@@ -202,38 +202,24 @@ if strcmp(omode, 'jensen')
     end
     G0bare0 = -(X(3, 3) + fb);
     G0el0   = G0bare0 - G0inel0;                                   % elastic + feedback (SS4a)
-    K0s = 0;  lam = [0; 0; 0];
-    for outer = 1:maxo
-        % (1) dynamic sector -- MIRRORS the bare loop's emt call verbatim
-        eopts.K0 = K;
-        med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
-        K   = med.K;
-        % (2) static sector (P0-2/P0-A), threaded opts (P1-F):
-        [K0s, ~, sout] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
-                                                 beta, J0eff, G0inel0, G0el0, eso);
-        K(1) = K0s;
-        % (3)-(5) lambdas, ordered Sigma, damped mix -- MIRRORS the bare loop's statements
-        lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
-        sg  = invz_sigma_ordered(tl, lam, K, g, beta);
-        dS  = max(abs(sg.Sigma - Sigma));
-        Sigma = Sigma + mixo*(sg.Sigma - Sigma);
-        if dS < tolo && sout.converged, converged = true; break; end
-    end
-    % Final post-loop static refresh (round-4 P1-B / round-5 P1-B): KEEPS its newly
-    % closed K0 (computed on the just-mixed Sigma(1)), written to K(1) before packing;
-    % gated on its OWN convergence/residual, folded into pt.converged below.
-    [K0s, Gstat, so] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
-                                               beta, J0eff, G0inel0, G0el0, eso);
-    K(1) = K0s;
-    ctol = getf(eso, 'resid_tol', 1e-10);
-    staticok = so.converged && isfinite(so.resid) && so.resid < ctol;
-    % Residual-only lambda/Sigma revalidation (round-5 P2): the exported tuple is
-    % closure-consistent to the STATED OUTER TOLERANCE, not exactly self-consistent.
-    lam_check   = invz_lambdas(K, g, wts, beta, [1 2 3]);
-    Sigma_check = invz_sigma_ordered(tl, lam_check, K, g, beta);
-    final_resid = max(abs(Sigma_check.Sigma - Sigma));
-    med.G(1) = Gstat;                                  % elastic static function (P1-D),
+    % --- stage-2c task 1b-ii-B: ONE call to the shared, checker-gated node solver --------
+    % (replaces the old inline cold-init + 7-step loop + post-loop refresh + ad hoc ctol
+    % gate: invz_ordered_node_solve runs that SAME map verbatim and gates acceptance on the
+    % complete residual checker, invz_ordered_residual -- see both files' headers.)
+    node = struct('tl', tl, 'G0', G0, 'g', g, 'wts', wts, 'wn', wn, 'beta', beta, ...
+        'J0eff', J0eff, 'G0inel0', G0inel0, 'G0el0', G0el0, 'G0bare0', G0bare0, ...
+        'eso', eso, 'eopts', eopts, 'Jnu_flat', Jnu_flat);
+    sopts = struct('mix_outer', mixo, 'max_outer', maxo, 'tol_outer', tolo, ...
+        'cold_retry', true, 'trace', false);
+    [state, info] = invz_ordered_node_solve(node, [], sopts);   % COLD: this leg always
+                                                                 % starts from Sigma=0/K0s=0
+    Sigma = state.Sigma;  K = state.K;  lam = state.lam;
+    med = info.med;  med.G(1) = info.so.Gstat;         % elastic static function (P1-D),
                                                         % not the ordinary Dyson value
+    sg  = invz_sigma_ordered(tl, lam, K, g, beta);     % recompute for pt.alpha/pt.alpha_m --
+                                                        % info does not expose sg
+    converged = info.loop_converged;   % in-loop verdict -- diagnostic only; pt.converged
+    outer     = info.outer_iters;      % below is checker-gated on info.accepted instead
 else
     for outer = 1:maxo
         eopts.K0 = K;
@@ -258,10 +244,19 @@ if oddOn
     pt.odd = struct('d', d, 'Xp', Xp);         % T1.4 diagnostics (absent when flag off)
 end
 if strcmp(omode, 'jensen')
-    pt.final_resid = final_resid;
-    pt.converged = pt.converged && staticok && (pt.final_resid < tolo);
+    % stage-2c task 1b-ii-B: acceptance = the complete four-block checker verdict, NOT the
+    % old in-loop dS/sout.converged + post-loop staticok/ctol re-gate (both folded away --
+    % info.accepted already IS invz_ordered_residual's res.accepted for this exported state).
+    % final_resid is diagnostic-only from here on: exposed as block C (the derived lam/Sigma
+    % chain from the exported K) -- the EXACT quantity the old final_resid computed
+    % (production's own invz_ordered_residual.m docstring: "this is production's existing
+    % final_resid, named ... here"; test_invz_ordered_residual.m:81 pins the two byte-equal).
+    pt.final_resid = info.res.blockC.resid;
+    pt.converged = info.accepted;
     pt.ordered_mode = omode;  pt.hmf = hstar;  pt.hmf_prof = hprof;
-    pt.D_uni = 1 + (J0eff - K(1))*med.G(1);          % pole observable AT THE FINAL STATE
+    pt.D_uni = info.so.D_uni;                        % pole observable AT THE FINAL STATE
+                                                      % (checker's own value; algebraically
+                                                      % identical to 1+(J0eff-K(1))*med.G(1))
     % CONTRACT (P2-G): pt.crit keeps its historical ordinary-Dyson definition and is NOT
     % the ordered pole mass below the boundary -- pt.D_uni is (see docstring).
     if abs(pt.si.hz - hstar) > 1e-12
