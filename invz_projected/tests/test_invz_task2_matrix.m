@@ -152,6 +152,12 @@ verifyEqual(testCase, numel(Jnu_flat), 4095*4);
 verifyEqual(testCase, J0eff, latinfo.Jcc0);
 verifyEqual(testCase, Jxx0, latinfo.Jaa0);
 
+% Minor #2 review-fix: a DIRECT self-check on the FUNCTION'S OWN returned qc (not merely
+% inferred from n_gamma_dropped==1 and the row-count dropping by exactly one) -- the row
+% actually excluded is self-evidently near-zero, on the qc this function actually hands back.
+verifyFalse(testCase, any(all(abs(qc) < 1e-9, 2)), ...
+    'the returned qc must contain no near-zero (Gamma-equivalent) row');
+
 % independently reconstruct the PRE-filter shifted grid and confirm the dropped point really
 % is (0,0,0) (not some other, unrelated point) -- proves the filter fired for the RIGHT reason.
 qc0 = qVec_generator(ion.a, 'mode', 'grid', 'grid', [16 16 16], 'range', [-0.5 0.5], 'verbose', false);
@@ -179,6 +185,17 @@ verifyEqual(testCase, size(qc_correct, 1), 4095, ...
     'the correct (shift-then-filter, general Gamma test) construction must exclude the reintroduced point');
 end
 
+function test_shifted_grid_half_step_rejects_noncubic_grid(testCase)
+% Minor #4 review-fix: 'half_step' builds ONE scalar delta = step/2 from grid(1) alone and adds
+% it uniformly to h/k/l, which silently assumes a cubic grid. A non-cubic grid must be rejected
+% explicitly (rather than silently mis-shifting two of the three axes by the wrong step) -- this
+% task only ever uses [16 16 16], so a guard (not a per-axis delta) is the appropriate fix.
+ion = invz_ion();
+verifyError(testCase, ...
+    @() invz_task2_couplings_shifted_grid(ion, [16 16 8], 30, 'half_step'), ...
+    'invz:task2Config');
+end
+
 function test_resolve_cell_cfg_materializes_shifted_grid_variant(testCase)
 ion = invz_ion();
 c = struct('cfg', struct('ion', ion, 'T', 0.1, 'Bx', 2.85, 'mode', 'swept', ...
@@ -201,22 +218,37 @@ end
 % an already-cached real lattice).
 % ===========================================================================================
 function test_downsample_preserves_rows_and_determinism(testCase)
+% Review-fix: also asserts the anti-single-axis-collapse property directly -- G3's whole point
+% (prereg Sec. G item 3: "isolates coupling density from distribution"). Every one of the three
+% BZ axes must retain its FULL 16-value marginal range after decimation, at every stride: this
+% is exactly what the earlier flat-stride construction violated (it collapsed the 2nd axis to
+% 8/4/2 values at stride 2/4/8 while leaving the other two axes untouched at all 16).
 ion = invz_ion();
-[~, ~, ~, qc_full, Jnu_unflat_full] = invz_task2_couplings_shifted_grid(ion, [16 16 16], 30, 'unshifted');
+grid0 = [16 16 16];
+[~, ~, ~, qc_full, Jnu_unflat_full] = invz_task2_couplings_shifted_grid(ion, grid0, 30, 'unshifted');
 
 for stride = [2 4 8]
     [Jnu_flat, qc_sub, Jnu_unflat_sub, keep_idx] = ...
-        invz_task2_couplings_downsample(Jnu_unflat_full, qc_full, stride);
-    verifyEqual(testCase, numel(keep_idx), 4096/stride);
-    verifyEqual(testCase, size(Jnu_unflat_sub, 1), 4096/stride);
+        invz_task2_couplings_downsample(Jnu_unflat_full, qc_full, grid0, stride);
+    n_expected = 4096/stride;
+    verifyEqual(testCase, numel(keep_idx), n_expected, ...
+        sprintf('stride %d must keep exactly nq_full/stride points', stride));
+    verifyEqual(testCase, size(Jnu_unflat_sub, 1), n_expected);
     verifyEqual(testCase, Jnu_unflat_sub, Jnu_unflat_full(keep_idx, :), 'AbsTol', 0);
     verifyEqual(testCase, qc_sub, qc_full(keep_idx, :), 'AbsTol', 0);
     verifyEqual(testCase, Jnu_flat, Jnu_unflat_sub(:), 'AbsTol', 0);
-    verifyEqual(testCase, keep_idx(1), 1);   % first q-row always kept
+    verifyEqual(testCase, keep_idx(1), 1);   % first q-row (h=k=l=0) always kept: sum==0 == 0 mod any stride
+
+    % THE anti-single-axis-collapse assertion -- what the original flat-stride bug would have
+    % failed: all three axes retain every one of their 16 unique reduced-coordinate values.
+    for axis = 1:3
+        verifyEqual(testCase, numel(unique(qc_sub(:, axis))), 16, ...
+            sprintf('stride %d: axis %d lost marginal range (single-axis-collapse regression)', stride, axis));
+    end
 
     % determinism: calling again reproduces the identical result.
     [Jnu_flat2, qc_sub2, Jnu_unflat_sub2, keep_idx2] = ...
-        invz_task2_couplings_downsample(Jnu_unflat_full, qc_full, stride);
+        invz_task2_couplings_downsample(Jnu_unflat_full, qc_full, grid0, stride);
     verifyEqual(testCase, Jnu_flat, Jnu_flat2, 'AbsTol', 0);
     verifyEqual(testCase, qc_sub, qc_sub2, 'AbsTol', 0);
     verifyEqual(testCase, keep_idx, keep_idx2, 'AbsTol', 0);
@@ -236,6 +268,57 @@ verifyTrue(testCase, isempty(dep_err));
 verifyEqual(testCase, numel(cfg_out.couplings.Jnu_flat), 4*512);
 verifyEqual(testCase, provenance.nq, 512);
 verifyEqual(testCase, size(provenance.qc, 1), 512);
+% review-fix: end-to-end confirmation (not just the raw helper's own unit test) that all three
+% axes keep their full 16-value marginal range through the FULL resolve_cell_cfg pathway.
+for axis = 1:3
+    verifyEqual(testCase, numel(unique(provenance.qc(:, axis))), 16);
+end
+end
+
+function test_resolve_cell_cfg_absorbs_nontask2_materialization_error(testCase)
+% Minor #1 review-fix: the coupling-materialization catch (invz_task2_resolve_cell_cfg.m, the
+% try/catch around local_materialize) absorbs an 'invz:*' identifier that is NOT 'invz:task2*'
+% into dep_err, and RETHROWS everything else -- exactly invz_task2_run_config.m's own
+% task2_is_absorbable(id) predicate. NONE of the 4 concrete couplings.variant helpers this
+% driver ships today (downsample/shifted_grid/cardinality_synth/histmatch_synth, nor their own
+% callees qVec_generator/invz_is_gamma_equiv/invz_jq_modes' default non-ODD path) ever raises
+% anything but 'invz:task2Config' or a plain non-'invz' MATLAB error -- i.e. the ABSORB branch
+% is not reachable today via any genuine production error from those helpers (every error(...)
+% call in that reachable call graph was inspected at implementation time: all are
+% 'invz:task2*'). To exercise the ABSORB branch deterministically and cheaply, this test
+% shadows qVec_generator -- a stable, non-task2 leaf utility reached via the 'downsample'
+% variant's invz_task2_couplings_shifted_grid call, untouched by this review-fix pass -- on the
+% MATLAB path with a throwaway stub that raises a genuine physics-class identifier
+% (invz:transverseMF, one of the identifiers task2_is_absorbable's own docstring names as a
+% "genuine production physics/numerics exception"). The shadow directory is added ahead of the
+% real qVec_generator via addpath and removed in onCleanup (guaranteed even on test failure), so
+% no other test observes it.
+shadow_dir = tempname();
+mkdir(shadow_dir);
+cleanupObj = onCleanup(@() cleanup_shadow_path(shadow_dir)); %#ok<NASGU>
+fid = fopen(fullfile(shadow_dir, 'qVec_generator.m'), 'w');
+fprintf(fid, ['function varargout = qVec_generator(varargin) %%#ok<STOUT>\n' ...
+    'error(''invz:transverseMF'', ''synthetic non-task2 materialization failure (task2b-driver review-fix absorb-branch test).'');\n' ...
+    'end\n']);
+fclose(fid);
+addpath(shadow_dir, '-begin');
+rehash path;
+
+ion = invz_ion();
+c = struct('cfg', struct('ion', ion, 'T', 0.1, 'Bx', 2.85, 'mode', 'swept', ...
+        'couplings', struct('variant', 'downsample', 'stride', 8, ...
+                             'grid', [16 16 16], 'dpRng', 30), 'label', 'x'), ...
+    'depends_on', '', 'resolve', struct('seed2_from_dep', false));
+results = struct('cfg_id', {}, 'group', {}, 'variant', {}, 'field_T', {}, 'cfg', {}, ...
+    'out', {}, 'lattice_provenance', {});
+[cfg_out, provenance, dep_err] = invz_task2_resolve_cell_cfg(c, results, ion);
+
+verifyFalse(testCase, isempty(dep_err), ...
+    'a non-task2 invz:* materialization error must be ABSORBED into dep_err, not crash the driver');
+verifyTrue(testCase, contains(dep_err, 'invz:transverseMF'));
+verifyTrue(testCase, contains(dep_err, 'downsample'));
+verifyEqual(testCase, cfg_out, c.cfg, 'on an absorbed failure, cfg must be returned unmodified');
+verifyEqual(testCase, provenance, struct(), 'on an absorbed failure, provenance must stay the empty-struct default');
 end
 
 % ===========================================================================================
@@ -487,4 +570,15 @@ end
 
 function delete_if_exists(p)
 if exist(p, 'file'), delete(p); end
+end
+
+function cleanup_shadow_path(shadow_dir)
+%CLEANUP_SHADOW_PATH onCleanup helper for test_resolve_cell_cfg_absorbs_nontask2_materialization_error:
+% removes shadow_dir from the MATLAB path (if present) and deletes it, so the shadowed
+% (throwaway) function definition can never leak into any other test.
+if any(strcmp(strsplit(path, pathsep), shadow_dir))
+    rmpath(shadow_dir);
+    rehash path;
+end
+if exist(shadow_dir, 'dir'), rmdir(shadow_dir, 's'); end
 end
