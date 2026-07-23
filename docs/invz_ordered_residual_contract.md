@@ -238,8 +238,9 @@ Block A's internal step (1) (same non-sharing discipline as Block B). **`K(1)` i
 design**, not by oversight: `med_D.K(1)` is the **ordinary-Dyson** static value, whereas the
 exported `K(1)` is the **elastic-hybrid** `K0s` from `invz_gstat_ordered` — these are two
 different physical quantities by construction
-(`invz_gstat_ordered.m`: "the elastic `G(0)` ... breaks the ordinary Dyson structure, so the
-closed-form direct solve of INVZ_EMT_SCALAR does not apply at `w=0` for `m != 0`"). This is the
+(`invz_emt_static_ordered.m` docstring, lines 3-4: "the elastic `G(0)` ... breaks the ordinary
+Dyson structure, so the closed-form direct solve of INVZ_EMT_SCALAR does not apply at `w=0`
+for `m != 0`"). This is the
 same principle `test_invz_ordered_jensen.m` already pins in `G`-space
 (`verifyGreaterThan(..., abs(pt.G(1) - G_dyson)/abs(G_dyson), 1e-6)`, `G_dyson` built from the
 ordinary Dyson formula fed the SAME `K(1)`) — that test shows the two *formulas* disagree;
