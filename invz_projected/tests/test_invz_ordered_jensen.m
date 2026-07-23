@@ -59,3 +59,42 @@ verifyError(testCase, @() invz_solve_point_ordered(ion, 0.31, [2 0 0.5], Jnu, o1
 verifyError(testCase, @() invz_solve_point_ordered(ion, 0.31, [2 0 0.5], Jnu, base), ...
             'invz:orderedMode');                               % longitudinal field forbidden (P1-6)
 end
+
+function test_jensen_accepted_state_passes_checker(testCase)
+% stage-2c task 1b-ii-B gate: invz_solve_point_ordered's jensen leg now calls the shared
+% invz_ordered_node_solve and sets pt.converged = info.accepted (the complete four-block
+% invz_ordered_residual verdict). This test verifies that guarantee from OUTSIDE the
+% solver: reconstruct the 13-field node bundle + exported state from pt's own public
+% fields (mirroring test_invz_ordered_residual.m's build_fixture -- invz_solve_point_ordered
+% does not itself export G0/g/wts/wn/G0inel0/G0el0/G0bare0/eso/eopts, so they are rebuilt
+% from the SAME public calls the solver's own preamble uses, invz_solve_point_ordered.m:
+% 177-204) and confirm invz_ordered_residual independently accepts it -- catching any
+% mismatch between what pt exports and what was actually accepted internally, not merely
+% trusting pt.converged's own bookkeeping.
+ion = invz_ion();  T = 0.31;
+Jnu = linspace(-2e-3, 6.0e-3, 24).';
+o = struct('J0eff', 6.4e-3, 'Jxx0', ion.Jxx0, 'hyp', true, 'ordered_mode', 'jensen');
+pt = invz_solve_point_ordered(ion, T, [2.85 0 0], Jnu, o);
+verifyTrue(testCase, pt.is_ordered && pt.converged, 'fixture solve did not converge');
+
+[wn, wts, beta] = invz_matsubara(T, 40);                       % Ecut default (unset in o)
+c0  = invz_chi0z(pt.si, T, 1i*wn, struct('elastic', true));
+G0  = -real(squeeze(c0(3,3,:)));
+c0i = invz_chi0z(pt.si, T, 1i*wn(1), struct('elastic', false));
+G0inel0 = -real(c0i(3,3,1));
+X  = real(c0(:, :, 1));
+fb = X(3,1) * (ion.Jxx0 / (1 - ion.Jxx0*X(1,1))) * X(1,3);     % legacy_x default (SS4a)
+G0bare0 = -(X(3,3) + fb);
+G0el0   = G0bare0 - G0inel0;
+g  = real(invz_g(pt.tl, 1i*wn));
+
+node = struct('tl', pt.tl, 'G0', G0, 'g', g, 'wts', wts, 'wn', wn, 'beta', beta, ...
+              'J0eff', 6.4e-3, 'G0inel0', G0inel0, 'G0el0', G0el0, 'G0bare0', G0bare0, ...
+              'eso', struct('warn', false), 'eopts', struct(), 'Jnu_flat', Jnu(:));
+state = struct('Sigma', pt.Sigma, 'K', pt.K, 'lam', pt.lambda, 'K0s', pt.K(1));
+res = invz_ordered_residual(node, state, struct('tol_outer', 1e-8));
+
+verifyTrue(testCase, res.accepted, 'reconstructed exported state was not accepted by the checker');
+verifyEqual(testCase, res.blockC.resid, pt.final_resid, 'AbsTol', 1e-14);   % same diagnostic
+verifyEqual(testCase, res.D_uni, pt.D_uni, 'RelTol', 1e-10);                % same pole value
+end
