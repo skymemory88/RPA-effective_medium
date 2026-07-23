@@ -49,6 +49,26 @@ Corrections applied (numbering matches the review):
 No code, test, driver, harness, or the frozen pre-registration was modified to produce these
 corrections, and no cell of the matrix was re-run.
 
+**Refreshed review (second pass) — two further wording corrections + one new technical finding.**
+A second independent-review pass confirmed the six corrections above and the operative verdict, and
+added:
+- **W1 (§7)** — "residual-clean" vs. "lattice-converged" were conflated. The 18-node F3754215
+  interval **is** residual-clean (its states are checker-accepted); it is separately **not**
+  lattice-converged, and `nH` persistence is untested. Wording corrected in §7.
+- **W2 (§6)** — "bitwise-identical under permutation" is too strong for floating-point `mean`
+  reductions (reordering can change roundoff). Corrected to "mathematically permutation-invariant,
+  up to floating-point reduction-order effects."
+- **T1 (new, verified from source — see §10)** — the production BZ grid is the endpoint-inclusive
+  `linspace(-0.5,0.5,N)` convention, which has **duplicate reciprocal-periodic boundary faces**: a
+  nominal 16³ grid holds only 15³ = 3375 distinct periodic points (17.6 % redundant samples,
+  numerically confirmed). Because the EMT map is a `mean` over the flat modes (the §6
+  permutation-invariance), those duplicate faces are **over-weighted**, and a half-step offset moves
+  *which* modes are duplicated — so the §3 offset comparison confounds sampling phase with
+  duplicate-face reweighting and Γ/cardinality handling. This is a plausible mechanistic driver of
+  the §3 sensitivity and **the first construction question to resolve** before extending the same
+  legacy grid/cutoff ladder. It does not change the frozen-threshold verdict. My **immediate action
+  plan** in response is recorded in §11.
+
 ---
 
 ## 1. Provenance
@@ -609,9 +629,12 @@ mean(Gq)`, `K0 = mean(Jf.*Gq)/Gbar` — every operation is either elementwise in
 taken over `Jf`'s flat mode index; **neither function ever references `q`, branch identity, or any
 other geometric label.** Consequently the calculation depends on the flat coupling array
 `Jnu_flat` **only through its values as an unordered multiset** — any permutation of the same
-values, or any other coupling array with the same multiset, produces bitwise-identical
-`A`/`K`/`Gq`/`K0`. **Geometry (which `q`, which branch, which BZ point a coupling came from) never
-enters this map at all.**
+values, or any other coupling array with the same multiset, produces the same `A`/`K`/`Gq`/`K0`,
+**mathematically permutation-invariant, up to floating-point reduction-order effects** (the `mean`
+reductions are not associative in IEEE arithmetic, so a reordering can perturb the result at the
+roundoff level — the invariance is exact in real arithmetic, not bit-for-bit; refreshed-review
+correction). **Geometry (which `q`, which branch, which BZ point a coupling came from) never enters
+this map at all.**
 
 | field | source | n_accepted | stable | marginal | unstable | unconverged | note |
 |---|---|---|---|---|---|---|---|
@@ -714,15 +737,20 @@ lattice question should be resolved — they are explicitly NOT triggered/operat
   stride2/4/8: 18/20/18 nodes; `G6` unshifted-dp40/halfstep-dp30/halfstep-dp40: 19/19/18 nodes) and
   across both seed variants (§4: all 18 nodes are accepted+agreeing in cold-vs-multistart and
   isolated-vs-swept). Weaker, non-contiguous unstable touches (1–3 nodes) also appear at F2581023
-  and F2850000. This is qualitatively the character of evidence 3B wants. However: (a) this same
-  interval **fails the identical strict §D numeric ladder test** that triggered
-  LATTICE-MESH-UNRESOLVED above (e.g. node `j=1` at F3754215: `s=-0.4192` baseline vs. `-0.5803`
-  half_step/dp30, a ≈38% relative shift) — so it cannot be called "residual-clean" under the
-  frozen numeric bar; and (b) **the HMF-grid (`nH`) refinement axis prereg §F explicitly requires
-  ("persisting under HMF-grid refinement") was never run** — every one of the 40 cells has
-  `n_nodes=34` (§1). **3B is therefore not established, and is not even a clean, gap-flagged
-  candidate while the lattice/mesh question (a) remains open** — both obstacles would need to
-  clear before 3B could be assessed.
+  and F2850000. This is qualitatively the character of evidence 3B wants. **The interval IS
+  residual-clean in the checker sense** — all 18 states are checker-accepted — but that is a
+  distinct property from lattice convergence, and two separate obstacles block 3B (refreshed-review
+  correction: do not conflate "residual-clean" with "lattice-converged"): (a) the interval's
+  numerical values are **not lattice-converged** — this same interval **fails the strict §D numeric
+  ladder test** that triggered LATTICE-MESH-UNRESOLVED above (e.g. node `j=1` at F3754215:
+  `s=-0.4192` baseline vs. `-0.5803` half_step/dp30, a ≈38% relative shift); and (b) **HMF-grid
+  (`nH`) persistence remains untested** — the refinement axis prereg §F explicitly requires
+  ("persisting under HMF-grid refinement") was never run; every one of the 40 cells has
+  `n_nodes=34` (§1). Concisely: *a residual-clean unstable interval exists on each tested
+  realization, but its numerical values are not lattice-converged and HMF-grid persistence remains
+  untested.* **3B is therefore not established, and is not even a clean, gap-flagged candidate while
+  the lattice/mesh question (a) remains open** — both obstacles would need to clear before 3B could
+  be assessed.
 - **"3B then 3A" and "UNSUPPORTED"** are, likewise, not reachable determinations while (1) holds;
   neither is discussed further as an operative verdict here.
 
@@ -828,6 +856,87 @@ Option C); if they do not converge, the `half_step`/Γ-normalization and real-sp
 convergence should be investigated before any solver or theory path.
 
 No path above has been selected. This report ends at the decision gate.
+
+---
+
+## 10. Main technical concern (refreshed review): the legacy BZ quadrature
+
+**Verified from source, this pass:**
+- `invz_bz_couplings.m:14` builds the coupling grid via
+  `qVec_generator(ion.a, 'mode','grid', 'grid',grid, 'range',[-0.5 0.5], ...)` with the **default
+  `endpoint=true`** — i.e. `linspace(-0.5, 0.5, N)` per axis, endpoint-inclusive.
+- `qVec_generator.m:189–193` documents this convention's own hazard verbatim: for a
+  reciprocal-periodic range like `[-0.5,0.5]` "the two boundary faces are duplicates."
+- **Numerically confirmed:** a 16³ endpoint-inclusive grid contains **3375 = 15³ distinct periodic
+  points**, i.e. **17.6 % redundant samples** (721 duplicate boundary-face points), computed by
+  wrapping `mod(q+0.5,1)` and counting unique rows.
+- A **half-open** alternative already exists in the same constructor (`endpoint=false` →
+  `lo + (0:N-1)/N·(hi−lo)`, N distinct points per axis, no duplicate face), currently unused by the
+  production coupling path.
+
+**Why this matters mechanistically.** §6 established that the ordered EMT map depends on the flat
+couplings only through a `mean` over modes (permutation-invariant). A `mean` over a grid with 721
+duplicated boundary-face modes is therefore a **weight-distorted quadrature** — those faces are
+over-counted. Shifting the grid by a half-step changes *which* modes land on the duplicated faces,
+so the effective quadrature weights move between rungs; this feeds straight into `K0`/`Gstat`/`s`/
+`D_uni`, which is exactly the offset sensitivity §3 measured. Consequently the current
+`unshifted`-vs-`half_step` comparison is **not yet a clean BZ quadrature-convergence test**: it
+mixes genuine sampling-phase change with duplicate-face reweighting, differing Γ/cardinality
+handling, and (on the `dp40` rungs) evaluation-point drift. This is a plausible root cause of the
+LATTICE/MESH-UNRESOLVED verdict — and it must be resolved **before** the frozen §D tolerance is
+reopened (only after removing the duplicated-face/Γ/cardinality/evaluation-point confounders is a
+tolerance judgement physically interpretable).
+
+## 11. Immediate action plan (proposed — HARD STOP still active; not yet executed)
+
+The hard stop remains in force; nothing below runs until the user approves it and settles the two
+theory/threshold decisions flagged. The plan follows the refreshed review's recommended order, with
+the cheapest diagnostic first.
+
+**Phase 0 — report corrections (this commit).** The two wording fixes (W1/W2) and this
+finding (T1/§10). Done.
+
+**Phase 1 — coupling-only BZ-quadrature/Γ audit (NO ordered solves; cheap, read-only-ish).** Build a
+pre-registered, tested coupling-grid audit that, for each convention/offset/`dpRng`, checks: point
+uniqueness, cardinality, Γ count, reciprocal periodicity `J(q+G)=J(q)`, and coupling-multiset
+statistics — with **no H_MF/ordered solve at all**. Adopt: (a) a **half-open** periodic grid
+(`endpoint=false`, no duplicate ±0.5 face); (b) shifted coordinates **wrapped back into one BZ**;
+(c) explicit **quadrature weights summing to 1** for every convention; (d) a single frozen **Γ
+policy**. Test the baseline plus the eight `{0,½}³` subcell offsets (their union = a refined 2N
+grid, separating true resolution convergence from single-offset dependence). Reference
+implementation pattern for half-open grids + explicit conventions + Γ-exclusion provenance:
+`invz_tensor/invzt_qgrid.m`. **This phase is additive diagnostic code; it does not touch the
+production coupling path or the frozen prereg.**
+
+**Phase 2 — freeze the corrected convention + weights**, then **recompute `Bc_PM`** under it and
+**re-freeze the four physical fields** if the convention shifts them (they are derived from `Bc_PM`).
+
+**Phase 3 — exact-`h` ordered lattice audit.** ONE explicit shared `h_list` for **every** rung (the
+decisive fix for §3/C3); real BZ **grid sizes** {12³, 16³, 20³} (closes the §0/C2 gap);
+`dpRng ∈ {30,40,50}`; both offsets (or the eight subcell offsets) with **identical** Γ handling;
+compare **only checker-accepted** states under the frozen class + numeric tolerances. **Pilot
+first**: F3754215 (interval start/end + one stable-tail node) and F1173192 (onset + interior);
+expand to all four fields only if the pilot shows a coherent grid construction.
+
+**Phase 4 — HMF-`nH` refinement** (the axis §F requires for 3B; independent of Phase 3).
+
+**Phase 5 — reassess 3B** only after **both** lattice and `nH` convergence are established. If
+`dpRng` convergence is still slow after the quadrature fix, the durable route is an Ewald /
+convergence-accelerated dipolar sum with Lorentz + demagnetization separated analytically (real-
+space cutoff growth alone may not converge a conditionally-convergent sum).
+
+**Decisions required from the user before Phase 1 executes:**
+1. **Go-ahead** to build the Phase-1 coupling-only audit (cheap; no ordered solves).
+2. **The Γ policy** — a *theory* decision I will not make unilaterally: use the complete quadrature
+   for the EMT average while treating the uniform Γ pole separately in the `D_uni`/`Dq` diagnostic,
+   **or** drop Γ and renormalize weights consistently in every rung. (I recommend the former unless
+   the derivation requires dropping Γ.)
+3. **The §D tolerance stays frozen for now** — per the refreshed review, do *not* reopen it until
+   Phase 1–3 remove the confounders. No action needed unless you disagree.
+
+I recommend approving Phase 1 (and settling decision 2) as the next step: it is cheap, it directly
+tests whether the duplicate-face/Γ construction is the culprit, and every later phase depends on its
+outcome.
 
 ---
 
