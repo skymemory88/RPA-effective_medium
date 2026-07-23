@@ -63,7 +63,9 @@ function [Jnu_flat, J0eff, Jxx0, qc, Jnu_unflat, latinfo, n_gamma_dropped] = ...
 %             points, in direct analogy to a simple-cubic -> body-centred-cubic secondary
 %             lattice. Since grid/range are identical and isotropic across h,k,l here, the
 %             per-axis step is identical on all three axes, so ONE scalar delta correctly
-%             implements a per-axis half-step shift on each of them.)
+%             implements a per-axis half-step shift on each of them -- a non-cubic grid is
+%             rejected explicitly, invz:task2Config, rather than silently mis-shifting two of
+%             the three axes (REVIEW-FIX guard; see the switch block below).)
 %
 % Returns the SAME shape invz_bz_couplings/invz_jq_modes jointly produce: Jnu_flat (column-
 % major flatten of Jnu_unflat, matching invz_bz_couplings.m:17's OWN convention exactly, so
@@ -85,10 +87,21 @@ switch shift_mode
     case 'unshifted'
         delta = 0;
     case 'half_step'
+        % REVIEW-FIX guard: delta below is ONE scalar built from grid(1) alone and added
+        % uniformly to h/k/l, which silently assumes a cubic grid. Reject non-cubic grids
+        % explicitly rather than silently mis-shifting two of the three axes by the wrong step
+        % (this task only ever uses [16 16 16], so a guard -- not a per-axis delta -- suffices).
+        if ~(numel(grid) == 3 && grid(1) == grid(2) && grid(2) == grid(3))
+            error('invz:task2Config', ['invz_task2_couplings_shifted_grid: ''half_step'' assumes ' ...
+                'a CUBIC grid (one scalar delta added uniformly to h/k/l); got non-cubic grid ' ...
+                '%s -- either pass a cubic grid (this task only ever uses [16 16 16]) or extend ' ...
+                'this function to compute a per-axis delta before using ''half_step'' on a ' ...
+                'non-cubic grid.'], mat2str(grid));
+        end
         step  = (range(2) - range(1)) / (grid(1) - 1);   % SAME step invz_bz_couplings' own
-                                                           % grid uses (grid assumed isotropic
-                                                           % across axes, as invz_bz_couplings
-                                                           % itself assumes via one scalar range).
+                                                           % grid uses (grid checked cubic just
+                                                           % above, so ONE scalar step correctly
+                                                           % applies to all three axes).
         delta = step / 2;
     otherwise
         error('invz:task2Config', 'invz_task2_couplings_shifted_grid: unknown shift_mode ''%s'' (expected ''unshifted'' or ''half_step'').', shift_mode);

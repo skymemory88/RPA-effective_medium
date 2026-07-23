@@ -36,9 +36,18 @@ function [cfg, provenance, dep_err] = invz_task2_resolve_cell_cfg(c, results, io
 % Pure w.r.t. `results` (never mutated); dep_err is '' on success, else a human-readable
 % reason resolution failed -- the caller (invz_task2_matrix_run.m) checkpoints a structured
 % failed-dependency record instead of calling invz_task2_run_config, and does NOT abort the
-% driver loop (mirrors the repo's invz:* error-absorption convention, applied at the driver
-% level for this specific -- and, for the real matrix, expected to be rare/never-hit --
-% failure mode: a prerequisite cell that itself errored or produced no nodes).
+% driver loop. Absorption policy differs by failure mode (REVIEW-FIX: this paragraph previously
+% said only non-'invz:*' rethrows, which is not what the code below does): dependency-
+% resolution failures (1 below) absorb UNCONDITIONALLY -- any error from
+% invz_task2_derive_isolated_h_list becomes dep_err, since a malformed prerequisite record is
+% itself the thing being reported; coupling-materialization failures (2 below) absorb
+% SELECTIVELY -- an identifier starting 'invz:' but NOT 'invz:task2' becomes dep_err, while an
+% 'invz:task2*' identifier (a harness/programming defect in this driver or a sibling Task-2
+% file) or any non-'invz' MATLAB error RETHROWS instead -- exactly
+% invz_task2_run_config.m's own task2_is_absorbable(id) predicate (tf = startsWith(id,'invz:')
+% && ~startsWith(id,'invz:task2')), applied here at the driver level for this specific -- and,
+% for the real matrix, expected to be rare/never-hit -- failure mode: a prerequisite cell that
+% itself errored or produced no nodes, or a couplings.variant materialization that raised.
 if nargin < 3 || isempty(ion), ion = invz_ion(); end
 cfg = c.cfg;
 provenance = struct();
@@ -100,12 +109,15 @@ switch cpl.variant
         [~, J0eff_full, Jxx0_full, qc_full, Jnu_unflat_full, ~, ~] = ...
             invz_task2_couplings_shifted_grid(ion, cpl.grid, cpl.dpRng, 'unshifted');
         [Jnu_flat, qc_sub, Jnu_unflat_sub, keep_idx] = invz_task2_couplings_downsample( ...
-            Jnu_unflat_full, qc_full, cpl.stride);
+            Jnu_unflat_full, qc_full, cpl.grid, cpl.stride);
         cfg.couplings = struct('Jnu_flat', Jnu_flat, 'J0eff', J0eff_full, 'Jxx0', Jxx0_full);
         provenance = struct('qc', qc_sub, 'Jnu_unflat', Jnu_unflat_sub, ...
             'nq', size(Jnu_unflat_sub, 1), 'keep_idx', keep_idx, 'construction', sprintf( ...
-            'stride-%d subsample of the %s/dpRng=%d baseline q-grid (flat q-row order, all 4 branches kept per row).', ...
-            cpl.stride, mat2str(cpl.grid), cpl.dpRng));
+            ['stride-%d modular decimation (mod(h+k+l,stride)==0 over integer BZ-axis indices) ' ...
+             'of the %s/dpRng=%d baseline q-grid (all 4 branches kept per kept q-row; exact ' ...
+             '1/%d density, full 16-value per-axis marginals preserved -- review-fix, replaces ' ...
+             'an earlier flat-stride construction that collapsed a single axis).'], ...
+            cpl.stride, mat2str(cpl.grid), cpl.dpRng, cpl.stride));
 
     case 'shifted_grid'
         [Jnu_flat, J0eff, Jxx0, qc, Jnu_unflat, ~, n_gamma_dropped] = ...
