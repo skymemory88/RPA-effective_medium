@@ -73,6 +73,11 @@ function summary = invz_task2_matrix(opts)
 % opts.cell_filter   (default {} = the full 40-cell matrix; else a cellstr of cfg_ids -- see
 %                    invz_task2_matrix_run.m).
 % opts.verbose       (default true)
+% opts.dry_run       (default false) build run_opts + enumerate, then RETURN WITHOUT running
+%                    any cell. Exists so the DEFAULT (unfiltered, full-matrix) option path --
+%                    the one the controller actually runs -- is reachable by a test without
+%                    paying for 40 real solves; see the run_opts note below for the bug this
+%                    guards. summary = struct('dry_run',true,'n_total_enumerated',..,'run_opts',..).
 %
 % summary  invz_task2_matrix_run.m's own return (n_total_enumerated/n_requested/n_run/
 %          n_skipped/n_failed/n_checkpointed/results_path).
@@ -87,10 +92,21 @@ function summary = invz_task2_matrix(opts)
 if nargin < 1, opts = struct(); end
 ion = getf(opts, 'ion', invz_ion());
 cells = invz_task2_matrix_enumerate(ion);
-run_opts = struct( ...
-    'results_path', getf(opts, 'results_path', fullfile('.superpowers', 'sdd', 'task2_matrix_results.mat')), ...
-    'cell_filter',  getf(opts, 'cell_filter', {}), ...
-    'ion',          ion, ...
-    'verbose',      getf(opts, 'verbose', true));
+% run_opts is built FIELD-BY-FIELD, never via struct('cell_filter', <cell>, ...). MATLAB's
+% struct() CONSTRUCTOR treats a cell value as an array generator, so struct('cell_filter', {})
+% yields a 0x0 EMPTY STRUCT ARRAY -- not a scalar struct whose cell_filter is {} -- and every
+% downstream getf(run_opts, ...) then dies with "Insufficient number of outputs". That is
+% exactly the DEFAULT (unfiltered, full-matrix) path this driver exists to run, and no test
+% reached it (the suite only ever called invz_task2_matrix_enumerate/_run directly, always with
+% an explicit non-empty filter). Plain field assignment has no such gotcha: s.f = {} is fine.
+run_opts = struct();
+run_opts.results_path = getf(opts, 'results_path', fullfile('.superpowers', 'sdd', 'task2_matrix_results.mat'));
+run_opts.cell_filter  = getf(opts, 'cell_filter', {});
+run_opts.ion          = ion;
+run_opts.verbose      = getf(opts, 'verbose', true);
+if getf(opts, 'dry_run', false)
+    summary = struct('dry_run', true, 'n_total_enumerated', numel(cells), 'run_opts', run_opts);
+    return;
+end
 summary = invz_task2_matrix_run(cells, run_opts);
 end
