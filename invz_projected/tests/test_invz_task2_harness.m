@@ -52,6 +52,23 @@ verifyTrue(testCase, ~any(strcmp(classes, 'unstable') & ~accepted), ...
     'no node may be labelled ''unstable'' unless it is checker-accepted (task-2 amendment)');
 verifyTrue(testCase, any(strcmp(classes, 'unconverged')));
 
+% Non-vacuous crux (stage-2c task 2a review fix): the accepted-only rule above only has
+% teeth if >=1 unconverged node actually carried a NEGATIVE transient D_uni or Dq_min --
+% the exact scenario the rule guards against (a solve that dipped through the unstable
+% side but never reached an accepted state must still classify 'unconverged', never
+% 'unstable'). Without this, the test above could pass vacuously if every unconverged
+% node happened to carry a positive transient. D_uni/Dq_min are recorded on EVERY node,
+% accepted or not (invz_task2_classify.m header: "Returns ... (s, D_uni, min(Dq)) ...
+% ALWAYS returned (even when class == 'unconverged')"). Physical anchor: the real
+% 16^3/T=0.1/B=2.85 profile is known to carry thousands of negative-Dq outer iterations
+% (stage2c-context.md), so at least one unconverged node's own terminal-iterate D_uni or
+% Dq_min must be negative.
+unconv_D_uni  = [out.nodes(~accepted).D_uni];
+unconv_Dq_min = [out.nodes(~accepted).Dq_min];
+verifyTrue(testCase, any(unconv_D_uni < 0) || any(unconv_Dq_min < 0), ...
+    ['expected >=1 unconverged node with a negative transient D_uni or Dq_min -- ' ...
+     'otherwise the accepted-only rule above is not actually being exercised']);
+
 % Harness self-consistency (invz_task2_run_config.m header): every replayed node's own
 % (accepted, D_uni) must match the production trace's recorded values -- proves this
 % harness's node reconstruction is not silently diverging from what invz_hmf_ordered
@@ -133,6 +150,64 @@ verifyEqual(testCase, rec.state.Sigma, pt.Sigma,  'AbsTol', 1e-8, 'RelTol', 1e-6
 verifyEqual(testCase, rec.state.K,     pt.K,      'AbsTol', 1e-8, 'RelTol', 1e-6);
 verifyEqual(testCase, rec.state.lambda, pt.lambda,'AbsTol', 1e-8, 'RelTol', 1e-6);
 verifyEqual(testCase, rec.state.D_uni, pt.D_uni,  'AbsTol', 1e-8, 'RelTol', 1e-6);
+end
+
+% ===========================================================================================
+% (2c) ERROR POLICY (stage-2c task 2a review-fix pass): the per-config node-production calls
+% are wrapped in try/catch (invz_task2_run_config.m header). A genuine 'invz:*' PRODUCTION
+% exception -- here invz_single_ion.m's invz:transverseMF, triggered via an invalid
+% solve_opts.transverse_mf string threaded straight through by task2_build_node's sio
+% bundle -- fires in the node-bundle PREAMBLE (task2_build_node's own si=invz_single_ion(...)
+% call), i.e. BEFORE invz_ordered_node_solve is ever reached, so it is NOT already absorbed
+% by that function's own internal try/catch (invz_ordered_node_solve.m header: "absorbs only
+% 'invz:*' identifiers raised by the map's own helper calls"). It must be ABSORBED here into
+% a structured failed-config record, not crash the whole per-config run. This file's OWN
+% 'invz:task2*' argument-validation errors, and any genuinely non-'invz' MATLAB error, must
+% still RETHROW unchanged.
+% ===========================================================================================
+function test_error_policy_absorbs_invz_and_rethrows_others(testCase)
+ion = invz_ion();
+T = 0.31;  Bx = 2.85;  Jnu = linspace(-2e-3, 6.0e-3, 24).';  J0eff = 6.42e-3;
+
+% (a) genuine production invz:* error -> ABSORBED into a failed-config record.
+cfg_bad_tmf = struct('ion', ion, 'T', T, 'Bx', Bx, 'mode', 'isolated', 'h_list', 0.01, ...
+    'couplings', struct('Jnu_flat', Jnu, 'J0eff', J0eff), ...
+    'solve_opts', struct('transverse_mf', 'bogus_mode'));
+out = invz_task2_run_config(cfg_bad_tmf);
+verifyEqual(testCase, out.status, 'failed');
+verifyEqual(testCase, out.err_id, 'invz:transverseMF');
+verifyTrue(testCase, ~isempty(out.err_msg));
+verifyTrue(testCase, isempty(out.nodes));
+verifyEqual(testCase, out.summary.hmf_status, 'error');
+verifyEqual(testCase, out.summary.n_nodes, 0);
+verifyEqual(testCase, out.summary.n_accepted, 0);
+% out.meta is still populated for this config (T/Bx/...), so a caller (Task 2b's matrix
+% loop) can identify WHICH config failed even though the solve produced no node records.
+verifyEqual(testCase, out.meta.T, T);
+verifyEqual(testCase, out.meta.Bx, invz_field_vec(Bx));
+
+% (b) this file's OWN 'invz:task2*' argument-validation error -> RETHROWS (never absorbed;
+% a usage/programming error, not a physics signal).
+cfg_bad_mode = struct('ion', ion, 'T', T, 'Bx', Bx, 'mode', 'not_a_real_mode', ...
+    'couplings', struct('Jnu_flat', Jnu, 'J0eff', J0eff));
+verifyError(testCase, @() invz_task2_run_config(cfg_bad_mode), 'invz:task2Config');
+
+% (c) a genuinely non-'invz' MATLAB error -> RETHROWS unchanged. cfg.mode is dispatched by
+% this file's own switch(mode) statement (inside the new try/catch); a non-scalar/non-char
+% switch expression is a MATLAB language-level error (id 'MATLAB:badSwitchExpression'),
+% never 'invz:*' -- confirmed here NOT absorbed.
+cfg_bad_type = struct('ion', ion, 'T', T, 'Bx', Bx, 'mode', struct('not', 'a string'), ...
+    'couplings', struct('Jnu_flat', Jnu, 'J0eff', J0eff));
+threw = false;  caught_id = '';
+try
+    invz_task2_run_config(cfg_bad_type);
+catch ME
+    threw = true;  caught_id = ME.identifier;
+end
+verifyTrue(testCase, threw, ...
+    'a non-invz MATLAB error must propagate, not be silently absorbed into a failed-config record');
+verifyFalse(testCase, startsWith(caught_id, 'invz:'), ...
+    sprintf('expected a non-invz MATLAB error to rethrow unchanged; got identifier ''%s''', caught_id));
 end
 
 % ===========================================================================================
