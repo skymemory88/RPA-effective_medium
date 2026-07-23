@@ -69,6 +69,20 @@ added:
   legacy grid/cutoff ladder. It does not change the frozen-threshold verdict. My **immediate action
   plan** in response is recorded in §11.
 
+**Action-plan review (third pass) — six execution constraints folded into §11 (R1–R6).** A third
+review pass found the report acceptable as a decision-gate record and the action plan directionally
+correct, and added six constraints before Phase 1 runs: (R1) freeze Phase-1 pass/fail thresholds as
+a real pre-registration, not a checklist; (R2) the ordered EMT uses unweighted `mean` and takes no
+weight argument (`invz_emt_scalar.m:43,48`, `invz_emt_static_ordered.m:48,50`) — so adopt
+uniform-weight point sets (the half-open grid already is one) rather than threading nonuniform
+weights through the solver stack; (R3) Γ is a theory decision — Phase 1 reports both the
+complete-quadrature and Γ-dropped policies and defines weights/Γ globally, and the `{0,½}³`≈`2N`
+equivalence holds only pre-Γ-filtering; (R4) add a physics-benchmark gate (re-run the LiHoF4/R2007
+anchors) before freezing the new convention, since numerical convergence alone does not prove the
+correct physical quadrature; (R5) re-freeze the `Bc_PM`-derived fields if the convention changes;
+(R6) `{0,½}³` is eight offsets *including* baseline — build the `2N` grid once and partition it.
+All six are folded into §11; none changes the verdict.
+
 ---
 
 ## 1. Provenance
@@ -889,34 +903,62 @@ tolerance judgement physically interpretable).
 
 ## 11. Immediate action plan (proposed — HARD STOP still active; not yet executed)
 
-The hard stop remains in force; nothing below runs until the user approves it and settles the two
-theory/threshold decisions flagged. The plan follows the refreshed review's recommended order, with
-the cheapest diagnostic first.
+The hard stop remains in force; nothing below runs until the user approves it and the Phase-1
+pre-registration is frozen. The plan follows the refreshed review's recommended order, cheapest
+diagnostic first, and incorporates the second-pass execution constraints (numbered R1–R6 below,
+mapped to the review's "Immediate action-plan review" items).
 
-**Phase 0 — report corrections (this commit).** The two wording fixes (W1/W2) and this
-finding (T1/§10). Done.
+**Phase 0 — report corrections (this + prior commit).** Wording fixes W1/W2, the §10 legacy-BZ
+finding, and this constraint-updated plan. Done.
 
-**Phase 1 — coupling-only BZ-quadrature/Γ audit (NO ordered solves; cheap, read-only-ish).** Build a
-pre-registered, tested coupling-grid audit that, for each convention/offset/`dpRng`, checks: point
-uniqueness, cardinality, Γ count, reciprocal periodicity `J(q+G)=J(q)`, and coupling-multiset
-statistics — with **no H_MF/ordered solve at all**. Adopt: (a) a **half-open** periodic grid
-(`endpoint=false`, no duplicate ±0.5 face); (b) shifted coordinates **wrapped back into one BZ**;
-(c) explicit **quadrature weights summing to 1** for every convention; (d) a single frozen **Γ
-policy**. Test the baseline plus the eight `{0,½}³` subcell offsets (their union = a refined 2N
-grid, separating true resolution convergence from single-offset dependence). Reference
-implementation pattern for half-open grids + explicit conventions + Γ-exclusion provenance:
-`invz_tensor/invzt_qgrid.m`. **This phase is additive diagnostic code; it does not touch the
-production coupling path or the frozen prereg.**
+**Phase 1 — coupling-only BZ-quadrature/Γ audit (NO ordered solves; cheap).** Additive diagnostic
+code only — it does not touch the production coupling path or the frozen Task-2 prereg. For each
+convention/offset/grid-size/`dpRng` it checks point uniqueness, cardinality, Γ count, reciprocal
+periodicity `J(q+G)=J(q)`, and coupling-multiset statistics, with **no H_MF/ordered solve at all**.
+Construction: (a) a **half-open** periodic grid (`endpoint=false`, no duplicate ±0.5 face);
+(b) shifted coordinates **wrapped back into one BZ**; (c) the **eight `{0,½}³` phase offsets**
+(eight *including* the `000` baseline — not "baseline plus eight"; R6), preferably by building the
+refined `2N` grid **once** and partitioning it into the eight sub-offsets (R6). Reference contract
+(half-open grids, explicit uniform weights, Γ-exclusion provenance): `invz_tensor/invzt_qgrid.m`.
+- **R1 — freeze pass/fail thresholds BEFORE running the audit.** Phase 1 must be a real
+  pre-registration (decision rules, not just a checklist): point-uniqueness and periodicity
+  tolerances, the Γ-policy selection rule, coupling-multiset/observable convergence criteria under
+  grid-size/`dpRng` refinement, the benchmark acceptance limits (R4), and escalation/stop rules
+  (e.g. → Ewald). Drafted separately for the user to amend and freeze (mirroring the Task-2 prereg
+  flow) — see the "decisions" block below.
+- **R2 — the weight contract is UNIFORM, so no EMT refactor is needed.** Verified this pass: the
+  ordered EMT routines use bare `mean` over `Jnu_flat` and accept **no** weight argument
+  (`invz_emt_scalar.m:43,48`, `invz_emt_static_ordered.m:48,50`). Rather than thread nonuniform
+  weights through the entire dynamic-EMT/static-EMT/checker/provenance stack, the corrected
+  construction is restricted to **uniform-weight point sets** — which the half-open grid already
+  is (every kept point has weight `1/Npts`), so the existing unweighted `mean` **is** the correct
+  quadrature for it. `invz_tensor/invzt_qgrid.m` already implements exactly this "uniform weight
+  over kept points" contract. This is the single biggest Phase-3 de-risk: no weighted-EMT change.
+- **R3 — Γ is a theory decision; Phase 1 reports BOTH policies.** Phase 1 builds and reports both
+  the **complete-quadrature** convention (keep Γ; the uniform critical pole handled separately in
+  the `D_uni`/`Dq` diagnostic) and the **Γ-dropped** convention (drop the exact-Γ row, uniform
+  weights over the remainder). It does not pre-select one. Note (R3): the `{0,½}³` union equals a
+  refined `2N` grid **only before Γ filtering** — if Γ is dropped and each sub-offset renormalized
+  independently, that equivalence no longer holds exactly, so weights and Γ treatment must be
+  defined **globally**, never inferred afterward from row counts.
 
-**Phase 2 — freeze the corrected convention + weights**, then **recompute `Bc_PM`** under it and
-**re-freeze the four physical fields** if the convention shifts them (they are derived from `Bc_PM`).
+**Phase 2 — freeze the corrected convention + Γ policy + weights, gated by a physics benchmark
+(R4).** Changing the grid convention changes grid-dependent physical quantities (`Tc`, `Bc`,
+`Σ_c`); numerical convergence alone does not prove the new quadrature is the correct physical
+convention. Before freezing, **re-run the existing LiHoF4/R2007 anchor checks**
+(`test_invz_critical.m`, `test_invz_ordered_phase.m`, `invz_odd_anchors.m`, and related) under the
+new convention and require them to pass. Only then recompute `Bc_PM` under the frozen convention.
+
+**Phase 2b — re-freeze the four physical fields (R5).** If Phase 2 changes `Bc_PM`, Phase 3 uses the
+**new** `{0.25, 0.55, 0.80}·Bc_PM` + the `2.85 T` anchor; the old absolute field values are retained
+only as explicitly-labeled legacy-parity diagnostics.
 
 **Phase 3 — exact-`h` ordered lattice audit.** ONE explicit shared `h_list` for **every** rung (the
 decisive fix for §3/C3); real BZ **grid sizes** {12³, 16³, 20³} (closes the §0/C2 gap);
-`dpRng ∈ {30,40,50}`; both offsets (or the eight subcell offsets) with **identical** Γ handling;
-compare **only checker-accepted** states under the frozen class + numeric tolerances. **Pilot
-first**: F3754215 (interval start/end + one stable-tail node) and F1173192 (onset + interior);
-expand to all four fields only if the pilot shows a coherent grid construction.
+`dpRng ∈ {30,40,50}`; the frozen offset set with **identical, global** Γ handling; compare **only
+checker-accepted** states under the frozen class + numeric tolerances. **Pilot first**: F3754215
+(interval start/end + one stable-tail node) and F1173192 (onset + interior); expand to all four
+fields only after the pilot confirms a coherent grid construction.
 
 **Phase 4 — HMF-`nH` refinement** (the axis §F requires for 3B; independent of Phase 3).
 
@@ -926,17 +968,18 @@ convergence-accelerated dipolar sum with Lorentz + demagnetization separated ana
 space cutoff growth alone may not converge a conditionally-convergent sum).
 
 **Decisions required from the user before Phase 1 executes:**
-1. **Go-ahead** to build the Phase-1 coupling-only audit (cheap; no ordered solves).
-2. **The Γ policy** — a *theory* decision I will not make unilaterally: use the complete quadrature
-   for the EMT average while treating the uniform Γ pole separately in the `D_uni`/`Dq` diagnostic,
-   **or** drop Γ and renormalize weights consistently in every rung. (I recommend the former unless
-   the derivation requires dropping Γ.)
-3. **The §D tolerance stays frozen for now** — per the refreshed review, do *not* reopen it until
-   Phase 1–3 remove the confounders. No action needed unless you disagree.
+1. **Go-ahead** to build the Phase-1 coupling-only audit (cheap; no ordered solves; additive
+   diagnostic code, production untouched).
+2. **Approve/amend the Phase-1 pre-registration** (R1) — the frozen pass/fail thresholds and the
+   Γ-policy *selection rule*. Per R3 the Γ *policy itself* is NOT chosen now — Phase 1 reports both
+   and the production choice is deferred to Phase 2, gated by the R4 benchmark and the derivation.
+3. **The §D tolerance stays frozen** for now — per the review, do not reopen it until Phases 1–3
+   remove the duplicated-face / Γ / cardinality / evaluation-point confounders. No action unless you
+   disagree.
 
-I recommend approving Phase 1 (and settling decision 2) as the next step: it is cheap, it directly
-tests whether the duplicate-face/Γ construction is the culprit, and every later phase depends on its
-outcome.
+I recommend approving Phase 1 and the pre-registration as the next step: it is cheap, it directly
+tests whether the duplicate-face/Γ construction is the culprit, and — because of R2 — it does so
+without any risky change to the ordered solver stack.
 
 ---
 
