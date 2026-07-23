@@ -69,10 +69,24 @@ function out = invz_task2_run_config(cfg)
 % out.summary  : per-class counts, n_accepted, hstar, hmf_status, replay_mismatch_any.
 % out.extra    : raw invz_ordered_trace output (swept mode) for provenance/debugging.
 %
-% Error policy: absorbs only 'invz:*' from calls into production code (none currently
-% expected on the two Task-2a validation configs); anything else rethrows. This file's OWN
-% argument-validation errors use 'invz:task2Config'/'invz:task2Node' identifiers for
-% consistency with repo convention; they are never absorbed (misuse, not a physics signal).
+% Error policy (review-fix pass, stage-2c task 2a): the per-config node-production calls
+% (the switch(mode) block below -- run_swept_mode / run_isolated_mode, i.e.
+% invz_ordered_trace -> invz_hmf_ordered, and the task2_build_node -> invz_ordered_node_solve
+% replay chain) are wrapped in ONE try/catch. An identifier matching 'invz:*' but NOT
+% 'invz:task2*' -- a genuine production physics/numerics exception, e.g.
+% invz:degenerateDoublet, invz:transverseMF, invz:hzFixed, invz:orderedTrace,
+% invz:nodeSolveNode (none currently thrown by the two Task-2a validation configs) -- is
+% ABSORBED into a structured failed-config record: out.status = 'failed', out.err_id/
+% out.err_msg carry the caught identifier/message, out.nodes = struct([]) (empty, this
+% file's existing "no nodes" convention -- see run_swept_mode/run_isolated_mode), and
+% out.summary reflects zero counts with hmf_status = 'error' -- returned NORMALLY, so a
+% caller (Task 2b's matrix loop) continues to the next cell instead of crashing. Anything
+% else RETHROWS unchanged: this file's OWN 'invz:task2Config'/'invz:task2Node'
+% argument-validation errors, this deliverable's sibling checker files' own 'invz:task2*'
+% errors (invz_task2_classify/invz_task2_agree/invz_task2_ladder_ok -- a harness programming
+% defect, not a physics signal, see task2_is_absorbable), and any non-'invz' MATLAB error.
+% The two validation configs never throw, so their output is byte-for-behaviour unchanged by
+% this policy.
 if nargin < 1 || isempty(cfg), cfg = struct(); end
 ion = getf(cfg, 'ion', invz_ion());
 if ~isfield(cfg, 'T'), error('invz:task2Config', 'cfg.T is required.'); end
@@ -90,14 +104,27 @@ cfg_opts.J0eff = J0eff;                                  % required downstream, 
 if ~isfield(cfg_opts, 'Jxx0'), cfg_opts.Jxx0 = Jxx0; end
 ro = resolve_numerics(ion, T, cfg_opts);
 
-switch mode
-    case 'swept'
-        [nodes, extra] = run_swept_mode(ion, T, Bx, Jnu_flat, cfg_opts, ro, qc, ...
-            Jnu_unflat, latinfo, grid_, dpRng_);
-    case 'isolated'
-        [nodes, extra] = run_isolated_mode(ion, T, Bx, Jnu_flat, cfg, ro, Jnu_unflat, is_synth);
-    otherwise
-        error('invz:task2Config', 'cfg.mode must be ''swept'' or ''isolated''; got ''%s''.', mode);
+failed = false;  err_id = '';  err_msg = '';
+try
+    switch mode
+        case 'swept'
+            [nodes, extra] = run_swept_mode(ion, T, Bx, Jnu_flat, cfg_opts, ro, qc, ...
+                Jnu_unflat, latinfo, grid_, dpRng_);
+        case 'isolated'
+            [nodes, extra] = run_isolated_mode(ion, T, Bx, Jnu_flat, cfg, ro, Jnu_unflat, is_synth);
+        otherwise
+            error('invz:task2Config', 'cfg.mode must be ''swept'' or ''isolated''; got ''%s''.', mode);
+    end
+catch ME
+    if task2_is_absorbable(ME.identifier)
+        failed  = true;
+        err_id  = ME.identifier;
+        err_msg = ME.message;
+        nodes = struct([]);
+        extra = struct('hstar', NaN, 'hmf_status', 'error', 'replay_mismatch_any', false, 'trc', []);
+    else
+        rethrow(ME);
+    end
 end
 
 out.meta = struct('T', T, 'Bx', Bx, 'J0eff', J0eff, 'Jxx0', Jxx0, 'mode', mode, ...
@@ -106,6 +133,29 @@ out.meta = struct('T', T, 'Bx', Bx, 'J0eff', J0eff, 'Jxx0', Jxx0, 'mode', mode, 
 out.nodes   = nodes;
 out.summary = build_summary(nodes, extra, mode);
 out.extra   = extra;
+if failed
+    out.status  = 'failed';
+    out.err_id  = err_id;
+    out.err_msg = err_msg;
+end
+end
+
+% =================================================================================================
+function tf = task2_is_absorbable(id)
+%TASK2_IS_ABSORBABLE True for an 'invz:*' identifier that is NOT this deliverable's own
+% 'invz:task2*' namespace. 'invz:task2*' covers BOTH this file's own argument-validation
+% errors (invz:task2Config/invz:task2Node, above and in task2_build_node) AND the sibling
+% Task-2 checker files' own argument-validation errors (invz_task2_classify.m's
+% invz:task2Classify, invz_task2_agree.m's invz:task2Agree, invz_task2_ladder_ok.m's
+% invz:task2LadderOk) -- all of these signal a harness/programming defect (a malformed node/
+% state bundle this file itself assembled), never a physics exception, so they always
+% rethrow. Everything else under 'invz:*' is a genuine production physics/numerics exception
+% (e.g. invz_twolevel_ordered.m/invz_twolevel_avg.m's invz:degenerateDoublet,
+% invz_hmf_ordered.m/invz_single_ion.m/invz_solve_point_ordered.m's invz:transverseMF/
+% invz:hzFixed, invz_ordered_trace.m's invz:orderedTrace, invz_ordered_node_solve.m's
+% invz:nodeSolveNode) and is absorbed into a failed-config record by the caller's try/catch.
+% Any non-'invz' MATLAB error (id = '' or some other component) is never absorbable either.
+tf = startsWith(id, 'invz:') && ~startsWith(id, 'invz:task2');
 end
 
 % =================================================================================================
