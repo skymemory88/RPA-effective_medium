@@ -7,6 +7,50 @@ anything other than understanding the data shape; none was modified.
 
 ---
 
+## 0. Corrections applied (errata — added after independent review)
+
+An independent review (`stage2_blocker_review_codex.md`, repo root) of this report identified six
+findings, all applied at their cited locations below and re-verified directly against
+`.superpowers/sdd/task2_matrix_results.mat` during this correction pass (MATLAB, read-only, no
+cell re-run). **The operative verdict — LATTICE/MESH-UNRESOLVED (§7) — is UNCHANGED.**
+
+The verdict does not depend on the questionable index-aligned, mixed-`dpRng` comparisons flagged by
+C3 below. It is independently supported by the ONE pairwise comparison unaffected by any of the six
+findings: **`baseline` (`unshifted`, `dpRng=30`) vs. `half_step`/`dpRng=30`**, whose H_MF `h`-grids
+agree to machine precision at every field (re-confirmed this pass). §3 (new paragraph) gives the
+exact, reproducible breakdown: on that pairwise comparison alone, restricted to nodes
+checker-accepted on both sides, the frozen §D numeric test **fails at every common-accepted node,
+at all 4 physical fields.**
+
+Corrections applied (numbering matches the review):
+- **C1** — §5's existence bar corrected: "MET at 1/4" → "MET at 0/4" under the literal frozen
+  reading (the prior version miscounted `baseline` + `unshifted/dp40` — the SAME grid offset at two
+  `dpRng` values — as "≥2 mesh offsets").
+- **C2** — disclosed a second, previously-unflagged untested axis: no cell in this matrix varies BZ
+  grid **size**; every rung holds the grid fixed at 16³, and `G3` downsampling is a subset of that
+  same fixed grid, not an independent size refinement.
+- **C3** — disclosed that the index-aligned §D ladder mixes a lattice change with a small H_MF
+  evaluation-point change on the `dpRng=40` rungs, and added the exact-`h` pairwise breakdown
+  (`baseline` vs. `half_step/dp30`) that the verdict actually rests on.
+- **C4** — flagged that the field-level "existence" criterion (what it means for a field to "yield
+  a state" when every cell's `hstar` is `NaN`) is not itself frozen by the prereg text, and marked
+  §5's numbers as conditional on this report's own operationalization of it.
+- **C5** — narrowed three overstated conclusions: (a) the §4 seed/continuation finding; (b) the §6
+  distribution-shape/geometry finding, substantially rewritten after confirming from source that
+  the ordered EMT map is permutation-invariant over the flat coupling multiset (so it cannot, by
+  construction, distinguish "distribution shape" from "geometry"); (c) the F2581023 `G3` stride-8
+  classification, corrected from "identical to G1" to "identical counts, two-node boundary shift"
+  (re-verified against the results file, node ids 26/27).
+- **C6** — corrected an incorrect floor/relative-tolerance explanation for the worst observed `K`
+  discrepancy in §4 (re-verified against the results file: `9.405×10⁻¹⁰` is ≈14.6× the `K` absolute
+  floor `1×10⁻⁸·|J0eff|` ≈ `6.424×10⁻¹¹`, not "orders of magnitude inside" it; it passes the
+  combined tolerance through the `RelTol` term).
+
+No code, test, driver, harness, or the frozen pre-registration was modified to produce these
+corrections, and no cell of the matrix was re-run.
+
+---
+
 ## 1. Provenance
 
 **What was run.** The full prereg §G experiment matrix: 40 cells (G1G2: 12, G3: 12, G4: 2, G5: 2,
@@ -63,6 +107,11 @@ classification claim below:**
 - **⚠️ Confirmed evidence gap (stated up front, expanded in §7):** every one of the 40 cells has
   `n_nodes = 34` — the matrix varies seed, grid offset, and `dpRng`, but **never the H_MF grid
   density (`nH`)**.
+- **⚠️ Second confirmed evidence gap, disclosed after independent review (§0/C2):** the matrix also
+  never varies BZ grid **size** — every cell holds the grid fixed at `16×16×16`, and `G3`
+  downsampling (§6) is a structured subset of that same fixed grid, not an independent size
+  refinement. Prereg §D names "grid size, grid offset, `dpRng`" as the ladder's three axes; the
+  ladder actually run (§3) covers only two of them. Detail and source-provenance citations in §3.
 
 No production/harness/driver file was modified to produce this report. This report's own working
 scripts (`.superpowers/sdd/task2b_part1.m`, `task2b_part2.m`, `task2b_debug_qbranch.m`,
@@ -170,6 +219,53 @@ index differs by at most ~2.3×10⁻⁵ (an order of magnitude smaller than the 
 spacing everywhere checked) — confirmed no reordering, so position-`j` matching is valid. (E.g. at
 F3754215: `g6_offunshifted_dp40` max|Δh|=2.3e-05, `g6_offhalfstep_dp30` max|Δh|=2.38e-15,
 `g6_offhalfstep_dp40` max|Δh|=2.3e-05, vs. baseline.)
+
+**Two axes this ladder does NOT test, disclosed after independent review (§0/C2, C3; see also
+§1/§8):**
+
+1. **BZ grid size.** Prereg §D names the ladder's axes as "grid size, grid offset, `dpRng`." Every
+   rung compared above holds the BZ grid fixed at the same `16×16×16` mesh — confirmed directly
+   from each cell's own stored construction provenance, e.g. `g6_offhalfstep_dp30`'s: `"half_step
+   q-grid ([16 16 16], dpRng=30); 1 Gamma-equivalent point(s) excluded via
+   invz_is_gamma_equiv."`. `G3`'s deterministic downsampling (§6) is built, per its own provenance
+   string, as `"stride-N modular decimation ... of the [16 16 16]/dpRng=30 baseline q-grid"` — a
+   **subset** of that same fixed grid, not an independently constructed coarser/finer BZ mesh — and
+   `G3` is a density/distribution discriminator (§6), never passed through `invz_task2_ladder_ok`
+   or any §D adjudication above. **No structured BZ grid-size refinement (e.g. `12³`/`16³`/`20³`)
+   was run anywhere in this 40-cell matrix.** This is a second explicitly-untested axis alongside
+   the H_MF-density (`nH`) gap already flagged in §1/§8 — the lattice ladder as actually run covers
+   2 of the 3 axes prereg §D names, not all 3.
+2. **A single explicit, shared `h_list`.** The comparison above matches rungs by **node index**
+   (position `j`), not by a common, explicitly-shared H_MF evaluation-point list — a defensible
+   operationalization of `invz_task2_ladder_ok`'s generic "one comparison point per slot" contract
+   (Method, above), but with a real consequence: same-`dpRng` rungs share `h` at matched index to
+   machine precision (confirmed above), while the `dpRng=40` rungs' own grid-construction constants
+   shift `h` at matched index by up to ~2.3×10⁻⁵ relative to baseline. **Every `baseline`-vs-
+   `dpRng=40` pairwise difference reported in this section therefore mixes a lattice-construction
+   change with a (small) change in the physical H_MF point being evaluated — it is not a
+   lattice-only comparison.**
+
+**The §D verdict below does not depend on that mixing.** Restricting to the one rung-pair that
+shares `h` EXACTLY — `baseline` (`unshifted/dp30`) vs. `half_step/dp30` — and to nodes
+checker-accepted on **both** sides of that pair only (a strictly pairwise, 2-rung restriction,
+distinct from the "ACCEPTED-IN-ALL-4-RUNGS" 4-rung set used in the table below), the frozen §D
+numeric test still fails at **every** such node, at all 4 fields — re-derived this pass by calling
+`invz_task2_ladder_ok` itself (unmodified) on this 2-rung restriction, one call per field, each
+common-accepted node treated as one field-slot (the same axis-operationalization as the rest of
+this section):
+
+| field | max\|Δh\| (baseline vs. half_step/dp30) | common-accepted nodes | pass §D numeric test | worst margin (s/D_uni/Dq_min) | class disagreements |
+|---|---|---|---|---|---|
+| 1.173192 | 6.9×10⁻¹⁷ | 10 | **0** | 0.0503 | 0 |
+| 2.581023 | 1.29×10⁻¹⁵ | 7 | **0** | 0.0851 | 0 |
+| 3.754215 | 2.38×10⁻¹⁵ | 29 | **0** | 0.2747 | 0 |
+| 2.850000 | 7.6×10⁻¹⁶ | 8 | **0** | 0.09937 | 0 |
+
+This is the basis on which the §D/§F verdict is independent of the mismatched-evaluation-point
+issue in (2) above: it uses only the one rung-pair with an exact, machine-precision-shared `h`, and
+it fails identically to the full ladder. **Recommendation for any future lattice adjudication: use
+one explicit, shared `h_list` across every rung** (not index-position matching), so no comparison
+mixes a lattice change with an evaluation-point change — see §9's added Option E.
 
 ### §D summary table (per field)
 
@@ -419,63 +515,103 @@ the comparison is therefore carried entirely by `Sigma/K/lambda/K0/Gstat/D_uni`.
 **56/56 matched-accepted node-pairs agree on both reproducibility axes, at every field, with zero
 disagreements.** The worst-case observed discrepancy across all 112 comparisons was of order
 10⁻⁹–10⁻¹⁰ (e.g. F3754215 node 23, cold-vs-seed2, `K` differs by 9.405×10⁻¹⁰; F2850000 node 27,
-isolated-vs-swept, `K` differs by 1.116×10⁻¹⁰) — six-plus orders of magnitude inside the
-`AbsTol_q` floor, i.e. ordinary `tol_outer=1×10⁻⁸`-level solver noise, not a physically meaningful
-difference. Most comparisons are far tighter still (many at 10⁻¹⁷–10⁻¹⁹, i.e. floating-point
-noise).
+isolated-vs-swept, `K` differs by 1.116×10⁻¹⁰). **Corrected (§0/C6):** these do NOT sit orders of
+magnitude inside the `AbsTol_q` floor — re-derived directly from the results file this pass,
+`J0eff = 0.0064244` (meV), so the `K`-quantity absolute floor `AbsTol_q = 1×10⁻⁸·|J0eff| ≈
+6.424×10⁻¹¹`. The worst discrepancy, `9.405×10⁻¹⁰`, is **≈14.6× that absolute floor** (and the
+second example, `1.116×10⁻¹⁰`, is ≈1.7× it) — both numerically EXCEED `AbsTol_q` alone. Both pass
+the combined §C tolerance (`AbsTol_q + RelTol·max(|a|,|b|)`, `RelTol=1×10⁻⁶`) through the
+**relative** term instead: at the worst node, `RelTol·max(|a|,|b|) ≈ 1.286×10⁻⁹`, giving a combined
+bound `≈1.348×10⁻⁹ ≥ 9.405×10⁻¹⁰`. This remains ordinary `tol_outer=1×10⁻⁸`-level solver noise
+relative to `K`'s own scale (a ~10⁻⁶–10⁻⁷ relative deviation), not a physically meaningful
+difference — the correction is to the tolerance mechanism cited, not to the conclusion that these
+are noise-level agreements. Most comparisons are far tighter still (many at 10⁻¹⁷–10⁻¹⁹, i.e.
+floating-point noise).
 
 Additionally, at **every one of the 4 fields**: **0 nodes** where `accepted(swept) ≠
 accepted(isolated_cold)`, and **0 nodes** where `class(swept) ≠ class(isolated_cold)`. Isolated and
 swept fail (and succeed) at **exactly the same nodes**, everywhere in this matrix.
 
-**Conclusion (§C): the blocker is definitively not a seed/state-management or continuation
-defect.** Full-state reproducibility across cold vs. multi-start seeds, and across isolated vs.
-swept-continuation solves, is total (56/56, 0 disagreements) at every physical field tested. This
-is the quantitative confirmation prereg §F itself anticipated ("Task 2 CONFIRMS this quantitatively
-via C… rather than re-litigating it").
+**Conclusion (§C, narrowed after independent review, §0/C5a): a seed/state-management or
+continuation defect is not observed for the two registered seed constructions and the tested
+isolated-vs-swept comparison.** Full-state reproducibility across cold vs. multi-start seeds, and
+across isolated vs. swept-continuation solves, is total (56/56, 0 disagreements) at every physical
+field tested. This is the quantitative confirmation prereg §F itself anticipated ("Task 2 CONFIRMS
+this quantitatively via C… rather than re-litigating it").
 
 ---
 
 ## 5. §E — existence bar
 
 **Method** (an operationalization of "≥2 seeds and ≥2 mesh offsets (per C/D)", applying the C and D
-tools exactly as defined, not a looser or tighter substitute): a node counts toward existence at a
-field iff (a) it is checker-accepted **stable** in `g1_swept`, `isolated_cold`, **and**
-`isolated_seed2` simultaneously; (b) the §C full-state test passes for **both**
-cold-vs-multistart and isolated-vs-swept at that node (the "≥2 seeds" leg); **and** (c) **at least
-one** of the 3 `G6` offset rungs numerically agrees with the `g1` baseline at that node under the
-same §D-style pairwise test (class-identical + `1×10⁻⁶+1×10⁻⁴·max` tolerance on `s`, `D_uni`,
-`Dq_min` — the "≥2 mesh offsets" leg, baseline + 1 agreeing rung = 2).
+tools exactly as defined, not a looser or tighter substitute — **leg (c) corrected after
+independent review, §0/C1**): a node counts toward existence at a field iff (a) it is
+checker-accepted **stable** in `g1_swept`, `isolated_cold`, **and** `isolated_seed2`
+simultaneously; (b) the §C full-state test passes for **both** cold-vs-multistart and
+isolated-vs-swept at that node (the "≥2 seeds" leg); **and** (c) **at least one rung using a grid
+offset DIFFERENT from baseline's** — i.e. `half_step/dp30` or `half_step/dp40`, **NOT**
+`unshifted/dp40`, which shares baseline's own `unshifted` offset and differs only in `dpRng` —
+numerically agrees with the `g1` baseline at that node under the same §D-style pairwise test
+(class-identical + `1×10⁻⁶+1×10⁻⁴·max` tolerance on `s`, `D_uni`, `Dq_min` — the "≥2 mesh offsets"
+leg: baseline's `unshifted` offset + 1 agreeing `half_step` rung = 2 distinct offsets). **The
+original version of this report incorrectly credited `unshifted/dp40` as satisfying leg (c);
+corrected here.**
 
-| field | existence-bar candidate nodes | MET |
+| field | existence-bar candidate nodes (leg c corrected) | MET |
 |---|---|---|
-| 1.173192 | j = {30, 31, 32, 33, 34} | **YES** |
+| 1.173192 | none — `unshifted/dp40` agrees at nodes 30–34 (§3), but that is the SAME offset as baseline, not a second offset; neither `half_step` rung numerically agrees anywhere in this matrix (§3) | NO |
 | 2.581023 | none | NO |
 | 3.754215 | none | NO |
 | 2.850000 | none | NO |
 
-**§E result: MET at 1 of 4 fields — below the ≥3-of-4 bar.** Leg (b) (seeds) passes at **every**
-stable node at **every** field (direct consequence of §4's 56/56 result), so the entire bar
-outcome is carried by leg (c) (mesh offsets), which is the **same numeric ladder test that already
-failed §D**. At F1173192, nodes 30–34 pass only through the `unshifted/dp40` leg specifically (the
-`half_step` rungs never pass anywhere in this matrix, even at these near-saturation nodes — see
-§3's `s`-values), and only because `s` has asymptoted close enough to 1 there (h≥0.0182, near
-field-polarized saturation) that the absolute cross-rung spread finally shrinks under the
-tolerance; it is not evidence that the lattice/offset sensitivity itself has vanished elsewhere in
-the profile.
+**§E result (corrected, §0/C1): MET at 0 of 4 fields — below the ≥3-of-4 bar.** Leg (b) (seeds)
+passes at **every** stable node at **every** field (direct consequence of §4's 56/56 result), so
+the entire bar outcome is carried by leg (c) (mesh offsets). Per §3, **no `half_step` rung ever
+numerically agrees with baseline at any checker-accepted node, at any field, anywhere in this
+matrix** — so leg (c), read literally (a genuinely different grid offset, not merely a different
+`dpRng` at the same offset), never passes, and the strict existence bar is unmet at all 4 fields.
+(The `unshifted/dp40` agreement at F1173192 nodes 30–34, §3/§5, remains true and is still the only
+rung/field/node combination where any numeric ladder pass occurs against baseline anywhere in the
+matrix — it demonstrates `dpRng`-axis stability specifically, not a second mesh offset, and so does
+not satisfy leg (c) as frozen.)
+
+**⚠️ Underspecification flagged, not resolved here (§0/C4):** prereg §E requires a field to "yield
+a stable (class A) checker-accepted ordered state," but — since every one of the 40 cells' `hstar`
+is `NaN` (§1/§2; no cell ever reaches a converged H_MF root) — the prereg text does not itself say
+what counts as "the field yielding a state" at the node level. This report operationalizes it as
+"the field has at least one stable, checker-accepted **internal** H_MF node" satisfying legs
+(a)/(b)/(c) above. That is a defensible reading but not a frozen one. **The 0/4 (and 4/4
+class-only, below) figures are conditional on this unfrozen operationalization** and should not be
+treated as a frozen-criterion result until the user fixes either a specific endpoint condition or a
+continuation-based existence criterion.
 
 **Complementary, explicitly-labeled class-only reading (NOT the rule-satisfying operationalization
-above — offered only as context, since §3 showed class agreement is separately excellent):** if
-leg (c) is read at the *class* level alone (ignoring §D's numeric sub-test), all of nodes 25–34 (10
-nodes) qualify at F1173192, nodes 28–34 (7 nodes) at F2581023, nodes 29–34 (6 nodes) at F3754215,
-and nodes 29–34 (6 nodes) at F2850000 — i.e. the bar would read **MET at 4/4 fields**. This
-discrepancy (1/4 strict vs. 4/4 class-only) is not a contradiction; it is the same §D
-numeric-non-convergence finding surfacing again downstream, and is reported here for
-completeness, not as an alternate verdict.
+above, and NOT the verdict — offered only as context, since §3 showed class agreement is
+separately excellent):** if leg (c) is read at the *class* level alone (ignoring §D's numeric
+sub-test, and not requiring the agreeing rung to be a distinct offset from baseline), all of nodes
+25–34 (10 nodes) qualify at F1173192, nodes 28–34 (7 nodes) at F2581023, nodes 29–34 (6 nodes) at
+F3754215, and nodes 29–34 (6 nodes) at F2850000 — i.e. the bar would read **MET at 4/4 fields**
+under this looser, non-frozen reading. This discrepancy (0/4 strict vs. 4/4 class-only) is not a
+contradiction; it is the same §D numeric-non-convergence finding surfacing again downstream, and is
+reported here for completeness — **not as an alternate verdict, and not as evidence that softens
+§7's LATTICE/MESH-UNRESOLVED determination.**
 
 ---
 
 ## 6. Step 4 — density/distribution discriminators (G1 vs. G3 vs. G4 vs. G5)
+
+**⚠️ Substantially rewritten after independent review (§0/C5b).** Before interpreting the table
+below, a fact verified directly from source during this correction pass changes what this
+comparison can and cannot show: **the ordered-phase EMT map is permutation-invariant over the flat
+coupling array, by construction.** `invz_emt_scalar.m:43,48` computes `A = mean(Jf ./ (D +
+Jf.*G0), 1)` and `invz_emt_static_ordered.m:47-50` computes `Gq = Gs./(1+(Jf-K0).*Gs)`, `Gbar =
+mean(Gq)`, `K0 = mean(Jf.*Gq)/Gbar` — every operation is either elementwise in `Jf` or a `mean`
+taken over `Jf`'s flat mode index; **neither function ever references `q`, branch identity, or any
+other geometric label.** Consequently the calculation depends on the flat coupling array
+`Jnu_flat` **only through its values as an unordered multiset** — any permutation of the same
+values, or any other coupling array with the same multiset, produces bitwise-identical
+`A`/`K`/`Gq`/`K0`. **Geometry (which `q`, which branch, which BZ point a coupling came from) never
+enters this map at all.**
 
 | field | source | n_accepted | stable | marginal | unstable | unconverged | note |
 |---|---|---|---|---|---|---|---|
@@ -486,7 +622,8 @@ completeness, not as an alternate verdict.
 | 1.173192 | g4_cardsynth | **18** | **17** | 0 | **1** | **16** | cardinality 16384, non-real shape |
 | 1.173192 | g5_histmatch | 10 | 10 | 0 | 0 | 24 | cardinality 16384, real shape |
 | 2.581023 | g1_swept | 8 | 7 | 0 | 1 | 26 | G1 baseline |
-| 2.581023 | g3_ds2/ds4/ds8 | 8 | 7 | 0 | 1 | 26 | identical to G1 at all 3 densities |
+| 2.581023 | g3_ds2/ds4 | 8 | 7 | 0 | 1 | 26 | node-by-node identical to G1 |
+| 2.581023 | g3_ds8 | 8 | 7 | 0 | 1 | 26 | identical counts; two-node boundary shift — nodes 26/27 unstable/unconverged SWAP vs. G1 (verified this pass against the results file: G1 has node26=unstable/node27=unconverged, `g3_ds8` has node26=unconverged/node27=unstable; corrected from "identical", §0/C5c) |
 | 3.754215 | g1_swept | 29 | 6 | 0 | 23 | 5 | G1 baseline |
 | 3.754215 | g3_ds2 | 29 | 6 | 0 | 23 | 5 | density 1/2 — identical to G1 |
 | 3.754215 | g3_ds4 | 31 | 6 | 0 | 25 | 3 | density 1/4 — 2-node boundary shift |
@@ -500,33 +637,51 @@ completeness, not as an alternate verdict.
 **Density alone (G3, real distribution shape, `{1, 1/2, 1/4, 1/8}` cardinality via deterministic
 modular decimation):** the classification pattern is essentially invariant down to 1/4 density at
 every field, and remains qualitatively unchanged (same overall structure, ±1–2 nodes at the
-accept/reject boundary) even at the coarsest 1/8 density. **Density is at most a secondary,
-boundary-level effect.**
+accept/reject boundary) even at the coarsest 1/8 density (F2581023's `ds8` two-node boundary swap,
+above, is exactly this kind of boundary-level effect). **Density is at most a secondary,
+boundary-level effect** — consistent with the permutation-invariance fact above: a structured
+modular subset leaves the multiset's bulk statistics (and hence `A`/`K0`) nearly unchanged until
+the subset becomes coarse enough to perturb a handful of boundary nodes.
 
-**Distribution shape at fixed cardinality (G1 vs. G4 vs. G5, all exactly 16384 couplings —
-cardinality held constant across all three):** decisive. **G5** (couplings whose histogram is
-inverse-CDF-matched to the real lattice's own `Jnu` distribution, at real cardinality) **reproduces
-G1 exactly** at both tested fields — F1173192: `(10,0,0,24)` = G1's own `(10,0,0,24)`; F2850000:
-`(6,0,3,25)` = G1's own `(6,0,3,25)`, matching down to the accepted count. **G4** (the pinned
-24-point synthetic fixture tiled to the same cardinality, a non-matching distribution shape)
-**diverges sharply from G1 at the same two fields**: F1173192 `(17,0,1,16)` vs. G1's `(10,0,0,24)`
-— 70% more stable nodes, an unstable node appears where G1 has none; F2850000 `(8,0,25,1)` vs.
-G1's `(6,0,3,25)` — the unstable count jumps from 3 to **25** and the unconverged count collapses
-from 25 to **1**.
+**Coupling-multiset sensitivity at fixed cardinality (G1 vs. G4 vs. G5, all exactly 16384
+couplings):** **G5** (couplings histogram-matched to the real lattice's own `Jnu` distribution, at
+real cardinality) **reproduces G1 exactly** at both tested fields — F1173192: `(10,0,0,24)` = G1's
+own `(10,0,0,24)`; F2850000: `(6,0,3,25)` = G1's own `(6,0,3,25)`. **Given the permutation-invariance
+fact above, this is EXPECTED BY CONSTRUCTION and is NOT independent evidence** (§0/C5b): `G5` is
+explicitly built to match the real coupling multiset's histogram, so at real cardinality it
+approximately reconstructs the same multiset the map is provably blind to reordering of —
+reproducing `G1` is close to a tautology of the construction, not a discovery about what drives the
+pattern. **G4** (the pinned 24-point synthetic fixture tiled to the same cardinality, a multiset
+with a different shape/histogram) **diverges sharply from G1 at the same two fields**: F1173192
+`(17,0,1,16)` vs. G1's `(10,0,0,24)` — 70% more stable nodes, an unstable node appears where G1 has
+none; F2850000 `(8,0,25,1)` vs. G1's `(6,0,3,25)` — the unstable count jumps from 3 to **25** and
+the unconverged count collapses from 25 to **1**. This divergence IS informative: it shows the
+classification pattern is sensitive to the coupling multiset's composition (not just its
+cardinality — G1/G4/G5 all hold cardinality fixed at 16384).
 
-**Since cardinality is identical across G1/G4/G5 (16384 throughout) and G4/G5 involve no BZ
-geometry at all (flat synthetic coupling arrays, not lattice-derived), this cleanly isolates
-coupling-value *distribution shape* — not cardinality, and not lattice-construction/geometry — as
-the dominant driver of the classification pattern.** Lattice-construction/geometry (grid offset,
-`dpRng`, tested via G6 in §3) does measurably shift the *quantitative* `s`/`D_uni`/`Dq_min` values
-(enough to break the strict §D tolerance), but its effect on the *qualitative* class pattern is far
-smaller than the G4-vs-G1/G5 shape swap above (§3's class-disagreement counts are 0–4 nodes out of
-34; the G4 shape swap flips the field's basic character — accepted count, unstable count, and
-unconverged count all move by a large factor).
+**What this can and cannot conclude (corrected, §0/C5b).** The data supports: the stability
+classification is sensitive to the multiset of coupling values (G4 vs. G1/G5 at matched
+cardinality). **The data does NOT support, and cannot support, a claim that this is "distribution
+shape... not... geometry"** as if the two were competing, separable causes: **geometry never enters
+the map** (per the source-verified permutation-invariance above), so no experiment in this matrix —
+or any experiment on this map — can isolate "distribution shape" from "geometry" as distinct
+drivers. "Coupling-value distribution shape" and "geometry" are not alternative explanations here;
+geometry's *only* possible channel of influence on this calculation is by determining *which
+multiset of values* gets sampled onto the flat array in the first place.
 
-**Step-4 finding, stated plainly: the data implicates coupling-value distribution shape, not
-cardinality/density and not lattice-construction/geometry, as the primary driver of the observed
-stability-classification pattern.**
+**This sharpens, rather than weakens, the §3/§D reading:** the grid-offset (`unshifted` vs.
+`half_step`) and `dpRng` sensitivity documented in §3 must propagate entirely through the resulting
+**changed sampled multiset** of `J(q)` at each rung (a different offset/cutoff samples different
+`q`-points, hence a different multiset of coupling values) — there is no other channel available to
+this map. **"Lattice/mesh-unresolved" (§7) can therefore be restated precisely: the sampled
+coupling multiset is not converged under mesh refinement** (grid offset, and to a lesser extent
+`dpRng`), which is exactly the quantity §3 measured failing to converge.
+
+**Step-4 finding, corrected (§0/C5b): the data shows the classification pattern is sensitive to the
+sampled coupling multiset's composition (G4-vs-G1/G5 at fixed cardinality; density/`G3` only a
+secondary, boundary effect) — but, because the map is provably geometry-blind by construction, this
+cannot be further attributed to "distribution shape" as opposed to "geometry"; the two are not
+separable causes for this calculation.**
 
 ---
 
@@ -592,6 +747,18 @@ theory/reformulation (3B) path is entertained.
 - It does **not** test H_MF-grid (`nH`) refinement **at all** — zero cells in this matrix vary
   `nH`; every cell has `n_nodes=34`. This is a completely unexercised axis, independent of the
   `dpRng`/offset axis that *was* tested (and failed) in §3.
+- It does **not** test BZ grid-**size** refinement **at all** (disclosed after independent review,
+  §0/C2) — every cell in this matrix (`G1` through `G6`) holds the BZ grid fixed at `16×16×16`,
+  confirmed from each cell's own stored construction provenance (§3); `G3`'s downsampling is a
+  structured subset of that same fixed grid, not an independent size refinement. This is a second
+  completely unexercised axis alongside `nH` above — the lattice ladder actually run (§3) covers 2
+  of the 3 axes prereg §D names ("grid size, grid offset, `dpRng`"), not all 3.
+- It does **not** distinguish "coupling-value distribution shape" from "lattice geometry" as
+  drivers of the classification pattern (§6, corrected §0/C5b) — the ordered EMT map is
+  permutation-invariant over the flat coupling multiset by construction (verified from source,
+  `invz_emt_scalar.m`/`invz_emt_static_ordered.m`), so geometry has no channel of influence on this
+  calculation except by determining which multiset of values gets sampled. §6 supports multiset
+  sensitivity; it cannot and does not establish "shape" as opposed to "geometry."
 - It does **not** propose, evaluate, or apply any alternative numeric tolerance for §D/§E — the
   frozen `1×10⁻⁶+1×10⁻⁴·max` bound was applied exactly as written throughout. Whether that bound is
   the right one for a quantity as lattice-sensitive as this static pole observable is a question
@@ -634,13 +801,31 @@ needed either way if the lattice question clears.
 
 **Option D — proceed informally/exploratory on the qualitative findings, accepting
 lattice-unresolved as an open risk.** §4's total seed/continuation reproducibility (56/56) and
-§3's robust *class*-level ladder agreement, together with §6's clean distribution-shape
-implication and the reproducible 18-node unstable interval at F3754215 (§7), are genuinely
-informative and may be enough for the user to form an independent physics judgment. **This is
-explicitly NOT what the frozen table recommends** ("No path is selected because it produces fuller
-plots" — prereg §F; lattice-unresolved precedes 3A/3B by design) and is noted here only because the
-user, not this report, owns the decision to follow the process as specified or to override it with
-that judgment.
+§3's robust *class*-level ladder agreement, together with §6's coupling-multiset sensitivity
+finding (§0/C5b — **not** the "clean distribution-shape, not geometry" reading originally stated;
+see §6's corrected framing) and the reproducible 18-node unstable interval at F3754215 (§7), are
+genuinely informative and may be enough for the user to form an independent physics judgment.
+**This is explicitly NOT what the frozen table recommends** ("No path is selected because it
+produces fuller plots" — prereg §F; lattice-unresolved precedes 3A/3B by design) and is noted here
+only because the user, not this report, owns the decision to follow the process as specified or to
+override it with that judgment.
+
+**Option E — run the independent reviewer's proposed exact-`h` lattice audit (added §0; an
+elaboration of Option A, offered as a concrete design, not a decision taken here).** Re-run the
+§D-style lattice ladder with the methodological fixes C2/C3 identified: (1) **one explicit, shared
+`h_list`** evaluated identically on every rung (not index-position matching, so no comparison mixes
+a lattice change with an evaluation-point change); (2) **actual BZ grid-size values** in the
+ladder, e.g. `12³`, `16³`, `20³` (currently completely untested, §0/C2); (3) an **extended `dpRng`
+ladder**, e.g. `dpRng ∈ {30, 40, 50, 60}`; (4) **both grid offsets** (`unshifted`, `half_step`) at
+every grid-size/`dpRng` combination, with explicit, identical Γ handling; (5) comparisons
+restricted to **checker-accepted states only**, under the frozen §A/§D tolerances, unchanged.
+**Suggested pilot fields (before running all 4): `3.754215` T** (the reproducible 18-node unstable
+interval and the largest observed cross-rung sensitivity, §3/§7) **and `1.173192` T** (the clean,
+fully-accepted stable tail) — extending to all 4 physical fields only if the pilot does not
+immediately expose a construction defect. If the observables converge under this design, the 3B
+unstable-interval question (§7) can be reassessed (still pending the separate, untested `nH` axis,
+Option C); if they do not converge, the `half_step`/Γ-normalization and real-space dipolar-sum
+convergence should be investigated before any solver or theory path.
 
 No path above has been selected. This report ends at the decision gate.
 
