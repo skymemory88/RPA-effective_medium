@@ -885,3 +885,252 @@ dmin = sqrt(sum((gapv.*Bd).^2, 2));
 keep = dmin <= g_cut*(1 + 1e-12);
 cnt = nnz(keep);
 end
+
+% =====================================================================
+% Task 5 -- Gate-A tests 3, 4 (reciprocal gauge covariance + periodic
+% coupling spectrum; half-open reduction + candidate completeness) and the
+% shared test-only coupling mapper (reused by a later task's Gate-A#9)
+% =====================================================================
+function test_gateA3_reciprocal_gauge_and_periodic_spectrum(testCase)
+% Gate-A #3 (docs/invzp_ewald_prereg.md sec 3, item 3): reciprocal gauge
+% covariance + periodic coupling spectrum. For EVERY q in fx.QA (30 points:
+% Gamma + 3 generic + 6 face + 12 edge + 8 corner) and EVERY frozen K in
+% fx.Kset (8 translations, 240 (q,K) pairs total):
+%   (i)  the full gauge-predicted tensor
+%        pred_nm(q,K) = exp(-i*2*pi*K.(tau_m-tau_n)) * dip_nm(q)
+%        must equal dip_nm(q+K) EXACTLY at M_id. Per the Task-3 reviewer's
+%        LOAD-BEARING forward-note, M_id is called ONCE PER (q,K) on that
+%        single q's COMPLETE [3,3,ntau,ntau] tensor -- never on a stacked
+%        multi-q array (which would silently loosen T_scale to the worst
+%        component over the whole stack);
+%   (ii) via the shared ewald_coupling_mapper (mirrors the non-ODD Ewald
+%        algebra through `exchange`, NO Ewald Lorentz term added -- the
+%        Ewald dip already carries the isotropic G=0-omitted term), the four
+%        sorted cc branches Jnu(q) and Jnu(q+K) agree under a DIRECT
+%        AbsTol=1e-10 meV / RelTol=1e-8 tolerance (the frozen Phase-1 item-2
+%        coupling tolerance -- NOT invz_ewald_metrics' M_J, whose internal
+%        AbsTol_J=1e-8*J_ref literal is a DIFFERENT frozen number). This meV
+%        tolerance is applied ONLY to the coupling branches -- never directly
+%        to the raw inverse-cubic-Angstrom dip eigenvalues.
+ion = invz_ion(); a = ion.a; tau = ion.tau; ntau = size(tau,1);
+eo = default_eopts(a);
+fx = invz_ewald_fixtures();
+M  = invz_ewald_metrics();
+
+[~, geomX] = exchange([0 0 0], abs(ion.J12), a, tau);      % prime exchange geom ONCE
+[dipQ, ~, geom] = invz_dipole_ewald(fx.QA, a, tau, eo);    % ONE geom, ONE batched dip(Q_A) call
+
+nQ = size(fx.QA,1); nK = size(fx.Kset,1);
+outQ = cell(nQ,1);
+for qi = 1:nQ
+    outQ{qi} = ewald_coupling_mapper(fx.QA(qi,:), dipQ(:,:,:,:,qi), geomX);
+end
+
+AbsTol_J3 = 1e-10; RelTol_J3 = 1e-8;   % frozen Phase-1 item-2 tolerance (prereg sec 3 item 3)
+
+worst_tensor_margin   = -inf;
+worst_coupling_margin = -inf;
+for ki = 1:nK
+    K = fx.Kset(ki,:);
+    dipQK = invz_dipole_ewald(fx.QA + K, a, tau, eo, geom);   % batched over all 30 q, geom reused
+
+    for qi = 1:nQ
+        q   = fx.QA(qi,:);
+        dq  = dipQ(:,:,:,:,qi);
+        dqK = dipQK(:,:,:,:,qi);
+
+        % ---- (i) gauge-predicted tensor vs dip(q+K), M_id per (q,K) --------
+        pred = gauge_predict(dq, K, tau, ntau);
+        mres = M.mid(pred, dqK);
+        verifyTrue(testCase, mres.pass, sprintf( ...
+            'Gate-A3: gauge-predicted tensor fails M_id at fx.QA row %d, K=[%g %g %g] (worst_margin=%.3e).', ...
+            qi, K(1), K(2), K(3), mres.worst_margin));
+        worst_tensor_margin = max(worst_tensor_margin, mres.worst_margin);
+
+        % ---- (ii) sorted cc coupling branches: DIRECT meV tolerance --------
+        outqK = ewald_coupling_mapper(q + K, dqK, geomX);
+        diffv = abs(outQ{qi}.Jnu - outqK.Jnu);
+        allowed = AbsTol_J3 + RelTol_J3*max(abs(outQ{qi}.Jnu), abs(outqK.Jnu));
+        margin = max(diffv - allowed);
+        verifyLessThanOrEqual(testCase, margin, 0, sprintf( ...
+            ['Gate-A3: sorted cc Jnu branches fail the direct meV tolerance at fx.QA row %d, ' ...
+             'K=[%g %g %g] (margin=%.3e meV).'], qi, K(1), K(2), K(3), margin));
+        worst_coupling_margin = max(worst_coupling_margin, margin);
+    end
+end
+fprintf(['Gate-A3 reciprocal gauge + periodic spectrum: worst tensor M_id margin = %.3e, ' ...
+    'worst coupling (direct meV) margin = %.3e over %d q x %d K = %d pairs.\n'], ...
+    worst_tensor_margin, worst_coupling_margin, nQ, nK, nQ*nK);
+end
+
+function test_gateA4_reduction_and_completeness(testCase)
+% Gate-A #4 (docs/invzp_ewald_prereg.md sec 3, item 4): canonical half-open
+% reduction + extended-zone gauge restoration + reciprocal-candidate
+% completeness.
+%   (a) exact q=+0.5 (each axis alone, and all three at once) reduces via the
+%       frozen convention K=floor(q+0.5), qbar=q-K EXACTLY to qbar=-0.5 (both
+%       the raw arithmetic AND the physical gauge-restored dip, at M_id);
+%   (b) all EIGHT frozen near-upper-face corners (fx corners at
+%       0.5-fx.delta_q) restore correctly under EVERY one of the 8 frozen K
+%       (64 combos total, M_id) -- an earlier draft's three-x-axis-shift-only
+%       loop was insufficient;
+%   (c) for a representative Gamma/face/edge/corner/generic q, INDEPENDENTLY
+%       enumerate (fresh generous bounding box, never touching geom.Ghkl in
+%       the enumeration) every integer reciprocal G with |qcart+Gcart|<=g_cut
+%       (k~=0) and assert every such G is present in the cached geom.Ghkl
+%       candidate union -- explicitly covering G=0 at nonzero q.
+ion = invz_ion(); a = ion.a; tau = ion.tau; ntau = size(tau,1);
+eo = default_eopts(a);
+fx = invz_ewald_fixtures();
+M  = invz_ewald_metrics();
+verifyEqual(testCase, size(fx.QA), [30 3]);   % documented Gamma+q_int(3)+face(6)+edge(12)+corner(8)
+
+[~, ~, geom] = invz_dipole_ewald([0 0 0], a, tau, eo);   % prime ONE geom, reused throughout
+
+% ---- (a) exact +0.5 reduces EXACTLY to -0.5 --------------------------------
+axis_hi  = {[0.5 0 0], [0 0.5 0], [0 0 0.5], [0.5 0.5 0.5]};
+axis_lo  = {[-0.5 0 0], [0 -0.5 0], [0 0 -0.5], [-0.5 -0.5 -0.5]};
+axis_lbl = {'x','y','z','xyz'};
+for ci = 1:numel(axis_hi)
+    qhi = axis_hi{ci}; qlo = axis_lo{ci}; Kexp = qhi - qlo;
+    verifyEqual(testCase, floor(qhi + 0.5), Kexp, 'AbsTol', 0, sprintf( ...
+        'Gate-A4a: K=floor(q+0.5) reduction wrong for exact +0.5 (%s).', axis_lbl{ci}));
+    verifyEqual(testCase, qhi - floor(qhi + 0.5), qlo, 'AbsTol', 0, sprintf( ...
+        'Gate-A4a: qbar=q-K does not reduce exact +0.5 to -0.5 (%s).', axis_lbl{ci}));
+
+    dhi  = invz_dipole_ewald(qhi, a, tau, eo, geom);
+    dlo  = invz_dipole_ewald(qlo, a, tau, eo, geom);
+    pred = gauge_predict(dlo, Kexp, tau, ntau);
+    mres = M.mid(pred, dhi);
+    verifyTrue(testCase, mres.pass, sprintf( ...
+        'Gate-A4a: exact +0.5->-0.5 (%s) gauge-restored tensor fails M_id (worst_margin=%.3e).', ...
+        axis_lbl{ci}, mres.worst_margin));
+end
+
+% ---- (b) all EIGHT near-upper-face corners x every frozen K ----------------
+corners = fx.QA(23:30,:);
+verifyEqual(testCase, size(corners), [8 3]);
+dipC = invz_dipole_ewald(corners, a, tau, eo, geom);
+worst_corner_margin = -inf;
+for ki = 1:size(fx.Kset,1)
+    K = fx.Kset(ki,:);
+    dipCK = invz_dipole_ewald(corners + K, a, tau, eo, geom);
+    for ci = 1:size(corners,1)
+        pred = gauge_predict(dipC(:,:,:,:,ci), K, tau, ntau);
+        mres = M.mid(pred, dipCK(:,:,:,:,ci));
+        verifyTrue(testCase, mres.pass, sprintf( ...
+            'Gate-A4b: corner %d fails M_id gauge restoration at K=[%g %g %g] (worst_margin=%.3e).', ...
+            ci, K(1), K(2), K(3), mres.worst_margin));
+        worst_corner_margin = max(worst_corner_margin, mres.worst_margin);
+    end
+end
+fprintf('Gate-A4b corners x K gauge restoration: worst M_id margin over 8x8=64 combos = %.3e.\n', ...
+    worst_corner_margin);
+
+% ---- (c) independent reciprocal candidate completeness ---------------------
+reps = struct( ...
+    'label', {'Gamma','face','edge','corner','generic'}, ...
+    'q',     {fx.QA(1,:), fx.QA(5,:), fx.QA(11,:), fx.QA(23,:), fx.q_int(1,:)});
+for ri = 1:numel(reps)
+    Gneed = indep_needed_G(reps(ri).q, geom.B, eo.g_cut);
+    verifyGreaterThan(testCase, size(Gneed,1), 0, sprintf( ...
+        'Gate-A4c: independent enumeration found zero needed G at %s -- check the bounding box.', ...
+        reps(ri).label));
+    present = ismember(Gneed, geom.Ghkl, 'rows');
+    verifyTrue(testCase, all(present), sprintf( ...
+        'Gate-A4c: %d of %d independently-enumerated needed G rows are MISSING from geom.Ghkl at %s.', ...
+        nnz(~present), numel(present), reps(ri).label));
+    isG0needed = any(all(Gneed == 0, 2));
+    if any(reps(ri).q ~= 0)
+        verifyTrue(testCase, isG0needed, sprintf( ...
+            'Gate-A4c: G=0 unexpectedly not needed at nonzero q (%s).', reps(ri).label));
+    end
+    verifyTrue(testCase, ismember([0 0 0], geom.Ghkl, 'rows'), ...
+        'Gate-A4c: G=[0,0,0] must be present in the cached candidate union.');
+    fprintf('Gate-A4c completeness (%s): %d needed G, all present in geom.Ghkl (G=0 needed: %d).\n', ...
+        reps(ri).label, size(Gneed,1), isG0needed);
+end
+end
+
+% =====================================================================
+% Task 5 helpers -- shared gauge-prediction loop, the test-only coupling
+% mapper (reused by a later task's Gate-A#9), and independent per-q
+% reciprocal-candidate enumeration
+% =====================================================================
+function pred = gauge_predict(dq, K, tau, ntau)
+% Full extended-zone gauge-predicted tensor:
+%   pred_nm = exp(-i*2*pi*K.(tau_m-tau_n)) * dq_nm,   dq = dip(q) [3,3,ntau,ntau].
+pred = complex(zeros(3,3,ntau,ntau));
+for n = 1:ntau
+    for m = 1:ntau
+        gph = exp(-1i*2*pi*(K*(tau(m,:) - tau(n,:)).'));
+        pred(:,:,n,m) = gph*dq(:,:,n,m);
+    end
+end
+end
+
+function out = ewald_coupling_mapper(q, dipq, geomX)
+% ewald_coupling_mapper -- TEST-ONLY shared helper (Step-4 Task 5; the plan's
+% "For primitive-level coupling convergence..." paragraph). Mirrors the
+% non-ODD Ewald coupling algebra EXACTLY via the production `exchange`
+% primitive, WITHOUT calling or modifying invz_jq_modes. Adds NO Lorentz term
+% on the Ewald branch: invz_dipole_ewald's returned dip already carries the
+% isotropic G=0-omitted term (frozen prereg sec 5 Gate-C decision), so an
+% extra Lorentz add-on here would double-count it.
+%
+% INPUTS
+%   q      [1,3] reduced reciprocal (Miller) coordinates -- the SAME raw q
+%          used to produce dipq (extended-zone; not pre-reduced to qbar).
+%   dipq   [3,3,ntau,ntau] complex Ewald dipolar tensor at this q (a
+%          caller-computed single-q slice of invz_dipole_ewald's output --
+%          this mapper never calls invz_dipole_ewald itself).
+%   geomX  primed q-independent `exchange` geometry, from a ONE-TIME
+%          [~, geomX] = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau);
+%          reused across the whole q-sweep for speed.
+%
+% OUTPUT out (struct):
+%   Jnu        [4,1] sorted real eigenvalues of the Hermitized cc coupling
+%              Jcc(q), in meV.
+%   Juni       scalar real uniform-mode projection v'*Jcc*v, v=[1 1 1 1]/2
+%              (meV) -- the same convention as this repo's other P.Juni.
+%   Jcc, Jaa   [4,4] complex Hermitized cc/aa coupling matrices at q (meV),
+%              for a caller that needs more than the sorted branches/uniform
+%              mode.
+%   Jcc0, Jaa0 the uniform-mode projections of Jcc/Jaa (Jcc0 == Juni),
+%              populated ONLY at exact Gamma (q==[0 0 0]); [] otherwise.
+ion = invz_ion(); C = invz_const();
+ex  = exchange(q, abs(ion.J12), ion.a, ion.tau, geomX);
+Jcc = -C.gfac*squeeze(dipq(3,3,:,:)) + sign(ion.J12)*squeeze(ex(3,3,:,:));
+Jaa = -C.gfac*squeeze(dipq(1,1,:,:)) + sign(ion.J12)*squeeze(ex(1,1,:,:));
+Jcc = (Jcc+Jcc')/2; Jaa = (Jaa+Jaa')/2;      % Hermitize exactly as the caller will
+v = [1 1 1 1]/2;
+out = struct();
+out.Jnu  = sort(real(eig(Jcc)));
+out.Juni = real(v*Jcc*v');
+out.Jcc  = Jcc; out.Jaa = Jaa;
+if all(q == 0)
+    out.Jcc0 = out.Juni;
+    out.Jaa0 = real(v*Jaa*v');
+else
+    out.Jcc0 = []; out.Jaa0 = [];
+end
+end
+
+function Gneed = indep_needed_G(qrow, B, g_cut)
+% Independent per-q enumeration of every integer reciprocal G=[h,k,l] with
+% |qcart+Gcart|<=g_cut, k~=0 (Gcart=G*B), from a FRESH generous bounding box
+% -- geom.Ghkl/geom.Gcart are never read here, so this cannot be tautological
+% against the primitive's own cached candidate union.
+K = floor(qrow + 0.5); qbar = qrow - K;      % same frozen extended-zone convention
+qcart = qbar*B;
+sb = min(svd(B));
+nmax = ceil((g_cut + norm(qcart))/sb) + 1;   % generous conservative box, +1 slack
+rng = -nmax:nmax;
+[H, Kk, L] = ndgrid(rng, rng, rng);
+Ghkl_all  = [H(:) Kk(:) L(:)];
+Gcart_all = Ghkl_all*B;
+k  = Gcart_all + qcart;
+kk = sum(k.^2, 2);
+keep = (kk <= g_cut^2) & (kk > 0);
+Gneed = Ghkl_all(keep,:);
+end
