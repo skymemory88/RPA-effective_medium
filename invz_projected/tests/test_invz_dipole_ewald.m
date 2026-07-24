@@ -465,3 +465,180 @@ q = zeros(nq,3);
 eo = mk_eopts(1, 5, 9, 'conducting_k0_omitted');
 verifyError(testCase, @() invz_dipole_ewald(q, 3*eye(3), tau, eo), 'invz:ewaldMemoryCap');
 end
+
+% =====================================================================
+% Task 3 -- Gate-A test 1: screened-Hessian finite-difference validation
+% =====================================================================
+function test_gateA1_screened_hessian(testCase)
+% Gate-A #1 (docs/invzp_ewald_prereg.md sec 3, item 1): the primitive's
+% precomputed real-space screened tensor g_ab must equal the analytic
+% Hessian of f(y) = erfc(alpha*|y|)/|y|, validated three ways:
+%   (i)   Richardson-extrapolated central-difference Hessians (steps 4e-3,
+%         2e-3, 1e-3 Angstrom -> R12, R23) agree with each other and with an
+%         INDEPENDENTLY-derived closed g_ab (indep_closed_gab below), over
+%         all 200 frozen hess_x samples at each of the 5 frozen alpha values;
+%   (ii)  the closed g_ab reduces EXACTLY to the bare
+%         (3 x_a x_b - r^2 delta_ab)/r^5 tensor at alpha = 0 (P->1, Q->0),
+%         not merely to within a loose 1e-8 floor;
+%   (iii) BRIDGE (anti-tautology): the primitive's own geom.real{n,m}.gab,
+%         for every retained real vector of every ordered sublattice pair,
+%         matches this SEPARATELY-written closed g_ab at M_id -- this is
+%         what would catch a wrong PRODUCTION formula (a test that only
+%         re-checks its own duplicated formula cannot).
+%
+% indep_closed_gab (below) is derived fresh from calculus --
+%   h(r) = erfc(alpha r)/r,
+%   d_a d_b h = (h''(r) - h'(r)/r) x_a x_b/r^2 + (h'(r)/r) delta_ab  (the
+%   general radial-function Hessian identity) --
+% NOT copied from invz_dipole_ewald's private P/Q-form local_gab: it is a
+% different algebraic decomposition (delta/xaxb coefficients A(r), B(r)
+% derived directly from h, h', h'' rather than P(r), Q(r) applied to the
+% bare tensor), independently typed, so a coefficient/sign/exponent typo
+% specific to the production code would generally NOT be replicated here.
+fx = invz_ewald_fixtures();
+M  = invz_ewald_metrics();
+
+% ---- fixture cardinalities this test exercises (fail fast, non-tautological)
+verifyEqual(testCase, size(fx.q_int), [3 3]);
+verifyEqual(testCase, size(fx.QA), [30 3]);
+verifyEqual(testCase, size(fx.Kset), [8 3]);
+verifyEqual(testCase, size(fx.hess_x), [200 3]);
+verifyEqual(testCase, size(unique(fx.hess_x, 'rows'), 1), 200);   % no duplicate sample
+verifyGreaterThan(testCase, fx.alpha0, 0);
+verifyEqual(testCase, fx.alpha0, sqrt(pi)/abs(det(invz_ion().a))^(1/3), 'RelTol', 1e-14);
+verifyGreaterThan(testCase, abs(fx.alpha0 - 0.268431), 0);   % never the rounded literal
+
+h1 = 4e-3; h2 = 2e-3; h3 = 1e-3;
+mult = [0.6 0.8 1.0 1.2 1.5];
+nX = size(fx.hess_x, 1);
+
+worst_analytic_ratio   = 0;
+worst_richardson_ratio = 0;
+
+for ai = 1:numel(mult)
+    alpha = mult(ai)*fx.alpha0;
+    for k = 1:nX
+        x = fx.hess_x(k,:);
+        closed = squeeze(indep_closed_gab(x, alpha));
+
+        Hh1 = fd_hessian_gab(x, alpha, h1);
+        Hh2 = fd_hessian_gab(x, alpha, h2);
+        Hh3 = fd_hessian_gab(x, alpha, h3);
+        R12 = (4*Hh2 - Hh1)/3;
+        R23 = (4*Hh3 - Hh2)/3;
+
+        mrich = M.mhfd(R12, R23, x);
+        verifyLessThanOrEqual(testCase, mrich.worst_margin, 0, sprintf( ...
+            'Gate-A1: R12/R23 Richardson estimates disagree by > 1e-7*H_scale at alpha=%.6g (x%.2g), sample %d.', ...
+            alpha, mult(ai), k));
+
+        mclosed = M.mhfd(closed, R23, x);
+        verifyLessThanOrEqual(testCase, mclosed.worst_margin, 0, sprintf( ...
+            'Gate-A1: R23 fails M_HFD vs the closed g_ab at alpha=%.6g (x%.2g), sample %d.', ...
+            alpha, mult(ai), k));
+        verifyTrue(testCase, mclosed.sign_ok, sprintf( ...
+            'Gate-A1: sign mismatch on a gated component (closed vs R23) at alpha=%.6g (x%.2g), sample %d.', ...
+            alpha, mult(ai), k));
+
+        worst_analytic_ratio   = max(worst_analytic_ratio, mclosed.worst_ratio);
+        worst_richardson_ratio = max(worst_richardson_ratio, mrich.worst_ratio);
+    end
+end
+fprintf(['Gate-A1 screened-Hessian: worst normalized analytic ratio = %.3e, ' ...
+    'worst adjacent-Richardson ratio = %.3e (tol 1e-7 each).\n'], ...
+    worst_analytic_ratio, worst_richardson_ratio);
+
+% ---- alpha = 0: closed g_ab must reduce EXACTLY to the bare tensor ----------
+for k = 1:nX
+    x = fx.hess_x(k,:);
+    closed0 = squeeze(indep_closed_gab(x, 0));
+    r = norm(x);
+    bare = (3*(x.'*x) - r^2*eye(3))/r^5;
+    m0 = M.mid(closed0, bare);
+    verifyLessThanOrEqual(testCase, m0.worst_margin, 0, sprintf( ...
+        'Gate-A1: alpha=0 closed g_ab is not EXACTLY the bare tensor at sample %d.', k));
+end
+
+% ---- BRIDGE: production geom.real{n,m}.gab vs the independent closed g_ab --
+ion = invz_ion(); a = ion.a; tau = ion.tau; ntau = size(tau,1);
+eo = default_eopts(a);
+[~, ~, geom] = invz_dipole_ewald(fx.q_int(1,:), a, tau, eo);
+worst_bridge_margin = -inf;
+for n = 1:ntau
+    for m = 1:ntau
+        X       = geom.real{n,m}.x;
+        prodgab = geom.real{n,m}.gab;
+        verifyGreaterThan(testCase, size(X,1), 0, sprintf( ...
+            'Gate-A1 bridge: pair (%d,%d) retains zero real vectors -- cannot bridge.', n, m));
+        indepgab = indep_closed_gab(X, eo.alpha);
+        mbridge = M.mid(prodgab, indepgab);
+        verifyLessThanOrEqual(testCase, mbridge.worst_margin, 0, sprintf( ...
+            'Gate-A1 bridge: geom.real{%d,%d}.gab disagrees with the independent closed g_ab (M_id).', n, m));
+        worst_bridge_margin = max(worst_bridge_margin, mbridge.worst_margin);
+    end
+end
+fprintf(['Gate-A1 bridge (production geom.real.gab vs independent closed g_ab): ' ...
+    'worst M_id margin = %.3e.\n'], worst_bridge_margin);
+end
+
+% =====================================================================
+% Task 3 helpers -- INDEPENDENT closed-form screened Hessian + FD stencils
+% (do not reuse invz_dipole_ewald's private local_gab; see test docstring)
+% =====================================================================
+function gab = indep_closed_gab(x, alpha)
+% Independent closed-form screened dipolar Hessian g_ab(x) = d_a d_b h(r),
+% h(r) = erfc(alpha*r)/r, r = |x|, derived via the general radial-function
+% Hessian identity
+%   d_a d_b h = (h''(r) - h'(r)/r) x_a x_b/r^2 + (h'(r)/r) delta_ab.
+% x: [K,3] Cartesian vectors (K>=1, all r>0). Returns gab: [K,3,3].
+x = reshape(x, [], 3);
+K = size(x,1);
+r = vecnorm(x, 2, 2);
+if any(r <= 0)
+    error('invz:ewaldMetricShape', 'indep_closed_gab: all sample points must have |x|>0.');
+end
+r2 = r.^2; r3 = r2.*r; r4 = r2.^2; r5 = r4.*r;
+z  = alpha*r;
+E  = exp(-z.^2);
+Ec = erfc(z);
+sp = sqrt(pi);
+% delta_ab coefficient: h'(r)/r
+Acoef = -( Ec./r3 + (2*alpha/sp)*E./r2 );
+% x_a x_b coefficient: (h''(r) - h'(r)/r)/r^2
+Bcoef = (4*alpha^3/sp)*E./r2 + (6*alpha/sp)*E./r4 + 3*Ec./r5;
+gab = zeros(K,3,3);
+for aa = 1:3
+    for bb = 1:3
+        gab(:,aa,bb) = Bcoef.*(x(:,aa).*x(:,bb)) + Acoef.*double(aa==bb);
+    end
+end
+end
+
+function H = fd_hessian_gab(x, alpha, h)
+% Central-difference Hessian of f(y)=erfc(alpha*|y|)/|y| at y=x, step h.
+% Diagonal (a=b): 3-point [f(x+h e_a)-2f(x)+f(x-h e_a)]/h^2.
+% Off-diagonal (a~=b): 4-point mixed
+%   [f(x+h e_a+h e_b)-f(x+h e_a-h e_b)-f(x-h e_a+h e_b)+f(x-h e_a-h e_b)]/(4h^2).
+% The mixed formula is NEVER used for a=b -- that would silently turn the
+% labelled step h into a 2h diagonal stencil.
+x = reshape(x, 1, 3);
+H = zeros(3,3);
+f0 = screened_f(x, alpha);
+for aa = 1:3
+    ea = zeros(1,3); ea(aa) = 1;
+    for bb = 1:3
+        if aa == bb
+            H(aa,bb) = (screened_f(x+h*ea, alpha) - 2*f0 + screened_f(x-h*ea, alpha))/h^2;
+        else
+            eb = zeros(1,3); eb(bb) = 1;
+            H(aa,bb) = (screened_f(x+h*ea+h*eb, alpha) - screened_f(x+h*ea-h*eb, alpha) ...
+                      - screened_f(x-h*ea+h*eb, alpha) + screened_f(x-h*ea-h*eb, alpha))/(4*h^2);
+        end
+    end
+end
+end
+
+function f = screened_f(y, alpha)
+r = norm(y);
+f = erfc(alpha*r)/r;
+end
