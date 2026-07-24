@@ -46,8 +46,28 @@ function S = invz_spectra_qpath(ion, T, B, qpath, w, opts)
 %                        crossings)
 %     .snapfac (2.5)     Gamma-limit trust-radius factor (see invz_jq_path)
 %     .peak_wmin (0.05)  meV; excludes the low-frequency hyperfine pole from the peak search
-%     .Jnu, .info        precomputed BZ-grid branches / info (skips the lattice sum; tests)
+%     .Jnu, .info        precomputed BZ-grid branches / info (skips the lattice sum; tests).
+%                        Must be supplied TOGETHER (error invz:spectraPrecomputedPartial
+%                        otherwise).
+%     .dipole, .ewald    opt-in Ewald dipolar backend: forwarded BY PRESENCE into
+%                        invz_bz_couplings when computed, and the SAME resolved backend is
+%                        forwarded to invz_jq_path (absent => unchanged brute-force default
+%                        throughout). .dipole is 'bruteforce' | 'ewald'; .ewald is a complete
+%                        {alpha,r_cut,g_cut,boundary} struct, required only with .dipole =
+%                        'ewald' (docs/invzp_ewald_integration_map.md Sec.5A/6).
+%     .gridConvention, .gridOffset, .gammaPolicy   opt-in BZ quadrature policy, forwarded BY
+%                        PRESENCE into invz_bz_couplings when computed (any one present there
+%                        switches to the invz_phase1_qgrid route). NEVER forwarded to
+%                        invz_jq_path (the q-path has no BZ quadrature of its own).
+%     .cache (true)      invz_jq_modes file cache; forwarded BY PRESENCE when computed.
 %   The hyperfine manifold is always included; there is deliberately no .hyp option here.
+%
+%   Precomputed .Jnu/.info + backend/grid strictness: identical rule table to invz_spectra_map
+%   (see there for the full contract and error identifiers). ADDITIONALLY here, whenever the
+%   (precomputed or computed) BZ info carries complete info.dipole provenance, the q-path's OWN
+%   resolved P.dipole (from invz_jq_path) must be isequaln to it -- a mismatch errors
+%   invz:spectraPathDipoleMismatch, never a silent fall-through. S.path_dipole = P.dipole is
+%   always returned, whether or not that check applied.
 
 if nargin < 6, opts = struct(); end
 grid    = getf(opts, 'grid', [16 16 16]);
@@ -67,10 +87,39 @@ tmf = invz_check_transverse_mf(sxtra, B(2));
 
 w = w(:);
 
-if isfield(opts, 'Jnu') && isfield(opts, 'info')
+% Ewald Step-5 Task 7 (docs/invzp_ewald_integration_map.md Sec.5A): backend/grid options are
+% forwarded BY PRESENCE into invz_bz_couplings on the compute branch, and a precomputed
+% opts.Jnu/opts.info pair is validated against any EXPLICIT backend/grid-policy request rather
+% than trusted blindly -- see the local_* helpers below for the exact conflict rules.
+hasBackendReq = isfield(opts, 'dipole') || isfield(opts, 'ewald');
+hasGridReq    = isfield(opts, 'gridConvention') || isfield(opts, 'gridOffset') || isfield(opts, 'gammaPolicy');
+if hasBackendReq
+    % Validate opts.dipole/opts.ewald THEMSELVES even though the precomputed branch below may
+    % never call invz_jq_modes: a malformed request must not escape checking just because no
+    % lattice sum runs.
+    [backendReq, eoptsReq] = local_validate_dipole_opts(opts);
+end
+
+hasJnuOpt  = isfield(opts, 'Jnu');
+hasInfoOpt = isfield(opts, 'info');
+if hasJnuOpt ~= hasInfoOpt
+    error('invz:spectraPrecomputedPartial', ...
+          'opts.Jnu and opts.info must be supplied together (exactly one was present).');
+end
+
+if hasJnuOpt && hasInfoOpt
     Jnu = opts.Jnu(:);   info = opts.info;
+    if hasBackendReq, local_check_backend_provenance(info, backendReq, eoptsReq); end
+    if hasGridReq,    local_check_grid_provenance(info, opts, grid);              end
 else
-    [Jnu, info, ~] = invz_bz_couplings(ion, struct('grid', grid, 'dpRng', dpRng));
+    bzOpts = struct('grid', grid, 'dpRng', dpRng);
+    if isfield(opts, 'dipole'),         bzOpts.dipole         = opts.dipole;         end
+    if isfield(opts, 'ewald'),          bzOpts.ewald          = opts.ewald;          end
+    if isfield(opts, 'gridConvention'), bzOpts.gridConvention = opts.gridConvention; end
+    if isfield(opts, 'gridOffset'),     bzOpts.gridOffset     = opts.gridOffset;     end
+    if isfield(opts, 'gammaPolicy'),    bzOpts.gammaPolicy    = opts.gammaPolicy;    end
+    if isfield(opts, 'cache'),          bzOpts.cache          = opts.cache;          end
+    [Jnu, info, ~] = invz_bz_couplings(ion, bzOpts);
 end
 Jcc0 = info.Jcc0;
 Jaa0 = ion.Jxx0;  if isfield(info, 'Jaa0'), Jaa0 = info.Jaa0; end
@@ -86,9 +135,29 @@ if phase == 0
         T, mat2str(B, 4));
 end
 
-% guarded coupling along the path: physical uniform FM mode by default (P.Juni),
-% or an exploratory sorted eigenvalue branch when opts.branch is 1..4
-P  = invz_jq_path(ion, qpath, struct('dpRng', dpRng, 'cache', true, 'snapfac', snapfac));
+% guarded coupling along the path: physical uniform FM mode by default (P.Juni), or an
+% exploratory sorted eigenvalue branch when opts.branch is 1..4. Resolve ONE dipolar backend
+% for the path (Ewald Step-5 Task 7, docs/invzp_ewald_integration_map.md Sec.5A): an explicit
+% spectra-level request is forwarded verbatim (already checked against info above when
+% precomputed); otherwise a complete BZ info.dipole naming the Ewald backend is INHERITED so
+% the path never silently falls back to brute force under it; an (inherited-or-default)
+% bruteforce backend, or a provenance-less legacy info, is left unforwarded here -- bit-
+% identical to the pre-Task-7 call. Grid convention/offset/gammaPolicy are BZ-quadrature-only
+% and are NEVER forwarded to invz_jq_path.
+pathOpts = struct('dpRng', dpRng, 'cache', true, 'snapfac', snapfac);
+if hasBackendReq
+    pathOpts.dipole = backendReq;
+    if strcmp(backendReq, 'ewald'), pathOpts.ewald = eoptsReq; end
+elseif local_has_complete_dipole_provenance(info) && strcmp(info.dipole.backend, 'ewald')
+    pathOpts.dipole = 'ewald';
+    pathOpts.ewald  = info.dipole.ewald;
+end
+P  = invz_jq_path(ion, qpath, pathOpts);
+if local_has_complete_dipole_provenance(info) && ~isequaln(P.dipole, info.dipole)
+    error('invz:spectraPathDipoleMismatch', ['invz_jq_path resolved a dipole backend/provenance ' ...
+        'that does not match the BZ coupling info.dipole provenance; this must never be silently ' ...
+        'mixed (compare S.path_dipole against S.info.dipole).']);
+end
 if branch == 0
     Jq = P.Juni(:).';                 % uniform ferromagnetic-mode coupling v'*Jcc*v
 else
@@ -139,8 +208,126 @@ else
     S.xlab = sprintf('s along path from Q = [%g %g %g] (index r.l.u.)', qpath(1, :));
 end
 S.w = w;  S.T = T;  S.Bvec = B;  S.Bmag = norm(B);  S.phase = phase;  S.info = info;  S.Jq = Jq;
-S.transverse_mf = tmf;
+S.transverse_mf = tmf;  S.path_dipole = P.dipole;
 S.chiz = chiz;  S.chirpa = chirpa;
 S.Epeak     = invz_peak_energy(chiz,   w, wmin);
 S.Epeak_rpa = invz_peak_energy(chirpa, w, wmin);
+end
+
+% -------------------------------------------------------------------------------------------
+% Ewald Step-5 Task 7: precomputed-coupling provenance/conflict validation (shared logic,
+% duplicated byte-for-byte in invz_spectra_map.m and invz_spectra_qpath.m -- no new shared file
+% is introduced, per the Task-7 staging contract; docs/invzp_ewald_integration_map.md Sec.5A).
+% local_validate_dipole_opts intentionally replicates invz_jq_modes.m's own
+% local_resolve_dipole_backend checks AND error identifiers, so a malformed opts.dipole/
+% opts.ewald request is rejected identically whether couplings are computed for real or a
+% precomputed opts.Jnu/opts.info bypasses invz_jq_modes entirely.
+% -------------------------------------------------------------------------------------------
+function [backend, eopts] = local_validate_dipole_opts(opts)
+if ~isfield(opts, 'dipole') || isempty(opts.dipole)
+    backend = 'bruteforce';
+else
+    raw = opts.dipole;
+    if isstring(raw) && isscalar(raw), raw = char(raw); end
+    if ~(ischar(raw) && isrow(raw))
+        error('invz:jqModesBackend', ...
+            ['opts.dipole must be a scalar string/char naming a backend ' ...
+             '(''bruteforce''|''ewald''); got class %s.'], class(opts.dipole));
+    end
+    if ~(strcmp(raw, 'bruteforce') || strcmp(raw, 'ewald'))
+        error('invz:jqModesBackend', ...
+            'unknown opts.dipole backend ''%s''; supported backends are ''bruteforce'' and ''ewald''.', raw);
+    end
+    backend = raw;
+end
+
+hasEwaldOpts = isfield(opts, 'ewald') && ~isempty(opts.ewald);
+if hasEwaldOpts && ~strcmp(backend, 'ewald')
+    error('invz:jqModesEwaldOptsUnexpected', ...
+        ['opts.ewald was supplied but the resolved opts.dipole backend is ''%s'', not ''ewald''; ' ...
+         'Ewald controls are only accepted with an explicit opts.dipole=''ewald'' request.'], backend);
+end
+
+eopts = [];
+if strcmp(backend, 'ewald')
+    if ~hasEwaldOpts || ~isstruct(opts.ewald) || ~isscalar(opts.ewald)
+        error('invz:jqModesEwaldOptsFields', ...
+            ['opts.dipole=''ewald'' requires a complete scalar struct opts.ewald with EXACTLY the ' ...
+             'fields {alpha, r_cut, g_cut, boundary}; jq_modes does not synthesize frozen defaults.']);
+    end
+    want = sort({'alpha', 'r_cut', 'g_cut', 'boundary'});
+    have = sort(reshape(fieldnames(opts.ewald), 1, []));
+    if ~isequal(have, want)
+        error('invz:jqModesEwaldOptsFields', ...
+            'opts.ewald must have EXACTLY the fields {alpha, r_cut, g_cut, boundary}; got {%s}.', ...
+            strjoin(reshape(fieldnames(opts.ewald), 1, []), ', '));
+    end
+    b = opts.ewald.boundary;
+    if isstring(b) && isscalar(b), b = char(b); end
+    if ~(ischar(b) && isrow(b) && strcmp(b, 'conducting_k0_omitted'))
+        error('invz:jqModesEwaldBoundary', ...
+            'opts.ewald.boundary must be ''conducting_k0_omitted''; got %s.', class(opts.ewald.boundary));
+    end
+    eopts = opts.ewald;
+end
+end
+
+function tf = local_has_complete_dipole_provenance(info)
+%LOCAL_HAS_COMPLETE_DIPOLE_PROVENANCE True iff info.dipole is a complete backend-provenance
+% struct (invz_jq_modes' info.dipole contract: backend/ewald/q_reduction/primitive_schema).
+tf = isfield(info, 'dipole') && isstruct(info.dipole) && isscalar(info.dipole) && ...
+     all(isfield(info.dipole, {'backend', 'ewald', 'q_reduction', 'primitive_schema'}));
+end
+
+function tf = local_has_complete_grid_provenance(info)
+%LOCAL_HAS_COMPLETE_GRID_PROVENANCE True iff info.grid is a complete BZ grid-policy provenance
+% struct (invz_bz_couplings' info.grid contract).
+tf = isfield(info, 'grid') && isstruct(info.grid) && isscalar(info.grid) && ...
+     all(isfield(info.grid, {'schema', 'convention', 'offset', 'gammaPolicy', 'requested', ...
+                             'nominal', 'retained', 'n_gamma', 'qhash'}));
+end
+
+function local_check_backend_provenance(info, backendReq, eoptsReq)
+%LOCAL_CHECK_BACKEND_PROVENANCE An explicit opts.dipole/opts.ewald request was made alongside
+% precomputed opts.Jnu/opts.info: require complete info.dipole and compare EXACTLY.
+if ~local_has_complete_dipole_provenance(info)
+    error('invz:spectraBackendProvenanceMissing', ['an explicit opts.dipole/opts.ewald request ' ...
+        'was given together with precomputed opts.Jnu/opts.info, but opts.info lacks complete ' ...
+        'info.dipole provenance (a struct with backend/ewald/q_reduction/primitive_schema); cannot ' ...
+        'verify the precomputed couplings actually used the requested backend.']);
+end
+conflict = ~strcmp(info.dipole.backend, backendReq);
+if ~conflict && strcmp(backendReq, 'ewald')
+    conflict = ~isequaln(info.dipole.ewald, eoptsReq);
+end
+if conflict
+    error('invz:spectraBackendConflict', ['the requested opts.dipole/opts.ewald backend/controls ' ...
+        'conflict with the precomputed opts.info.dipole provenance (requested ''%s'', precomputed ' ...
+        'info carries ''%s'').'], backendReq, info.dipole.backend);
+end
+end
+
+function local_check_grid_provenance(info, opts, grid)
+%LOCAL_CHECK_GRID_PROVENANCE An explicit gridConvention/gridOffset/gammaPolicy request was made
+% alongside precomputed opts.Jnu/opts.info: require complete info.grid, resolve any omitted
+% request member to invz_bz_couplings' own defaults, and compare EXACTLY (convention, offset,
+% gammaPolicy, and the requested grid dimensions).
+if ~local_has_complete_grid_provenance(info)
+    error('invz:spectraGridProvenanceMissing', ['an explicit gridConvention/gridOffset/gammaPolicy ' ...
+        'request was given together with precomputed opts.Jnu/opts.info, but opts.info lacks ' ...
+        'complete info.grid provenance; cannot verify the precomputed couplings actually used the ' ...
+        'requested grid policy.']);
+end
+convention = getf(opts, 'gridConvention', 'legacy_inclusive');
+if isstring(convention) && isscalar(convention), convention = char(convention); end
+gridOffset  = logical(reshape(getf(opts, 'gridOffset', [0 0 0]), 1, 3));
+gammaPolicy = getf(opts, 'gammaPolicy', 'P_drop');
+if isstring(gammaPolicy) && isscalar(gammaPolicy), gammaPolicy = char(gammaPolicy); end
+gr = info.grid;
+conflict = ~isequal(gr.convention, convention) || ~isequal(gr.offset, gridOffset) || ...
+    ~isequal(gr.gammaPolicy, gammaPolicy) || ~isequal(gr.requested, reshape(grid, 1, 3));
+if conflict
+    error('invz:spectraGridConflict', ['the requested gridConvention/gridOffset/gammaPolicy/grid ' ...
+        'dimensions conflict with the precomputed opts.info.grid provenance.']);
+end
 end
