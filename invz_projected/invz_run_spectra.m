@@ -93,6 +93,13 @@ wq = (0:0.02:6).';                 % eUnit -- q-path frequency grid (0-6 GHz ~ 0
 dispScale = 1;                       % dispersion display scale factor; R 2007 scales the
                                      % calculated energies by 1.15 to match experiment (Fig 3)
 
+% ---- dipole backend (Step-5 opt-in; the defaults reproduce the legacy bruteforce/legacy-grid path) ----
+dipoleBackend  = 'bruteforce';       % 'bruteforce' (default) | 'ewald' -- lattice dipolar-sum backend
+ewaldOpts      = struct();           % Ewald controls {alpha,r_cut,g_cut,boundary}; used only when dipoleBackend = 'ewald'
+gridConvention = '';                 % '' (legacy BZ grid) | 'halfopen' -- opt-in half-open BZ quadrature (new grid route)
+gridOffset     = [];                 % [] (none) | [oh ok ol] logical -- BZ sub-offset (new grid route only)
+gammaPolicy    = '';                 % '' | 'P_complete' | 'P_drop' -- Gamma-row policy (new grid route only)
+
 C = invz_const();
 switch eUnit
     case 'meV', eScale = 1;         eLabel = '\omega (meV)';
@@ -114,6 +121,17 @@ if ~strcmp(transverse_mf, 'legacy_x'), tiltStr = [tiltStr sprintf(', %s', transv
 
 solve_opts = struct('transverse_mf', transverse_mf);   % merged into every spectra call below
 
+% Coupling backend/grid options (Step-5 opt-in): always pass the explicit backend; add the Ewald
+% controls and each grid-policy field only when selected, so the defaults above reproduce the legacy
+% bruteforce/legacy-grid path exactly. Merged into every spectra_map/spectra_qpath call below.
+coupling_opts = struct('dipole', dipoleBackend);
+if strcmp(dipoleBackend, 'ewald'),  coupling_opts.ewald          = ewaldOpts;      end
+if ~isempty(gridConvention),        coupling_opts.gridConvention = gridConvention;  end
+if ~isempty(gridOffset),            coupling_opts.gridOffset     = gridOffset;      end
+if ~isempty(gammaPolicy),           coupling_opts.gammaPolicy    = gammaPolicy;     end
+qpOpts  = coupling_opts;  qpOpts.eta = eta;  qpOpts.solve_opts = solve_opts;
+mapOpts = coupling_opts;  mapOpts.parallel = useParallel;  mapOpts.eta = eta;  mapOpts.field_dir = dhat;  mapOpts.solve_opts = solve_opts;
+
 % w and wq are given in eUnit; solves run in meV, so convert on the way in (eScale is the
 % meV->eUnit factor) and scale returned grids (S.w, Epeak) back up by eScale for plotting.
 % eta is ALWAYS in meV, independent of eUnit, and passes through unconverted.
@@ -123,7 +141,7 @@ wqMeV  = wq  / eScale;
 if ~isempty(qpath)
     % ---------------- FM-mode q-path view at fixed field(s) ----------------
     if isscalar(Bq)
-        S = invz_spectra_qpath(ion, T, Bq*dhat, qpath, wqMeV, struct('eta', eta, 'solve_opts', solve_opts));
+        S = invz_spectra_qpath(ion, T, Bq*dhat, qpath, wqMeV, qpOpts);
         Splot = S;   % display-only copy; the solve above always ran in meV
         Splot.w = S.w*eScale;  Splot.Epeak = S.Epeak*eScale;  Splot.Epeak_rpa = S.Epeak_rpa*eScale;
         figure('Position', [100 100 1150 460]);
@@ -136,7 +154,7 @@ if ~isempty(qpath)
     else
         figure; hold on;  co = lines(numel(Bq));
         for k = 1:numel(Bq)
-            Sk = invz_spectra_qpath(ion, T, Bq(k)*dhat, qpath, wqMeV, struct('eta', eta, 'solve_opts', solve_opts));
+            Sk = invz_spectra_qpath(ion, T, Bq(k)*dhat, qpath, wqMeV, qpOpts);
             plot(Sk.x, Sk.Epeak*eScale*dispScale,     '-',  'Color', co(k, :), ...
                  'DisplayName', sprintf('1/z, %.2f T', Bq(k)));
             plot(Sk.x, Sk.Epeak_rpa*eScale*dispScale, '--', 'Color', co(k, :), ...
@@ -153,8 +171,7 @@ if ~isempty(qpath)
     end
 else
     % ---------------- field-sweep views at the uniform mode ----------------
-    S = invz_spectra_map(ion, T, fields, wMeV, ...
-            struct('parallel', useParallel, 'eta', eta, 'field_dir', dhat, 'solve_opts', solve_opts));
+    S = invz_spectra_map(ion, T, fields, wMeV, mapOpts);
 
     fprintf('Bc_auto (bare-MF dispatch; RPA proxy only where the ordered EMT converged) ~ %s T | Bc_1z (renormalized) ~ %s T  (sweep midpoints; masked/suspect columns widen the bracket)\n', ...
             num2str(S.Bc_auto), num2str(S.Bc_1z));
