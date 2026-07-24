@@ -9,12 +9,13 @@ function tests = test_invz_ewald_baselines
 %
 % This is the regression spine every later Step-5 task (which DOES modify
 % invz_jq_modes.m/invz_jq_path.m) must continue to satisfy for an absent or
-% explicit opts.dipole='bruteforce' request: Jnu, Juni, every info field,
-% and every pre-existing P field must remain isequaln to this frozen
-% reference. Task 1 itself does not modify invz_jq_modes.m/invz_jq_path.m,
-% so this test currently compares the reference against itself in all but
-% implementation (both are, today, the identical pre-Step-5 arithmetic);
-% its value is as the frozen baseline later tasks regress against.
+% explicit opts.dipole='bruteforce' request: Jnu, Juni, every LEGACY info field,
+% and every pre-existing P field must remain isequaln to this frozen reference.
+% From Task 2 on, production additively exports new fields (info.dipole,
+% info.Jpath_base_cc, info.Jgamma_cc, later info.grid / P.dipole); those are NOT
+% a regression -- verify_struct_fields_isequaln strips production to the
+% reference's legacy field set before comparing, and the additive fields are
+% validated separately (test_invz_jq_modes_ewald and the per-task Ewald tests).
 tests = functiontests(localfunctions);
 end
 
@@ -119,15 +120,25 @@ end
 % shared helper (name deliberately free of "test" so functiontests skips it)
 % =====================================================================
 function verify_struct_fields_isequaln(testCase, s_ref, s_prod, label, ctx)
-% Field-SET equality first (fails loudly if the reference or production
-% side is missing/gains a field), then isequaln on every individual field
-% (fails loudly, and per-field, on any numeric/content divergence).
+% Legacy-field regression per the plan's "Legacy regression" contract
+% (docs/superpowers/plans/2026-07-24-ewald-step5-integration.md): every field of
+% the frozen pre-Step-5 REFERENCE must be present in production and isequaln to
+% it. Production MAY additively carry new Step-5 fields (e.g. info.dipole,
+% info.Jpath_base_cc, info.Jgamma_cc, info.grid, P.dipole) -- those are NOT a
+% regression and are validated separately (test_invz_jq_modes_ewald and the
+% per-task Ewald tests). So strip production to the reference's legacy field set
+% before asserting: fail loudly on any MISSING legacy field, and per-field on any
+% content divergence of a legacy field. This keeps the spine robust as later
+% tasks add additive fields while still catching any drop or drift of a legacy
+% field bit-for-bit.
 fn_ref  = sort(fieldnames(s_ref));
-fn_prod = sort(fieldnames(s_prod));
-verifyEqual(testCase, fn_ref, fn_prod, sprintf( ...
-    '%s field-name set differs between reference and production (%s).', label, ctx));
-for i = 1:numel(fn_prod)
-    f = fn_prod{i};
+missing = setdiff(fn_ref, fieldnames(s_prod));
+verifyEmpty(testCase, missing, sprintf( ...
+    '%s: production is MISSING legacy field(s) {%s} (%s).', ...
+    label, strjoin(missing(:).', ', '), ctx));
+for i = 1:numel(fn_ref)
+    f = fn_ref{i};
+    if ~isfield(s_prod, f), continue; end   % already reported as missing above
     verifyTrue(testCase, isequaln(s_ref.(f), s_prod.(f)), sprintf( ...
         '%s.%s differs between reference and production (%s).', label, f, ctx));
 end
