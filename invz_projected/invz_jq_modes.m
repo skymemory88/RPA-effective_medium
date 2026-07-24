@@ -25,25 +25,81 @@ function [Jnu, info, Juni] = invz_jq_modes(ion, qvec, opts)
 % feeds the DS2023 mean-field mechanism into the MF, the RPA denominator and
 % the 1/z criticality. Diagnostics land in info.odd (see jq_modes_odd below).
 % With opts.odd false/absent the default path below runs untouched (bitwise
-% regression-gated); the ODD path never reads or writes the jq4_ cache.
+% regression-gated); the ODD path never reads or writes the jq4_/jq5_ cache.
+% opts.odd remains brute-force-only: an active ODD request combined with the
+% Ewald dipolar backend (below) is rejected before either diversion runs.
+%
+% Dipolar backend (Step-5 Task 2, opt-in; docs/invzp_ewald_prereg.md FROZEN,
+% docs/invzp_ewald_design.md Sec.2.2/2.3/4.2, docs/invzp_ewald_integration_map.md
+% Sec.6.3): opts.dipole = absent | 'bruteforce' (both resolve to the unchanged
+% brute-force MF_dipole path; identical cache identity) | 'ewald' (opt-in
+% invz_dipole_ewald primitive; opts.ewald must then be a scalar struct with
+% EXACTLY {alpha,r_cut,g_cut,boundary} -- this function does not synthesize
+% frozen defaults, see the higher-level drivers for that). The production
+% default remains bruteforce; no default flip happens here.
+%
+% Both backends additively export (appended AFTER every legacy field):
+%   info.dipole         = struct('backend',...,'ewald',...,'q_reduction',...,
+%                          'primitive_schema',...) -- full backend provenance;
+%                          bruteforce reports a canonical empty 'ewald' value
+%                          and a documented legacy q-convention string.
+%   info.Jpath_base_cc  = [4x4], NOT pre-Hermitized, the backend-agnostic
+%                          q-path reconstruction base invz_jq_path consumes:
+%                            bruteforce = -gfac*dip_sphere_cc(0) + Jex_cc(0)
+%                            ewald      = -gfac*dip_reg_cc(0) + Jex_cc(0) - lorz*ones(4)
+%   info.Jgamma_cc      = info.Jpath_base_cc + lorz*ones(4), the exact-Gamma
+%                          backend-agnostic production matrix (this single
+%                          formula reduces to both frozen Gate-C decompositions
+%                          -- see docs/invzp_ewald_prereg.md Sec.5 Gate-C).
+% Under Ewald, the regularized dipolar tensor already contains the isotropic
+% Lorentz term (design Sec.4.2: "Ewald adds 0 at Gamma"), so the per-q loop and
+% the Gamma-point Jcc0_dipole/Jaa0_dipole priming block add NO extra +lorz;
+% info.dpRng is NaN (dpRng does not affect the Ewald calculation or its cache
+% identity) and info.geomD is never populated (info.geomX, the UNCHANGED
+% exchange geometry, remains present under both backends).
+%
+% Cache: schema 'invz_jq_modes/v5', filenames 'jq5_<backend>_...'. A hit is
+% accepted only after an exact isequaln validation of a structured cacheMeta
+% payload (qvec, lattice, basis, Vc, J12, gfac, demag, top-level aspect ratio,
+% backend, exact Ewald controls or a canonical empty brute-force value, brute
+% dpRng or the Ewald NaN sentinel, the BZ cacheContext if the caller supplies
+% one via opts.cacheContext [Task 4] or a canonical direct-call context,
+% schema version, and the required info-field/output-shape contract); any
+% missing/legacy/malformed/mismatched payload is a miss and is recomputed.
+% Absent backend and explicit 'bruteforce' resolve to the identical backend
+% string and therefore share one canonical cache identity. This replaces the
+% v4 'jq4_' scheme (not extended in place); the ODD path's separate 'odd1_'
+% cache is untouched.
 if nargin < 3, opts = struct(); end
 dpRng = 30;  if isfield(opts,'dpRng'), dpRng = opts.dpRng; end
 useCache = ~isfield(opts,'cache') || opts.cache;
+
+% --- Backend dispatch (Step-5 Task 2): resolved/validated BEFORE the ODD
+% diversion below, per docs/invzp_ewald_design.md Sec.1.1/2.2. ---
+[backend, eopts] = local_resolve_dipole_backend(opts);
+
+activeOdd = isfield(opts, 'odd') && ~isempty(opts.odd) && ~isequal(opts.odd, false);
+if strcmp(backend, 'ewald') && activeOdd
+    error('invz:jqModesOddEwald', ['the ODD extension (opts.odd) is not supported together with ' ...
+        'the Ewald dipolar backend (opts.dipole=''ewald''); opts.odd must be false/absent when ' ...
+        'requesting Ewald. The ODD path remains brute-force-only (docs/invzp_ewald_design.md Sec.1.1).']);
+end
+
 % --- ODD diversion (T1.3): strictly additive and opt-in. Everything below this
 % block is the pre-ODD code path, byte-untouched (regression test
 % test_jq_modes_odd_off_bitwise gates isequaln on all three outputs).
-if isfield(opts, 'odd') && ~isempty(opts.odd) && ~isequal(opts.odd, false)
+if activeOdd
     [Jnu, info, Juni] = jq_modes_odd(ion, qvec, opts, dpRng, useCache);
     return
 end
 C = invz_const();
 % Lorentz cavity (+4pi/(3Vc)) is always added at the uniform mode (mandatory
-% split term, not a toggle). Demagnetization (ion.demag/ion.alpha, default
-% off) cancels from the critical condition per R2007, so Jnu/info.Jcc0/Tc(B=0)
-% are demag-invariant; it is exported instead as info.Jshape_cc (applied
-% downstream via chi_meas = chi/(1+Jshape_cc*chi) in invz_chi_realaxis) and
-% folded into demag-aware info.Jaa0, through which Bc(T) vs applied field can
-% still shift.
+% split term, not a toggle) for the BRUTE-FORCE backend. Demagnetization
+% (ion.demag/ion.alpha, default off) cancels from the critical condition per
+% R2007, so Jnu/info.Jcc0/Tc(B=0) are demag-invariant; it is exported instead
+% as info.Jshape_cc (applied downstream via chi_meas = chi/(1+Jshape_cc*chi) in
+% invz_chi_realaxis) and folded into demag-aware info.Jaa0, through which
+% Bc(T) vs applied field can still shift. This block is backend-independent.
 demag = 0;   if isfield(ion,'demag')  && ~isempty(ion.demag),  demag = ion.demag;  end
 if isfield(opts,'demag') && ~isempty(opts.demag), demag = opts.demag; end
 alpha = 1;   if isfield(ion,'alpha')  && ~isempty(ion.alpha),  alpha = ion.alpha;  end
@@ -55,57 +111,112 @@ if demag ~= 0
 else
     dm_cc = 0;  dm_aa = 0;                             % off: byte-identical to the pre-demag code
 end
+
 cacheDir = fullfile(fileparts(mfilename('fullpath')), 'cache');
-pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; demag; alpha; 4];   % trailing 4 = cache schema v4 (adds info.geomD/geomX)
-key = sprintf('jq4_%d_%s_%s.mat', dpRng, hash_vec(qvec(:)), hash_vec(pkey));
+cacheContext = local_resolve_cache_context(opts);
+reqInfoFields = local_required_info_fields(backend);
+cacheMeta = local_build_cache_meta(backend, eopts, dpRng, qvec, ion, C, demag, alpha, cacheContext, reqInfoFields);
+pkeyNum = local_pkey_numeric(backend, eopts, dpRng, ion, C, demag, alpha);
+dpTag = 'NaN';  if strcmp(backend,'bruteforce'), dpTag = sprintf('%d', dpRng); end
+key = sprintf('jq5_%s_%s_%s_%s.mat', backend, dpTag, hash_vec(qvec(:)), hash_vec(pkeyNum));
 cacheFile = fullfile(cacheDir, key);
 if useCache && exist(cacheFile, 'file')
     S = load(cacheFile);
-    if isfield(S,'pkey') && isfield(S,'qvec') && isfield(S,'Juni') && isequal(S.pkey, pkey) && isequal(S.qvec, qvec)
+    if local_cache_hit_valid(S, cacheMeta, reqInfoFields)
         Jnu = S.Jnu;  info = S.info;  Juni = S.Juni;  return;
     end
-    % stale or legacy cache entry: fall through and recompute (file will be overwritten)
+    % missing/legacy/malformed/mismatched cache entry: fall through and recompute (file will be overwritten)
 end
 v = ones(4,1)/2;                 % uniform (all-sublattices-in-phase) ferromagnetic mode
 nq = size(qvec,1);
 Jnu  = zeros(nq, 4);
 Juni = zeros(nq, 1);
 lorz = 4*pi/(3*ion.Vc)*C.gfac;   % scalar; broadcasts to ones(4,4)-type Lorentz block (see header)
-% Build the q-independent lattice geometry ONCE and reuse it for every q below.
-% This priming call is itself at q=[0 0 0], so capture its dip0 for the Gamma-
-% point info block instead of recomputing it. MF_dipole/exchange are otherwise
-% bit-identical whether the geometry is rebuilt or passed in.
-[dip0, ~, geomD] = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
-[~,       geomX] = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau);
-for iq = 1:nq
-    q = qvec(iq,:);
-    dip = MF_dipole(q, dpRng, ion.a, ion.tau, geomD);       % [3,3,4,4], Å^-3
-    ex  = exchange(q, abs(ion.J12), ion.a, ion.tau, geomX); % [3,3,4,4], carries |J12|
-    Jcc = -squeeze(C.gfac*dip(3,3,:,:)) + sign(ion.J12)*squeeze(ex(3,3,:,:));
-    if invz_is_gamma_equiv(q, ion.tau)
-        Jcc = Jcc + lorz;                            % uniform-mode Lorentz cavity (demag-invariant)
+
+if strcmp(backend, 'bruteforce')
+    % ================= BRUTE-FORCE PATH (operation order byte-preserved) =================
+    % Build the q-independent lattice geometry ONCE and reuse it for every q below.
+    % This priming call is itself at q=[0 0 0], so capture its dip0 for the Gamma-
+    % point info block instead of recomputing it. MF_dipole/exchange are otherwise
+    % bit-identical whether the geometry is rebuilt or passed in.
+    [dip0, ~, geomD] = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
+    [~,       geomX] = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau);
+    for iq = 1:nq
+        q = qvec(iq,:);
+        dip = MF_dipole(q, dpRng, ion.a, ion.tau, geomD);       % [3,3,4,4], Å^-3
+        ex  = exchange(q, abs(ion.J12), ion.a, ion.tau, geomX); % [3,3,4,4], carries |J12|
+        Jcc = -squeeze(C.gfac*dip(3,3,:,:)) + sign(ion.J12)*squeeze(ex(3,3,:,:));
+        if invz_is_gamma_equiv(q, ion.tau)
+            Jcc = Jcc + lorz;                            % uniform-mode Lorentz cavity (demag-invariant)
+        end
+        Jcc = (Jcc + Jcc')/2;
+        Jnu(iq,:) = sort(real(eig(Jcc))).';
+        Juni(iq)  = real(v.'*Jcc*v);                     % uniform FM-mode coupling (physical dispersion)
     end
-    Jcc = (Jcc + Jcc')/2;
-    Jnu(iq,:) = sort(real(eig(Jcc))).';
-    Juni(iq)  = real(v.'*Jcc*v);                     % uniform FM-mode coupling (physical dispersion)
+    % Γ-point info block (dip0 from the priming call above), uniform-mode projection:
+    Jcc0d = -squeeze(C.gfac*dip0(3,3,:,:)) + lorz;
+    Jaa0d = -squeeze(C.gfac*dip0(1,1,:,:)) + lorz - dm_aa;
+    Jcc0d = (Jcc0d + Jcc0d')/2;
+    Jaa0d = (Jaa0d + Jaa0d')/2;
+    info.Jcc0_dipole = real(v.'*Jcc0d*v);
+    info.Jaa0_dipole = real(v.'*Jaa0d*v);
+    info.Jcc0 = info.Jcc0_dipole + 4*ion.J12;
+    info.Jaa0      = info.Jaa0_dipole + 4*ion.J12;   % transverse J(0), demag-aware (meV)
+    info.Jshape_cc = 4*dm_cc;                        % strict-uniform observable correction (meV); 0 when demag = 0
+    info.dpRng = dpRng;
+    info.geomD = geomD;   % q-independent lattice geometry (MF_dipole/exchange 5-arg reuse form),
+    info.geomX = geomX;   % exposed so callers (e.g. invz_jq_path's Gamma-limit Greg) can rebuild a
+                           % q=0 dip/ex matrix without re-deriving the geometry (bit-identical either way).
+    % ---- Additive Gamma metadata (Step-5 Task 2), appended AFTER all legacy fields. ----
+    % Recovers the Gamma exchange tensor the priming call above discards (bit-identical
+    % reuse of the already-built geomX -- docs/invzp_ewald_integration_map.md Sec.6.1).
+    ex0 = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau, geomX);
+    info.dipole = struct('backend', 'bruteforce', 'ewald', local_empty_ewald(), ...
+        'q_reduction', ['bruteforce: q used directly as MF_dipole/exchange Miller indices ' ...
+                         '(q*geom.b); no canonical q-domain reduction applied'], ...
+        'primitive_schema', 'MF_dipole+exchange (legacy, unversioned)');
+    info.Jpath_base_cc = -C.gfac*squeeze(dip0(3,3,:,:)) + sign(ion.J12)*squeeze(ex0(3,3,:,:));
+    info.Jgamma_cc     = info.Jpath_base_cc + lorz*ones(4);
+else
+    % ================= EWALD PATH (additive; opt-in) =================
+    % Build/reuse ONE invz_dipole_ewald geometry across every q below (same
+    % priming-call pattern as the brute-force branch). exchange is UNCHANGED
+    % and used identically to the brute-force branch (design Sec.9: "exchange
+    % is out of scope"). No +lorz is added anywhere here: the regularized
+    % Ewald tensor already contains the isotropic Lorentz term at Gamma
+    % (design Sec.4.2; prereg Sec.5 Gate-C).
+    [dip0, ~, geomE] = invz_dipole_ewald([0 0 0], ion.a, ion.tau, eopts);
+    [~,       geomX] = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau);
+    for iq = 1:nq
+        q = qvec(iq,:);
+        dip = invz_dipole_ewald(q, ion.a, ion.tau, eopts, geomE);
+        ex  = exchange(q, abs(ion.J12), ion.a, ion.tau, geomX);
+        Jcc = -squeeze(C.gfac*dip(3,3,:,:)) + sign(ion.J12)*squeeze(ex(3,3,:,:));
+        Jcc = (Jcc + Jcc')/2;
+        Jnu(iq,:) = sort(real(eig(Jcc))).';
+        Juni(iq)  = real(v.'*Jcc*v);
+    end
+    Jcc0d = -squeeze(C.gfac*dip0(3,3,:,:));            % NO +lorz: already inside dip_reg
+    Jaa0d = -squeeze(C.gfac*dip0(1,1,:,:)) - dm_aa;    % NO +lorz: already inside dip_reg
+    Jcc0d = (Jcc0d + Jcc0d')/2;
+    Jaa0d = (Jaa0d + Jaa0d')/2;
+    info.Jcc0_dipole = real(v.'*Jcc0d*v);
+    info.Jaa0_dipole = real(v.'*Jaa0d*v);
+    info.Jcc0 = info.Jcc0_dipole + 4*ion.J12;
+    info.Jaa0      = info.Jaa0_dipole + 4*ion.J12;     % transverse J(0), demag-aware (meV); same semantics as bruteforce
+    info.Jshape_cc = 4*dm_cc;                          % same caller-level demag semantics as bruteforce
+    info.dpRng = NaN;                  % Ewald: dpRng does not affect the calculation or cache identity
+    info.geomX = geomX;                % UNCHANGED exchange geometry; info.geomD is intentionally NEVER set
+    ex0 = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau, geomX);
+    info.dipole = struct('backend', 'ewald', 'ewald', eopts, ...
+        'q_reduction', geomE.fingerprint.qconv, 'primitive_schema', geomE.fingerprint.schema);
+    info.Jpath_base_cc = -C.gfac*squeeze(dip0(3,3,:,:)) + sign(ion.J12)*squeeze(ex0(3,3,:,:)) - lorz*ones(4);
+    info.Jgamma_cc     = info.Jpath_base_cc + lorz*ones(4);   % = -gfac*dip_reg_cc(0)+Jex_cc(0): adds 0 extra
 end
-% Γ-point info block (dip0 from the priming call above), uniform-mode projection:
-Jcc0d = -squeeze(C.gfac*dip0(3,3,:,:)) + lorz;
-Jaa0d = -squeeze(C.gfac*dip0(1,1,:,:)) + lorz - dm_aa;
-Jcc0d = (Jcc0d + Jcc0d')/2;
-Jaa0d = (Jaa0d + Jaa0d')/2;
-info.Jcc0_dipole = real(v.'*Jcc0d*v);
-info.Jaa0_dipole = real(v.'*Jaa0d*v);
-info.Jcc0 = info.Jcc0_dipole + 4*ion.J12;
-info.Jaa0      = info.Jaa0_dipole + 4*ion.J12;   % transverse J(0), demag-aware (meV)
-info.Jshape_cc = 4*dm_cc;                        % strict-uniform observable correction (meV); 0 when demag = 0
-info.dpRng = dpRng;
-info.geomD = geomD;   % q-independent lattice geometry (MF_dipole/exchange 5-arg reuse form),
-info.geomX = geomX;   % exposed so callers (e.g. invz_jq_path's Gamma-limit Greg) can rebuild a
-                       % q=0 dip/ex matrix without re-deriving the geometry (bit-identical either way).
+
 if useCache
     if ~exist(cacheDir,'dir'), mkdir(cacheDir); end
-    save(cacheFile, 'Jnu', 'info', 'Juni', 'pkey', 'qvec');
+    save(cacheFile, 'Jnu', 'info', 'Juni', 'cacheMeta');
 end
 end
 
@@ -114,24 +225,189 @@ h = sprintf('%dv_%08x', numel(v), ...
     typecast(single(sum(v.*(1:numel(v))')), 'uint32'));
 end
 
+% =====================================================================
+% Step-5 Task 2: backend dispatch validation, cache metadata, cache-hit
+% validation. Every raised identifier is stable and invz:jqModes*-namespaced.
+% =====================================================================
+function [backend, eopts] = local_resolve_dipole_backend(opts)
+% Resolves opts.dipole (absent or 'bruteforce' -> 'bruteforce' | 'ewald' -> 'ewald')
+% and strictly validates opts.ewald against the resolved backend. jq_modes does
+% NOT synthesize frozen Ewald defaults -- opts.ewald must already be a
+% complete {alpha,r_cut,g_cut,boundary} struct for the Ewald backend; default
+% derivation is a higher-layer concern (docs/invzp_ewald_design.md Sec.2.2).
+if ~isfield(opts, 'dipole') || isempty(opts.dipole)
+    backend = 'bruteforce';
+else
+    raw = opts.dipole;
+    if isstring(raw) && isscalar(raw)
+        raw = char(raw);
+    end
+    if ~(ischar(raw) && isrow(raw))
+        error('invz:jqModesBackend', ...
+            ['opts.dipole must be a scalar string/char naming a backend ' ...
+             '(''bruteforce''|''ewald''); got class %s.'], class(opts.dipole));
+    end
+    if ~(strcmp(raw,'bruteforce') || strcmp(raw,'ewald'))
+        error('invz:jqModesBackend', ...
+            'unknown opts.dipole backend ''%s''; supported backends are ''bruteforce'' and ''ewald''.', raw);
+    end
+    backend = raw;
+end
+
+hasEwaldOpts = isfield(opts, 'ewald') && ~isempty(opts.ewald);
+if hasEwaldOpts && ~strcmp(backend, 'ewald')
+    error('invz:jqModesEwaldOptsUnexpected', ...
+        ['opts.ewald was supplied but the resolved opts.dipole backend is ''%s'', not ''ewald''; ' ...
+         'Ewald controls are only accepted with an explicit opts.dipole=''ewald'' request.'], backend);
+end
+
+eopts = [];
+if strcmp(backend, 'ewald')
+    if ~hasEwaldOpts || ~isstruct(opts.ewald) || ~isscalar(opts.ewald)
+        error('invz:jqModesEwaldOptsFields', ...
+            ['opts.dipole=''ewald'' requires a complete scalar struct opts.ewald with EXACTLY the ' ...
+             'fields {alpha, r_cut, g_cut, boundary}; jq_modes does not synthesize frozen defaults.']);
+    end
+    want = sort({'alpha','r_cut','g_cut','boundary'});
+    have = sort(reshape(fieldnames(opts.ewald), 1, []));
+    if ~isequal(have, want)
+        error('invz:jqModesEwaldOptsFields', ...
+            'opts.ewald must have EXACTLY the fields {alpha, r_cut, g_cut, boundary}; got {%s}.', ...
+            strjoin(reshape(fieldnames(opts.ewald), 1, []), ', '));
+    end
+    b = opts.ewald.boundary;
+    if isstring(b) && isscalar(b), b = char(b); end
+    if ~(ischar(b) && isrow(b) && strcmp(b, 'conducting_k0_omitted'))
+        error('invz:jqModesEwaldBoundary', ...
+            'opts.ewald.boundary must be ''conducting_k0_omitted''; got %s.', local_describe_value(opts.ewald.boundary));
+    end
+    eopts = opts.ewald;
+end
+end
+
+function s = local_describe_value(x)
+if (ischar(x) && isrow(x)) || (isstring(x) && isscalar(x))
+    s = ['''' char(x) ''''];
+else
+    s = class(x);
+end
+end
+
+function ewaldEmpty = local_empty_ewald()
+% Canonical empty Ewald value: same field names as a real eopts struct (for a
+% predictable, backend-independent info.dipole.ewald shape), sentinel-empty
+% values. Used for BOTH info.dipole.ewald and the bruteforce cacheMeta.ewald.
+ewaldEmpty = struct('alpha', [], 'r_cut', [], 'g_cut', [], 'boundary', '');
+end
+
+function ctx = local_resolve_cache_context(opts)
+% The BZ layer (Task 4) will supply/own a private, validated opts.cacheContext
+% (route, grid dimensions, convention, offset, Gamma policy, q digest); stored
+% and isequaln-validated as-is here. Direct/anchor calls that supply none get
+% a canonical direct-call sentinel so their cache identity stays well-defined
+% and distinct from any future BZ-layer context 'kind'.
+if isfield(opts, 'cacheContext') && ~isempty(opts.cacheContext)
+    ctx = opts.cacheContext;
+else
+    ctx = struct('kind', 'direct_call');
+end
+end
+
+function fn = local_required_info_fields(backend)
+% Backend-specific fixed info field-name contract (part of the v5 cacheMeta
+% "required output field names/shapes"); info.geomD exists ONLY for bruteforce.
+core = {'Jcc0_dipole','Jaa0_dipole','Jcc0','Jaa0','Jshape_cc','dpRng','geomX', ...
+        'dipole','Jpath_base_cc','Jgamma_cc'};
+if strcmp(backend, 'bruteforce')
+    fn = sort(reshape([core, {'geomD'}], [], 1));
+else
+    fn = sort(reshape(core, [], 1));
+end
+end
+
+function cacheMeta = local_build_cache_meta(backend, eopts, dpRng, qvec, ion, C, demag, alpha, cacheContext, reqInfoFields)
+% Structured v5 cache-identity payload (global cache contract: exact qvec,
+% lattice, basis, Vc, J12, gfac, demag, top-level aspect ratio, backend, exact
+% Ewald controls or a canonical empty brute-force value, brute dpRng or the
+% Ewald NaN sentinel, BZ cacheContext or a canonical direct-call context,
+% schema version, required output field names/shapes). Accepted on a filename
+% hit ONLY after an exact isequaln match (see local_cache_hit_valid).
+cacheMeta = struct();
+cacheMeta.schema  = 'invz_jq_modes/v5';
+cacheMeta.qvec    = qvec;
+cacheMeta.lattice = ion.a;
+cacheMeta.basis   = ion.tau;
+cacheMeta.Vc      = ion.Vc;
+cacheMeta.J12     = ion.J12;
+cacheMeta.gfac    = C.gfac;
+cacheMeta.demag   = demag;
+cacheMeta.aspect  = alpha;             % top-level ellipsoid aspect ratio (NOT eopts.alpha)
+cacheMeta.backend = backend;
+if strcmp(backend, 'ewald')
+    cacheMeta.ewald = eopts;
+    cacheMeta.dpRng = NaN;
+else
+    cacheMeta.ewald = local_empty_ewald();
+    cacheMeta.dpRng = dpRng;
+end
+cacheMeta.cacheContext  = cacheContext;
+cacheMeta.reqInfoFields = reqInfoFields;
+cacheMeta.JnuCols  = 4;
+cacheMeta.JuniCols = 1;
+end
+
+function pkeyNum = local_pkey_numeric(backend, eopts, dpRng, ion, C, demag, alpha)
+% Compact numeric fingerprint for the cache FILENAME digest only (convenience/
+% collision-reduction, NOT the safety mechanism -- see local_cache_hit_valid's
+% isequaln check on the full cacheMeta, which is what actually gates a hit).
+pkeyNum = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; demag; alpha; 5];   % trailing 5 = schema v5
+if strcmp(backend, 'ewald')
+    pkeyNum = [pkeyNum; eopts.alpha; eopts.r_cut; eopts.g_cut];
+else
+    pkeyNum = [pkeyNum; dpRng];
+end
+end
+
+function ok = local_cache_hit_valid(S, cacheMeta, reqInfoFields)
+% A filename hit is accepted only after this exact structural + isequaln
+% validation. Missing, legacy (pre-v5), malformed, or mismatched payloads are
+% ALL treated as misses (recomputed), never trusted.
+ok = false;
+if ~isfield(S,'cacheMeta') || ~isfield(S,'Jnu') || ~isfield(S,'info') || ~isfield(S,'Juni')
+    return   % missing/legacy (e.g. jq4_-style) payload
+end
+if ~isequaln(S.cacheMeta, cacheMeta)
+    return   % any mismatch anywhere in the structured payload
+end
+nq = size(cacheMeta.qvec, 1);
+if ~isequal(size(S.Jnu), [nq 4]) || ~isequal(size(S.Juni), [nq 1])
+    return   % malformed shapes
+end
+if ~isequal(sort(reshape(fieldnames(S.info), [], 1)), reqInfoFields)
+    return   % malformed/legacy info field set
+end
+ok = true;
+end
+
 function [Jnu, info, Juni] = jq_modes_odd(ion, qvec, opts, dpRng, useCache)
 %JQ_MODES_ODD opts.odd branch of invz_jq_modes (T1.3; E1/E4/E5).
 % Rebuilds the cc channel as M(q) = Vcc(q) + deltaJ(q) from the geometric ODD
 % blocks (invz_odd_blocks; odd1_ cache when useCache) and the supplied
 % transverse susceptibility Xp = opts.odd.Xp, then eigendecomposes per q
 % exactly as the default path does (same sort(real(eig(.))) and uniform-mode
-% Juni = v'*M*v). NEVER reads or writes the jq4_ cache: the ODD Jnu depend on
-% Xp, which is not part of the jq4_ key; the heavy geometric blocks are cached
-% under odd1_ by invz_odd_blocks itself.
+% Juni = v'*M*v). NEVER reads or writes the jq4_/jq5_ cache: the ODD Jnu depend
+% on Xp, which is not part of that key; the heavy geometric blocks are cached
+% under odd1_ by invz_odd_blocks itself. Always brute-force (Ewald+ODD is
+% rejected before this function is ever reached -- see the dispatch above).
 %
 % info mirrors the default path field-for-field:
 %   Jcc0            = infoB.Jcc0 - d  <- THE single line that carries the
 %                     MF-level DS2023 mechanism into the mean field, the RPA
-%                     denominator and the 1/z criticality (single-sourcing).
-%                     Bookkeeping (plan T1.3): the grid matrices carry the
-%                     POST-subtraction deltaJ -- whose diagonal already
-%                     contains -d (E4) -- and Jcc0 carries the explicit -d
-%                     (E5); there is NO other q = 0 handling anywhere.
+%                     denominator and the 1/z criticality. Bookkeeping (plan
+%                     T1.3): the grid matrices carry the POST-subtraction
+%                     deltaJ -- whose diagonal already contains -d (E4) --
+%                     and Jcc0 carries the explicit -d (E5); there is NO
+%                     other q = 0 handling anywhere.
 %   Jcc0_dipole, Jaa0_dipole, Jaa0, dpRng: from invz_odd_blocks' Gamma info
 %                     block, bit-identical to the default path at demag = 0
 %                     (T1.1 parity test). info.lorz rides along (extra,
