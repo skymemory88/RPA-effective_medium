@@ -253,27 +253,53 @@ recip_cube_bound = (2*nmax_G + 1)^3;
 end
 
 % =====================================================================
-% conservative byte manifest (matches the arrays that are allocated)
+% conservative byte manifest (prereg sec 2: enumerate EVERY size-dependent
+% retained/temporary numeric/logical array -- real+reciprocal geometry, the
+% local_boxmin_dist temporaries (boxmin_*), the per-q loop-body temporaries
+% (qwork_*), and the output. The O(1) fixed 3x3 metric scratch (M/MFF) is
+% excluded as non-size-dependent. Rows are summed as if simultaneously live,
+% which conservatively over-bounds the true peak working set.
 % =====================================================================
 function [manifest, est_bytes] = local_manifest(real_cube_bound, recip_cube_bound, ntau, nq, MARGIN)
 RBmax = max(real_cube_bound(:));          % worst single-pair temporary mesh
 RBsum = sum(real_cube_bound(:));          % conservative total retained real vectors
 GC    = recip_cube_bound;                 % conservative candidate count
 rows = struct('name',{},'class',{},'is_complex',{},'size',{},'numel',{},'bytes',{});
+% -- real-space geometry: per-pair build mesh + retained union --
 rows(end+1) = local_mkrow('real_int_mesh',  'double',  false, [RBmax 3]);
 rows(end+1) = local_mkrow('real_cart_mesh', 'double',  false, [RBmax 3]);
 rows(end+1) = local_mkrow('real_radius',    'double',  false, [RBmax 1]);
 rows(end+1) = local_mkrow('real_mask',      'logical', false, [RBmax 1]);
 rows(end+1) = local_mkrow('real_x',         'double',  false, [RBsum 3]);
 rows(end+1) = local_mkrow('real_gab',       'double',  false, [RBsum 9]);
+% -- reciprocal candidate build mesh --
 rows(end+1) = local_mkrow('recip_int_mesh', 'double',  false, [GC 3]);
 rows(end+1) = local_mkrow('recip_Gcart',    'double',  false, [GC 3]);
 rows(end+1) = local_mkrow('recip_dmin',     'double',  false, [GC 1]);
+% -- local_boxmin_dist temporaries (nG = GC candidate rows) --
+rows(end+1) = local_mkrow('boxmin_lo',      'double',  false, [GC 3]);
+rows(end+1) = local_mkrow('boxmin_hi',      'double',  false, [GC 3]);
+rows(end+1) = local_mkrow('boxmin_v',       'double',  false, [GC 3]);
+rows(end+1) = local_mkrow('boxmin_RHS',     'double',  false, [GC 3]);
+rows(end+1) = local_mkrow('boxmin_VF',      'double',  false, [GC 3]);
+rows(end+1) = local_mkrow('boxmin_feas',    'logical', false, [GC 1]);
+rows(end+1) = local_mkrow('boxmin_f',       'double',  false, [GC 1]);
+rows(end+1) = local_mkrow('boxmin_fbest',   'double',  false, [GC 1]);
+% -- retained reciprocal per-pair phase --
 rows(end+1) = local_mkrow('recip_phase',    'double',  true,  [GC*ntau^2 1]);
+% -- per-q assembly work: qbar/K vectorized over nq; loop-body temporaries at
+%    single-iteration size, matching the existing qwork_k/qwork_kernel modelling --
 rows(end+1) = local_mkrow('qwork_qbar',     'double',  false, [nq 3]);
 rows(end+1) = local_mkrow('qwork_K',        'double',  false, [nq 3]);
 rows(end+1) = local_mkrow('qwork_k',        'double',  false, [GC 3]);
 rows(end+1) = local_mkrow('qwork_kernel',   'double',  true,  [GC 1]);
+rows(end+1) = local_mkrow('qwork_kk',       'double',  false, [GC 1]);
+rows(end+1) = local_mkrow('qwork_keep',     'logical', false, [GC 1]);
+rows(end+1) = local_mkrow('qwork_kK',       'double',  false, [GC 3]);
+rows(end+1) = local_mkrow('qwork_kk2',      'double',  false, [GC 1]);
+rows(end+1) = local_mkrow('qwork_ph',       'double',  true,  [RBmax 1]);
+rows(end+1) = local_mkrow('qwork_w',        'double',  true,  [GC 1]);
+% -- output + per-q retained count --
 rows(end+1) = local_mkrow('dip_output',     'double',  true,  [3 3 ntau ntau nq]);
 rows(end+1) = local_mkrow('recip_used',     'double',  false, [nq 1]);
 manifest  = rows(:);
@@ -396,6 +422,8 @@ function dmin = local_boxmin_dist(G, B)
 % Metric M = B*B' is SPD; minimize the convex quadratic f(v)=v*M*v' over the box
 % v in [G-0.5, G+0.5] by enumerating the 27 free/lower/upper active sets (no
 % Optimization Toolbox). The global box-min is the smallest feasible KKT value.
+% The size-dependent temporaries below (lo/hi/v/RHS/VF/feas/f/fbest, ~[nG,*]) are
+% accounted in local_manifest as boxmin_* -- keep the two in sync.
 M  = B*B.';
 nG = size(G,1);
 lo = G - 0.5;
@@ -454,6 +482,8 @@ gc2      = g_cut^2;
 dip = complex(zeros(3,3,ntau,ntau,nq));
 recip_used = zeros(nq,1);
 
+% Per-q loop-body temporaries (k/kk/keep/kK/kk2/kernel and, per pair, ph/w) are
+% accounted in local_manifest as qwork_* -- keep the two in sync.
 for i = 1:nq
     qraw = q(i,:);
     K    = floor(qraw + 0.5);        % extended-zone translation

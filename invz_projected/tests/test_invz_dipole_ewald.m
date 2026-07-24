@@ -243,6 +243,39 @@ o3 = local_named(c3.preflight.array_manifest, 'dip_output');
 verifyEqual(testCase, o3.numel, 3*o1.numel);                 % output scales exactly with nq
 end
 
+function test_manifest_names_are_complete(testCase)
+% Completeness (prereg sec 2): the byte manifest must enumerate EVERY
+% size-dependent retained/temporary array. This pins the full set so a future
+% omission (as with the box-min boxmin_* and per-q qwork_* temporaries an earlier
+% draft left out) fails loudly; exact set-equality also catches unaccounted strays.
+ion = invz_ion(); a = ion.a; tau = ion.tau;
+[~, counts] = invz_dipole_ewald([0.137 0.291 0.453], a, tau, default_eopts(a));
+man = counts.preflight.array_manifest;
+names = sort({man.name});
+expected = sort({ ...
+    'real_int_mesh','real_cart_mesh','real_radius','real_mask','real_x','real_gab', ...
+    'recip_int_mesh','recip_Gcart','recip_dmin', ...
+    'boxmin_lo','boxmin_hi','boxmin_v','boxmin_RHS','boxmin_VF','boxmin_feas','boxmin_f','boxmin_fbest', ...
+    'recip_phase', ...
+    'qwork_qbar','qwork_K','qwork_k','qwork_kernel','qwork_kk','qwork_keep','qwork_kK','qwork_kk2', ...
+    'qwork_ph','qwork_w', ...
+    'dip_output','recip_used'});
+verifyEqual(testCase, names, expected);
+% representative sizing/typing of the newly-accounted temporaries
+GC    = counts.preflight.recip_cube_bound;
+RBmax = max(counts.preflight.real_cube_bound(:));
+lo = local_named(man, 'boxmin_lo');
+verifyEqual(testCase, lo.numel, 3*GC);                       % [GC,3] box-min bound array
+feas = local_named(man, 'boxmin_feas');
+verifyEqual(testCase, feas.class, 'logical'); verifyEqual(testCase, feas.numel, GC);
+kp = local_named(man, 'qwork_keep');
+verifyEqual(testCase, kp.class, 'logical'); verifyEqual(testCase, kp.numel, GC);
+ph = local_named(man, 'qwork_ph');
+verifyTrue(testCase, ph.is_complex); verifyEqual(testCase, ph.numel, RBmax);   % per-pair phase ~[Kr,1]
+w = local_named(man, 'qwork_w');
+verifyTrue(testCase, w.is_complex); verifyEqual(testCase, w.numel, GC);
+end
+
 function row = local_named(man, name)
 row = man(strcmp({man.name}, name));
 end

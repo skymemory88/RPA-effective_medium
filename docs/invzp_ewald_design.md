@@ -1,5 +1,16 @@
 # Ewald dipolar-summation reformulation — DESIGN (PREREG-REVIEWED)
 
+> **STATUS ADDENDUM (2026-07-24 — supersedes the pre-freeze status language below).** The five §10
+> amendments were incorporated and the preregistration `docs/invzp_ewald_prereg.md` was **FROZEN
+> 2026-07-24** (with §12 Errata E1). The Step-4 primitive `invz_dipole_ewald.m` was subsequently
+> **built, reviewed, and committed** (`086d102..fcb3031`, additive; production default still
+> `bruteforce`; suite 269/0/23). Consequently the "not freeze-ready", "No Ewald implementation …
+> should begin", "Step 4 implementation remains unauthorized", and "does not authorize
+> implementation" statements in the header below and in §10 are **historical snapshots of the
+> pre-freeze review and are no longer operative**. Current operative status and roadmap:
+> `docs/invzp_ordered_1z_state.md`. Per the freeze rule, the original review text is retained
+> unedited below this note rather than rewritten.
+
 **Status: PREREG-REVIEWED DESIGN — design closure is complete, but this is not an implementation
 authorization.** This revision incorporates the independent review of the completed Phase-1 report,
 the derivation calibration, every live user-facing projected-spectra path, and review of the draft
@@ -660,3 +671,10 @@ freeze. Until then, Step 4 implementation remains unauthorized.
 This document does not authorize implementation, default changes, ODD/tensor-path adoption, or any
 Phase-3/3A/3B/4 work. This review authorizes only amendment and re-review of
 `docs/invzp_ewald_prereg.md`.
+
+> **[Superseded 2026-07-24 — see the STATUS ADDENDUM at the top of this file.]** The prereg was
+> amended per the five points above and **FROZEN** (2026-07-24, §12 Errata E1); the Step-4 primitive
+> was then built, reviewed, and committed (`086d102..fcb3031`, additive, production default still
+> `bruteforce`). The "remains unauthorized" / "does not authorize implementation" language in this
+> section is a historical pre-freeze snapshot and is no longer operative. Step 5 (opt-in integration,
+> default unchanged) is the current authorized phase.
