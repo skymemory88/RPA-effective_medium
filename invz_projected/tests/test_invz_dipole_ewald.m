@@ -1134,3 +1134,201 @@ kk = sum(k.^2, 2);
 keep = (kk <= g_cut^2) & (kk > 0);
 Gneed = Ghkl_all(keep,:);
 end
+
+% =====================================================================
+% Task 6 -- Gate-A test 5 (structural identities: conjugation/Hermiticity,
+% Gamma-realness, common origin-shift raw invariance, per-representative
+% Bravais-shift raw invariance, and cell-phase-gauge covariance)
+% =====================================================================
+function test_gateA5_hermiticity_and_gamma_realness(testCase)
+% Gate-A #5 part 1/2 (docs/invzp_ewald_prereg.md sec 3, item 5): for EVERY
+% q in fx.QA (30 points: Gamma + 3 generic + 6 face + 12 edge + 8 corner),
+% the returned complete tensor is pair-conjugate/Hermitian,
+% dip(:,:,m,n)==conj(dip(:,:,n,m)), at M_id -- called PER q on that q's own
+% complete [3,3,ntau,ntau] slice (never on the stacked 5-D array, which
+% would silently loosen T_scale to the worst component over the whole
+% stack). At EXACT Gamma the complete tensor, INCLUDING off-site blocks,
+% must additionally be real at M_id (max|imag|<=1e-12*T_scale): tested via
+% M.mid(dip0, real(dip0)), whose |A-B| is exactly |imag(dip0)| componentwise
+% and whose T_scale is exactly max(|dip0|) (since |real(dip0)|<=|dip0|
+% pointwise), i.e. precisely the frozen realness criterion.
+ion = invz_ion(); a = ion.a; tau = ion.tau; ntau = size(tau,1);
+eo = default_eopts(a);
+fx = invz_ewald_fixtures();
+M  = invz_ewald_metrics();
+
+dipQ = invz_dipole_ewald(fx.QA, a, tau, eo);   % ONE geom (internal), ONE batched call
+nQ = size(fx.QA,1);
+
+worst_herm_margin = -inf;
+for qi = 1:nQ
+    A = dipQ(:,:,:,:,qi);
+    herm = conj_transpose_pred(A, ntau);
+    mres = M.mid(A, herm);
+    verifyTrue(testCase, mres.pass, sprintf( ...
+        'Gate-A5: pair conjugation/Hermiticity fails M_id at fx.QA row %d (worst_margin=%.3e).', ...
+        qi, mres.worst_margin));
+    worst_herm_margin = max(worst_herm_margin, mres.worst_margin);
+end
+fprintf('Gate-A5 Hermiticity: worst M_id margin over %d fx.QA points = %.3e.\n', nQ, worst_herm_margin);
+
+gidx = find(all(fx.QA == 0, 2));
+verifyEqual(testCase, numel(gidx), 1, 'Gate-A5: fx.QA must contain exactly one exact-Gamma row.');
+dip0 = dipQ(:,:,:,:,gidx);
+mreal = M.mid(dip0, real(dip0));
+verifyTrue(testCase, mreal.pass, sprintf( ...
+    ['Gate-A5: exact-Gamma complete tensor (incl. off-site blocks) fails realness at M_id ' ...
+     '(worst_margin=%.3e).'], mreal.worst_margin));
+fprintf('Gate-A5 Gamma-realness: M_id margin = %.3e.\n', mreal.worst_margin);
+end
+
+function test_gateA5_origin_shift_invariance(testCase)
+% Gate-A #5 part 3/5: applying the frozen COMMON fractional-origin shift
+% fx.origin_shift (added to EVERY representative alike) leaves the complete
+% RAW (total-displacement-gauge) tensor invariant at M_id, for every q in
+% fx.QA. Shifting every tau row by the SAME vector leaves every pairwise
+% difference tau_m-tau_n -- hence every real-space displacement, reciprocal
+% phase, and extended-zone gauge-restore phase the primitive computes --
+% UNCHANGED up to floating round-off; this is a genuine structural
+% invariance of the primitive, not a numerical accident. tau's fingerprint
+% differs from the baseline, so a FRESH geometry is built (geom reuse across
+% a tau change would raise invz:ewaldGeomReuse).
+ion = invz_ion(); a = ion.a; tau = ion.tau;
+eo = default_eopts(a);
+fx = invz_ewald_fixtures();
+M  = invz_ewald_metrics();
+
+dipQ  = invz_dipole_ewald(fx.QA, a, tau, eo);                 % baseline (own geom)
+tau_os = tau + fx.origin_shift;                               % common shift, ALL reps
+dipOS  = invz_dipole_ewald(fx.QA, a, tau_os, eo);              % fresh geom (fingerprint differs)
+
+nQ = size(fx.QA,1);
+worst_margin = -inf;
+for qi = 1:nQ
+    mres = M.mid(dipOS(:,:,:,:,qi), dipQ(:,:,:,:,qi));
+    verifyTrue(testCase, mres.pass, sprintf( ...
+        'Gate-A5: common origin-shift breaks raw invariance at fx.QA row %d (worst_margin=%.3e).', ...
+        qi, mres.worst_margin));
+    worst_margin = max(worst_margin, mres.worst_margin);
+end
+fprintf('Gate-A5 common origin-shift raw invariance: worst M_id margin over %d fx.QA points = %.3e.\n', ...
+    nQ, worst_margin);
+end
+
+function test_gateA5_bravais_shift_invariance_and_cellphase_covariance(testCase)
+% Gate-A #5 part 4/5 (the load-bearing sign check): for EVERY basis
+% representative rep and BOTH frozen Bravais shifts L (fx.bravais_shifts),
+% rebuild geometry with tau2 = tau; tau2(rep,:) = tau2(rep,:) + L (an
+% INTEGER lattice vector -- this re-indexes which integer real cell counts
+% as "R=0" for that one representative while leaving every other
+% representative untouched). Two requirements, for every q in fx.QA:
+%   (a) RAW (total-displacement-gauge) invariance at M_id vs the unshifted
+%       dip -- the shift only relabels which integer cell each real-space
+%       term is enumerated under (the retained {x=R+d} SET is unchanged) and
+%       multiplies every reciprocal phase by exp(+/-i*2*pi*(integer
+%       Ghkl).(integer L)) == 1 EXACTLY (reciprocal-lattice duality), so the
+%       returned tensor is unchanged;
+%   (b) in the CELL-PHASE gauge Dcell_nm=exp(+i*2*pi*q.(tau_m-tau_n))*dip_nm
+%       (each result converted using its OWN tau -- unshifted tau for the
+%       baseline, tau2 for the shifted result), the shifted result obeys
+%       Dcell_shifted = U' * Dcell_unshifted * U at M_id, with U diagonal in
+%       sublattice, U(rep,rep)=exp(+i*2*pi*q.L), U(k,k)=1 for k~=rep.
+%       *** U' is on the LEFT: U'*Dcell*U, NOT U*Dcell*U' -- this exact sign
+%       was corrected and verified numerically against MF_dipole at freeze;
+%       the reverse fails by O(1) (8.2e-2 vs 1.0e-6). See
+%       docs/invzp_ewald_prereg.md sec 3 item 5. ***
+% Every M_id call is made PER (q,rep,L) on that combination's own complete
+% [3,3,ntau,ntau] tensor, built in full before the call (never a stacked
+% array, never an ad hoc block-relative tolerance).
+ion = invz_ion(); a = ion.a; tau = ion.tau; ntau = size(tau,1);
+eo = default_eopts(a);
+fx = invz_ewald_fixtures();
+M  = invz_ewald_metrics();
+
+dipQ = invz_dipole_ewald(fx.QA, a, tau, eo);   % baseline (own geom)
+nQ = size(fx.QA,1);
+
+worst_raw_margin = -inf;
+worst_cov_margin = -inf;
+for rep = 1:ntau
+    for li = 1:numel(fx.bravais_shifts)
+        L = fx.bravais_shifts{li};
+        tau2 = tau;
+        tau2(rep,:) = tau2(rep,:) + L;
+        dip2 = invz_dipole_ewald(fx.QA, a, tau2, eo);   % fresh geom (re-indexed real cells)
+
+        for qi = 1:nQ
+            q  = fx.QA(qi,:);
+            d0 = dipQ(:,:,:,:,qi);
+            d2 = dip2(:,:,:,:,qi);
+
+            % ---- (a) raw total-displacement-gauge invariance ---------------
+            mraw = M.mid(d2, d0);
+            verifyTrue(testCase, mraw.pass, sprintf( ...
+                ['Gate-A5: per-representative Bravais shift (rep=%d, L=[%g %g %g]) breaks raw ' ...
+                 'invariance at fx.QA row %d (worst_margin=%.3e).'], ...
+                rep, L(1), L(2), L(3), qi, mraw.worst_margin));
+            worst_raw_margin = max(worst_raw_margin, mraw.worst_margin);
+
+            % ---- (b) cell-phase covariance, U' * Dcell * U (U' on the LEFT) --
+            Dcell0 = to_cellphase(d0, q, tau,  ntau);    % unshifted result, its OWN tau
+            Dcell2 = to_cellphase(d2, q, tau2, ntau);    % shifted result, its OWN tau2
+            pred   = covariance_pred(Dcell0, q, L, rep, ntau);
+            mcov = M.mid(Dcell2, pred);
+            verifyTrue(testCase, mcov.pass, sprintf( ...
+                ['Gate-A5: cell-phase covariance U''*Dcell*U fails (rep=%d, L=[%g %g %g]) at ' ...
+                 'fx.QA row %d (worst_margin=%.3e).'], ...
+                rep, L(1), L(2), L(3), qi, mcov.worst_margin));
+            worst_cov_margin = max(worst_cov_margin, mcov.worst_margin);
+        end
+    end
+end
+fprintf(['Gate-A5 Bravais-shift raw invariance + cell-phase covariance: worst raw M_id margin = ' ...
+    '%.3e, worst covariance M_id margin = %.3e, over %d reps x %d shifts x %d fx.QA points.\n'], ...
+    worst_raw_margin, worst_cov_margin, ntau, numel(fx.bravais_shifts), nQ);
+end
+
+% =====================================================================
+% Task 6 helpers -- pair-conjugation prediction, cell-phase gauge conversion,
+% and the U'*Dcell*U covariance prediction (U' on the LEFT -- see the
+% docstring of test_gateA5_bravais_shift_invariance_and_cellphase_covariance)
+% =====================================================================
+function herm = conj_transpose_pred(A, ntau)
+% Predicted pair-conjugate tensor: herm(:,:,n,m) = conj(A(:,:,m,n)). Every
+% block is built independently from A -- no conjugate block is ever filled
+% by copying the block it will be compared against.
+herm = complex(zeros(3,3,ntau,ntau));
+for n = 1:ntau
+    for m = 1:ntau
+        herm(:,:,n,m) = conj(A(:,:,m,n));
+    end
+end
+end
+
+function Dcell = to_cellphase(dipslice, q, tau, ntau)
+% Dcell_nm = exp(+i*2*pi*q.(tau_m-tau_n)) * dip_nm, using the CALLER-supplied
+% tau (each result's OWN tau -- unshifted or per-representative-shifted).
+Dcell = complex(zeros(3,3,ntau,ntau));
+for n = 1:ntau
+    for m = 1:ntau
+        ph = exp(1i*2*pi*(q*(tau(m,:) - tau(n,:)).'));
+        Dcell(:,:,n,m) = ph*dipslice(:,:,n,m);
+    end
+end
+end
+
+function pred = covariance_pred(Dcell0, q, L, rep, ntau)
+% pred = U' * Dcell0 * U, U diagonal in sublattice with
+% U(rep,rep)=exp(+i*2*pi*q.L), U(k,k)=1 for k~=rep. Block (n,m) scales by
+% conj(U(n,n))*U(m,m): U' (conjugate-transpose) acts on the LEFT/row index
+% n, U acts on the RIGHT/column index m. THE SIGN IS U'*Dcell*U, NOT
+% U*Dcell*U' -- reversing it fails by O(1) (see the caller's docstring).
+Udiag = ones(1,ntau);
+Udiag(rep) = exp(1i*2*pi*(q*L.'));
+pred = complex(zeros(3,3,ntau,ntau));
+for n = 1:ntau
+    for m = 1:ntau
+        pred(:,:,n,m) = conj(Udiag(n))*Udiag(m)*Dcell0(:,:,n,m);
+    end
+end
+end
