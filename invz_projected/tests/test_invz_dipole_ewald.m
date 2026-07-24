@@ -1332,3 +1332,273 @@ for n = 1:ntau
     end
 end
 end
+
+% =====================================================================
+% Task 7 -- Gate-A test 9 (alpha-bracket independence + separate-axis
+% cutoff-ladder convergence of the raw tensor at M_T and the derived
+% couplings at M_J, plus the default-vs-joint-refinement >=3-orders-margin
+% check). This is the LAST Gate-A test. The frozen config set (prereg sec 2/
+% sec 3 item 9) has 13 members in four groups, ALL evaluated at EVERY q in
+% fx.QA (30 points), reusing ONE geom per config:
+%   (1) alpha bracket:      {0.6,0.8,1.0,1.2,1.5}*alpha0, alpha-matched
+%                            cutoffs r_cut=6.5/alpha, g_cut=13*alpha    [5]
+%   (2) real-axis ladder:   C_r in {4.5,5.0,5.5} at fixed C_g=13        [3]
+%   (3) recip-axis ladder:  C_g in {9,10,11}    at fixed C_r=6.5        [3]
+%   (4) default (5.5,11) vs joint refinement (6.0,12)                  [2]
+% =====================================================================
+function test_gateA9_alpha_bracket_independence(testCase)
+% Gate-A #9 part 1/3 (docs/invzp_ewald_prereg.md sec 3 item 9 / sec 2):
+% ALPHA-BRACKET independence. Multipliers {0.6,0.8,1.0,1.2,1.5}*alpha0, each
+% with the alpha-MATCHED generous cutoffs r_cut=6.5/alpha, g_cut=13*alpha
+% (sec 2 "For alpha-independence..."), so the DIMENSIONLESS truncation
+% bounds (alpha*r_cut=6.5, g_cut/(2*alpha)=6.5) stay FIXED across the whole
+% bracket -- only the physical splitting point alpha itself changes. ALL 10
+% pairwise combinations of the 5 members are compared, at EVERY q in fx.QA
+% (not just q_int(1,:)), via M_T (raw complete tensor, per q) and M_J (the
+% shared Task-5 ewald_coupling_mapper's Jnu/Juni/Jcc0/Jaa0, per q) -- full
+% pairwise rather than each-vs-one-reference, so a cancellation specific to
+% any single pair is still caught and localized (retains the pairwise
+% diagnostics the frozen acceptance wording calls for).
+ion = invz_ion(); a = ion.a; tau = ion.tau;
+fx = invz_ewald_fixtures();
+M  = invz_ewald_metrics();
+verifyEqual(testCase, size(fx.QA), [30 3]);              % Gamma+q_int(3)+face(6)+edge(12)+corner(8)
+[~, geomX] = exchange([0 0 0], abs(ion.J12), a, tau);     % prime exchange geom ONCE, reused everywhere
+
+mult = [0.6 0.8 1.0 1.2 1.5];
+nA = numel(mult);
+cfgs = cell(nA,1);
+tags = cell(nA,1);
+for ai = 1:nA
+    alpha = mult(ai)*fx.alpha0;
+    cfgs{ai} = gateA9_eval_config(a, tau, eopts_alpha_matched(alpha), fx, geomX);
+    tags{ai} = sprintf('alpha=x%.2g', mult(ai));
+    fprintf('Gate-A9 alpha-bracket config %s (alpha=%.6g): elapsed %.3fs (diagnostic only).\n', ...
+        tags{ai}, alpha, cfgs{ai}.elapsed);
+end
+
+worst_T_margin = -inf; worst_T_ratio = 0; worst_J_margin = -inf; worst_J_ratio = 0;
+npairs = 0;
+for i = 1:nA
+    for j = i+1:nA
+        res = gateA9_pair_check(testCase, M, fx, cfgs{i}, cfgs{j}, tags{i}, tags{j}, 'alpha-bracket');
+        worst_T_margin = max(worst_T_margin, res.worst_T_margin);
+        worst_T_ratio  = max(worst_T_ratio,  res.worst_T_ratio);
+        worst_J_margin = max(worst_J_margin, res.worst_J_margin);
+        worst_J_ratio  = max(worst_J_ratio,  res.worst_J_ratio);
+        npairs = npairs + 1;
+    end
+end
+fprintf(['Gate-A9 alpha-bracket independence: %d pairwise combos over %d members x %d fx.QA points -- ' ...
+    'worst M_T margin=%.3e (ratio %.3e), worst M_J margin=%.3e (ratio %.3e).\n'], ...
+    npairs, nA, size(fx.QA,1), worst_T_margin, worst_T_ratio, worst_J_margin, worst_J_ratio);
+end
+
+function test_gateA9_cutoff_ladders_separate_axes(testCase)
+% Gate-A #9 part 2/3 (docs/invzp_ewald_prereg.md sec 3 item 9 / sec 2):
+% SEPARATE-AXIS cutoff-ladder convergence, alpha=alpha0 throughout. TWO
+% independent one-axis ladders, evaluated and pairwise-compared entirely
+% separately -- the two cutoff axes are NEVER combined into one sweep here
+% (that is part 3/3 below, the default-vs-joint-refinement pair, the ONE
+% place both axes move together by design):
+%   real axis:       C_r in {4.5,5.0,5.5} at FIXED generous C_g=13;
+%   reciprocal axis: C_g in {9,10,11}    at FIXED generous C_r=6.5.
+% Within each ladder, ALL 3 pairwise combinations of its 3 rungs (coarsest-
+% mid, mid-finest, coarsest-finest) are compared at every q in fx.QA via M_T
+% and M_J -- so the coarsest-to-finest convergence bracket is asserted
+% directly (coarsest-vs-finest is itself one of the pairs), not merely
+% inferred from adjacent-rung agreement alone.
+ion = invz_ion(); a = ion.a; tau = ion.tau;
+fx = invz_ewald_fixtures();
+M  = invz_ewald_metrics();
+[~, geomX] = exchange([0 0 0], abs(ion.J12), a, tau);
+alpha0 = fx.alpha0;
+
+Cr_list = [4.5 5.0 5.5];
+eo_real  = arrayfun(@(Cr) eopts_Cr_Cg(alpha0, Cr, 13), Cr_list, 'UniformOutput', false);
+tag_real = arrayfun(@(Cr) sprintf('C_r=%.1f,C_g=13', Cr), Cr_list, 'UniformOutput', false);
+gateA9_run_ladder(testCase, M, fx, a, tau, geomX, eo_real, tag_real, 'real-axis ladder');
+
+Cg_list = [9 10 11];
+eo_recip  = arrayfun(@(Cg) eopts_Cr_Cg(alpha0, 6.5, Cg), Cg_list, 'UniformOutput', false);
+tag_recip = arrayfun(@(Cg) sprintf('C_r=6.5,C_g=%.0f', Cg), Cg_list, 'UniformOutput', false);
+gateA9_run_ladder(testCase, M, fx, a, tau, geomX, eo_recip, tag_recip, 'reciprocal-axis ladder');
+end
+
+function test_gateA9_default_vs_joint_refinement(testCase)
+% Gate-A #9 part 3/3 (docs/invzp_ewald_prereg.md sec 3 item 9 / sec 2):
+% production default (C_r,C_g)=(5.5,11) versus joint refinement (6.0,12),
+% alpha=alpha0. This is the ONE Gate-A9 pair where BOTH cutoff axes move
+% together (by design -- the "joint" refinement), in contrast to the two
+% one-axis ladders above which never combine axes. Beyond the ordinary M_T/
+% M_J PASS requirement (asserted inside gateA9_pair_check, per q, over every
+% fx.QA point), the default-vs-joint pair must additionally retain the
+% frozen >=3-orders-of-magnitude margin: WORST_RATIO (the fraction of the
+% AbsTol+RelTol*max(|A|,|B|) budget actually used) for BOTH the raw M_T
+% comparison and the coupling M_J comparison must be <=1e-3 (prereg sec 3
+% item 9: "the default must retain the calibrated >=3-orders margin
+% relative to the controlling tolerance"; sec 1 records the calibration
+% default self-convergence residual as raw 3.6e-13 / coupling 2.1e-13 --
+% several more orders below even this 1e-3 utilization requirement).
+ion = invz_ion(); a = ion.a; tau = ion.tau;
+fx = invz_ewald_fixtures();
+M  = invz_ewald_metrics();
+[~, geomX] = exchange([0 0 0], abs(ion.J12), a, tau);
+alpha0 = fx.alpha0;
+
+eo_default = eopts_Cr_Cg(alpha0, 5.5, 11);   % production default (matches default_eopts(a))
+eo_joint   = eopts_Cr_Cg(alpha0, 6.0, 12);   % joint refinement -- BOTH axes move together
+
+cfgD = gateA9_eval_config(a, tau, eo_default, fx, geomX);
+cfgJ = gateA9_eval_config(a, tau, eo_joint,   fx, geomX);
+fprintf(['Gate-A9 default-vs-joint config elapsed: default(5.5,11) %.3fs, joint(6.0,12) %.3fs ' ...
+    '(diagnostic only).\n'], cfgD.elapsed, cfgJ.elapsed);
+
+res = gateA9_pair_check(testCase, M, fx, cfgD, cfgJ, 'default(5.5,11)', 'joint(6.0,12)', ...
+    'default-vs-joint');
+
+verifyLessThanOrEqual(testCase, res.worst_T_ratio, 1e-3, sprintf( ...
+    ['Gate-A9: default-vs-joint RAW (M_T) controlling-tolerance utilization exceeds the frozen ' ...
+     '3-orders margin (worst_ratio=%.3e, required <=1e-3).'], res.worst_T_ratio));
+verifyLessThanOrEqual(testCase, res.worst_J_ratio, 1e-3, sprintf( ...
+    ['Gate-A9: default-vs-joint COUPLING (M_J) controlling-tolerance utilization exceeds the frozen ' ...
+     '3-orders margin (worst_ratio=%.3e, required <=1e-3).'], res.worst_J_ratio));
+
+fprintf(['Gate-A9 default-vs-joint refinement: worst M_T margin=%.3e (ratio %.3e, <=1e-3 required), ' ...
+    'worst M_J margin=%.3e (ratio %.3e, <=1e-3 required).\n'], ...
+    res.worst_T_margin, res.worst_T_ratio, res.worst_J_margin, res.worst_J_ratio);
+end
+
+% =====================================================================
+% Task 7 helpers -- alpha/cutoff config builders, the per-config batched
+% evaluator (ONE geom, all 30 fx.QA points, per-q coupling via the shared
+% Task-5 ewald_coupling_mapper), and the shared pairwise M_T/M_J comparator.
+% LOAD-BEARING: gateA9_pair_check calls M.mt/M.mj PER Q on that single q's
+% own complete tensor / coupling row -- NEVER on a stacked multi-q array
+% (which would silently loosen M_T's T_scale to the worst component over
+% the whole stack).
+% =====================================================================
+function eo = eopts_alpha_matched(alpha)
+% alpha-matched generous cutoffs r_cut=6.5/alpha, g_cut=13*alpha (prereg
+% sec 2), so the dimensionless truncation bounds alpha*r_cut=6.5 and
+% g_cut/(2*alpha)=6.5 stay fixed -- both comfortably above the GUARD=4.5
+% floor for every frozen multiplier.
+eo = mk_eopts(alpha, 6.5/alpha, 13*alpha, 'conducting_k0_omitted');
+end
+
+function eo = eopts_Cr_Cg(alpha, Cr, Cg)
+% General (C_r,C_g) -> eopts map, r_cut=C_r/alpha, g_cut=C_g*alpha (prereg
+% sec 2 "r_cut=C_r/alpha0, g_cut=C_g*alpha0"), the same pattern as this
+% file's own default_eopts (5.5/a0, 11*a0 for (C_r,C_g)=(5.5,11)).
+eo = mk_eopts(alpha, Cr/alpha, Cg*alpha, 'conducting_k0_omitted');
+end
+
+function out = gateA9_eval_config(a, tau, eo, fx, geomX)
+% Evaluate ONE Ewald configuration over EVERY q in fx.QA (30 points): build
+% geom ONCE via a single batched invz_dipole_ewald call over all 30 q, then
+% run the shared Task-5 ewald_coupling_mapper per q, reusing the
+% q-independent exchange geometry geomX. Returns:
+%   dipQ  [3,3,ntau,ntau,30] complex raw Ewald tensor, this config's OWN geom
+%   Jnu   [30,4] sorted real cc eigenvalues (meV), one row per fx.QA point
+%   Juni  [30,1] real uniform-mode projection v'*Jcc*v (meV)
+%   Jcc0, Jaa0   scalar real uniform-mode couplings AT EXACT GAMMA (meV) --
+%                fx.QA(1,:) is always [0 0 0] so these are always populated
+%   elapsed      wall time for this whole config (DIAGNOSTIC ONLY -- prereg
+%                sec 2's "operational timing target" is explicitly not a
+%                numerical pass/fail condition; never asserted on below)
+t0 = tic;
+dipQ = invz_dipole_ewald(fx.QA, a, tau, eo);
+nQ = size(fx.QA,1);
+Jnu = zeros(nQ,4); Juni = zeros(nQ,1); Jcc0 = []; Jaa0 = [];
+for qi = 1:nQ
+    r = ewald_coupling_mapper(fx.QA(qi,:), dipQ(:,:,:,:,qi), geomX);
+    Jnu(qi,:) = r.Jnu(:).';
+    Juni(qi)  = r.Juni;
+    if ~isempty(r.Jcc0)
+        Jcc0 = r.Jcc0; Jaa0 = r.Jaa0;
+    end
+end
+out = struct('dipQ', dipQ, 'Jnu', Jnu, 'Juni', Juni, 'Jcc0', Jcc0, 'Jaa0', Jaa0, 'elapsed', toc(t0));
+end
+
+function res = gateA9_pair_check(testCase, M, fx, cfgA, cfgB, tagA, tagB, ctx)
+% Pairwise Gate-A9 comparison between two EVALUATED configurations (from
+% gateA9_eval_config): M_T on the RAW complete tensor and M_J on
+% Jnu/Juni/Jcc0/Jaa0 (the shared coupling mapper's four required outputs).
+% Every pair gets its OWN per-q assertions (never collapsed into one
+% aggregate check), so a cancellation between any two members is still
+% caught and localized to the (pair, q) that produced it.
+nQ = size(fx.QA,1);
+verifyTrue(testCase, ~isempty(cfgA.Jcc0) && ~isempty(cfgB.Jcc0), sprintf( ...
+    'Gate-A9 (%s): Jcc0 unexpectedly empty for %s or %s (fx.QA(1,:) must be exact Gamma).', ...
+    ctx, tagA, tagB));
+
+worst_T_margin = -inf; worst_T_ratio = 0;
+worst_J_margin = -inf; worst_J_ratio = 0;
+for qi = 1:nQ
+    A = cfgA.dipQ(:,:,:,:,qi); B = cfgB.dipQ(:,:,:,:,qi);
+    mT = M.mt(A, B);
+    verifyTrue(testCase, mT.pass, sprintf( ...
+        'Gate-A9 (%s): M_T raw-tensor comparison fails between %s and %s at fx.QA row %d (worst_margin=%.3e).', ...
+        ctx, tagA, tagB, qi, mT.worst_margin));
+    worst_T_margin = max(worst_T_margin, mT.worst_margin);
+    worst_T_ratio  = max(worst_T_ratio,  mT.worst_ratio);
+
+    mJnu  = M.mj(cfgA.Jnu(qi,:), cfgB.Jnu(qi,:));
+    mJuni = M.mj(cfgA.Juni(qi),  cfgB.Juni(qi));
+    verifyTrue(testCase, mJnu.pass, sprintf( ...
+        'Gate-A9 (%s): M_J Jnu comparison fails between %s and %s at fx.QA row %d (worst_margin=%.3e).', ...
+        ctx, tagA, tagB, qi, mJnu.worst_margin));
+    verifyTrue(testCase, mJuni.pass, sprintf( ...
+        'Gate-A9 (%s): M_J Juni comparison fails between %s and %s at fx.QA row %d (worst_margin=%.3e).', ...
+        ctx, tagA, tagB, qi, mJuni.worst_margin));
+    worst_J_margin = max([worst_J_margin, mJnu.worst_margin, mJuni.worst_margin]);
+    worst_J_ratio  = max([worst_J_ratio,  mJnu.worst_ratio,  mJuni.worst_ratio]);
+end
+
+mJcc0 = M.mj(cfgA.Jcc0, cfgB.Jcc0);
+mJaa0 = M.mj(cfgA.Jaa0, cfgB.Jaa0);
+verifyTrue(testCase, mJcc0.pass, sprintf( ...
+    'Gate-A9 (%s): M_J Jcc0 (Gamma) comparison fails between %s and %s (worst_margin=%.3e).', ...
+    ctx, tagA, tagB, mJcc0.worst_margin));
+verifyTrue(testCase, mJaa0.pass, sprintf( ...
+    'Gate-A9 (%s): M_J Jaa0 (Gamma) comparison fails between %s and %s (worst_margin=%.3e).', ...
+    ctx, tagA, tagB, mJaa0.worst_margin));
+worst_J_margin = max([worst_J_margin, mJcc0.worst_margin, mJaa0.worst_margin]);
+worst_J_ratio  = max([worst_J_ratio,  mJcc0.worst_ratio,  mJaa0.worst_ratio]);
+
+fprintf(['Gate-A9 (%s) pair [%s] vs [%s]: worst M_T margin=%.3e (ratio %.3e), ' ...
+    'worst M_J margin=%.3e (ratio %.3e) over %d fx.QA points.\n'], ...
+    ctx, tagA, tagB, worst_T_margin, worst_T_ratio, worst_J_margin, worst_J_ratio, nQ);
+
+res = struct('worst_T_margin', worst_T_margin, 'worst_T_ratio', worst_T_ratio, ...
+             'worst_J_margin', worst_J_margin, 'worst_J_ratio', worst_J_ratio);
+end
+
+function gateA9_run_ladder(testCase, M, fx, a, tau, geomX, eo_list, tag_list, ctx)
+% Shared driver for ONE one-axis cutoff ladder: evaluate every rung, then
+% pairwise-compare ALL combinations of that ladder's own rungs. The caller
+% passes exactly one axis' eo_list per call, so this never crosses into the
+% other axis' rungs (the "WITHOUT combining the two cutoff axes" wording).
+n = numel(eo_list);
+cfgs = cell(n,1);
+for i = 1:n
+    cfgs{i} = gateA9_eval_config(a, tau, eo_list{i}, fx, geomX);
+    fprintf('Gate-A9 %s config %s: elapsed %.3fs (diagnostic only).\n', ctx, tag_list{i}, cfgs{i}.elapsed);
+end
+worst_T_margin = -inf; worst_T_ratio = 0; worst_J_margin = -inf; worst_J_ratio = 0;
+npairs = 0;
+for i = 1:n
+    for j = i+1:n
+        res = gateA9_pair_check(testCase, M, fx, cfgs{i}, cfgs{j}, tag_list{i}, tag_list{j}, ctx);
+        worst_T_margin = max(worst_T_margin, res.worst_T_margin);
+        worst_T_ratio  = max(worst_T_ratio,  res.worst_T_ratio);
+        worst_J_margin = max(worst_J_margin, res.worst_J_margin);
+        worst_J_ratio  = max(worst_J_ratio,  res.worst_J_ratio);
+        npairs = npairs + 1;
+    end
+end
+fprintf(['Gate-A9 %s coarsest-to-finest bracket: %d pairwise combos over %d rungs x %d fx.QA points -- ' ...
+    'worst M_T margin=%.3e (ratio %.3e), worst M_J margin=%.3e (ratio %.3e).\n'], ...
+    ctx, npairs, n, size(fx.QA,1), worst_T_margin, worst_T_ratio, worst_J_margin, worst_J_ratio);
+end
