@@ -642,3 +642,246 @@ function f = screened_f(y, alpha)
 r = norm(y);
 f = erfc(alpha*r)/r;
 end
+
+% =====================================================================
+% Task 4 -- Gate-A tests 2, 6, 7, 8 (small-shell real signs / self term /
+% boundary + no-surface-term / counts + caps)
+% =====================================================================
+function test_gateA2_small_shell_real_signs(testCase)
+% Gate-A #2 (docs/invzp_ewald_prereg.md sec 3, item 2): explicit small-shell
+% real-space signs and phase. Uses the frozen two-site fx.shell_fixture.
+% (i)  independently enumerate every integer cell with |R+d|<=r_cut and build
+%      the complete [3,3,2,2] screened REAL tensor from the defining formula
+%      (leading minus, total-displacement phase e^{-i q_cart.(R+d)});
+% (ii) independently reconstruct the primitive's real contribution from its
+%      retained geom.real{n,m}.{x,gab} (reconstruct_parts' dR, ignoring
+%      dG/dS/dG0 -- the reciprocal part is deliberately never added here).
+% Compare the two COMPLETE tensors at M_T (do NOT re-add a reciprocal copy;
+% A2 is specifically the finite screened real shell).
+fx = invz_ewald_fixtures();
+M  = invz_ewald_metrics();
+sf = fx.shell_fixture;
+a = sf.a; tau = sf.tau; alpha = sf.alpha; r_cut = sf.r_cut; q = sf.q;
+ntau = size(tau,1);
+g_cut = 11*alpha;   % valid synthetic reciprocal cutoff (guard g_cut/(2a)=5.5>=4.5);
+                    % A2 never uses the reciprocal part -- only needed to form a valid eopts.
+eo = mk_eopts(alpha, r_cut, g_cut, 'conducting_k0_omitted');
+[~, ~, geom] = invz_dipole_ewald(q, a, tau, eo);
+
+K = floor(q + 0.5); qbar = q - K; qcart = qbar*geom.B;
+
+% ---- (i) independent reference: fresh cell enumeration + defining formula --
+ref = complex(zeros(3,3,ntau,ntau));
+for n = 1:ntau
+    for m = 1:ntau
+        x = indep_real_cells(a, tau, n, m, r_cut);
+        verifyGreaterThan(testCase, size(x,1), 0, sprintf( ...
+            'Gate-A2: pair (%d,%d) retains zero real vectors in the small-shell fixture.', n, m));
+        gab = indep_closed_gab(x, alpha);
+        ph  = exp(-1i*(x*qcart.'));                      % total-displacement phase e^{-i q.(R+d)}
+        gph = exp(-1i*2*pi*(K*(tau(m,:) - tau(n,:)).'));
+        blk = zeros(3,3);
+        for aa = 1:3, for bb = 1:3, blk(aa,bb) = -sum(ph.*gab(:,aa,bb)); end, end %#ok<ALIGN>
+        ref(:,:,n,m) = gph*blk;                           % leading minus sign
+    end
+end
+
+% ---- (ii) independent reconstruction of the primitive's own retained geometry
+[dR, ~, ~, ~] = reconstruct_parts(geom, q, alpha, g_cut);
+
+mres = M.mt(ref, dR);
+verifyTrue(testCase, mres.pass, sprintf( ...
+    'Gate-A2: small-shell real-space tensor mismatch (signs/phase), worst_margin=%.3e.', mres.worst_margin));
+fprintf('Gate-A2 small-shell real signs: worst M_T margin = %.3e (ratio %.3e).\n', ...
+    mres.worst_margin, mres.worst_ratio);
+end
+
+function test_gateA6_self_term(testCase)
+% Gate-A #6 (prereg sec 3, item 6): isolate the self term by subtracting an
+% independent geom-reconstruction of the real + reciprocal NON-SELF parts from
+% the returned primitive; compare the isolated actual self tensor against one
+% complete expected self tensor (-4*alpha^3/(3*sqrt(pi))*eye(3) on every
+% same-site block, zero off-site) at M_T, at every frozen positive alpha. Uses
+% a generic nonzero frozen q (fx.q_int(1,:)) throughout -- NOT Gamma-only --
+% so this is a genuine reconstruction/subtraction test, not an
+% imaginary-trace/Gamma-realness placeholder.
+ion = invz_ion(); a = ion.a; tau = ion.tau; ntau = size(tau,1);
+fx = invz_ewald_fixtures();
+M  = invz_ewald_metrics();
+q  = fx.q_int(1,:);
+mult = [0.6 0.8 1.0 1.2 1.5];
+
+sameMask = false(3,3,ntau,ntau);
+for n = 1:ntau
+    sameMask(:,:,n,n) = true;
+end
+
+worst_margin = -inf;
+for ai = 1:numel(mult)
+    alpha = mult(ai)*fx.alpha0;
+    eo = mk_eopts(alpha, 5.5/alpha, 11*alpha, 'conducting_k0_omitted');
+    [dip, ~, geom] = invz_dipole_ewald(q, a, tau, eo);
+
+    [dR, dG, ~, ~] = reconstruct_parts(geom, q, alpha, eo.g_cut);   % real + reciprocal NON-SELF
+    dS_actual = dip - dR - dG;                                      % isolated actual self term
+
+    selfval = 4*alpha^3/(3*sqrt(pi));
+    dS_expected = complex(zeros(3,3,ntau,ntau));
+    for n = 1:ntau
+        dS_expected(:,:,n,n) = -selfval*eye(3);
+    end
+
+    mres = M.mt(dS_actual, dS_expected);
+    verifyTrue(testCase, mres.pass, sprintf( ...
+        'Gate-A6: isolated self tensor mismatch at alpha=%.6g (x%.2g), worst_margin=%.3e.', ...
+        alpha, mult(ai), mres.worst_margin));
+
+    sameMax = max(abs(dS_actual(sameMask) - dS_expected(sameMask)));
+    offMax  = max(abs(dS_actual(~sameMask) - dS_expected(~sameMask)));
+    fprintf(['Gate-A6 self term (alpha=%.6g, x%.2g): same-site max|err|=%.3e, ' ...
+        'off-site max|err|=%.3e (M_T worst_margin=%.3e, complete-tensor scale unchanged).\n'], ...
+        alpha, mult(ai), sameMax, offMax, mres.worst_margin);
+
+    worst_margin = max(worst_margin, mres.worst_margin);
+end
+fprintf('Gate-A6 self term: worst M_T margin over all frozen alpha = %.3e.\n', worst_margin);
+end
+
+function test_gateA7_boundary_and_no_surface_term(testCase)
+% Gate-A #7 (prereg sec 3, item 7): (1) every non-frozen boundary string
+% raises invz:ewaldBoundary; (2) an unknown surface/demag-flavored eopts
+% control raises invz:ewaldArgs (an unknown primitive control, exactly as any
+% other unknown field would); (3) a geom-reconstruction (real+recip+self)
+% equals the primitive at M_id across every fx.QA point (Gamma + q_int + all
+% face/edge/corner candidate-boundary probes), proving the output contains
+% EXACTLY these three terms and no fourth macroscopic (surface/shape/demag)
+% term.
+ion = invz_ion(); a = ion.a; tau = ion.tau;
+eo = default_eopts(a);
+
+% ---- (1) every non-frozen boundary string errors with the SPECIFIC id -----
+bad_boundaries = {'lorentz','vacuum','open','tinfoil','shape_dependent','surface_dipole'};
+for i = 1:numel(bad_boundaries)
+    eob = mk_eopts(eo.alpha, eo.r_cut, eo.g_cut, bad_boundaries{i});
+    verifyError(testCase, @() invz_dipole_ewald([0.1 0.2 0.3], a, tau, eob), ...
+        'invz:ewaldBoundary', sprintf('Gate-A7: boundary ''%s'' must raise invz:ewaldBoundary.', bad_boundaries{i}));
+end
+
+% ---- (2) unknown surface/demag-flavored controls error as unknown controls -
+extra_fields = {'surface_correction','demag_shape','lorentz_radius'};
+for i = 1:numel(extra_fields)
+    eox = eo; eox.(extra_fields{i}) = 1;
+    verifyError(testCase, @() invz_dipole_ewald([0.1 0.2 0.3], a, tau, eox), ...
+        'invz:ewaldArgs', sprintf('Gate-A7: unknown control ''%s'' must raise invz:ewaldArgs.', extra_fields{i}));
+end
+
+% ---- (3) no fourth macroscopic term: geom-reconstruction == primitive, ----
+% ---- at M_id, over every fx.QA candidate-boundary probe -------------------
+fx = invz_ewald_fixtures();
+M  = invz_ewald_metrics();
+[dip, ~, geom] = invz_dipole_ewald(fx.QA, a, tau, eo);
+worst_margin = -inf;
+for i = 1:size(fx.QA,1)
+    [dR, dG, dS, ~] = reconstruct_parts(geom, fx.QA(i,:), eo.alpha, eo.g_cut);
+    recon = dR + dG + dS;
+    mres = M.mid(recon, dip(:,:,:,:,i));
+    verifyTrue(testCase, mres.pass, sprintf( ...
+        ['Gate-A7: geom-reconstruction (real+recip+self) fails M_id at fx.QA row %d -- ' ...
+         'implies a fourth macroscopic term, worst_margin=%.3e.'], i, mres.worst_margin));
+    worst_margin = max(worst_margin, mres.worst_margin);
+end
+fprintf(['Gate-A7 no-fourth-term reconstruction: worst M_id margin over all %d fx.QA points ' ...
+    '= %.3e.\n'], size(fx.QA,1), worst_margin);
+end
+
+function test_gateA8_counts_and_caps(testCase)
+% Gate-A #8 (prereg sec 3, item 8): (1) counts.real_pair / recip_candidates /
+% recip_used each match an independent enumeration; (2) all three hard caps
+% fire their SPECIFIC error id, with synthetic small-input configurations,
+% and without the prohibited large allocation (timing kept diagnostic only).
+ion = invz_ion(); a = ion.a; tau = ion.tau; ntau = size(tau,1);
+eo = default_eopts(a);
+fx = invz_ewald_fixtures();
+qset = fx.q_int;
+[~, counts, geom] = invz_dipole_ewald(qset, a, tau, eo);
+
+% ---- counts.real_pair vs independent integer-cell enumeration -------------
+for n = 1:ntau
+    for m = 1:ntau
+        xind = indep_real_cells(a, tau, n, m, eo.r_cut);
+        verifyEqual(testCase, counts.real_pair(n,m), size(xind,1), sprintf( ...
+            'Gate-A8: counts.real_pair(%d,%d) disagrees with independent cell enumeration.', n, m));
+    end
+end
+
+% ---- counts.recip_candidates vs independent closed-box+slack enumeration ---
+cnt_ind = indep_recip_candidates(a, eo.g_cut);
+verifyEqual(testCase, counts.recip_candidates, cnt_ind, ...
+    'Gate-A8: counts.recip_candidates disagrees with the independent closed-box(+1e-12 slack) enumeration.');
+
+% ---- each counts.recip_used(iq) vs independent per-q filtering ------------
+for i = 1:size(qset,1)
+    verifyEqual(testCase, counts.recip_used(i), recip_used_indep(geom, qset(i,:), eo.g_cut), sprintf( ...
+        'Gate-A8: counts.recip_used(%d) disagrees with independent per-q filtering.', i));
+end
+fprintf('Gate-A8 counts: real_pair / recip_candidates (=%d) / recip_used all match independent enumeration.\n', ...
+    counts.recip_candidates);
+
+% ---- three hard caps: SPECIFIC id, no prohibited large allocation ----------
+% (timing is a diagnostic only -- never turned into a pass/fail assertion)
+eo_real = mk_eopts(0.05, 400, 0.45, 'conducting_k0_omitted');    % a*r=20>=4.5, g/(2a)=4.5
+tR0 = tic;
+verifyError(testCase, @() invz_dipole_ewald([0 0 0], eye(3), [0 0 0; 0.2 0.2 0.2], eo_real), ...
+    'invz:ewaldRealCap');
+tR = toc(tR0);
+
+eo_recip = mk_eopts(1, 5, 20, 'conducting_k0_omitted');          % a*r=5>=4.5, g/(2a)=10
+tG0 = tic;
+verifyError(testCase, @() invz_dipole_ewald([0 0 0], 400*eye(3), [0 0 0; 0.2 0.2 0.2], eo_recip), ...
+    'invz:ewaldRecipCap');
+tG = toc(tG0);
+
+ntauM = 50; nqM = 15000;
+tauM = 0.1*ones(ntauM,3) + (1:ntauM).'*1e-3;
+qM = zeros(nqM,3);
+eo_mem = mk_eopts(1, 5, 9, 'conducting_k0_omitted');
+tM0 = tic;
+verifyError(testCase, @() invz_dipole_ewald(qM, 3*eye(3), tauM, eo_mem), 'invz:ewaldMemoryCap');
+tM = toc(tM0);
+
+fprintf(['Gate-A8 caps (timing diagnostic only, not asserted): RealCap %.3fs, RecipCap %.3fs, ' ...
+    'MemoryCap %.3fs.\n'], tR, tG, tM);
+end
+
+% =====================================================================
+% Task 4 helper -- independent reciprocal candidate-union enumeration
+% =====================================================================
+function cnt = indep_recip_candidates(a, g_cut)
+% Independent count of the reciprocal candidate union, replicating the EXACT
+% frozen convention (docs/invzp_ewald_prereg.md): closed box qbar in
+% [-0.5,0.5]^3, keep every integer G with
+%   dmin(G) = min_{qbar in box} |(qbar+G)*B| <= g_cut*(1+1e-12).
+% Uses a CLOSED-FORM per-axis minimization -- NOT the primitive's 27
+% free/lower/upper active-set enumeration -- valid because `a` (hence
+% B=2*pi*inv(a)') is EXACTLY DIAGONAL for every lattice this helper is called
+% with (asserted below): the quadratic |(qbar+G)*B|^2 then separates
+% axis-by-axis, and each 1-D box minimization has the closed form
+% max(|G_j|-0.5,0)*B_jj (0 exactly when G_j==0, since 0 is then inside the
+% box; otherwise the nearest box point to the origin on that axis).
+assert(isequal(a, diag(diag(a))), ...
+    'indep_recip_candidates: this closed-form independent check requires a diagonal lattice matrix.');
+B  = 2*pi*inv(a).';  %#ok<MINV>
+Bd = diag(B).';                                    % [1,3], B is exactly diagonal
+corners01 = [-0.5 0.5];
+[c1,c2,c3] = ndgrid(corners01, corners01, corners01);
+corners = [c1(:) c2(:) c3(:)];
+qmax = max(vecnorm(corners*B, 2, 2));
+nmax_G = ceil((g_cut + qmax)/min(abs(Bd))) + 1;    % generous conservative enumeration range
+rng = -nmax_G:nmax_G;
+[H,Kk,L] = ndgrid(rng, rng, rng);
+Ghkl_all = [H(:) Kk(:) L(:)];
+gapv = max(abs(Ghkl_all) - 0.5, 0);                % [N,3] per-axis closed-form box-min |v_j|
+dmin = sqrt(sum((gapv.*Bd).^2, 2));
+keep = dmin <= g_cut*(1 + 1e-12);
+cnt = nnz(keep);
+end
