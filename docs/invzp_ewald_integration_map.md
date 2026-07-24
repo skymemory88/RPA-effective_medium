@@ -1,5 +1,27 @@
 # Ewald integration surface map — REVIEW-CORRECTED implementation contract
 
+> **STATUS ADDENDUM (2026-07-24 — supersedes the pre-freeze status language below).** The
+> preregistration `docs/invzp_ewald_prereg.md` was **FROZEN 2026-07-24** (with §12 Errata E1),
+> incorporating this map's Blocker-5/5A/6 contracts (the wrapper API, the spectra-forwarder
+> contract, and the `Jpath_base_cc`/`Jgamma_cc` q-path contract). The Step-4 primitive
+> `invz_dipole_ewald.m` was subsequently **built, reviewed, and committed**
+> (`086d102..fcb3031`, additive; production default still `bruteforce`), and the Step-4
+> manifest/status closeout landed in `a58bdb4` (suite 270/0/23). Consequently, in the header
+> below: **"No production `.m` file has been modified"** remains true only for the pre-existing
+> production files this map discusses (`invz_jq_modes.m`, `invz_bz_couplings.m`,
+> `invz_jq_path.m`, the spectra drivers) — `invz_dipole_ewald.m` itself now exists as a new,
+> additive primitive file, not a modification of an existing one; **"`invz_dipole_ewald.m` and
+> `docs/invzp_ewald_prereg.md` do not exist yet"** is a **historical pre-freeze snapshot and is
+> no longer operative** — both now exist; and **"Numerical Γ and cutoff values cited here are
+> design calibration, not formal post-preregistration gate results"** is likewise superseded —
+> those values are now the FROZEN prereg §2/§3 values (`docs/invzp_ewald_prereg.md`), not mere
+> calibration, though the caller-level Gate-C4/C6/C7 integration checks this map anticipates
+> remain prospective until Step 5 lands them. Step 5 (opt-in `invz_jq_modes`/BZ/q-path/spectra
+> integration per this map's Blocker 5/5A/6 contracts, production default unchanged) is the
+> current authorized phase per `docs/invzp_ewald_design.md` §8. Current operative status and
+> roadmap: `docs/invzp_ordered_1z_state.md`. Per the freeze rule, the original review text is
+> retained unedited below this note rather than rewritten.
+
 **Status: REVIEW-CORRECTED, READ-ONLY design closure.** This fixes the Gate-E wrapper contract,
 `invz_jq_path` Γ/metadata contract, and the previously omitted user-facing spectra forwarders.
 It proposes APIs/contracts only. **No production `.m` file has been modified.**
