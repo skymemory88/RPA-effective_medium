@@ -244,26 +244,66 @@ verifyEqual(testCase, o3.numel, 3*o1.numel);                 % output scales exa
 end
 
 function test_manifest_names_are_complete(testCase)
-% Completeness (prereg sec 2): the byte manifest must enumerate EVERY
-% size-dependent retained/temporary array. This pins the full set so a future
-% omission (as with the box-min boxmin_* and per-q qwork_* temporaries an earlier
-% draft left out) fails loudly; exact set-equality also catches unaccounted strays.
-ion = invz_ion(); a = ion.a; tau = ion.tau;
-[~, counts] = invz_dipole_ewald([0.137 0.291 0.453], a, tau, default_eopts(a));
+% Completeness (prereg sec 2, LITERAL wording: "every planned retained and
+% temporary numeric/logical array" -- no size-dependence qualifier). The
+% expected inventory is DERIVED from manifest_source_table() below -- a
+% maintained source-to-manifest table mapping every row name to the exact
+% source function/statement that allocates it, plus its declared class/
+% complexity/numel-bound -- so this test and the table can never
+% independently drift: update the table (and the matching in-source
+% sync-pointer comment it documents, in invz_dipole_ewald.m) whenever
+% local_manifest changes, and this test's expected list/checks follow
+% automatically. This fails loudly on:
+%   (1) a duplicate name inside the table itself (a corrupt table cannot
+%       silently pass this test);
+%   (2) a duplicate row name inside the actual array_manifest;
+%   (3) any set mismatch between the table's names and the manifest's names
+%       (a missing OR an unaccounted-for/stray row) -- as with the box-min
+%       boxmin_* and per-q qwork_* temporaries an earlier draft left out,
+%       and the raw-ndgrid/local_gab-internals/recip_keepG/qwork_w_kK/
+%       fixed-[3,3]-metric rows a later completeness pass added; and
+%   (4) any row whose actual class/is_complex/numel disagrees with the
+%       table's declared class/is_complex/bound function.
+tbl = manifest_source_table();
+tblNames = {tbl.name};
+verifyEqual(testCase, numel(unique(tblNames)), numel(tblNames), ...
+    'manifest_source_table itself contains a duplicate row name.');
+
+ion = invz_ion(); a = ion.a; tau = ion.tau; ntau = size(tau,1);
+qtest = [0.137 0.291 0.453];
+nq = size(qtest,1);
+[~, counts] = invz_dipole_ewald(qtest, a, tau, default_eopts(a));
 man = counts.preflight.array_manifest;
-names = sort({man.name});
-expected = sort({ ...
-    'real_int_mesh','real_cart_mesh','real_radius','real_mask','real_x','real_gab', ...
-    'recip_int_mesh','recip_Gcart','recip_dmin', ...
-    'boxmin_lo','boxmin_hi','boxmin_v','boxmin_RHS','boxmin_VF','boxmin_feas','boxmin_f','boxmin_fbest', ...
-    'recip_phase', ...
-    'qwork_qbar','qwork_K','qwork_k','qwork_kernel','qwork_kk','qwork_keep','qwork_kK','qwork_kk2', ...
-    'qwork_ph','qwork_w', ...
-    'dip_output','recip_used'});
-verifyEqual(testCase, names, expected);
-% representative sizing/typing of the newly-accounted temporaries
+manNames = {man.name};
+verifyEqual(testCase, numel(unique(manNames)), numel(manNames), ...
+    'array_manifest contains a duplicate row name.');
+
+verifyEqual(testCase, sort(manNames), sort(tblNames));
+
+% ---- every row's class/is_complex/numel vs the table's declared bound ----
+% (the manifest is exact cube-bound sizing, not a post-hoc estimate, so this
+% is an EXACT numel check against the table's bound function, not merely an
+% upper bound).
 GC    = counts.preflight.recip_cube_bound;
 RBmax = max(counts.preflight.real_cube_bound(:));
+RBsum = sum(counts.preflight.real_cube_bound(:));
+for i = 1:numel(tbl)
+    row = local_named(man, tbl(i).name);
+    verifyEqual(testCase, row.class, tbl(i).class, sprintf( ...
+        'manifest row %s (%s): class mismatch vs the source table.', tbl(i).name, tbl(i).source));
+    verifyEqual(testCase, row.is_complex, tbl(i).is_complex, sprintf( ...
+        'manifest row %s (%s): is_complex mismatch vs the source table.', tbl(i).name, tbl(i).source));
+    expected_numel = tbl(i).boundfun(RBmax, RBsum, GC, ntau, nq);
+    verifyEqual(testCase, row.numel, expected_numel, sprintf( ...
+        'manifest row %s (%s): numel does not match the source table''s declared bound.', ...
+        tbl(i).name, tbl(i).source));
+end
+
+% ---- representative sizing/typing spot-checks, retained verbatim from the
+% prior version of this test as an explicit, independently-written
+% cross-check (redundant with the table-driven loop above by construction,
+% but a second, differently-authored assertion catches a bug shared by both
+% local_manifest and manifest_source_table) --------------------------------
 lo = local_named(man, 'boxmin_lo');
 verifyEqual(testCase, lo.numel, 3*GC);                       % [GC,3] box-min bound array
 feas = local_named(man, 'boxmin_feas');
@@ -274,6 +314,85 @@ ph = local_named(man, 'qwork_ph');
 verifyTrue(testCase, ph.is_complex); verifyEqual(testCase, ph.numel, RBmax);   % per-pair phase ~[Kr,1]
 w = local_named(man, 'qwork_w');
 verifyTrue(testCase, w.is_complex); verifyEqual(testCase, w.numel, GC);
+
+% ---- newly-accounted-for rows (this task): fixed [3,3] metric scratch,
+% raw ndgrid triples, local_gab internals, the reciprocal retain mask, and
+% the complex w.*kK product ------------------------------------------------
+Mrow = local_named(man, 'boxmin_M');
+verifyEqual(testCase, Mrow.numel, 9); verifyFalse(testCase, Mrow.is_complex);
+MFFrow = local_named(man, 'boxmin_MFF');
+verifyEqual(testCase, MFFrow.numel, 9); verifyFalse(testCase, MFFrow.is_complex);
+rndg = local_named(man, 'real_ndgrid_raw');
+verifyEqual(testCase, rndg.numel, 3*RBmax);
+gndg = local_named(man, 'recip_ndgrid_raw');
+verifyEqual(testCase, gndg.numel, 3*GC);
+gP = local_named(man, 'gab_P');
+verifyEqual(testCase, gP.numel, RBmax); verifyFalse(testCase, gP.is_complex);
+gTab = local_named(man, 'gab_Tab');
+verifyEqual(testCase, gTab.numel, RBmax); verifyFalse(testCase, gTab.is_complex);
+kg = local_named(man, 'recip_keepG');
+verifyEqual(testCase, kg.class, 'logical'); verifyEqual(testCase, kg.numel, GC);
+wkK = local_named(man, 'qwork_w_kK');
+verifyTrue(testCase, wkK.is_complex); verifyEqual(testCase, wkK.numel, 3*GC);
+end
+
+function tbl = manifest_source_table()
+%MANIFEST_SOURCE_TABLE Source-to-manifest completeness table (prereg sec 2).
+% ONE row per invz_dipole_ewald.m local_manifest() entry: the exact source
+% function/statement that live-allocates it (matching that site's
+% sync-pointer comment in invz_dipole_ewald.m), its manifest class/
+% complexity, and a bound function (RBmax,RBsum,GC,ntau,nq) -> expected
+% numel, evaluated against the SAME call's actual preflight bounds. This
+% table is the SINGLE source of truth for test_manifest_names_are_complete's
+% expected-name list and per-row class/complexity/shape checks -- never
+% hand-maintain a second, independent expected-name list.
+mk = @(name, source, class, is_complex, boundfun) ...
+    struct('name', name, 'source', source, 'class', class, ...
+           'is_complex', is_complex, 'boundfun', boundfun);
+tbl = [ ...
+ mk('real_ndgrid_raw',  'local_build_geom: [H,Kk,L]=ndgrid(rng,rng,rng) (real-space per-pair loop)',    'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*RBmax)
+ mk('real_int_mesh',    'local_build_geom: hkl=[H(:) Kk(:) L(:)] (real-space per-pair loop)',            'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*RBmax)
+ mk('real_cart_mesh',   'local_build_geom: x=hkl*a+d',                                                   'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*RBmax)
+ mk('real_radius',      'local_build_geom: r=vecnorm(x,2,2)',                                            'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
+ mk('real_mask',        'local_build_geom: keep=(r<=r_cut)',                                             'logical', false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
+ mk('real_x',           'local_build_geom: realc{n,m}.x=x(keep,:) (retained union over all pairs)',      'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*RBsum)
+ mk('real_gab',         'local_build_geom: realc{n,m}.gab=local_gab(...) (retained union over all pairs)','double', false, @(RBmax,RBsum,GC,ntau,nq) 9*RBsum)
+ mk('gab_P',            'local_gab: P=erfc(alpha*r)+(2*alpha*r/sqrt(pi)).*exp(-a2r2)',                   'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
+ mk('gab_Q',            'local_gab: Q=(4*alpha^3/sqrt(pi))*exp(-a2r2)./r2',                              'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
+ mk('gab_r2',           'local_gab: r2=r.^2',                                                            'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
+ mk('gab_r5',           'local_gab: r5=r2.^2.*r',                                                        'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
+ mk('gab_a2r2',         'local_gab: a2r2=(alpha*r).^2',                                                  'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
+ mk('gab_Tab',          'local_gab: Tab=(3*xa.*xb-r2*(aa==bb))./r5',                                     'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
+ mk('recip_ndgrid_raw', 'local_build_geom: [H,Kk,L]=ndgrid(rng,rng,rng) (reciprocal candidate build)',   'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
+ mk('recip_int_mesh',   'local_build_geom: Ghkl_all=[H(:) Kk(:) L(:)]',                                  'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
+ mk('recip_Gcart',      'local_build_geom: Gcart_all=Ghkl_all*B',                                        'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
+ mk('recip_dmin',       'local_build_geom: dmin=local_boxmin_dist(Ghkl_all,B)',                          'double',  false, @(RBmax,RBsum,GC,ntau,nq) GC)
+ mk('recip_keepG',      'local_build_geom: keepG=dmin<=g_cut*(1+1e-12)',                                 'logical', false, @(RBmax,RBsum,GC,ntau,nq) GC)
+ mk('boxmin_M',         'local_boxmin_dist: M=B*B''  (fixed [3,3] SPD metric)',                          'double',  false, @(RBmax,RBsum,GC,ntau,nq) 9)
+ mk('boxmin_MFF',       'local_boxmin_dist: MFF=M(F,F)  (conservative [3,3] active-set block)',          'double',  false, @(RBmax,RBsum,GC,ntau,nq) 9)
+ mk('boxmin_lo',        'local_boxmin_dist: lo=G-0.5',                                                   'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
+ mk('boxmin_hi',        'local_boxmin_dist: hi=G+0.5',                                                   'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
+ mk('boxmin_v',         'local_boxmin_dist: v=zeros(nG,3)',                                              'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
+ mk('boxmin_RHS',       'local_boxmin_dist: RHS=-M(F,Cc)*v(:,Cc).''',                                    'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
+ mk('boxmin_VF',        'local_boxmin_dist: VF=(MFF\RHS).''',                                            'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
+ mk('boxmin_feas',      'local_boxmin_dist: feas=true(nG,1)',                                            'logical', false, @(RBmax,RBsum,GC,ntau,nq) GC)
+ mk('boxmin_f',         'local_boxmin_dist: f=sum((v*M).*v,2)',                                          'double',  false, @(RBmax,RBsum,GC,ntau,nq) GC)
+ mk('boxmin_fbest',     'local_boxmin_dist: fbest=inf(nG,1)',                                            'double',  false, @(RBmax,RBsum,GC,ntau,nq) GC)
+ mk('recip_phase',      'local_build_geom: recipc{n,m}.phase=exp(1i*(Gcart*d.''))  (all ordered pairs)', 'double',  true,  @(RBmax,RBsum,GC,ntau,nq) GC*ntau^2)
+ mk('qwork_qbar',       'local_assemble: qbar=qraw-K',                                                   'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*nq)
+ mk('qwork_K',          'local_assemble: K=floor(qraw+0.5)',                                             'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*nq)
+ mk('qwork_k',          'local_assemble: k=Gcart+qcart',                                                 'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
+ mk('qwork_kernel',     'local_assemble: kernel=fourpiVc*exp(-kk2*inv4a2)./kk2',                         'double',  true,  @(RBmax,RBsum,GC,ntau,nq) GC)
+ mk('qwork_kk',         'local_assemble: kk=sum(k.^2,2)',                                                'double',  false, @(RBmax,RBsum,GC,ntau,nq) GC)
+ mk('qwork_keep',       'local_assemble: keep=(kk<=gc2)&(kk>0)',                                         'logical', false, @(RBmax,RBsum,GC,ntau,nq) GC)
+ mk('qwork_kK',         'local_assemble: kK=k(keep,:)',                                                  'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
+ mk('qwork_kk2',        'local_assemble: kk2=kk(keep)',                                                  'double',  false, @(RBmax,RBsum,GC,ntau,nq) GC)
+ mk('qwork_ph',         'local_assemble: ph=exp(-1i*(X*qcart.''))  (per pair)',                          'double',  true,  @(RBmax,RBsum,GC,ntau,nq) RBmax)
+ mk('qwork_w',          'local_assemble: w=kernel.*geom.recip{n,m}.phase(keep)  (per pair)',             'double',  true,  @(RBmax,RBsum,GC,ntau,nq) GC)
+ mk('qwork_w_kK',       'local_assemble: w.*kK  (per pair, complex broadcast product)',                  'double',  true,  @(RBmax,RBsum,GC,ntau,nq) 3*GC)
+ mk('dip_output',       'invz_dipole_ewald: dip=complex(zeros(3,3,ntau,ntau,nq))',                       'double',  true,  @(RBmax,RBsum,GC,ntau,nq) 9*ntau^2*nq)
+ mk('recip_used',       'local_assemble: recip_used=zeros(nq,1)',                                        'double',  false, @(RBmax,RBsum,GC,ntau,nq) nq)
+];
 end
 
 function row = local_named(man, name)

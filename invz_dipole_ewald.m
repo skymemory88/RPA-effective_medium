@@ -253,30 +253,56 @@ recip_cube_bound = (2*nmax_G + 1)^3;
 end
 
 % =====================================================================
-% conservative byte manifest (prereg sec 2: enumerate EVERY size-dependent
-% retained/temporary numeric/logical array -- real+reciprocal geometry, the
-% local_boxmin_dist temporaries (boxmin_*), the per-q loop-body temporaries
-% (qwork_*), and the output. The O(1) fixed 3x3 metric scratch (M/MFF) is
-% excluded as non-size-dependent. Rows are summed as if simultaneously live,
-% which conservatively over-bounds the true peak working set.
+% conservative byte manifest (prereg sec 2, literal: "every planned retained
+% and temporary numeric/logical array" -- no size-dependence qualifier).
+% Enumerates: real+reciprocal geometry INCLUDING the raw ndgrid triples
+% [H,Kk,L] that are live simultaneously with the concatenated hkl/Ghkl_all
+% meshes built from them; local_gab's internal work arrays (gab_*); the
+% local_boxmin_dist temporaries (boxmin_*), INCLUDING the fixed [3,3] metric
+% scratch M and the conservative [3,3] MFF -- previously excluded as
+% "O(1)/non-size-dependent", now INCLUDED per the frozen manifest-
+% completeness decision: an array counts regardless of how small/fixed its
+% shape is, so only genuinely scalar bookkeeping (tol, loop indices, and the
+% <=3-element active-set index vectors s/F/Cc used purely for control flow,
+% never stored as data) stays off this list; the reciprocal candidate-retain
+% mask (recip_keepG); the per-q loop-body temporaries (qwork_*), including
+% the complex w.*kK broadcast product; and the output. Rows are summed as if
+% simultaneously live, which conservatively over-bounds the true peak
+% working set. See test_manifest_names_are_complete's manifest_source_table
+% for the authoritative row-by-row source mapping this function must stay in
+% sync with.
 % =====================================================================
 function [manifest, est_bytes] = local_manifest(real_cube_bound, recip_cube_bound, ntau, nq, MARGIN)
 RBmax = max(real_cube_bound(:));          % worst single-pair temporary mesh
 RBsum = sum(real_cube_bound(:));          % conservative total retained real vectors
 GC    = recip_cube_bound;                 % conservative candidate count
 rows = struct('name',{},'class',{},'is_complex',{},'size',{},'numel',{},'bytes',{});
-% -- real-space geometry: per-pair build mesh + retained union --
+% -- real-space geometry: raw ndgrid triple + per-pair build mesh + retained union --
+rows(end+1) = local_mkrow('real_ndgrid_raw','double',  false, [RBmax 3]);
 rows(end+1) = local_mkrow('real_int_mesh',  'double',  false, [RBmax 3]);
 rows(end+1) = local_mkrow('real_cart_mesh', 'double',  false, [RBmax 3]);
 rows(end+1) = local_mkrow('real_radius',    'double',  false, [RBmax 1]);
 rows(end+1) = local_mkrow('real_mask',      'logical', false, [RBmax 1]);
 rows(end+1) = local_mkrow('real_x',         'double',  false, [RBsum 3]);
 rows(end+1) = local_mkrow('real_gab',       'double',  false, [RBsum 9]);
-% -- reciprocal candidate build mesh --
+% -- local_gab internal work arrays (one call per ordered pair, sized at
+%    that pair's retained count <= RBmax) --
+rows(end+1) = local_mkrow('gab_P',          'double',  false, [RBmax 1]);
+rows(end+1) = local_mkrow('gab_Q',          'double',  false, [RBmax 1]);
+rows(end+1) = local_mkrow('gab_r2',         'double',  false, [RBmax 1]);
+rows(end+1) = local_mkrow('gab_r5',         'double',  false, [RBmax 1]);
+rows(end+1) = local_mkrow('gab_a2r2',       'double',  false, [RBmax 1]);
+rows(end+1) = local_mkrow('gab_Tab',        'double',  false, [RBmax 1]);
+% -- reciprocal candidate build mesh: raw ndgrid triple + concatenated meshes --
+rows(end+1) = local_mkrow('recip_ndgrid_raw','double', false, [GC 3]);
 rows(end+1) = local_mkrow('recip_int_mesh', 'double',  false, [GC 3]);
 rows(end+1) = local_mkrow('recip_Gcart',    'double',  false, [GC 3]);
 rows(end+1) = local_mkrow('recip_dmin',     'double',  false, [GC 1]);
-% -- local_boxmin_dist temporaries (nG = GC candidate rows) --
+rows(end+1) = local_mkrow('recip_keepG',    'logical', false, [GC 1]);
+% -- local_boxmin_dist temporaries (nG = GC candidate rows), including the
+%    fixed [3,3] SPD metric M and the conservative [3,3] active-set MFF --
+rows(end+1) = local_mkrow('boxmin_M',       'double',  false, [3 3]);
+rows(end+1) = local_mkrow('boxmin_MFF',     'double',  false, [3 3]);
 rows(end+1) = local_mkrow('boxmin_lo',      'double',  false, [GC 3]);
 rows(end+1) = local_mkrow('boxmin_hi',      'double',  false, [GC 3]);
 rows(end+1) = local_mkrow('boxmin_v',       'double',  false, [GC 3]);
@@ -299,6 +325,7 @@ rows(end+1) = local_mkrow('qwork_kK',       'double',  false, [GC 3]);
 rows(end+1) = local_mkrow('qwork_kk2',      'double',  false, [GC 1]);
 rows(end+1) = local_mkrow('qwork_ph',       'double',  true,  [RBmax 1]);
 rows(end+1) = local_mkrow('qwork_w',        'double',  true,  [GC 1]);
+rows(end+1) = local_mkrow('qwork_w_kK',     'double',  true,  [GC 3]);
 % -- output + per-q retained count --
 rows(end+1) = local_mkrow('dip_output',     'double',  true,  [3 3 ntau ntau nq]);
 rows(end+1) = local_mkrow('recip_used',     'double',  false, [nq 1]);
@@ -335,6 +362,10 @@ for n = 1:ntau
         d = taucart(m,:) - taucart(n,:);
         nmax_r = ceil((r_cut + norm(d))/sa);
         rng = -nmax_r:nmax_r;
+        % [H,Kk,L] (raw ndgrid outputs) are live simultaneously with the
+        % concatenated hkl/x built from them below -- accounted in
+        % local_manifest as real_ndgrid_raw/real_int_mesh/real_cart_mesh;
+        % keep the three in sync.
         [H,Kk,L] = ndgrid(rng, rng, rng);
         hkl = [H(:) Kk(:) L(:)];
         x = hkl*a + d;
@@ -357,6 +388,9 @@ corners = [c1(:) c2(:) c3(:)];
 qmax = max(vecnorm(corners*B, 2, 2));
 nmax_G = ceil((g_cut + qmax)/min(svd(B)));
 rng = -nmax_G:nmax_G;
+% [H,Kk,L] (raw ndgrid outputs) are live simultaneously with Ghkl_all/
+% Gcart_all built from them below -- accounted in local_manifest as
+% recip_ndgrid_raw/recip_int_mesh/recip_Gcart; keep the three in sync.
 [H,Kk,L] = ndgrid(rng, rng, rng);
 Ghkl_all  = [H(:) Kk(:) L(:)];
 Gcart_all = Ghkl_all*B;
@@ -364,7 +398,7 @@ Gcart_all = Ghkl_all*B;
 % treated conservatively over the CLOSED box (the upper face belongs to the union
 % in the half-open limit), with a tiny numerical slack for boundary candidates.
 dmin = local_boxmin_dist(Ghkl_all, B);
-keepG = dmin <= g_cut*(1 + 1e-12);
+keepG = dmin <= g_cut*(1 + 1e-12);          % accounted in local_manifest as recip_keepG
 Ghkl  = Ghkl_all(keepG,:);
 Gcart = Gcart_all(keepG,:);
 
@@ -394,7 +428,10 @@ end
 % screened Hessian kernel g_ab
 % =====================================================================
 function gab = local_gab(x, r, alpha)
-% x [K,3], r [K,1]. Returns gab [K,3,3].
+% x [K,3], r [K,1]. Returns gab [K,3,3]. The internal work arrays
+% P,Q,r2,r5,a2r2,Tab (each ~[K,1], K<=RBmax, one call per ordered pair) are
+% accounted in local_manifest as gab_P/gab_Q/gab_r2/gab_r5/gab_a2r2/gab_Tab;
+% keep the two in sync.
 K = size(x,1);
 gab = zeros(K,3,3);
 if K == 0
@@ -422,7 +459,8 @@ function dmin = local_boxmin_dist(G, B)
 % Metric M = B*B' is SPD; minimize the convex quadratic f(v)=v*M*v' over the box
 % v in [G-0.5, G+0.5] by enumerating the 27 free/lower/upper active sets (no
 % Optimization Toolbox). The global box-min is the smallest feasible KKT value.
-% The size-dependent temporaries below (lo/hi/v/RHS/VF/feas/f/fbest, ~[nG,*]) are
+% The size-dependent temporaries below (lo/hi/v/RHS/VF/feas/f/fbest, ~[nG,*]),
+% PLUS the fixed [3,3] metric M and the conservative [3,3] active-set MFF, are
 % accounted in local_manifest as boxmin_* -- keep the two in sync.
 M  = B*B.';
 nG = size(G,1);
@@ -442,7 +480,7 @@ for s1 = -1:1
             end
             feas = true(nG,1);
             if ~isempty(F)
-                MFF = M(F,F);
+                MFF = M(F,F);          % accounted in local_manifest as boxmin_MFF (conservative [3,3])
                 if isempty(Cc)
                     RHS = zeros(numel(F), nG);
                 else
@@ -482,8 +520,9 @@ gc2      = g_cut^2;
 dip = complex(zeros(3,3,ntau,ntau,nq));
 recip_used = zeros(nq,1);
 
-% Per-q loop-body temporaries (k/kk/keep/kK/kk2/kernel and, per pair, ph/w) are
-% accounted in local_manifest as qwork_* -- keep the two in sync.
+% Per-q loop-body temporaries (k/kk/keep/kK/kk2/kernel and, per pair,
+% ph/w/w.*kK) are accounted in local_manifest as qwork_* -- keep the two in
+% sync.
 for i = 1:nq
     qraw = q(i,:);
     K    = floor(qraw + 0.5);        % extended-zone translation
@@ -511,6 +550,7 @@ for i = 1:nq
 
             % --- reciprocal part: +(4pi/Vc) sum k_a k_b/|k|^2 ... e^{+iG.d} ---
             w = kernel .* geom.recip{n,m}.phase(keep);   % [Kk,1]
+            % w.*kK [Kk,3] complex is accounted in local_manifest as qwork_w_kK.
             block = block + (kK.' * (w .* kK));          % [3,3]
 
             % --- self part (same-site diagonal only) ---
