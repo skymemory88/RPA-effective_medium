@@ -244,26 +244,48 @@ verifyEqual(testCase, o3.numel, 3*o1.numel);                 % output scales exa
 end
 
 function test_manifest_names_are_complete(testCase)
-% Completeness (prereg sec 2, LITERAL wording: "every planned retained and
-% temporary numeric/logical array" -- no size-dependence qualifier). The
-% expected inventory is DERIVED from manifest_source_table() below -- a
-% maintained source-to-manifest table mapping every row name to the exact
-% source function/statement that allocates it, plus its declared class/
+% Completeness (prereg sec 2 / Step-5 plan Task 1, LITERAL wording: "every
+% planned retained and temporary numeric/logical array ... include
+% fixed-size numeric scratch too, OR document and test an authority-
+% supported reason for excluding it"). The expected SIZE-DEPENDENT inventory
+% is DERIVED from manifest_source_table() below -- a maintained
+% source-to-manifest table mapping every row name to the exact source
+% function/statement that allocates it, plus its declared class/
 % complexity/numel-bound -- so this test and the table can never
 % independently drift: update the table (and the matching in-source
 % sync-pointer comment it documents, in invz_dipole_ewald.m) whenever
 % local_manifest changes, and this test's expected list/checks follow
-% automatically. This fails loudly on:
-%   (1) a duplicate name inside the table itself (a corrupt table cannot
-%       silently pass this test);
+% automatically. The separately-maintained excluded_o1_table() documents
+% the complementary BOUND-INDEPENDENT O(1) set (never local_manifest rows).
+% This fails loudly on:
+%   (1) a duplicate name inside manifest_source_table itself (a corrupt
+%       table cannot silently pass this test);
 %   (2) a duplicate row name inside the actual array_manifest;
 %   (3) any set mismatch between the table's names and the manifest's names
 %       (a missing OR an unaccounted-for/stray row) -- as with the box-min
-%       boxmin_* and per-q qwork_* temporaries an earlier draft left out,
-%       and the raw-ndgrid/local_gab-internals/recip_keepG/qwork_w_kK/
-%       fixed-[3,3]-metric rows a later completeness pass added; and
-%   (4) any row whose actual class/is_complex/numel disagrees with the
-%       table's declared class/is_complex/bound function.
+%       boxmin_* and per-q qwork_* temporaries an earlier draft left out;
+%       the raw-ndgrid/local_gab-internals/recip_keepG/qwork_w_kK rows a
+%       later completeness pass added; and gab_xa/gab_xb (added)/boxmin_M/
+%       boxmin_MFF (removed -- moved to the O(1) excluded_o1_table() set,
+%       see set (ii) of local_manifest's header comment) by this fix;
+%   (4) any row whose class/is_complex/numel disagrees with the maintained
+%       manifest_source_table's declared class/is_complex/bound function --
+%       this is a SELF-CONSISTENCY check between local_manifest and the
+%       hand-maintained table (both must be kept in sync by hand), NOT an
+%       independent re-derivation of class/is_complex/numel from each
+%       expression's raw MATLAB arithmetic. A value transcribed identically
+%       (and wrongly) into both local_manifest and the table -- e.g.
+%       qwork_kernel's is_complex was `true` in both before this fix, even
+%       though `kernel=fourpiVc*exp(-kk2*inv4a2)./kk2` has no `1i` factor
+%       and is arithmetically real -- would NOT be caught by this loop; only
+%       a from-source re-derivation (done by hand for this fix, see
+%       invz_dipole_ewald.m's qwork_kernel row/comment and the table row
+%       above) catches that class of bug; and
+%   (5) the excluded_o1_table() aggregate byte total (the bound-independent
+%       O(1) arrays intentionally excluded from local_manifest) growing to a
+%       non-negligible fraction of CAP_BYTES (asserted <64 KiB) -- the
+%       tested, authority-supported reason that set stays excluded rather
+%       than becoming rows.
 tbl = manifest_source_table();
 tblNames = {tbl.name};
 verifyEqual(testCase, numel(unique(tblNames)), numel(tblNames), ...
@@ -315,13 +337,9 @@ verifyTrue(testCase, ph.is_complex); verifyEqual(testCase, ph.numel, RBmax);   %
 w = local_named(man, 'qwork_w');
 verifyTrue(testCase, w.is_complex); verifyEqual(testCase, w.numel, GC);
 
-% ---- newly-accounted-for rows (this task): fixed [3,3] metric scratch,
-% raw ndgrid triples, local_gab internals, the reciprocal retain mask, and
-% the complex w.*kK product ------------------------------------------------
-Mrow = local_named(man, 'boxmin_M');
-verifyEqual(testCase, Mrow.numel, 9); verifyFalse(testCase, Mrow.is_complex);
-MFFrow = local_named(man, 'boxmin_MFF');
-verifyEqual(testCase, MFFrow.numel, 9); verifyFalse(testCase, MFFrow.is_complex);
+% ---- newly-accounted-for rows (Task-1 first pass): raw ndgrid triples,
+% local_gab internals, the reciprocal retain mask, and the complex w.*kK
+% product ------------------------------------------------------------------
 rndg = local_named(man, 'real_ndgrid_raw');
 verifyEqual(testCase, rndg.numel, 3*RBmax);
 gndg = local_named(man, 'recip_ndgrid_raw');
@@ -334,18 +352,69 @@ kg = local_named(man, 'recip_keepG');
 verifyEqual(testCase, kg.class, 'logical'); verifyEqual(testCase, kg.numel, GC);
 wkK = local_named(man, 'qwork_w_kK');
 verifyTrue(testCase, wkK.is_complex); verifyEqual(testCase, wkK.numel, 3*GC);
+
+% ---- this fix (task-1 review): gab_xa/gab_xb added as genuine per-(aa,bb)
+% column-index copies (unlike gmat's zero-copy reshape); boxmin_M/boxmin_MFF
+% are asserted ABSENT from array_manifest (moved to the O(1) excluded set,
+% not silently dropped -- see the excluded_o1_table() aggregate check
+% below); qwork_kernel is asserted real (ground-truthed against its
+% arithmetic, ./kk2 has no 1i factor) -------------------------------------
+gxa = local_named(man, 'gab_xa');
+verifyEqual(testCase, gxa.numel, RBmax); verifyFalse(testCase, gxa.is_complex);
+gxb = local_named(man, 'gab_xb');
+verifyEqual(testCase, gxb.numel, RBmax); verifyFalse(testCase, gxb.is_complex);
+verifyTrue(testCase, isempty(local_named(man, 'boxmin_M')), ...
+    'boxmin_M must no longer be a local_manifest row (moved to excluded_o1_table).');
+verifyTrue(testCase, isempty(local_named(man, 'boxmin_MFF')), ...
+    'boxmin_MFF must no longer be a local_manifest row (moved to excluded_o1_table).');
+qk = local_named(man, 'qwork_kernel');
+verifyFalse(testCase, qk.is_complex, ...
+    'qwork_kernel is arithmetically real (fourpiVc*exp(-kk2*inv4a2)./kk2, no 1i factor).');
+verifyEqual(testCase, qk.bytes, qk.numel*8);   % 8 bytes/elt, not 16 -- ground-truths the fix
+
+% ---- excluded, BOUND-INDEPENDENT O(1) arrays: documented + tested
+% aggregate bound (prereg sec 2 / Step-5 plan Task 1's "document and test an
+% authority-supported reason for excluding it") ----------------------------
+etbl = excluded_o1_table();
+enames = {etbl.name};
+verifyEqual(testCase, numel(unique(enames)), numel(enames), ...
+    'excluded_o1_table itself contains a duplicate entry name.');
+excluded_bytes = sum(arrayfun(@(r) r.bytesfun(RBmax, RBsum, GC, ntau, nq), etbl));
+verifyLessThan(testCase, excluded_bytes, 64*1024, sprintf( ...
+    ['excluded O(1)/ntau-only aggregate %.0f bytes is no longer negligible ' ...
+     '(>=64 KiB) -- re-examine whether some of excluded_o1_table should ' ...
+     'become size-dependent local_manifest rows instead.'], excluded_bytes));
 end
 
 function tbl = manifest_source_table()
-%MANIFEST_SOURCE_TABLE Source-to-manifest completeness table (prereg sec 2).
-% ONE row per invz_dipole_ewald.m local_manifest() entry: the exact source
-% function/statement that live-allocates it (matching that site's
-% sync-pointer comment in invz_dipole_ewald.m), its manifest class/
+%MANIFEST_SOURCE_TABLE Source-to-manifest completeness table (prereg sec 2 /
+% Step-5 plan Task 1). ONE row per invz_dipole_ewald.m local_manifest()
+% SIZE-DEPENDENT entry (element count scales with RBmax/RBsum/GC or nq): the
+% exact source function/statement that live-allocates it (matching that
+% site's sync-pointer comment in invz_dipole_ewald.m), its manifest class/
 % complexity, and a bound function (RBmax,RBsum,GC,ntau,nq) -> expected
 % numel, evaluated against the SAME call's actual preflight bounds. This
 % table is the SINGLE source of truth for test_manifest_names_are_complete's
 % expected-name list and per-row class/complexity/shape checks -- never
-% hand-maintain a second, independent expected-name list.
+% hand-maintain a second, independent expected-name list. BOUND-INDEPENDENT
+% O(1) arrays (fixed shape, or scaling only with ntau) are deliberately NOT
+% here -- see excluded_o1_table() below.
+%
+% Two size-dependent quantities are real allocations in the source but are
+% each provably bounded by an ALREADY-LISTED row of the same/larger scale,
+% so they are explicitly NOT separate rows here (would double-count, not
+% under-count):
+%   - geom.Ghkl/geom.Gcart (local_build_geom: Ghkl=Ghkl_all(keepG,:);
+%     Gcart=Gcart_all(keepG,:)) are each <=GC rows -- a strict subset of the
+%     pre-filter recip_int_mesh/recip_Gcart candidates (rows above, same GC
+%     bound) -- already conservatively covered by those two rows.
+%   - local_assemble's gmat=reshape(gab,Kr,9) is a same-total-element-count
+%     reshape of the already-counted geom.real{n,m}.gab/real_gab (row
+%     above). MATLAB reshape relabels dimensions without reordering the
+%     column-major buffer -- gmat/gab share storage (copy-on-write) and are
+%     never mutated in local_assemble, so no physical copy is ever forced
+%     (verified empirically: mutating a reshape output leaves its source
+%     array unaffected).
 mk = @(name, source, class, is_complex, boundfun) ...
     struct('name', name, 'source', source, 'class', class, ...
            'is_complex', is_complex, 'boundfun', boundfun);
@@ -362,14 +431,14 @@ tbl = [ ...
  mk('gab_r2',           'local_gab: r2=r.^2',                                                            'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
  mk('gab_r5',           'local_gab: r5=r2.^2.*r',                                                        'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
  mk('gab_a2r2',         'local_gab: a2r2=(alpha*r).^2',                                                  'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
+ mk('gab_xa',           'local_gab: xa=x(:,aa)  (per (aa,bb), column-index copy)',                       'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
+ mk('gab_xb',           'local_gab: xb=x(:,bb)  (per (aa,bb), column-index copy)',                       'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
  mk('gab_Tab',          'local_gab: Tab=(3*xa.*xb-r2*(aa==bb))./r5',                                     'double',  false, @(RBmax,RBsum,GC,ntau,nq) RBmax)
  mk('recip_ndgrid_raw', 'local_build_geom: [H,Kk,L]=ndgrid(rng,rng,rng) (reciprocal candidate build)',   'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
  mk('recip_int_mesh',   'local_build_geom: Ghkl_all=[H(:) Kk(:) L(:)]',                                  'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
  mk('recip_Gcart',      'local_build_geom: Gcart_all=Ghkl_all*B',                                        'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
  mk('recip_dmin',       'local_build_geom: dmin=local_boxmin_dist(Ghkl_all,B)',                          'double',  false, @(RBmax,RBsum,GC,ntau,nq) GC)
  mk('recip_keepG',      'local_build_geom: keepG=dmin<=g_cut*(1+1e-12)',                                 'logical', false, @(RBmax,RBsum,GC,ntau,nq) GC)
- mk('boxmin_M',         'local_boxmin_dist: M=B*B''  (fixed [3,3] SPD metric)',                          'double',  false, @(RBmax,RBsum,GC,ntau,nq) 9)
- mk('boxmin_MFF',       'local_boxmin_dist: MFF=M(F,F)  (conservative [3,3] active-set block)',          'double',  false, @(RBmax,RBsum,GC,ntau,nq) 9)
  mk('boxmin_lo',        'local_boxmin_dist: lo=G-0.5',                                                   'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
  mk('boxmin_hi',        'local_boxmin_dist: hi=G+0.5',                                                   'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
  mk('boxmin_v',         'local_boxmin_dist: v=zeros(nG,3)',                                              'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
@@ -382,7 +451,7 @@ tbl = [ ...
  mk('qwork_qbar',       'local_assemble: qbar=qraw-K',                                                   'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*nq)
  mk('qwork_K',          'local_assemble: K=floor(qraw+0.5)',                                             'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*nq)
  mk('qwork_k',          'local_assemble: k=Gcart+qcart',                                                 'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
- mk('qwork_kernel',     'local_assemble: kernel=fourpiVc*exp(-kk2*inv4a2)./kk2',                         'double',  true,  @(RBmax,RBsum,GC,ntau,nq) GC)
+ mk('qwork_kernel',     'local_assemble: kernel=fourpiVc*exp(-kk2*inv4a2)./kk2  (real: no 1i factor)',    'double',  false, @(RBmax,RBsum,GC,ntau,nq) GC)
  mk('qwork_kk',         'local_assemble: kk=sum(k.^2,2)',                                                'double',  false, @(RBmax,RBsum,GC,ntau,nq) GC)
  mk('qwork_keep',       'local_assemble: keep=(kk<=gc2)&(kk>0)',                                         'logical', false, @(RBmax,RBsum,GC,ntau,nq) GC)
  mk('qwork_kK',         'local_assemble: kK=k(keep,:)',                                                  'double',  false, @(RBmax,RBsum,GC,ntau,nq) 3*GC)
@@ -392,6 +461,57 @@ tbl = [ ...
  mk('qwork_w_kK',       'local_assemble: w.*kK  (per pair, complex broadcast product)',                  'double',  true,  @(RBmax,RBsum,GC,ntau,nq) 3*GC)
  mk('dip_output',       'invz_dipole_ewald: dip=complex(zeros(3,3,ntau,ntau,nq))',                       'double',  true,  @(RBmax,RBsum,GC,ntau,nq) 9*ntau^2*nq)
  mk('recip_used',       'local_assemble: recip_used=zeros(nq,1)',                                        'double',  false, @(RBmax,RBsum,GC,ntau,nq) nq)
+];
+end
+
+function tbl = excluded_o1_table()
+%EXCLUDED_O1_TABLE Bound-independent O(1) arrays deliberately excluded from
+% local_manifest/manifest_source_table (prereg sec 2 / Step-5 plan Task 1:
+% "include fixed-size numeric scratch too, OR document and test an
+% authority-supported reason for excluding it"). ONE row per distinct
+% fixed-shape or ntau-only-scaled array/pattern found while sweeping
+% local_build_geom/local_gab/local_boxmin_dist/local_assemble; each entry's
+% bytesfun(RBmax,RBsum,GC,ntau,nq) is written with the FULL
+% manifest_source_table()-style signature but its value depends on ntau (or
+% nothing) ONLY -- never RBmax/RBsum/GC/nq -- which is itself the visible,
+% checkable evidence backing the "bound-independent" claim.
+% test_manifest_names_are_complete asserts sum(bytesfun(...)) over this
+% table stays far below CAP_BYTES (<64 KiB): the tested, authority-supported
+% reason this set is excluded from local_manifest rather than enumerated as
+% rows.
+mk = @(name, source, bytesfun, reason) ...
+    struct('name', name, 'source', source, 'bytesfun', bytesfun, 'reason', reason);
+tbl = [ ...
+ mk('B',               'local_scalar_bounds: B=2*pi*inv(a).''  (retained as geom.B)', ...
+    @(RBmax,RBsum,GC,ntau,nq) 9*8, ...
+    'fixed [3,3], independent of RBmax/RBsum/GC/nq')
+ mk('taucart',         'local_scalar_bounds: taucart=tau*a  (retained as geom.taucart)', ...
+    @(RBmax,RBsum,GC,ntau,nq) 3*ntau*8, ...
+    'scales only with ntau, the fixed sublattice count')
+ mk('real_cube_bound', 'local_scalar_bounds: real_cube_bound(n,m)=(2*nmax_r+1)^3  (retained as geom.real_cube_bound)', ...
+    @(RBmax,RBsum,GC,ntau,nq) ntau^2*8, ...
+    'element COUNT is ntau^2 (fixed); only element VALUES scale with the real cube bound')
+ mk('real_pair_count', 'local_build_geom: real_pair_count=zeros(ntau,ntau)  (retained as geom.real_pair_count/counts.real_pair)', ...
+    @(RBmax,RBsum,GC,ntau,nq) ntau^2*8, ...
+    'same shape/nature as real_cube_bound: element COUNT fixed at ntau^2')
+ mk('block',           'local_assemble: block=reshape(-(ph.''*gmat),3,3), plus block-selfval*eye(3) self term', ...
+    @(RBmax,RBsum,GC,ntau,nq) 9*16, ...
+    'fixed [3,3] complex per-pair accumulator, independent of RBmax/RBsum/GC/nq')
+ mk('boxmin_M',        'local_boxmin_dist: M=B*B.''  (fixed [3,3] SPD metric)', ...
+    @(RBmax,RBsum,GC,ntau,nq) 9*8, ...
+    'fixed [3,3], independent of nG=GC (REMOVED as a local_manifest row by this fix)')
+ mk('boxmin_MFF',      'local_boxmin_dist: MFF=M(F,F)  (conservative [3,3] active-set block)', ...
+    @(RBmax,RBsum,GC,ntau,nq) 9*8, ...
+    'conservative fixed [3,3] upper bound (true size <=3x3), independent of nG=GC (REMOVED as a local_manifest row by this fix)')
+ mk('qmax_corners',    'local_scalar_bounds AND local_build_geom (reciprocal section): corners=[c1(:) c2(:) c3(:)] plus its c1/c2/c3 ndgrid inputs (identical computation at both sites, never simultaneously live across them)', ...
+    @(RBmax,RBsum,GC,ntau,nq) 8*3*8 + 3*(2*2*2*8), ...
+    'fixed [8,3] + 3x[2,2,2] canonical-domain corner enumeration for qmax, independent of RBmax/RBsum/GC/nq')
+ mk('boxmin_activeset_sFCc', 'local_boxmin_dist: s/F/Cc inside the 27-branch active-set loop', ...
+    @(RBmax,RBsum,GC,ntau,nq) 3*3*8, ...
+    'control-flow index vectors, <=3 elements each, one simultaneous instance regardless of nG=GC')
+ mk('pair_displacement_d', 'local_build_geom: d=taucart(m,:)-taucart(n,:)  (real-space build loop AND reciprocal-phase loop)', ...
+    @(RBmax,RBsum,GC,ntau,nq) 3*8, ...
+    'fixed [1,3] per-pair displacement, independent of RBmax/RBsum/GC/nq')
 ];
 end
 
