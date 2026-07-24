@@ -282,6 +282,11 @@ for i = 1:size(Q, 1)
     % at exact Gamma (dip_reg0/ex0) plus a q-direction-only outer product
     % (qhat is s-independent) -- no finite-s primitive/projector value is
     % ever compared to the no-exp formula here (E1-safe by construction).
+    % NB (information content): this reconstruction is an algebraic IDENTITY in
+    % qhat -- it holds for every ray/s -- so the 20-point loop confirms the
+    % reconstruction formula is implemented without a typo, but is NOT 20
+    % independent finite-q validations. The independent finite-q/finite-s content
+    % lives in the isolated-P0-projector tests, which E1 keeps separate.
     Jrecon         = Jbase + C.gfac*(4*pi/ion.Vc)*(Dab/3 - outer);
     JreconExpected = -C.gfac*dip_reg0 + sign(ion.J12)*ex0 - C.gfac*(4*pi/ion.Vc)*outer;
 
@@ -324,6 +329,12 @@ verifyTrue(testCase, mres1.pass, sprintf(...
     'Gate-C4: hand-built Jgamma_cc != info.Jgamma_cc at M_id (worst_margin=%.3e).', mres1.worst_margin));
 
 Dab = delta3(ntau);
+% The genuine cross-checks are mres0/mres1 above: hand-built Jbase_cc/Jgamma_cc
+% (from the primitive directly) vs the live info.Jpath_base_cc/info.Jgamma_cc.
+% Given mres0 (info.Jpath_base_cc == Jbase_cc), the loop below is an algebraic
+% IDENTITY in qhat -- it re-confirms the cc slice of the nine-component
+% reconstruction equals the production q-path formula for every qhat (a
+% formula-typo catcher), NOT 20 independent finite-q validations.
 worst_margin = -inf;
 for i = 1:size(Q, 1)
     qrow = Q(i, :);
