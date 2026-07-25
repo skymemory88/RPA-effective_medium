@@ -74,7 +74,7 @@ qvec = qtest_array();
 ref = invz_legacy_coupling_reference();
 opts = struct('dpRng', 30, 'cache', true);
 
-% cold (first call may write a jq4_* cache file; harmless -- excluded from
+% cold (first call may write a jq5_* cache file; harmless -- excluded from
 % git by invz_projected/cache/.gitignore's '*' rule).
 [Jnu_prod_cold, info_prod_cold, Juni_prod_cold] = invz_jq_modes(ion, qvec, opts);
 % warm (second call should hit the just-written cache).
