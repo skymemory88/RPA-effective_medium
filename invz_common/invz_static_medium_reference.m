@@ -1,6 +1,6 @@
 function [Gref, ref] = invz_static_medium_reference(G0bare, Sigma0, scheme, opts)
 %INVZ_STATIC_MEDIUM_REFERENCE Reference propagator for the strict-O(1/z) static medium
-% (spec SS4.1). G = -chi, ferromagnetic positive J.
+% (spec SS4.1). G = -chi (meV^-1), ferromagnetic positive J.
 %   'strict_1z_dyson_ref' : denom = 1 + Sigma0;  Gref = G0bare/denom   (SELECTED convention)
 %   'strict_1z_bare_ref'  : denom = 1;           Gref = G0bare         (systematic comparator)
 %
