@@ -53,6 +53,31 @@ verifyError(testCase, @() invz_coupling_moments([1e-3; 1i*1e-3]), 'invz:coupling
 verifyError(testCase, @() invz_coupling_moments([]), 'invz:couplingMoments');
 end
 
+% [1,nw] row input (nJ=1) must be treated as nw single-element columns -> one moment set PER
+% COLUMN, exactly like any other [nJ,nw] matrix -- NOT flattened into one nJ=3 static
+% multiset. This is the isvector(...) special case the fix removes: MATLAB's isvector is true
+% for a 1 x N row, so the pre-fix dispatch wrongly collapsed this into scalar fields.
+function test_row_input_is_per_column(testCase)
+J = [1e-3 2e-3 3e-3];
+mom = invz_coupling_moments(J);
+verifyEqual(testCase, size(mom.Jbar), [1 3]);
+verifyEqual(testCase, size(mom.mu2),  [1 3]);
+verifyEqual(testCase, size(mom.mu3),  [1 3]);
+verifyEqual(testCase, size(mom.mu4),  [1 3]);
+verifyEqual(testCase, size(mom.n),    [1 3]);
+verifyEqual(testCase, mom.Jbar, J, 'AbsTol', 0);
+verifyEqual(testCase, mom.mu2, [0 0 0], 'AbsTol', 0);
+verifyEqual(testCase, mom.mu3, [0 0 0], 'AbsTol', 0);
+verifyEqual(testCase, mom.mu4, [0 0 0], 'AbsTol', 0);
+verifyEqual(testCase, mom.n, [1 1 1]);
+end
+
+% A >2-D array must be rejected outright, not silently reach the matrix formula and produce
+% an internally inconsistent struct (e.g. Jbar sized [1,3,4] but n sized [1,3]).
+function test_rejects_higher_dimensional_input(testCase)
+verifyError(testCase, @() invz_coupling_moments(reshape(1:24, 2, 3, 4)), 'invz:couplingMoments');
+end
+
 % Production-multiset regression, with its provenance asserted (spec §B: the numbers are valid
 % ONLY for this tuple). INVZ_SLOW-gated like the other real-coupling anchors.
 function test_production_multiset_moments(testCase)
