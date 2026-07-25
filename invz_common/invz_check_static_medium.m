@@ -29,6 +29,18 @@ if nargin < 1 || isempty(opts), opts = struct(); end
 if nargin < 2 || isempty(eopts), eopts = struct(); end
 if nargin < 3 || isempty(eso),   eso   = struct(); end
 
+% eopts/eso are internal leg option structs; a caller passing something else by mistake must
+% get this validator's own invz:staticMedium identifier, not an un-namespaced MATLAB error from
+% the dot-indexed stamping below -- a validator whose whole purpose is policing malformed
+% option structs should not itself raise an un-namespaced error for exactly that class of
+% mistake.
+if ~isstruct(eopts)
+    error('invz:staticMedium', 'eopts must be a struct; got %s.', local_describe(eopts));
+end
+if ~isstruct(eso)
+    error('invz:staticMedium', 'eso must be a struct; got %s.', local_describe(eso));
+end
+
 valid = {'resummed', 'strict_1z_dyson_ref', 'strict_1z_bare_ref'};
 scheme = getf(opts, 'static_medium', 'resummed');
 if ~(ischar(scheme) || isstring(scheme)) || ~any(strcmp(char(scheme), valid))
