@@ -75,8 +75,8 @@ function tests = test_invz_ewald_gateC_integration
 % docs/superpowers/plans/2026-07-24-ewald-step5-integration.md Task 2 ("Gamma
 % metadata" formulas, already committed) and Task 3 (this file's checklist).
 % Reused frozen helpers: invz_ewald_metrics.m (M_id), invz_ewald_fixtures.m
-% (alpha0). invz_jq_path.m is NOT wired for Ewald yet (Task 6, later in the
-% Step-5 plan) so it is never called here; the "production q-path formula"
+% (alpha0). invz_jq_path.m (Ewald-wired as of Task 6) is deliberately not
+% called here; the "production q-path formula"
 % is verified directly against invz_jq_modes' exported Jpath_base_cc/
 % Jgamma_cc fields plus hand-built primitive quantities, per the task
 % brief's explicit instruction to cross-check the cc slice only through

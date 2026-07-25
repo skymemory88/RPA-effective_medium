@@ -84,6 +84,9 @@ function h = local_qhash(q)
 % elsewhere for cache filenames. PROVENANCE ONLY -- invz_jq_modes' own cache-hit validation
 % rests on an exact isequaln comparison of the FULL stored qvec, never on this digest's
 % collision resistance.
+% NOTE: this runs on BOTH BZ routes (including the legacy/absent-grid default), so it requires
+% the JVM (as does this plotting-oriented codebase generally); a `matlab -nojvm` batch run is
+% unsupported here. It only feeds the private cacheContext, never Jnu/info/Juni.
 clsBytes   = uint8(class(q));
 shapeBytes = typecast(size(q), 'uint8');   % size(q) is always double
 dataBytes  = typecast(reshape(q, 1, []), 'uint8');
