@@ -84,4 +84,58 @@ function test_validator_does_not_guess_coupling_shape(testCase)
 % leg supports [nJ,nw]; the ordered solver rejects that matrix at its public entry.
 sm = invz_check_static_medium(struct('static_medium', 'strict_1z_dyson_ref'));
 verifyTrue(testCase, sm.is_strict);
+
+% This validator never receives Jnu_flat/coupling data at all -- it structurally cannot guess
+% coupling shape, because coupling shape never reaches it. Confirm: a strict scheme resolves
+% with ZERO coupling data supplied (the call below completes without error using only
+% opts.static_medium); the returned sm carries EXACTLY scheme/is_strict/ref_margin and no
+% coupling-related field; the stamped eopts/eso likewise gain only static_medium/ref_margin and
+% no coupling-related field.
+% NOTE: the actual [nJ,nw] rejection under strict mode is enforced LATER, at the ordered
+% solver's public entry (invz_solve_point_ordered.m / invz_emt_static_ordered.m:43), not here --
+% a future reader should not expect this test to cover that.
+[sm2, eopts2, eso2] = invz_check_static_medium(struct('static_medium', 'strict_1z_dyson_ref'));
+verifyEqual(testCase, sort(fieldnames(sm2)), sort({'scheme'; 'is_strict'; 'ref_margin'}));
+verifyEqual(testCase, sort(fieldnames(eopts2)), sort({'static_medium'; 'ref_margin'}));
+verifyEqual(testCase, sort(fieldnames(eso2)), sort({'static_medium'; 'ref_margin'}));
+end
+
+% Fix 1: a non-struct eopts/eso must escape as this validator's OWN invz:staticMedium
+% identifier, not an un-namespaced MATLAB error from the dot-indexed stamping at the bottom of
+% the function -- a validator whose whole purpose is policing malformed option structs should
+% not itself raise an un-namespaced error for exactly that class of mistake. Omitted/empty
+% eopts/eso (exercised by every other test in this file, which pass only opts) must keep
+% defaulting to struct() exactly as before; only a SUPPLIED non-struct is an error.
+function test_nonstruct_eopts_or_eso_raises_static_medium_error(testCase)
+verifyError(testCase, @() invz_check_static_medium(struct(), 5, 7), 'invz:staticMedium');
+verifyError(testCase, @() invz_check_static_medium(struct(), 5), 'invz:staticMedium');
+verifyError(testCase, @() invz_check_static_medium(struct(), struct(), 7), 'invz:staticMedium');
+end
+
+% Fix 3: conflict detection must also run on the EXPLICIT eopts/eso positional arguments, not
+% just on nested opts.emt/opts.emt_static (test_disagreeing_per_leg_values_are_conflicts
+% above) -- without this, a disagreeing eopts/eso would simply be clobbered by the final stamp
+% and the conflict hidden.
+function test_disagreeing_explicit_eopts_or_eso_are_conflicts(testCase)
+% (1) eopts (2nd positional arg) disagrees with a resolved NON-default scheme.
+verifyError(testCase, @() invz_check_static_medium( ...
+    struct('static_medium', 'strict_1z_dyson_ref'), ...
+    struct('static_medium', 'resummed')), 'invz:staticMedium');
+% (2) eso (3rd positional arg) disagrees with a resolved NON-default scheme.
+verifyError(testCase, @() invz_check_static_medium( ...
+    struct('static_medium', 'strict_1z_dyson_ref'), struct(), ...
+    struct('static_medium', 'strict_1z_bare_ref')), 'invz:staticMedium');
+% (3) disagreement present when the scheme resolves to the 'resummed' DEFAULT (opts carries no
+% static_medium field at all).
+verifyError(testCase, @() invz_check_static_medium( ...
+    struct(), struct('static_medium', 'strict_1z_dyson_ref')), 'invz:staticMedium');
+
+% Idempotent counterpart: an eopts/eso that AGREES with the resolved scheme must be ACCEPTED,
+% not thrown -- this is what lets invz_solve_point_ordered forward its context into
+% invz_hmf_ordered for a second validation pass without the validator throwing on its own
+% output.
+[sm, eopts, eso] = invz_check_static_medium(struct('static_medium', 'strict_1z_dyson_ref'), ...
+    struct('static_medium', 'strict_1z_dyson_ref'), struct('static_medium', 'strict_1z_dyson_ref'));
+verifyEqual(testCase, eopts.static_medium, sm.scheme);
+verifyEqual(testCase, eso.static_medium, sm.scheme);
 end
