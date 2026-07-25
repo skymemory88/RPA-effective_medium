@@ -17,7 +17,9 @@ function [Gref, ref] = invz_static_medium_reference(G0bare, Sigma0, scheme, opts
 % Domain events RETURN a status and Gref = NaN; they never throw (spec SS5.2). A caller must
 % not evaluate the closure on a non-'ok' reference. An unknown or 'resummed' scheme IS a
 % wiring error and throws invz:staticMedium -- the resummed path must bypass this primitive
-% entirely.
+% entirely. The three statuses are mutually exclusive and checked in this precedence order:
+% 'nonfinite' > 'ref_denom_nonpositive' > 'ref_denom_small'. In particular, a non-finite denom
+% reports 'nonfinite' even when it equals -Inf, which would also satisfy the non-positive test.
 % opts.ref_margin (default 1e-6; named ref_floor in the preregistration): denom at or below
 % this is 'ref_denom_small'. 1 + Sigma0 is O(1) because Sigma0 is O(1/z), so a
 % denominator this small means the reference is degenerate.

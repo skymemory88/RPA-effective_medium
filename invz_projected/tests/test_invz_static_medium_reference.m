@@ -61,6 +61,20 @@ verifyEqual(testCase, ok.status, 'ok');
 verifyGreaterThan(testCase, ok.margin, 0);
 end
 
+% Neither sub-case above puts denom exactly at opts.ref_margin (1e-3 is strictly below the
+% 1e-2 floor; 1e-1 is strictly above it), so that test cannot detect a regression from '<=' to
+% '<' in the ref_denom_small classification. This test constructs denom bit-exactly equal to
+% opts.ref_margin using exactly-representable doubles (denom = 1 + Sigma0 = 1 + (-0.75) = 0.25,
+% opts.ref_margin = 0.25) to test the boundary itself, and asserts the exactness of denom
+% itself so the test cannot silently drift into a near-miss and stop testing the boundary.
+function test_boundary_exactly_at_margin_is_ref_denom_small(testCase)
+[Gref, ref] = invz_static_medium_reference(-0.5, -0.75, 'strict_1z_dyson_ref', ...
+                                          struct('ref_margin', 0.25));
+verifyEqual(testCase, ref.denom, 0.25, 'AbsTol', 0);
+verifyEqual(testCase, ref.status, 'ref_denom_small');
+verifyTrue(testCase, isnan(Gref));
+end
+
 function test_nonfinite_input_returns_status(testCase)
 [Gref, ref] = invz_static_medium_reference(NaN, 0.1, 'strict_1z_dyson_ref');
 verifyEqual(testCase, ref.status, 'nonfinite');
