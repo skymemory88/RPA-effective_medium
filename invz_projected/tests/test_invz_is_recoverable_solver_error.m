@@ -106,3 +106,13 @@ function test_non_function_handle_is_rejected(testCase)
 verifyError(testCase, @() invz_try_solver_call(42), 'invz:solverCall');
 verifyError(testCase, @() invz_try_solver_call('not a handle'), 'invz:solverCall');
 end
+
+% A handle to a name that is not on the path CONSTRUCTS fine and only fails when nargout probes
+% it. That probe must not leak a raw MATLAB:narginout:* identifier out of this boundary -- doing
+% so would be the same un-namespaced escape the void-fn guard exists to prevent.
+function test_unresolvable_named_handle_is_a_wiring_error(testCase)
+verifyError(testCase, @() invz_try_solver_call(@invz_no_such_function_xyz123), ...
+            'invz:solverCall');
+verifyError(testCase, @() invz_try_solver_call(str2func('invz_no_such_function_xyz123')), ...
+            'invz:solverCall');
+end
