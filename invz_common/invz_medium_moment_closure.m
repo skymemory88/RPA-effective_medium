@@ -19,7 +19,11 @@ function [K0, info] = invz_medium_moment_closure(Gref, mom, scheme)
 %
 % info.omit_mu3   = |mu3*Gref^2|            / |mu2*Gref|   <-- the FIRST omitted term
 % info.omit_cubic = |(2*mu2^2-mu4)*Gref^3|  / |mu2*Gref|
-% info.omit_max   = max of the two.
+% info.omit_max   = max of the two, but NaN whenever EITHER ratio is NaN (fails closed: MATLAB's
+%                   max ignores a NaN operand, which would otherwise mask a corrupted moment
+%                   behind a finite omit_max on an otherwise-'ok' node). Inf still propagates
+%                   through omit_max unchanged -- isnan(Inf) is false, so the zero-denominator
+%                   convention above is preserved.
 % Both are ALWAYS reported. mu3 is near zero on the production multiset, but that is a measured
 % property of one grid/cutoff/backend -- generalising it is the same inference error that
 % produced the synthetic-Jnu defect this work repairs. Zero convention: if mu2*Gref == 0, a
@@ -42,6 +46,11 @@ for k = 1:numel(req)
             'never the whole set (spec SS4.3).'], req{k});
     end
 end
+if ~isnumeric(Gref) || ~isscalar(Gref)
+    error('invz:staticMedium', ['invz_medium_moment_closure: Gref must be a SCALAR. ' ...
+        'For a [nJ,nw] retardation reference set, pass the static column (index 1) -- ' ...
+        'never the whole set (spec SS4.3).']);
+end
 
 corr = mom.mu2*Gref;                                   % the retained O(1/z) correction
 num3 = abs(mom.mu3*Gref^2);
@@ -50,7 +59,11 @@ den  = abs(corr);
 info = struct('scheme', scheme, 'retained', 'mu2', 'Kstrict', NaN, ...
               'omit_mu3', ratio(num3, den), 'omit_cubic', ratio(num4, den), ...
               'omit_max', NaN, 'status', 'ok');
-info.omit_max = max(info.omit_mu3, info.omit_cubic);
+if any(isnan([info.omit_mu3, info.omit_cubic]))
+    info.omit_max = NaN;
+else
+    info.omit_max = max(info.omit_mu3, info.omit_cubic);
+end
 
 if ~isfinite(Gref) || ~isfinite(corr)
     info.status = 'nonfinite';

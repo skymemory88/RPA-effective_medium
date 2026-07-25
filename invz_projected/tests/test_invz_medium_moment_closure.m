@@ -97,3 +97,47 @@ mom = struct('Jbar', [1e-4 2e-4], 'mu2', [5e-6 6e-6], 'mu3', [0 0], 'mu4', [0 0]
 verifyError(testCase, @() invz_medium_moment_closure(-200, mom, 'strict_1z_dyson_ref'), ...
             'invz:staticMedium');
 end
+
+% omit_max must fail closed on NaN. MATLAB's max() ignores a NaN operand, so a NaN omit_mu3 (e.g.
+% from a corrupted mu3) would otherwise be silently swallowed into a finite omit_max, producing a
+% node indistinguishable from a healthy one. status alone does not catch this either, since
+% K0 = Jbar - mu2*Gref never reads mu3 -- this test documents both facts.
+function test_omit_max_fails_closed_on_nan_mu3(testCase)
+mom = fixture_mom();  Gref = -200;
+mom.mu3 = NaN;
+[~, info] = invz_medium_moment_closure(Gref, mom, 'strict_1z_dyson_ref');
+verifyTrue(testCase, isnan(info.omit_mu3));
+verifyTrue(testCase, isfinite(info.omit_cubic));
+verifyTrue(testCase, isnan(info.omit_max));
+verifyEqual(testCase, info.status, 'ok');   % status alone does not catch this -- why omit_max
+                                             % itself must fail closed
+end
+
+% Symmetric case: a NaN mu4 must also poison omit_max via omit_cubic, not just a NaN mu3 via
+% omit_mu3.
+function test_omit_max_fails_closed_on_nan_mu4(testCase)
+mom = fixture_mom();  Gref = -200;
+mom.mu4 = NaN;
+[~, info] = invz_medium_moment_closure(Gref, mom, 'strict_1z_dyson_ref');
+verifyTrue(testCase, isnan(info.omit_cubic));
+verifyTrue(testCase, isfinite(info.omit_mu3));
+verifyTrue(testCase, isnan(info.omit_max));
+end
+
+% Inf must still propagate through omit_max after the NaN guard: isnan(Inf) is false, so the
+% zero-denominator convention (spec §4.1) must not be swallowed by the new NaN check.
+function test_omit_max_preserves_inf_not_nan(testCase)
+mom = struct('Jbar', 1e-4, 'mu2', 0, 'mu3', 1e-11, 'mu4', 1e-14, 'n', 10);
+[~, info] = invz_medium_moment_closure(-200, mom, 'strict_1z_dyson_ref');
+verifyEqual(testCase, info.omit_mu3, Inf);
+verifyEqual(testCase, info.omit_max, Inf);
+verifyFalse(testCase, isnan(info.omit_max));
+end
+
+% Gref must be validated as scalar before use: an un-indexed [nJ,nw] retardation reference is a
+% wiring error and must surface as invz:staticMedium, not MATLAB's generic mpower error.
+function test_nonscalar_gref_rejected(testCase)
+mom = fixture_mom();
+verifyError(testCase, @() invz_medium_moment_closure([-200 -300], mom, 'strict_1z_dyson_ref'), ...
+            'invz:staticMedium');
+end
