@@ -15,7 +15,19 @@ function [value, completed, error_id] = invz_try_solver_call(fn)
 if ~isa(fn, 'function_handle')
     error('invz:solverCall', 'fn must be a function handle.');
 end
-if nargout(fn) == 0
+% nargout() itself throws for a direct handle to an unresolvable name (a stale, mistyped or
+% str2func-built one): handle CONSTRUCTION succeeds, resolution fails only when probed. Left
+% unguarded, that raw MATLAB:narginout:* identifier would escape this boundary un-namespaced --
+% the very leak the check below exists to prevent. Report it as the wiring error it is, keeping
+% the original text so the cause stays diagnosable.
+try
+    n_out = nargout(fn);
+catch probe_err
+    error('invz:solverCall', ...
+        'fn is not a resolvable function handle: %s (%s)', ...
+        probe_err.message, probe_err.identifier);
+end
+if n_out == 0
     error('invz:solverCall', ['fn must return a value; a void fn surfaces as MATLAB:maxlhs ' ...
         'and masks its own identifier, so a recoverable signal would be rethrown as fatal.']);
 end
