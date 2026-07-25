@@ -88,3 +88,27 @@ verifyError(testCase, @() invz_static_medium_reference(-0.5, 0.1, 'resummed'), .
 verifyError(testCase, @() invz_static_medium_reference(-0.5, 0.1, 'nonsense'), ...
             'invz:staticMedium');
 end
+
+% G0bare must be validated as scalar: an un-indexed [nJ,nw] retardation set is the same
+% "forgot to index down to the static column" wiring error the mom-field guard in
+% invz_medium_moment_closure guards against, and this is the sole documented producer of Gref.
+function test_nonscalar_g0bare_rejected(testCase)
+verifyError(testCase, @() invz_static_medium_reference([-0.5 -0.6], 0.25, ...
+            'strict_1z_dyson_ref'), 'invz:staticMedium');
+end
+
+% Symmetric guard on Sigma0.
+function test_nonscalar_sigma0_rejected(testCase)
+verifyError(testCase, @() invz_static_medium_reference(-0.5, [0.25 0.3], ...
+            'strict_1z_dyson_ref'), 'invz:staticMedium');
+end
+
+% Non-finite Sigma0 must still return a status rather than throw -- the new scalar guard on
+% Sigma0 checks scalarity and numeric type only, never finiteness, so NaN must flow through to
+% the existing 'nonfinite' handling (here via a non-finite denom, distinct from the existing
+% G0bare-NaN test above which is non-finite via G0bare itself).
+function test_nonfinite_sigma0_returns_status(testCase)
+[Gref, ref] = invz_static_medium_reference(-0.5, NaN, 'strict_1z_dyson_ref');
+verifyEqual(testCase, ref.status, 'nonfinite');
+verifyTrue(testCase, isnan(Gref));
+end

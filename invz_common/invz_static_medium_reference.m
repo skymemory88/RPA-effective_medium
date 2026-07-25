@@ -28,6 +28,12 @@ margin = getf(opts, 'ref_margin', 1e-6);
 if ~(isscalar(margin) && isfinite(margin) && margin > 0)
     error('invz:staticMedium', 'opts.ref_margin must be a positive finite scalar.');
 end
+if ~(isnumeric(G0bare) && isscalar(G0bare))
+    error('invz:staticMedium', 'G0bare must be a numeric scalar.');
+end
+if ~(isnumeric(Sigma0) && isscalar(Sigma0))
+    error('invz:staticMedium', 'Sigma0 must be a numeric scalar.');
+end
 switch scheme
     case 'strict_1z_dyson_ref'
         denom = 1 + Sigma0;
