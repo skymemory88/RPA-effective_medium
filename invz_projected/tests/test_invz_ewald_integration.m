@@ -107,6 +107,27 @@ for i = 1:numel(newOnes)
 end
 end
 
+function tok = stash_matching_caches(cacheDir, pattern)
+% Move any pre-existing cache files matching `pattern` aside so a test can create a known-fresh
+% file at that exact name WITHOUT destroying unrelated (e.g. production) caches; restore with
+% restore_stashed_caches(tok). Respects the brief: never permanently deletes an unrelated cache
+% (review finding 2).
+d = dir(fullfile(cacheDir, pattern));
+tok = struct('cacheDir', cacheDir, 'orig', {{}}, 'bak', {{}});
+for i = 1:numel(d)
+    orig = fullfile(cacheDir, d(i).name);
+    bak  = [orig '.mask9stash'];
+    movefile(orig, bak);
+    tok.orig{end+1} = orig; tok.bak{end+1} = bak;
+end
+end
+
+function restore_stashed_caches(tok)
+for i = 1:numel(tok.orig)
+    if exist(tok.bak{i}, 'file'), movefile(tok.bak{i}, tok.orig{i}); end
+end
+end
+
 function h = local_hash_vec_replica(v)
 % Byte-for-byte replica of invz_jq_modes.m's PRIVATE hash_vec(v) local function, used
 % ONLY to self-verify a deliberately constructed q-vector cache-filename collision
@@ -237,6 +258,67 @@ verifyGreaterThanOrEqual(testCase, sum(isBrute), 1, 'expected at least one new j
 verifyGreaterThanOrEqual(testCase, sum(isEwald), 1, 'expected at least one new jq5_ewald_* file.');
 verifyTrue(testCase, all(isBrute | isEwald), ...
     'every new cache file must carry the literal jq5_bruteforce_ or jq5_ewald_ backend prefix.');
+
+cleanup_new_cache_files(cacheDir, before);
+end
+
+function test_warm_call_returns_ondisk_payload_proving_a_read(testCase)
+% Review finding 1: every cold->warm test above asserts only isequaln(Scold,Swarm) and an
+% unchanged cache-file count -- BOTH pass identically whether the warm call genuinely read
+% the cache OR silently recomputed (a cache=true recompute overwrites the same deterministic
+% filename, so the count is unchanged either way). This is the INVERSE of
+% test_discriminator_schema_corruption_rejected below: it corrupts the on-disk PAYLOAD while
+% leaving cacheMeta completely untouched, so the warm call's own cache-hit check ACCEPTS the
+% entry -- the only way S2.info.Jcc0 can come back as the poisoned sentinel is if the warm
+% call actually read it off disk (a silent recompute would return the true, freshly computed
+% Jcc0 instead). info.Jcc0 flows unmodified from invz_jq_modes' cached `info` all the way
+% through invz_bz_couplings/invz_spectra_map to S.info.Jcc0 (invz_jq_modes.m: on a cache hit
+% `info = S.info` verbatim; invz_spectra_map.m: `Jcc0 = info.Jcc0; ... S.info = info;`) -- the
+% same passthrough test_discriminator_schema_corruption_rejected already relies on. The
+% pre-existing slate at this dpRng is STASHED (never permanently deleted -- finding 2) and
+% restored by onCleanup even if an assertion below throws.
+ion = testCase.TestData.ion; T = testCase.TestData.T; B = testCase.TestData.B; w = testCase.TestData.w;
+grid = testCase.TestData.grid; cacheDir = testCase.TestData.cacheDir;
+dpRng = 27;                       % unused by any sibling test/pre-existing cache in this file
+% A same-order-of-magnitude sentinel (true Jcc0 here is ~6.4e-3 meV, matching the codebase's
+% own legacy_precomputed_fixture) -- NOT the schema test's -999/-777-style astronomically
+% off-scale sentinel: this call goes through the FULL physics solve (the cache hit is
+% genuinely ACCEPTED, unlike the schema test where it is rejected before ever reaching the
+% solver), and an off-scale J0eff sends invz_single_ion's mean-field iteration into
+% non-convergence (a printed warning, breaking the pristine-output requirement) without
+% making the read-vs-recompute proof any stronger -- any value != trueJcc0 proves the read.
+SENTINEL = -0.00777;
+pattern = sprintf('jq5_bruteforce_%d_*.mat', dpRng);
+stashTok = stash_matching_caches(cacheDir, pattern);
+cleaner  = onCleanup(@() restore_stashed_caches(stashTok));   % restores even if an assertion throws
+
+opts = struct('grid', grid, 'dpRng', dpRng, 'cache', true, 'verbose', false, 'dipole', 'bruteforce');
+
+% CONTROL -- independent, cache-bypassing ground truth for this exact configuration.
+Sfresh = invz_spectra_map(ion, T, B, w, setfield(opts, 'cache', false)); %#ok<SFLD>
+trueJcc0 = Sfresh.info.Jcc0;
+verifyTrue(testCase, isfinite(trueJcc0), 'control: fresh recompute must give a finite Jcc0.');
+
+before = snapshot_cache(cacheDir);
+S1 = invz_spectra_map(ion, T, B, w, opts);          % cold call: populates the cache
+
+d = dir(fullfile(cacheDir, pattern));
+verifyEqual(testCase, numel(d), 1, 'expected exactly one new cache file from the cold map call.');
+fpath = fullfile(cacheDir, d(1).name);
+
+Sload = load(fpath);
+verifyTrue(testCase, isfield(Sload, 'cacheMeta') && isfield(Sload.cacheMeta, 'schema'));
+verifyEqual(testCase, Sload.cacheMeta.schema, 'invz_jq_modes/v5');
+Sload.info.Jcc0 = SENTINEL;               % poison ONLY the payload
+Sload.Jnu(:) = SENTINEL;
+save(fpath, '-struct', 'Sload');          % cacheMeta left completely untouched -> hit accepted
+
+S2 = invz_spectra_map(ion, T, B, w, opts);   % warm call, identical opts
+
+verifyEqual(testCase, S2.info.Jcc0, SENTINEL, ...
+    ['genuine-read proof: the warm call did not return the poisoned on-disk payload -- ' ...
+     'it recomputed instead of reading the cache.']);
+verifyNotEqual(testCase, S2.info.Jcc0, trueJcc0);
 
 cleanup_new_cache_files(cacheDir, before);
 end
@@ -460,12 +542,15 @@ function test_discriminator_schema_corruption_rejected(testCase)
 % filename the next identical call will look up -- confirms the exact-cacheMeta check
 % rejects it (recompute, not a stale/sentinel return), mirroring the
 % test_invz_jq_modes_ewald.m v5-cache precedent but reached through the spectra driver.
+% The pre-existing slate at this dpRng is STASHED (never permanently deleted -- review
+% finding 2: the cache dir is shared with production/sibling tests, e.g. a future v5
+% production cache at dpRng ~= 26) and restored by onCleanup even if an assertion throws.
 ion = testCase.TestData.ion; T = testCase.TestData.T; B = testCase.TestData.B; w = testCase.TestData.w;
 grid = testCase.TestData.grid; cacheDir = testCase.TestData.cacheDir;
 dpRng = 26;
 pattern = sprintf('jq5_bruteforce_%d_*.mat', dpRng);
-d0 = dir(fullfile(cacheDir, pattern));
-for i = 1:numel(d0), delete(fullfile(cacheDir, d0(i).name)); end   % guarantee a genuinely fresh cold write
+stashTok = stash_matching_caches(cacheDir, pattern);
+cleaner  = onCleanup(@() restore_stashed_caches(stashTok));   % restores even if an assertion throws
 
 opts = struct('grid', grid, 'dpRng', dpRng, 'verbose', false, 'dipole', 'bruteforce', 'cache', true);
 before = snapshot_cache(cacheDir);
