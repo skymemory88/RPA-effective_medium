@@ -15,7 +15,26 @@ tmf  = getf(opts, 'transverse_mf', 'legacy_x');
 C  = invz_const();
 si = invz_single_ion(ion, T, invz_field_vec(Bx), struct('hyp', false, 'hz_fixed', hz, 'Jxx0', Jxx0, 'transverse_mf', tmf));
 tl.Delta = si.E(2) - si.E(1);
+tl.valid = true;
+% Domain policy (spec SS5.3). Delta is measured at THIS node's molecular field hz, so the
+% geometric h-grid clustered at 0 puts the predictor and lowest nodes at risk whenever Bx is
+% small -- not only at exactly Bx = 0. 'throw' (DEFAULT) is the historical behaviour and stays
+% the contract for every existing caller. 'return' reports the outcome instead, using the SAME
+% single diagonalization already performed above: it returns before g0 or any division that
+% assumes a resolved doublet, so an invalid tl carries only .valid and .Delta and a consumer
+% that ignores .valid fails loudly rather than silently computing with a degenerate doublet.
+% Do NOT pre-screen by repeating this diagonalization and then calling the constructor again.
+% The 1e-4 meV floor is unchanged, not re-tuned.
+policy = getf(opts, 'domain_policy', 'throw');
+if ~any(strcmp(policy, {'throw', 'return'}))
+    error('invz:twolevelDomainPolicy', ...
+        'opts.domain_policy must be ''throw'' or ''return''; got ''%s''.', policy);
+end
 if tl.Delta < 1e-4
+    if strcmp(policy, 'return')
+        tl.valid = false;
+        return;                              % ONLY .Delta and .valid are defined
+    end
     error('invz:degenerateDoublet', ...
         'Doublet splitting %.2e meV too small for the two-level Sigma.', tl.Delta);
 end
