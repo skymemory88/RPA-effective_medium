@@ -86,6 +86,11 @@ function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 % pt.omit_mu3/.omit_cubic/.omit_max, and pt.path_omit_max -- the FAIL-CLOSED maximum of the
 % solved path's omit_max (empty or any NaN node => NaN; Inf dominates), the quantity the frozen
 % prereg's omit_promote gate reads.
+% FIELD-PRESENCE CONTRACT ACROSS MODES: those jensen-only members -- stable_1z, crit_1z,
+% Dq_min, D_uni, omit_mu3, omit_cubic, omit_max, path_omit_max -- are ABSENT ENTIRELY in bare
+% mode (isfield false, not NaN-valued), so consumers must test isfield before reading them and
+% must not infer bare-mode results from a NaN. By contrast static_medium, medium_status,
+% medium_denom, medium_margin and Jmom are present in BOTH modes on EVERY return path.
 if nargin < 5, opts = struct(); end
 Ecut  = getf(opts, 'Ecut', 40);
 hyp   = getf(opts, 'hyp', true);
@@ -298,6 +303,26 @@ else
         eopts.K0 = K;
         med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
         K   = med.K;
+        if ~any(strcmp(med.medium_status, {'ok', 'not_applicable'}))
+            % Mirrors invz_solve_point's PM domain halt verbatim (same two whitelisted strings,
+            % same lam/sg reset, same break into the COMMON export block below). 'bare' is the
+            % DEFAULT ordered_mode and is reachable from invz_solve_auto, so a strict-scheme
+            % reference/closure domain event must halt HERE, before invz_lambdas and
+            % invz_sigma_ordered consume the invalid medium: without this the NaN Sigma feeds
+            % the next iteration's reference, the loop burns max_outer iterations on NaNs, and
+            % the exported medium_status degrades from the TRUE first cause (e.g.
+            % ref_denom_small) to 'nonfinite' -- provenance naming the wrong condition.
+            % INERT under the default 'resummed' scheme, where invz_emt_scalar's whole strict
+            % block is gated off (:73) and medium_status is always 'not_applicable'.
+            % lam/sg are reset (not left at the previous iterate) so the exported point carries
+            % no stale lambda/alpha for a medium that has no solution; the export block then
+            % produces the COMPLETE field set with pt.converged false (med.converged is false
+            % here by construction, K(1)/G(1) = NaN) and pt.medium_status the exact domain
+            % string. lam is 3-long and sg carries alpha_m here -- the ordered leg's shapes.
+            lam = nan(3,1);
+            sg  = struct('Sigma', nan(size(Sigma)), 'alpha', NaN, 'alpha_m', NaN);
+            break;
+        end
         lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
         sg  = invz_sigma_ordered(tl, lam, K, g, beta);
         dS  = max(abs(sg.Sigma - Sigma));
