@@ -100,11 +100,25 @@ end
 % The guard is INERT under the default 'resummed' scheme: invz_emt_scalar's strict block is
 % gated off there, so medium_status is always 'not_applicable' -- one of the two strings the
 % guard whitelists -- and the halt can never be reached.
+% medium_status ALONE cannot witness that: invz_emt_scalar stamps it (:72) BEFORE the guard
+% (:306) ever runs, so its value is identical whether or not the guard's break fires -- a
+% whitelist mutant that drops 'not_applicable' (leaving only {'ok'}) makes the guard fire on
+% EVERY outer iteration of EVERY resummed bare point, yet med.medium_status still reads
+% 'not_applicable' verbatim, so the line above alone passes unchanged against that mutant
+% (measured). pt.converged and pt.outer_iters ARE sensitive to the break: it resets lam/sg to
+% NaN and exits the loop at outer=1 with `converged` left at its pre-loop false (:258) --
+% collapsing a normal multi-iteration solve (measured converged=true, outer_iters=22/23 for
+% B=0.5/2.85 at HEAD) to converged=false, outer_iters=1, unconditionally. Do not weaken this
+% back to a medium_status-only check.
 function test_resummed_bare_never_reaches_the_guard(testCase)
 [ion, T, ~, Jnu, o] = fx();
 for B = [0.5 2.85]
     pt = invz_solve_point_ordered(ion, T, [B 0 0], Jnu, o);
     verifyEqual(testCase, pt.medium_status, 'not_applicable');
+    verifyTrue(testCase, pt.converged, ...
+        'a spuriously-firing guard halts the loop early and leaves converged false');
+    verifyGreaterThan(testCase, pt.outer_iters, 1, ...
+        'a spuriously-firing guard always halts at the first outer iteration (outer_iters == 1)');
 end
 end
 
