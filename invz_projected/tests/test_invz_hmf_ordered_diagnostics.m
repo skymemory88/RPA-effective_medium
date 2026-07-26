@@ -36,16 +36,20 @@ verifyTrue(testCase, iscell(prof.medium_status));
 end
 
 % Step 7 schema coverage, DOMAIN kind: opts.ref_margin=1e9 forces the strict reference
-% denominator out of domain on every node (measured: status='node_failed', hstar=NaN,
-% medium_status={ref_denom_small}, node_term_reason={medium_out_of_domain} on all 33
-% nodes, ref_denom(1)=1, ref_margin(1)=-999999999). Same structural guarantee as
+% denominator out of domain on every node (measured: status='medium_out_of_domain',
+% hstar=NaN, medium_status={ref_denom_small}, node_term_reason={medium_out_of_domain} on
+% all 33 nodes, ref_denom(1)=1, ref_margin(1)=-999999999). Same structural guarantee as
 % test_per_node_arrays_are_present_and_aligned, plus the domain-specific field provenance
 % (ref_margin is the ACTUAL distance to the configured floor, never the floor itself).
+% CONTRACT CHANGE (task 13): prof.status was 'node_failed' here; a medium domain event is
+% now its own distinct status (invz_hmf_status.m's binding precedence), never masked as a
+% generic node failure -- node_term_reason already read 'medium_out_of_domain' per-node,
+% so prof.status now agrees with it instead of contradicting it.
 function test_schema_domain_record(testCase)
 [ion, T, Bx, Jnu, o] = fixture();
 o.ref_margin = 1e9;
 [hstar, prof] = invz_hmf_ordered(ion, T, Bx, Jnu, o);
-verifyEqual(testCase, prof.status, 'node_failed');
+verifyEqual(testCase, prof.status, 'medium_out_of_domain');
 verifyTrue(testCase, isnan(hstar));
 n = numel(prof.hgrid);
 verifyGreaterThan(testCase, n, 0, 'fixture must produce a non-empty grid');
