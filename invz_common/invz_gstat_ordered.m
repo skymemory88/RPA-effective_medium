@@ -24,11 +24,14 @@ function [Gstat, out] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G
 % below changes no sign):
 %   false (default -- EVERY existing/resummed call site, preserved bit-identically, G9):
 %     out.Gtil0 = Gstat/(1-K0*Gstat);  out.r = G0bare/Gtil0 -- the historical arithmetic.
-%   true (strict mode only; wired by invz_emt_static_ordered under strict static_medium):
+%   true (strict mode only; intended caller: invz_emt_static_ordered under strict
+%     static_medium -- not wired there, or anywhere else, as of this task):
 %     the EXACT reassociation 1/Gtil0 = 1/Gstat - K0, i.e.
 %     out.Gtil0 = 1/(1/Gstat - K0);  out.r = G0bare*(1/Gstat - K0).
-%     Algebraically identical to the false branch everywhere away from a pole (measured 0 ulp
-%     over a representative sweep); NOT a regulariser -- no broadening, no added tolerance, no
+%     Algebraically identical to the false branch everywhere away from a pole (measured at
+%     most ~1 ulp over an independent 16-point sweep spanning near-pole and sign-crossing
+%     Gstat values -- see test_invz_gstat_removable_pole's dual-branch equivalence test);
+%     NOT a regulariser -- no broadening, no added tolerance, no
 %     sign change. Where Gstat itself diverges (its own local denominator
 %     gstat_local_denom -> 0), the divergence CANCELS in this arrangement --
 %     Gtil0 -> -1/K0, r -> -G0bare*K0 -- while the false-branch form evaluates
