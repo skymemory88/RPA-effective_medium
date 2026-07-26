@@ -137,13 +137,22 @@ Jscale = max(abs(Jnu_flat(:)));                  % problem-native coupling scale
 
 % =========================================================================================
 % Strict-only domain preflight (independent reference/closure recomputation BEFORE Blocks
-% A/C/D or either EMT leaf are ever touched). Mirrors, precedence for precedence, the
-% ref/closure status combination invz_emt_static_ordered's own strict branch uses internally,
-% so this independently-recomputed verdict can never disagree with the node's own. A non-'ok'
-% status means the static medium itself is out of domain: feeding it into Jensen's local
-% denominators would manufacture a residual, not measure one, so this returns a complete,
-% non-accepted res immediately -- local_F/local_blockB/local_blockC/invz_emt_scalar/
-% invz_lambdas/invz_sigma_ordered are never called on this path.
+% A/C/D or either EMT leaf are ever touched). This calls invz_static_medium_reference /
+% invz_medium_moment_closure on node.G0bare0 and node.Jmom, in the SAME precedence order
+% invz_emt_static_ordered's own strict branch uses internally (:86-91) -- but that branch reads
+% G0inel0+G0el0 and eso.Jmom (falling back to invz_coupling_moments(Jf) when eso.Jmom is
+% absent), a DIFFERENT provenance path for nominally the same quantities. The two verdicts
+% therefore agree -- and this preflight's status matches invz_emt_static_ordered's own -- only
+% when node.G0bare0 is bitwise-equal to node.G0inel0+node.G0el0 and node.Jmom matches what
+% eso.Jmom (or its fallback) would produce. Measured true at every fixture to date (bitwise,
+% task-9 review), but NOT enforced here and not guaranteed for an arbitrary caller. Block B's
+% defensive `else rB = NaN; passB = false; convB = false;` branch below exists precisely for a
+% caller where that agreement fails; it is unreachable today only because the equality above
+% happens to hold everywhere it has been measured. A non-'ok' status here means the static
+% medium itself is out of domain: feeding it into Jensen's local denominators would manufacture
+% a residual, not measure one, so this returns a complete, non-accepted res immediately --
+% local_F/local_blockB/local_blockC/invz_emt_scalar/invz_lambdas/invz_sigma_ordered are never
+% called on this path.
 % =========================================================================================
 if ~strcmp(smid_node, 'resummed')
     [pf_Gref, pf_ref] = invz_static_medium_reference(node.G0bare0, Sigma(1), smid_node, eso);
@@ -162,6 +171,14 @@ if ~strcmp(smid_node, 'resummed')
                              'pass', false, 'converged', false, 'err', '', 'status', pf_status, ...
                              'scheme', smid_node, 'ref_denom', pf_ref.denom, ...
                              'omit_mu3', pf_clo.omit_mu3, 'omit_cubic', pf_clo.omit_cubic);
+        if getf(opts, 'debug_resummed', false)
+            % Schema parity with the normal path (below, near the debug_resummed block after
+            % local_blockB): a flag-keyed Task 10/12 consumer must see the same
+            % fieldnames(res.blockB) regardless of which path produced res. NaN, not computed:
+            % the whole point of this preflight is that no EMT leaf runs on an invalid medium,
+            % so there is no resummed closure to evaluate here even as an opt-in diagnostic.
+            res.blockB.resid_resummed = NaN;
+        end
         res.blockC = local_dead_block(tol_outer, tol_outer);
         res.blockD = local_dead_block(tol_outer*Jscale, tol_outer);
         res.D_uni  = NaN;  res.Dq_min = NaN;  res.Dq_max = NaN;
@@ -217,6 +234,12 @@ Gstat_b = outB.Gstat;
 D_uni   = outB.so.D_uni;
 Dq      = 1 + (Jnu_flat(:) - outB.K0) .* Gstat_b;
 Dq_min  = min(Dq);  Dq_max = max(Dq);
+% so.converged means different things by scheme (contract Sec. 4's base Block-B text describes
+% only the 'resummed' meaning): under 'resummed' it is so.resid < rtol_B, a PURE-ABSOLUTE
+% closure flag independent of blockB.pass's own combined gate; under strict it is a
+% domain-validity flag (strcmp(medium.status,'ok')), forced false in the domain-failure branch
+% below. Tasks 10/12 reading res.blockB.converged must branch on res.blockB.scheme, not assume
+% either meaning holds unconditionally.
 convB   = outB.so.converged;
 if strictB
     statusB = outB.so.medium_status;
@@ -235,6 +258,10 @@ else
     rB = outB.so.resid;
     passB = isfinite(rB) && (rB < scaleB_abs + scaleB_rel*abs(Gstat_b));
 end
+% blockB.pass is likewise scheme-dependent: under 'resummed' it is the q-average closure gate
+% (isfinite(rB) && rB < scale_abs+scale_rel*|Gstat_b|, set above); under strict it is the
+% algebraic |K0s-Kstrict| mis-wiring check AND status=='ok' (both already folded into passB by
+% the if/else above) -- see the contract's dated Block-B subsection for the full scheme split.
 res.blockB = struct('resid', rB, 'scale_abs', scaleB_abs, 'scale_rel', scaleB_rel, ...
                      'pass', passB, 'converged', convB, 'err', '', 'status', statusB, ...
                      'scheme', smid_node, 'ref_denom', refdenB, ...
