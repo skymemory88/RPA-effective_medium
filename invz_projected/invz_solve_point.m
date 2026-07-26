@@ -69,6 +69,20 @@ function pt = invz_solve_point(ion, T, Bx, Jnu_flat, opts)
 % equal-time Scc (E3) from the STATIC mode spectrum with this solve's G/K,
 % and a retarded solve carries per-frequency modes with no validated E3
 % counterpart (the static T2.2 default makes the combination unused).
+%
+% Static medium (spec SS4.2, opt-in): opts.static_medium = 'resummed' (DEFAULT, legacy and
+% numerically bit-identical) | 'strict_1z_dyson_ref' | 'strict_1z_bare_ref' replaces the
+% omega_n = 0 slot of the effective medium with the strict one-shot moment closure;
+% opts.ref_margin (1e-6) is the reference-denominator floor. The scheme is resolved ONCE here
+% by invz_check_static_medium -- the sole authority -- and stamped into opts.emt, so setting
+% it per leg (opts.emt.static_medium) is a CONFLICT ('invz:staticMedium'), never an override.
+% pt ALWAYS carries pt.static_medium (the resolved scheme), pt.Jmom (invz_coupling_moments of
+% THIS point's final coupling spectrum, per column under T2.1 retardation), pt.medium_status,
+% pt.medium_denom and pt.medium_margin (= denom - floor, the DISTANCE TO THE FLOOR, not the
+% denominator); the last three read 'not_applicable'/NaN/NaN under 'resummed'. A strict-scheme
+% reference/closure domain event halts the outer loop at once and returns a NON-CONVERGED
+% point whose pt.medium_status names the exact domain condition, instead of iterating NaNs to
+% max_outer.
 if nargin < 5, opts = struct(); end
 Ecut  = getf(opts, 'Ecut', 40);
 hyp   = getf(opts, 'hyp', true);
@@ -79,6 +93,10 @@ mixo  = getf(opts, 'mix_outer', 0.7);
 tolo  = getf(opts, 'tol_outer', 1e-8);
 maxo  = getf(opts, 'max_outer', 200);
 eopts = getf(opts, 'emt', struct());
+% Static-medium scheme: resolved ONCE here and stamped into the leg option struct, so
+% invz_emt_scalar's omega = 0 slot and the ordered sector can never run different truncation
+% orders (spec SS4.2). Absent => 'resummed' => numerically identical to the pre-strict path.
+[sm, eopts] = invz_check_static_medium(opts, eopts);
 Bx = invz_field_vec(Bx);                       % scalar -> [Bx 0 0]; 3-vector passes through
 
 % --- ODD diversion (T1.4): strictly additive and opt-in; everything else in
@@ -216,6 +234,13 @@ if oddOn
     end
 end
 
+% Coupling moments of THIS point's FINAL spectrum (spec SS4.1), taken only once the ODD branch
+% above has rebuilt Jnu_flat from odd_blocks + deltaJ (and retardation has widened it to
+% [nJ,nwn]) -- taken any earlier they would describe the wrong multiset, or none at all.
+% Threaded into the leg struct so the strict static slot never silently re-derives them.
+Jmom = invz_coupling_moments(Jnu_flat);
+eopts.Jmom = Jmom;                            % matrix moments allowed; PM slot selects column 1
+
 [wn, wts, beta] = invz_matsubara(T, Ecut);
 if oddOn
     % Bit-identical reuse: invz_chiperp built its si with the SAME (ion, T, Bx)
@@ -242,6 +267,17 @@ converged = false;
 for outer = 1:maxo
     med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
     K   = med.K;
+    if ~any(strcmp(med.medium_status, {'ok', 'not_applicable'}))
+        % Strict-scheme reference/closure domain event (spec SS4.4): halt BEFORE invz_lambdas
+        % and invz_sigma consume the invalid medium, and do NOT iterate NaNs to max_outer --
+        % a reportable domain outcome must not degrade into an unexplained non-convergence.
+        % lam/sg are reset (not left at the previous iterate) so the exported point carries no
+        % stale value for a medium that has no solution; the export block below then produces
+        % the COMPLETE field set with pt.converged false (med.converged is false here by
+        % construction, K(1)/G(1) = NaN) and pt.medium_status carrying the exact domain string.
+        lam = nan(2,1);  sg = struct('Sigma', nan(size(Sigma)), 'alpha', NaN);
+        break;
+    end
     lam = invz_lambdas(K, g, wts, beta, [1 2]);
     sg  = invz_sigma(tl, lam, K, g, beta);
     dS  = max(abs(sg.Sigma - Sigma));
@@ -313,6 +349,19 @@ if odd2On
         pt.converged = pt.converged && t2conv;
     end
 end
+
+% --- static-medium provenance (spec SS4.2) -------------------------------------------------
+% Placed at the SINGLE exit of this function, so it is set on every path (converged, EMT
+% non-convergence, and the strict-scheme domain halt above) and always describes the FINAL
+% medium -- the Tier-2 branch replaces `med` when it runs, and a provenance stamp written
+% before it would then describe a superseded solve. `medium.ref` is [] under 'resummed', and
+% getf is safe on that (isfield of a non-struct is false), so both numbers read NaN there.
+pt.static_medium = sm.scheme;
+pt.Jmom = Jmom;
+ref = getf(getf(med, 'medium', struct()), 'ref', struct());
+pt.medium_status = getf(med, 'medium_status', 'not_applicable');
+pt.medium_denom  = getf(ref, 'denom', NaN);
+pt.medium_margin = getf(ref, 'margin', NaN);   % distance to floor, NOT the denominator
 end
 
 function [Sigma, sg, med, lam, converged, outer] = local_sigma_loop( ...
@@ -325,6 +374,17 @@ converged = false;
 for outer = 1:maxo
     med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
     K   = med.K;
+    if ~any(strcmp(med.medium_status, {'ok', 'not_applicable'}))
+        % Mirrors the main loop's domain halt verbatim (this helper is re-entered on EVERY
+        % Tier-2 iteration, so without it a strict-scheme domain event would spin NaNs to
+        % max_outer once per Tier-2 step). This helper returns a TUPLE, not a pt, so it cannot
+        % early-return a point: it stops the wasted iterations and hands back med carrying the
+        % domain status, and the Tier-2 outer loop's existing
+        % `pt.converged = innerConv && med.converged` / `if ~pt.converged, break` already
+        % terminates on it. lam/sg reset for the same reason as the main loop.
+        lam = nan(2,1);  sg = struct('Sigma', nan(size(Sigma)), 'alpha', NaN);
+        break;
+    end
     lam = invz_lambdas(K, g, wts, beta, [1 2]);
     sg  = invz_sigma(tl, lam, K, g, beta);
     dS  = max(abs(sg.Sigma - Sigma));
