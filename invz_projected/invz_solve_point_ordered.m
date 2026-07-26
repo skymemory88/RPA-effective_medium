@@ -60,6 +60,32 @@ function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 % CONTRACT (P2-G): pt.crit KEEPS its historical ordinary-Dyson definition
 % (1 + Sigma0 - J0eff*chi0cc0) as a legacy diagnostic in EITHER mode -- it is NOT the ordered
 % pole mass below the boundary; pt.D_uni is. Callers must not conflate the two.
+%
+% Static medium (spec SS4.2, opt-in): opts.static_medium = 'resummed' (DEFAULT, legacy and
+% numerically bit-identical) | 'strict_1z_dyson_ref' | 'strict_1z_bare_ref', with
+% opts.ref_margin (1e-6) the reference-denominator floor. The scheme is resolved ONCE at this
+% entry by invz_check_static_medium and stamped into BOTH legs (opts.emt for the dynamic slot,
+% opts.emt_static for the ordered static sector) plus the invz_hmf_ordered context, so the two
+% sectors can never run different truncation orders; setting it per leg is a CONFLICT
+% ('invz:staticMedium'), never an override. Under a strict scheme a non-vector (retarded
+% [nJ,nw]) Jnu_flat and opts.odd_retarded(_exact) are both rejected with 'invz:staticMedium':
+% there is no retarded ordered path here, and silently solving the static multiset instead
+% would be indistinguishable from a retarded solve in the output. pt ALWAYS carries
+% pt.static_medium, pt.Jmom (invz_coupling_moments of this point's final spectrum),
+% pt.medium_status, pt.medium_denom and pt.medium_margin (= denom - floor, the DISTANCE TO THE
+% FLOOR, not the denominator) on EVERY return path, early ones included.
+%
+% TWO-TIER ACCEPTANCE in jensen mode (spec SS1): pt.converged KEEPS its existing meaning --
+% info.accepted, the closure-consistency tier -- so no existing consumer shifts meaning under
+% it. ENDPOINT STABILITY is the separate pt.stable_1z: the checker's own res.stability verdict
+% (already carrying the frozen crit_tol/D_tol/Dq_tol) for the accepted root, AND agreement
+% between that node's crit and the profile's crit_star. The two must not be collapsed --
+% intermediate path nodes are the unstable Landau interval by construction, so folding
+% stability into acceptance would re-mask the ordered phase. jensen mode additionally exports
+% pt.crit_1z (hmf profile's crit_star), pt.Dq_min, the endpoint's omitted-term ratios
+% pt.omit_mu3/.omit_cubic/.omit_max, and pt.path_omit_max -- the FAIL-CLOSED maximum of the
+% solved path's omit_max (empty or any NaN node => NaN; Inf dominates), the quantity the frozen
+% prereg's omit_promote gate reads.
 if nargin < 5, opts = struct(); end
 Ecut  = getf(opts, 'Ecut', 40);
 hyp   = getf(opts, 'hyp', true);
@@ -71,6 +97,13 @@ tolo  = getf(opts, 'tol_outer', 1e-8);
 maxo  = getf(opts, 'max_outer', 200);
 mtol  = getf(opts, 'm_tol', 1e-2);
 eopts = getf(opts, 'emt', struct());
+eso_pub = getf(opts, 'emt_static', struct());
+% Static-medium scheme: resolved ONCE at this public entry by the sole authority and stamped
+% into BOTH leg option structs (spec SS4.2), so the dynamic PM slot and the ordered static
+% sector can never run different truncation orders. Absent => 'resummed' => numerically
+% identical to the pre-strict path. Validation is idempotent by design, so the stamped structs
+% are forwarded verbatim into invz_hmf_ordered, which resolves the scheme again.
+[sm, eopts, eso_pub] = invz_check_static_medium(opts, eopts, eso_pub);
 Bx = invz_field_vec(Bx);                       % scalar -> [Bx 0 0]; 3-vector passes through
 fmom = getf(opts, 'forced_moment', false);
 
@@ -107,6 +140,31 @@ if oddOn
     J0eff = J0eff - d;
 end
 
+% Moments AFTER the point's coupling spectrum is resolved: the ODD branch above rebuilds
+% Jnu_flat from odd_blocks + deltaJ, so taking them earlier would describe the wrong multiset.
+Jmom = invz_coupling_moments(Jnu_flat);
+eopts.Jmom = Jmom;  eso_pub.Jmom = Jmom;
+if sm.is_strict && ~isvector(Jnu_flat)
+    error('invz:staticMedium', ['strict ordered/Jensen mode does not support the [nJ,nw] ' ...
+        'retarded coupling matrix in this phase; PM strict mode remains supported.']);
+end
+% opts.odd_retarded / opts.odd_retarded_exact are SILENTLY IGNORED by this solver (they appear
+% nowhere else in it -- there is no retarded ordered path, and no invented 'ordered_retarded'
+% option). Under a strict scheme that silence would become load-bearing: the caller would get a
+% strict ordered solve built on the static multiset while believing it retarded. Rejected here,
+% after the options are actually resolved and before any HMF work starts.
+if sm.is_strict
+    for f = {'odd_retarded', 'odd_retarded_exact'}
+        if isfield(opts, f{1}) && ~isempty(opts.(f{1})) && ~isequal(opts.(f{1}), false)
+            error('invz:staticMedium', ['opts.%s is not supported under static_medium ''%s'': ' ...
+                'this solver has no retarded ordered path (the flag is silently ignored on the ' ...
+                '''resummed'' path), so a strict ordered solve would silently describe the ' ...
+                'STATIC coupling multiset. Use the PM leg for retarded strict solves.'], ...
+                f{1}, sm.scheme);
+        end
+    end
+end
+
 [wn, wts, beta] = invz_matsubara(T, Ecut);
 
 % Ordered mean-field solve (full electronuclear space): spontaneous moment m0 and field hz.
@@ -129,6 +187,9 @@ if strcmp(omode, 'jensen')
     end
     hopts = opts;                                    % FULL numerical context (P1-6) ...
     hopts.J0eff = J0eff;                             % ... with the ODD-shifted coupling
+    hopts.Jmom = Jmom;                               % ... the resolved moments (no re-derive)
+    hopts.static_medium = sm.scheme;                 % ... and the resolved scheme
+    hopts.emt = eopts;  hopts.emt_static = eso_pub;  % ... stamped (validation is idempotent)
     for f = {'ordered_mode', 'forced_moment'}        % ... and mode fields stripped
         if isfield(hopts, f{1}), hopts = rmfield(hopts, f{1}); end
     end
@@ -136,8 +197,17 @@ if strcmp(omode, 'jensen')
     if ~isfinite(hstar)
         si = invz_single_ion(ion, T, Bx, struct('hyp', hyp, 'hz_fixed', 0, ...
                                                 'Jxx0', Jxx0, 'transverse_mf', tmf));
-        pt = early_return(0, si, 'none');            % paramagnetic: PM leg owns this field
+        pt = early_return(0, si, 'none', sm, Jmom);  % paramagnetic: PM leg owns this field
         pt.ordered_mode = omode;  pt.hmf_status = hprof.status;
+        % Jensen-only members, blanked so the jensen exit schema is uniform. This is the ONLY
+        % early return reachable in jensen mode (the other three sit behind forced_moment,
+        % which jensen rejects, and behind ~is_ordered, which jensen overrides to true), so
+        % there is exactly one blank site and one populated site -- no drift surface. No root
+        % was accepted, so there is no endpoint to classify and no solved path to reduce; NaN
+        % is also the fail-closed value of path_omit_max. A domain/degenerate reason is NOT
+        % lost here -- pt.hmf_status carries it.
+        pt.D_uni = NaN;  pt.crit_1z = NaN;  pt.Dq_min = NaN;  pt.stable_1z = false;
+        pt.omit_mu3 = NaN;  pt.omit_cubic = NaN;  pt.omit_max = NaN;  pt.path_omit_max = NaN;
         if strcmp(hprof.status, 'unresolved')
             pt.converged = false;                    % round-3 P0-3: ordering was PREDICTED
         end                                          % but unbracketed -- NOT a PM verdict;
@@ -157,12 +227,12 @@ if fmom && Bx(3) ~= 0 && si.mf_converged && abs(si.Jexp(3)) > 1e-10 && sign(si.J
     else
         warning('invz:branchMismatch', ...
             'Anti-aligned moment persists at Bz = %.3g T after mirrored retry.', Bx(3));
-        pt = early_return(si.Jexp(3), si, branch);
+        pt = early_return(si.Jexp(3), si, branch, sm, Jmom);
         return;
     end
 end
 if fmom && ~si.mf_converged
-    pt = early_return(si.Jexp(3), si, branch);             % MF gate (second review finding 6)
+    pt = early_return(si.Jexp(3), si, branch, sm, Jmom);   % MF gate (second review finding 6)
     return;
 end
 m0 = si.Jexp(3);
@@ -170,7 +240,7 @@ pt.m0 = m0;
 pt.is_ordered = fmom || abs(m0) > mtol;
 if strcmp(omode, 'jensen'), pt.is_ordered = true; end      % root existence gates jensen (P1-4)
 if ~pt.is_ordered
-    pt = early_return(m0, si, 'none');                     % paramagnetic point: use invz_solve_point
+    pt = early_return(m0, si, 'none', sm, Jmom);           % paramagnetic point: use invz_solve_point
     return;
 end
 
@@ -184,7 +254,7 @@ converged = false;
 if strcmp(omode, 'jensen')
     % Static-sector closure insertion (Task 3's eval_node statement order, P1-F/P1-A):
     % full-electronuclear split weights from the FINAL si, mode-switched chain rule.
-    eso = getf(opts, 'emt_static', struct());
+    eso = eso_pub;      % the scheme/ref_margin/Jmom-stamped struct resolved at the entry
     eso.warn = false;   % solver gates on so.converged; suppress the per-node console flood
     c0i = invz_chi0z(si, T, 1i*wn(1), struct('elastic', false));   % static inelastic only
     G0inel0 = -real(c0i(3,3,1));                                   % fixed-Hamiltonian slot
@@ -208,7 +278,10 @@ if strcmp(omode, 'jensen')
     % complete residual checker, invz_ordered_residual -- see both files' headers.)
     node = struct('tl', tl, 'G0', G0, 'g', g, 'wts', wts, 'wn', wn, 'beta', beta, ...
         'J0eff', J0eff, 'G0inel0', G0inel0, 'G0el0', G0el0, 'G0bare0', G0bare0, ...
-        'eso', eso, 'eopts', eopts, 'Jnu_flat', Jnu_flat);
+        'eso', eso, 'eopts', eopts, 'Jnu_flat', Jnu_flat, 'Jmom', Jmom);
+    % Jmom (resolved ONCE above) is REQUIRED by invz_ordered_node_solve whenever node.eso
+    % selects a strict scheme ('invz:nodeSolveNode' otherwise); it is threaded into both EMT
+    % leaves there so neither silently re-derives it. Harmless-absent under 'resummed'.
     sopts = struct('mix_outer', mixo, 'max_outer', maxo, 'tol_outer', tolo, ...
         'cold_retry', true, 'trace', false);
     [state, info] = invz_ordered_node_solve(node, [], sopts);   % COLD: this leg always
@@ -240,6 +313,17 @@ pt.sumrule_rel = abs(sum(wts.*med.G)/beta + si.JzJz_fluct) / max(abs(si.JzJz_flu
 pt.converged = converged && med.converged;
 pt.outer_iters = outer;
 pt.moment_branch = branch;
+% --- static-medium provenance (spec SS4.2): stamped in the COMMON export, so BOTH ordered
+% modes carry the same members. Here the three medium_* values describe the DYNAMIC medium
+% invz_emt_scalar returned; in jensen mode the block below overwrites them with the ordered
+% STATIC sector's own record, which is the sector that actually owns slot 1 there. `medium.ref`
+% is [] under 'resummed' and getf is safe on that, so both numbers read NaN.
+pt.static_medium = sm.scheme;
+pt.Jmom = Jmom;
+ref = getf(getf(med, 'medium', struct()), 'ref', struct());
+pt.medium_status = getf(med, 'medium_status', 'not_applicable');
+pt.medium_denom  = getf(ref, 'denom', NaN);
+pt.medium_margin = getf(ref, 'margin', NaN);   % distance to floor, NOT the denominator
 if oddOn
     pt.odd = struct('d', d, 'Xp', Xp);         % T1.4 diagnostics (absent when flag off)
 end
@@ -257,6 +341,43 @@ if strcmp(omode, 'jensen')
     pt.D_uni = info.so.D_uni;                        % pole observable AT THE FINAL STATE
                                                       % (checker's own value; algebraically
                                                       % identical to 1+(J0eff-K(1))*med.G(1))
+    % TWO-TIER EXPORT (spec SS1): pt.converged keeps its existing meaning (info.accepted, the
+    % consistency tier) so no existing consumer shifts meaning under it. Endpoint stability is
+    % a SEPARATE field -- collapsing them would re-mask the ordered phase, because intermediate
+    % path nodes are the unstable Landau interval by construction. The classification itself is
+    % the checker's (res.stability already applied the frozen crit_tol/D_tol/Dq_tol); it is
+    % never rebuilt here from raw > 0 comparisons. The crit agreement term only confirms that
+    % the exported endpoint IS the root the profile accepted.
+    pt.crit_1z = hprof.crit_star;
+    pt.Dq_min = info.res.stability.Dq_min;
+    pt.stable_1z = pt.converged && info.res.stability.pass && ...
+                   isfinite(hprof.crit_star) && ...
+                   abs(hprof.crit_star-info.res.stability.crit) <= ...
+                       getf(opts,'crit_tol',1e-6);
+    pt.omit_mu3 = getf(info.so, 'omit_mu3', NaN);
+    pt.omit_cubic = getf(info.so, 'omit_cubic', NaN);
+    pt.omit_max = getf(info.so, 'omit_max', NaN);
+    % path_omit_max FAILS CLOSED (plan-owner ruling 2026-07-26, mirroring the task-3 omit_max
+    % ruling and DELIBERATELY replacing this brief's isfinite-filtered version): it is a
+    % load-bearing promotion gate (frozen prereg docs/invzp_strict_medium_prereg.md SS48,
+    % SS64-65 compare max(omit_max) over the solved path against omit_promote = 0.10), so a
+    % corrupted node must never be quietly dropped from the maximum. Inf DOMINATES, NaN POISONS.
+    if isempty(hprof.omit_max)
+        pt.path_omit_max = NaN;
+    elseif any(isnan(hprof.omit_max))
+        pt.path_omit_max = NaN;      % fail closed: a corrupted node
+                                     % must not be silently dropped
+    else
+        pt.path_omit_max = max(hprof.omit_max);   % Inf dominates,
+    end                                           % per the frozen
+                                                  % zero-denominator
+                                                  % convention
+    % The ordered STATIC sector owns slot 1 here, so its own medium record supersedes the
+    % dynamic one stamped in the common block above.
+    ref = getf(getf(info, 'medium', struct()), 'ref', struct());
+    pt.medium_status = getf(info, 'medium_status', 'not_applicable');
+    pt.medium_denom = getf(ref, 'denom', NaN);
+    pt.medium_margin = getf(ref, 'margin', NaN);
     % CONTRACT (P2-G): pt.crit keeps its historical ordinary-Dyson definition and is NOT
     % the ordered pole mass below the boundary -- pt.D_uni is (see docstring).
     if abs(pt.si.hz - hstar) > 1e-12
@@ -266,9 +387,17 @@ end
 end
 
 % -------------------------------------------------------------------------------------------
-function pt = early_return(m0, si, branch)
+function pt = early_return(m0, si, branch, sm, Jmom)
 %EARLY_RETURN Complete field set for every non-accepted exit (spec: callers never
 % probe a missing member; tl = [] flags "no two-level params were built").
+% The static-medium provenance (spec SS4.2) is stamped HERE, inside the shared builder,
+% rather than repeated as five post-call assignments at each of the four call sites --
+% repeating them is exactly how a member goes missing on one of them. No medium was ever
+% solved on any of these paths, so medium_status is 'not_applicable' and both reference
+% numbers are NaN; a jensen exit that failed for a domain reason still reports it, through
+% pt.hmf_status, which that call site sets.
 pt = struct('m0', m0, 'is_ordered', false, 'converged', false, 'Sigma0', NaN, ...
-            'crit', NaN, 'si', si, 'tl', [], 'moment_branch', branch);
+            'crit', NaN, 'si', si, 'tl', [], 'moment_branch', branch, ...
+            'static_medium', sm.scheme, 'Jmom', Jmom, ...
+            'medium_status', 'not_applicable', 'medium_denom', NaN, 'medium_margin', NaN);
 end
