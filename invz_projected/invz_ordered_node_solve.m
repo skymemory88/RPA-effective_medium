@@ -21,6 +21,10 @@ function [state, info] = invz_ordered_node_solve(node, seed, sopts)
 %   (read-only: never mutated here; G0bare0 is accepted for provenance/parity with the
 %   checker's own node schema and is not read by the map below, exactly as in
 %   invz_ordered_residual.m.)
+%   Jmom (14th field, invz_coupling_moments of the static Jnu_flat column) is REQUIRED once
+%   node.eso.static_medium selects a strict_1z_* scheme (spec SS4.3); harmless-absent under
+%   'resummed'. Threaded verbatim into both EMT leaves (eopts.Jmom for the dynamic slot,
+%   eso_local.Jmom for the static slot) so neither leaf silently re-derives it.
 % seed  (struct('Sigma', size(node.wn), 'K0s', scalar), OPTIONAL): the warm-start
 %        continuation state -- the SAME two quantities BOTH current loops actually thread
 %        across node calls (confirmed directly at invz_hmf_ordered.m's eval_node call sites,
@@ -66,9 +70,12 @@ function [state, info] = invz_ordered_node_solve(node, seed, sopts)
 %                   perform that substitution itself).
 %   .outer_iters    (integer) the WINNING attempt's outer-loop iteration count.
 %   .seed_kind      'cold' | 'warm' | 'cold_after_warm_fail'.
-%   .term_reason    'accepted' | 'loop_converged_not_accepted' | 'max_iter' -- the WINNING
-%                   attempt's own classification ('bare_shortcut' is reserved for 1b-ii's
-%                   caller-level fbare branch, see the note below; this solver never emits it).
+%   .term_reason    'accepted' | 'medium_out_of_domain' | 'loop_converged_not_accepted' |
+%                   'max_iter' -- the WINNING attempt's own classification
+%                   ('medium_out_of_domain': a strict-scheme reference/closure domain event
+%                   stopped the attempt before invz_lambdas/invz_sigma_ordered ran, spec SS4.4;
+%                   'bare_shortcut' is reserved for 1b-ii's caller-level fbare branch, see the
+%                   note below; this solver never emits it).
 %   .iters          struct array, one record per OUTER iteration of the WINNING attempt,
 %                   populated ONLY when sopts.trace: fields `outer`, `dS` (raw pre-mix Sigma-
 %                   map residual), `resid_static` (sout.resid), `K0` (=K0s), `D_uni`
@@ -81,6 +88,14 @@ function [state, info] = invz_ordered_node_solve(node, seed, sopts)
 %                   no fields) when sopts.trace is false, so the default path pays nothing
 %                   for it. NOT wired to invz_hmf_ordered's trc schema here -- that
 %                   relocation is 1b-ii's job.
+%   .medium         the WINNING attempt's final medium struct (.scheme/.status/.ref/.closure),
+%                   from the LAST invz_emt_static_ordered call that actually ran (the post-loop
+%                   refresh when it ran; the last in-loop call when a domain event pre-empted
+%                   it). status='not_applicable'/scheme='resummed' placeholder under the legacy
+%                   scheme (task 8's convention).
+%   .medium_status  the same call's out.medium_status ('not_applicable' | 'ok' |
+%                   'ref_denom_nonpositive' | 'ref_denom_small' | 'nonfinite'), exposed
+%                   top-level so a caller does not need to reach into .medium.status.
 %
 % Retry semantics (deterministic; point 3 of the brief): a WARM-seeded attempt that is not
 % accepted, with sopts.cold_retry true, is retried EXACTLY ONCE from a cold start (fresh
@@ -91,19 +106,19 @@ function [state, info] = invz_ordered_node_solve(node, seed, sopts)
 % itself is a deterministic no-op (identical inputs, identical map => identical result), so
 % it can never change the outcome and is not attempted.
 %
-% Never throws on physics non-convergence: absorbs only 'invz:*' identifiers raised by the
-% map's own helper calls (repo error-policy convention); anything else rethrows immediately.
-% A caught invz:* error truncates the current attempt at its last fully-completed outer
-% iteration (MATLAB never partially commits the assignment targets of a statement that
-% itself threw, so `state` below is always the last self-consistent snapshot available) and
-% is then scored by the checker exactly like any other non-accepted state (typically failing
-% res.finite). In practice, across the whole call chain this map exercises
+% No exception absorber (task 10 removed the previous per-attempt try/catch): ordinary
+% numerical non-convergence never throws anywhere in the call chain this map exercises
 % (invz_emt_scalar / invz_emt_static_ordered / invz_gstat_ordered / invz_lambdas /
-% invz_sigma_ordered / invz_sigma), the only 'error(...)' site at all is invz_emt_scalar's
-% 'invz:emtJnu' (a malformed [nJ,nw] Jnu_flat matrix shape, the T2.1 retardation path not
-% exercised by any vector-Jnu fixture) -- ordinary numerical non-convergence never throws in
-% this chain, it simply returns non-finite/non-converged outputs, which the checker then
-% correctly scores as not accepted.
+% invz_sigma_ordered / invz_sigma) -- it always returns non-finite/non-converged outputs,
+% which the checker below then correctly scores as not accepted. Under a strict scheme, a
+% reference/closure domain event is likewise never an exception: it is a returned
+% medium_status, and this map halts the attempt at that point (before invz_lambdas /
+% invz_sigma_ordered can consume the invalid reference, spec SS4.4), scored
+% term_reason='medium_out_of_domain' above. Any invz:* identifier that IS thrown and reaches
+% this function -- e.g. invz_emt_scalar's 'invz:emtJnu' (a malformed [nJ,nw] Jnu_flat matrix
+% shape) or invz_static_medium_reference's 'invz:staticMedium' (an unrecognized scheme) -- is
+% therefore always a wiring/programming defect, never a numerical one, and escapes to the
+% caller unchanged, exactly like any non-invz:* exception.
 %
 % Note on `fbare` (invz_hmf_ordered.m eval_node's force-bare shortcut: rk=1, ok=true, NO
 % loop at all): that is a CALLER-level branch on the fixed-field h, not part of the per-node
@@ -122,6 +137,13 @@ for k = 1:numel(req_node)
     if ~isfield(node, req_node{k})
         error('invz:nodeSolveNode', 'node is missing required field ''%s''.', req_node{k});
     end
+end
+
+% Jmom is required only once a STRICT scheme is selected (spec SS4.3).
+smid_node = getf(node.eso, 'static_medium', 'resummed');
+if ~strcmp(smid_node, 'resummed') && (~isfield(node, 'Jmom') || isempty(node.Jmom))
+    error('invz:nodeSolveNode', ['node.Jmom is required under static_medium ''%s'' ' ...
+        '(invz_coupling_moments of the static coupling column).'], smid_node);
 end
 
 sopts = struct('mix_outer',  getf(sopts, 'mix_outer', 0.7), ...
@@ -157,9 +179,11 @@ function [state, info] = run_attempt(node, Sigma0, K0s0, sopts)
 %RUN_ATTEMPT One full damped-Picard attempt: the outer Sigma<->EMT loop
 % (invz_solve_point_ordered.m:206-221 / invz_hmf_ordered.m eval_node:313-328, VERBATIM) plus
 % the post-loop static refresh (invz_solve_point_ordered.m:225-227, VERBATIM), from a given
-% (Sigma0, K0s0) start (lam ALWAYS [0;0;0] -- see the file header). Never throws on an
-% 'invz:*' non-convergence signal; anything else rethrows. Builds `state` from whatever was
-% last fully computed, then scores it with the complete checker (invz_ordered_residual).
+% (Sigma0, K0s0) start (lam ALWAYS [0;0;0] -- see the file header). No exception absorber: an
+% invz:* identifier reaching here is a wiring defect and escapes; ordinary non-convergence and
+% strict-scheme domain events are never exceptions (see the file header). A domain event halts
+% the attempt early and `state` reflects the last fully-computed values at that point. Builds
+% `state`, then scores it with the complete checker (invz_ordered_residual).
 wn = node.wn(:);  G0 = node.G0(:);  g = node.g(:);  wts = node.wts(:);
 Jnu_flat = node.Jnu_flat;  if isvector(Jnu_flat), Jnu_flat = Jnu_flat(:); end
 
@@ -171,53 +195,68 @@ K     = zeros(size(wn));           % matches both loops' per-call reset; inert i
 K0s   = K0s0;
 lam   = [0; 0; 0];
 eopts = node.eopts;                 % LOCAL copy: .K0 is mutated below; node's own untouched.
+if isfield(node, 'Jmom') && ~isempty(node.Jmom)
+    eopts.Jmom = node.Jmom;                 % strict slot reads it; legacy path ignores it
+    eso_local  = node.eso;  eso_local.Jmom = node.Jmom;
+else
+    eso_local  = node.eso;
+end
+medium_status = 'not_applicable';  medium = struct('scheme', getf(node.eso, ...
+    'static_medium', 'resummed'), 'status', 'not_applicable', 'ref', [], 'closure', []);
 
 dS = NaN;  loop_converged = false;  outer_used = 0;  iters = struct([]);
 med = struct('G', nan(size(wn)), 'K', nan(size(wn)), 'converged', false, 'closure', NaN, ...
-             'iters', 0);
+             'iters', 0, 'dynamic_converged', false);
 so    = struct('D_uni', NaN, 'resid', NaN, 'converged', false, 'iters', 0);
 Gstat = NaN;
 
-try
-    for outer = 1:sopts.max_outer
-        % (1) dynamic sector -- MIRRORS both loops' emt call verbatim
-        eopts.K0 = K;
-        med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
-        K   = med.K;
-        % (2) static sector (threaded node.eso opts, verbatim argument order):
-        [K0s, Gstat_it, sout] = invz_emt_static_ordered(node.tl, lam(1:2), Sigma(1), ...
-            Jnu_flat, K0s, node.beta, node.J0eff, node.G0inel0, node.G0el0, node.eso);
-        K(1) = K0s;
-        % (3)-(5) lambdas, ordered Sigma map, pre-mix step -- MIRRORS both loops verbatim
-        lam = invz_lambdas(K, g, wts, node.beta, [1 2 3]);
-        sg  = invz_sigma_ordered(node.tl, lam, K, g, node.beta);
-        dS  = max(abs(sg.Sigma - Sigma));
-        if sopts.trace
-            iters = append_iter(iters, outer, dS, sout, K0s, Gstat_it, Jnu_flat);
-        end
-        % (6) damped mix
-        Sigma = Sigma + sopts.mix_outer*(sg.Sigma - Sigma);
+for outer = 1:sopts.max_outer
+    % (1) dynamic sector -- MIRRORS both loops' emt call verbatim
+    eopts.K0 = K;
+    med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
+    K   = med.K;
+    % (2) static sector (threaded node.eso opts, verbatim argument order):
+    [K0s, Gstat_it, sout] = invz_emt_static_ordered(node.tl, lam(1:2), Sigma(1), ...
+        Jnu_flat, K0s, node.beta, node.J0eff, node.G0inel0, node.G0el0, eso_local);
+    % Domain event: stop BEFORE invz_lambdas / invz_sigma_ordered consume an invalid
+    % reference (spec SS4.4). Propagating a non-finite K0 through the outer map would turn a
+    % reportable domain outcome into an unexplained non-convergence.
+    medium_status = getf(sout, 'medium_status', 'not_applicable');
+    medium        = getf(sout, 'medium', medium);
+    if ~any(strcmp(medium_status, {'not_applicable', 'ok'}))
         outer_used = outer;
-        % (7) in-loop verdict -- DIAGNOSTIC ONLY (info.loop_converged); NEVER the acceptance
-        % test (that is the incomplete gate this whole task replaces).
-        if dS < sopts.tol_outer && sout.converged
-            loop_converged = true;
-            break;
-        end
+        break;
     end
-    % post-loop static refresh (invz_solve_point_ordered.m:225-227, verbatim): recomputed on
-    % the just-mixed Sigma(1), continuing from the loop's own last K0s.
-    [K0s, Gstat, so] = invz_emt_static_ordered(node.tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
-        node.beta, node.J0eff, node.G0inel0, node.G0el0, node.eso);
     K(1) = K0s;
-catch err
-    if ~strncmp(err.identifier, 'invz:', 5)
-        rethrow(err);
+    % (3)-(5) lambdas, ordered Sigma map, pre-mix step -- MIRRORS both loops verbatim
+    lam = invz_lambdas(K, g, wts, node.beta, [1 2 3]);
+    sg  = invz_sigma_ordered(node.tl, lam, K, g, node.beta);
+    dS  = max(abs(sg.Sigma - Sigma));
+    if sopts.trace
+        iters = append_iter(iters, outer, dS, sout, K0s, Gstat_it, Jnu_flat);
     end
-    % An invz:* error never partially commits the statement that raised it, so Sigma/K/lam/
-    % K0s above still hold the last fully-computed, self-consistent snapshot; `so`/`Gstat`
-    % keep their pre-declared NaN/false fallbacks if the post-loop refresh itself is what
-    % threw.
+    % (6) damped mix
+    Sigma = Sigma + sopts.mix_outer*(sg.Sigma - Sigma);
+    outer_used = outer;
+    % (7) in-loop verdict -- DIAGNOSTIC ONLY (info.loop_converged); NEVER the acceptance
+    % test (that is the incomplete gate this whole task replaces).
+    if dS < sopts.tol_outer && sout.converged
+        loop_converged = true;
+        break;
+    end
+end
+% post-loop static refresh (invz_solve_point_ordered.m:225-227, verbatim): recomputed on
+% the just-mixed Sigma(1), continuing from the loop's own last K0s. Skipped after a domain
+% event -- that would feed the invalid reference into the static function a second time and
+% contradict "stop before consumption" (spec SS4.4).
+if any(strcmp(medium_status, {'not_applicable', 'ok'}))
+    [K0s, Gstat, so] = invz_emt_static_ordered(node.tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
+        node.beta, node.J0eff, node.G0inel0, node.G0el0, eso_local);
+    medium_status = getf(so, 'medium_status', medium_status);
+    medium        = getf(so, 'medium', medium);
+    if any(strcmp(medium_status, {'not_applicable', 'ok'})), K(1) = K0s; end
+else
+    so = sout;  Gstat = Gstat_it;       % preserve the classified domain record
 end
 
 state = struct('Sigma', Sigma, 'K', K, 'lam', lam, 'K0s', K0s);
@@ -227,6 +266,8 @@ res = invz_ordered_residual(node, state, struct('tol_outer', sopts.tol_outer, 'd
 
 if res.accepted
     term_reason = 'accepted';
+elseif ~any(strcmp(medium_status, {'not_applicable', 'ok'}))
+    term_reason = 'medium_out_of_domain';   % distinct from a convergence failure
 elseif loop_converged
     term_reason = 'loop_converged_not_accepted';
 else
@@ -236,7 +277,8 @@ end
 so_out = so;  so_out.Gstat = Gstat;
 
 info = struct('res', res, 'loop_converged', loop_converged, 'so', so_out, 'med', med, ...
-              'outer_iters', outer_used, 'term_reason', term_reason, 'iters', iters);
+              'outer_iters', outer_used, 'term_reason', term_reason, 'iters', iters, ...
+              'medium', medium, 'medium_status', medium_status);
 end
 
 % =============================================================================================
