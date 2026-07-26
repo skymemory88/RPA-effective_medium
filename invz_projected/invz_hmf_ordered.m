@@ -32,7 +32,9 @@ function [hmf_star, prof, trc] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
 % unaffected either way. When on: trc.nodes has one record per eval_node CALL (id, h,
 % phase in {predictor,sweep,extend,redensify,bisect,root}, seed_kind cold/warm +
 % seed_from node id, outer_iters, term_reason in {converged,max_iter,refresh_failed,
-% bare_shortcut}, K0, D_uni, resid_static); trc.iters has one record per OUTER Sigma<->K
+% bare_shortcut}, K0, D_uni, resid_static, PLUS every field of that call's per-node record --
+% see the diagnostics paragraph below; ONE nested finalizer, append_trace_node, builds every
+% entry, so no exit path can append a shorter schema); trc.iters has one record per OUTER Sigma<->K
 % iteration across all nodes (node_id back-link, the RAW map residual `dS` and the RAW
 % static-closure residual `sout.resid`, K0, D_uni, min/max/neg-count of the static
 % Dq = 1+(J(q)-K0)*Gstat, and the closest-to-zero positive/negative Dq flat indices +
@@ -40,6 +42,37 @@ function [hmf_star, prof, trc] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
 % lattice provenance is NOT available here (flat-Jnu interface, unchanged) and is
 % reconstructed by the caller; see invz_projected/invz_ordered_trace.m, the packaging
 % helper that adds qc/unflattened-Jnu/hashes and documents the versioned schema in full.
+%
+% Per-node diagnostics (task 12). G = -chi (meV^-1), ferromagnetic positive J. eval_node
+% returns ONE fixed-schema record (blank_node_record) instead of a positional output list, and
+% the solved path exports it wholesale, so prof's numeric arrays and its cell arrays are
+% derived from the SAME record array in the SAME order at ONE point and cannot drift apart:
+%   prof.crit              r + J0eff*G0bare -- the dimensionless mass, the per-node
+%                          generalization of prof.slope0 (= crit at h = 0, SS5)
+%   prof.r_minus_1         r - 1. NOT Sigma0: at finite ordered moment the hybrid elastic
+%                          factor xi makes r depend on K0 and lambda(1:2) as well, so the two
+%                          coincide only at m = 0 (spec SSA Consequence 2)
+%   prof.Delta             the node's own two-level splitting (invz_twolevel_ordered)
+%   prof.Dq_min            res.stability.Dq_min from the independent residual checker
+%   prof.ref_denom         strict reference denominator (1 + Sigma0 for the Dyson reference)
+%   prof.ref_margin        the ACTUAL distance to the configured floor (denom - ref_margin),
+%                          never the denominator and never the floor itself
+%   prof.gstat_local_denom 1 + Sigma0 + K0*G0inel0, Gstat's own signed local denominator
+%   prof.omit_mu3/_cubic/_max   the strict closure's omitted-term ratios
+%   prof.medium_status, prof.node_term_reason   cell arrays, one entry per node
+%   prof.r_pm0/.G0bare_pm0/.Sigma0_pm0/.K0_pm0  the h = 0 predictor seeds
+%   prof.G0bare_star/.crit_star/.Dq_min_star    the accepted root's own record
+%   prof.int_Sigma0, prof.int_r_minus_1   path integrals over h, seeded on the SAME first
+%                          panel as h0 so all three quadratures are consistent. BOTH are
+%                          needed (spec SSA binding caution, gate G5): int Sigma0 dh is a
+%                          component diagnostic, not the whole correction.
+% All of these are diagnostics: none of them gates the root search or the status contract.
+%
+% opts.static_medium / opts.ref_margin are resolved ONCE per call by invz_check_static_medium,
+% the sole scheme authority, which stamps both leg option structs (opts.emt -> the dynamic
+% slot, opts.emt_static -> the ordered static sector). The scheme is never re-derived here.
+% opts.Jmom (optional): invz_coupling_moments of the coupling multiset, resolved once per call
+% and threaded into every node solve; a direct caller may omit it and it is derived here.
 if nargin < 5, opts = struct(); end
 J0eff = opts.J0eff;                                  % required, no default (caller-owned)
 Jxx0  = getf(opts, 'Jxx0', ion.Jxx0);
@@ -53,8 +86,26 @@ fbare = getf(opts, 'force_bare', false);
 mixo  = getf(opts, 'mix_outer', 0.7);
 tolo  = getf(opts, 'tol_outer', 1e-8);
 maxo  = getf(opts, 'max_outer', 200);                % ALIGNED with both solvers' default
+% Static-medium scheme, resolved ONCE by the SOLE authority (invz_check_static_medium, spec
+% SS4.2) and stamped into BOTH leg option structs -- eopts (invz_emt_scalar's PM static slot)
+% and eso (invz_emt_static_ordered's ordered static sector) -- so the two sectors can never run
+% different truncation orders. Resolved HERE, ahead of the bare-order early return below, so
+% prof.static_medium is stamped on every exit path. The scheme is NEVER re-derived locally, and
+% eopts is NOT fetched a second time near the Matsubara block.
+eopts = getf(opts, 'emt', struct());                 % dynamic-sector opts, threaded (P1-6)
 eso   = getf(opts, 'emt_static', struct());          % static-closure opts, threaded (P1-F)
+[sm, eopts, eso] = invz_check_static_medium(opts, eopts, eso);
 eso.warn = false;   % node loop gates on so.converged; suppress the per-node console flood
+
+% Coupling moments, resolved ONCE per call (spec SS4.3): recomputing them inside the outer
+% iteration of every node would repeat an O(nJ) pass up to max_outer x nNodes times per field.
+% A caller that already resolved the point's coupling spectrum (invz_solve_point_ordered) passes
+% opts.Jmom straight through; a direct call derives it here as a compatibility fallback.
+Jmom = getf(opts, 'Jmom', []);
+if isempty(Jmom), Jmom = invz_coupling_moments(Jnu_flat); end
+if sm.is_strict && ~isvector(Jnu_flat)
+    error('invz:staticMedium', 'strict ordered HMF does not support [nJ,nw] Jnu_flat.');
+end
 
 % single-ion opts for FIXED-FIELD nodes: NO 'order' (P0-1); forward mf knobs (P1-6)
 sibase = struct('hyp', hyp, 'Jxx0', Jxx0, 'transverse_mf', tmf);
@@ -65,10 +116,17 @@ hmin_abs = getf(opts, 'hmin_abs', NaN);              % resolved after hmax below
 
 prof = struct('hgrid', [], 'r', [], 'h0', [], 'm', [], 'Sigma0', [], 'K0', [], ...
               'D_uni', [], 'G0bare', [], 'Gstat', [], 'node_conv', [], 'F', [], ...
-              'slope0', NaN, 'Sigma0_pm0', NaN, 'K0_pm0', NaN, 'J0eff', J0eff, ...
+              'crit', [], 'r_minus_1', [], 'Delta', [], 'Dq_min', [], ...
+              'ref_denom', [], 'ref_margin', [], 'gstat_local_denom', [], ...
+              'omit_mu3', [], 'omit_cubic', [], ...
+              'omit_max', [], 'medium_status', {{}}, 'node_term_reason', {{}}, ...
+              'slope0', NaN, 'r_pm0', NaN, 'G0bare_pm0', NaN, ...
+              'Sigma0_pm0', NaN, 'K0_pm0', NaN, 'J0eff', J0eff, ...
               'n_extend', 0, 'hmin_initial', NaN, 'status', 'no_bare_order', ...
-              'redensified', false, ...
-              'm_star', NaN, 'D_uni_star', NaN, 'r_star', NaN, 'Gstat_star', NaN);
+              'redensified', false, 'int_Sigma0', NaN, 'int_r_minus_1', NaN, ...
+              'm_star', NaN, 'D_uni_star', NaN, 'r_star', NaN, 'Gstat_star', NaN, ...
+              'G0bare_star', NaN, 'crit_star', NaN, 'Dq_min_star', NaN, ...
+              'static_medium', sm.scheme);
 hmf_star = NaN;
 
 % --- Trace hook init (stage-2c task 0; diagnostic-only, DEFAULT OFF -- see the header
@@ -87,6 +145,11 @@ if tracing
 end
 node_seq  = 0;    % running eval_node CALL counter (assigns nrec.id; bookkeeping only)
 cur_phase = '';   % phase tag for the NEXT eval_node call, set at each call site below
+% id/h/phase/seed provenance of the eval_node call currently in flight, captured at its ENTRY
+% (BEFORE Sigma is touched) and read back by the single append_trace_node finalizer. Declared
+% here so it is genuinely SHARED across both nested functions -- the SAME bookkeeping-only
+% nested-workspace idiom node_seq/cur_phase already use; never read on the production path.
+cur_node_meta = struct('id', NaN, 'h', NaN, 'phase', '', 'seed_kind', '', 'seed_from', NaN);
 
 % Bracket ceiling from the BARE ordered fixed point: SAME MF option base plus
 % order=true and J0z (P1-F -- the bracket runs under the caller's MF knobs too).
@@ -110,9 +173,9 @@ end
 if isnan(hmin_abs), hmin_abs = 1e-10*hmax; end
 
 % --- Matsubara grid, weights, beta: MIRROR invz_solve_point_ordered's setup block
-% verbatim (wn, wts, beta, eopts from opts -- honors Ecut and EMT options, P1-6).
+% verbatim (wn, wts, beta -- honors Ecut and EMT options, P1-6; eopts was resolved and
+% scheme-stamped once at the top of this function, so it is NOT re-fetched here).
 Ecut  = getf(opts, 'Ecut', 40);
-eopts = getf(opts, 'emt', struct());
 [wn, wts, beta] = invz_matsubara(T, Ecut);
 
 % Independent h = 0 PM predictor node (round-3 P0-3; doubles as Gate 6b's comparator):
@@ -121,7 +184,8 @@ eopts = getf(opts, 'emt', struct());
 % predicts root existence INDEPENDENTLY of any sampled profile value.
 Sigma = [];  K0s = 0;                                % warm-start carriers across nodes
 if tracing, cur_phase = 'predictor'; end             % stage-2c task 0: node phase tag (bookkeeping only)
-[r0n, ~, S0pm, K0pm, ~, Gb0, ~, ok0, Sigma, K0s] = eval_node(0, Sigma, K0s);
+[rec0, Sigma, K0s] = eval_node(0, Sigma, K0s);
+ok0 = rec0.accepted;  r0n = rec0.r;  Gb0 = rec0.G0bare;   % predictor's own record
 % A predictor-node convergence failure is NOT one of the three enumerated
 % 'node_failed' triggers (round-5 P2: profile/bisection/final-evaluation), and it is
 % NOT 'unresolved' either (that label presupposes a computed slope_pred). It is its
@@ -136,24 +200,21 @@ if tracing, cur_phase = 'predictor'; end             % stage-2c task 0: node pha
 % verdict is still forced to 'node_failed' / NaN below, never silently 'ok'.
 if ok0
     slope_pred = r0n + J0eff*Gb0;
-    prof.Sigma0_pm0 = S0pm;  prof.K0_pm0 = K0pm;  prof.slope0 = slope_pred;
+    prof.Sigma0_pm0 = rec0.Sigma0;  prof.K0_pm0 = rec0.K0;  prof.slope0 = slope_pred;
+    % Exported predictor seeds: r_pm0/G0bare_pm0 are the SAME two values slope0 is built from
+    % (so prof.slope0 == prof.r_pm0 + J0eff*prof.G0bare_pm0 is a literal identity), and
+    % r_pm0/Sigma0_pm0 are the h = 0 seeds of int_r_minus_1/int_Sigma0 below.
+    prof.r_pm0 = r0n;  prof.G0bare_pm0 = Gb0;
 else
     slope_pred = NaN;
 end
 
-ratio = hfrac^(1/(nH-1));
-hgrid = hmax * ratio.^((nH-1):-1:0);                 % geometric, clustered at 0 (P1-4)
+[hgrid, ratio] = invz_hmf_grid(hmax, nH, hfrac);     % geometric, clustered at 0 (P1-4)
 prof.hmin_initial = hgrid(1);
 
 if tracing, cur_phase = 'sweep'; end                 % stage-2c task 0: node phase tag (bookkeeping only)
-[rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s);
-
-if ok0
-    h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end); % first panel seeded with r(0)
-else
-    h0 = nan(1, nH);                                     % undefined without a real r(0)
-end
-F  = h0 - J0eff*mv;
+[nodes, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s);
+[h0, F] = path_from_nodes(nodes, hgrid);
 
 % ADAPTIVE lower extension (round-3 P0-3): predictor-driven, NOT self-referential.
 % slope_pred < 0 predicts an ordered root; extend geometrically downward until a
@@ -162,16 +223,13 @@ n_extend = 0;
 while ok0 && slope_pred < 0 && all(F >= 0) && hgrid(1) > hmin_abs
     n_extend = n_extend + 1;
     hext = hgrid(1) * ratio.^(3:-1:1);                % three more decades-fraction nodes
-    [re, me, S0e, K0e, De, Gbe, Gse] = deal(nan(1, 3));  ce = false(1, 3);
+    erec = repmat(blank_node_record(), 1, 3);         % SAME schema as every other node
     if tracing, cur_phase = 'extend'; end             % stage-2c task 0: node phase tag (bookkeeping only)
     for k = 1:3
-        [re(k), me(k), S0e(k), K0e(k), De(k), Gbe(k), Gse(k), ce(k), Sigma, K0s] = ...
-            eval_node(hext(k), Sigma, K0s);
+        [erec(k), Sigma, K0s] = eval_node(hext(k), Sigma, K0s);
     end
-    hgrid = [hext hgrid];  rv = [re rv];  mv = [me mv];  cnv = [ce cnv];
-    S0v = [S0e S0v];  K0v = [K0e K0v];  Dv = [De Dv];  Gbv = [Gbe Gbv];  Gsv = [Gse Gsv];
-    h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end);
-    F  = h0 - J0eff*mv;
+    hgrid = [hext hgrid];  nodes = [erec nodes];      % ONE array, prepended in grid order
+    [h0, F] = path_from_nodes(nodes, hgrid);          % grid changed -> recompute h0/F
 end
 
 if n_extend > 0 && any(F < 0)
@@ -183,19 +241,42 @@ if n_extend > 0 && any(F < 0)
     % default-path quality. Cost: one extra nH-sweep, only when extension fired.
     idx0 = find(F < 0, 1, 'first');
     hfrac_eff = max(hmin_abs/hmax, 0.25*hgrid(idx0)/hmax);
-    ratio2 = hfrac_eff^(1/(nH-1));
-    hgrid = hmax * ratio2.^((nH-1):-1:0);
+    hgrid = invz_hmf_grid(hmax, nH, hfrac_eff);
     if tracing, cur_phase = 'redensify'; end          % stage-2c task 0: node phase tag (bookkeeping only)
-    [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s);
-    h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end);
-    F  = h0 - J0eff*mv;
+    [nodes, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s);
+    [h0, F] = path_from_nodes(nodes, hgrid);          % grid changed -> recompute h0/F
     prof.redensified = true;
 end
 prof.n_extend = n_extend;
 
+% --- SINGLE derivation point for every solved-path array (task 12 step 8) -------------------
+% `nodes` is now FINAL (extension and redensification are both behind us), so the numeric
+% vectors AND the two cell arrays below are all read off THIS one struct array in THIS one
+% order. There is deliberately no second, separately-maintained set of per-node vectors:
+% that is exactly how prof.medium_status / prof.node_term_reason would drift out of alignment
+% with prof.r / prof.m. h0/F come from path_from_nodes on the SAME array and grid.
+rv = [nodes.r];      mv = [nodes.m];       S0v = [nodes.Sigma0];  K0v = [nodes.K0];
+Dv = [nodes.D_uni];  Gbv = [nodes.G0bare]; Gsv = [nodes.Gstat];   cnv = [nodes.accepted];
 prof.hgrid = hgrid;  prof.r = rv;  prof.h0 = h0;  prof.m = mv;
 prof.Sigma0 = S0v;   prof.K0 = K0v;  prof.D_uni = Dv;  prof.node_conv = cnv;  prof.F = F;
 prof.G0bare = Gbv;   prof.Gstat = Gsv;
+prof.crit = [nodes.crit];  prof.r_minus_1 = rv - 1;  prof.Delta = [nodes.Delta];
+prof.Dq_min = [nodes.Dq_min];  prof.ref_denom = [nodes.ref_denom];
+prof.ref_margin = [nodes.ref_margin];
+prof.gstat_local_denom = [nodes.gstat_local_denom];
+prof.omit_mu3 = [nodes.omit_mu3];
+prof.omit_cubic = [nodes.omit_cubic];  prof.omit_max = [nodes.omit_max];
+prof.medium_status = {nodes.medium_status};  prof.node_term_reason = {nodes.term_reason};
+% Path corrections (spec SSA binding caution, gate G5). BOTH are needed: at finite ordered
+% moment r - 1 is NOT Sigma0 -- the hybrid elastic factor xi makes r depend on K0 and
+% lambda(1:2) -- so integral Sigma0 dh is a component diagnostic, not the whole correction.
+% The ~0.3% PM boundary shift bounds NEITHER of them deep in the ordered phase.
+% Same first-panel seeding as h0 above, so all three integrals are quadrature-consistent, and
+% computed here from the FINAL adapted grid so no superseded-grid integral is ever published.
+if ok0
+    prof.int_Sigma0    = trapz([0 hgrid], [prof.Sigma0_pm0, S0v]);
+    prof.int_r_minus_1 = trapz([0 hgrid], [r0n - 1, rv - 1]);
+end
 
 if ~ok0                          % predictor never converged: h0/F are undefined (NaN)
     prof.status = 'node_failed'; % above -- report the honest verdict now that the grid's
@@ -223,14 +304,14 @@ a = hgrid(idx);  b = hgrid(idx+1);  Fa = F(idx);  h0a = h0(idx);  ra = rv(idx);
 if tracing, cur_phase = 'bisect'; end                % stage-2c task 0: node phase tag (bookkeeping only)
 for it = 1:12
     c = 0.5*(a + b);
-    [rc, mc, ~, ~, ~, ~, ~, okc, Sigma, K0s] = eval_node(c, Sigma, K0s);
-    if ~okc                                           % round-5 P1-A: a failed bisection node
+    [recc, Sigma, K0s] = eval_node(c, Sigma, K0s);
+    if ~recc.accepted                                 % round-5 P1-A: a failed bisection node
         prof.status = 'node_failed';  hmf_star = NaN; % TERMINATES the solve -- never a root
         return;                                       % from a partial bracket
     end
-    h0c = h0a + 0.5*(ra + rc)*(c - a);
-    Fc  = h0c - J0eff*mc;
-    if sign(Fc) == sign(Fa), a = c; Fa = Fc; h0a = h0c; ra = rc; else, b = c; end
+    h0c = h0a + 0.5*(ra + recc.r)*(c - a);
+    Fc  = h0c - J0eff*recc.m;
+    if sign(Fc) == sign(Fa), a = c; Fa = Fc; h0a = h0c; ra = recc.r; else, b = c; end
     if (b - a) < trt*b, break; end
 end
 if (b - a) >= trt*b                                   % round-5 P1-A: tol_root not reached --
@@ -240,37 +321,95 @@ if (b - a) >= trt*b                                   % round-5 P1-A: tol_root n
 end
 hmf_star = 0.5*(a + b);
 if tracing, cur_phase = 'root'; end                  % stage-2c task 0: node phase tag (bookkeeping only)
-[r_s, m_s, ~, ~, D_s, ~, Gs_s, ok_s] = eval_node(hmf_star, Sigma, K0s);
-if ~ok_s
+[root, ~, ~] = eval_node(hmf_star, Sigma, K0s);
+if ~root.accepted
     prof.status = 'node_failed';  hmf_star = NaN;  return;
 end
-prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star = Gs_s;
+% the root's COMPLETE record, G0bare included (it was previously discarded here, which is
+% why crit_star was not computable): crit_star = r_star + J0eff*G0bare_star must be > 0 for
+% an accepted root, i.e. the INCREASING crossing of F -- a Landau minimum, not a maximum.
+prof.m_star = root.m;  prof.D_uni_star = root.D_uni;  prof.Dq_min_star = root.Dq_min;
+prof.r_star = root.r;  prof.Gstat_star = root.Gstat;  prof.G0bare_star = root.G0bare;
+prof.crit_star = root.crit;
 
-    function [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s)
+    function rec = blank_node_record()
+    % The FIXED per-node record schema (task 12 step 7) -- the ONE initializer every eval_node
+    % exit path starts from, and the one run_sweep/the extension preallocate with. Because the
+    % field set, order and defaults are identical on every exit (normal, fbare shortcut, and any
+    % future domain / degenerate-doublet exit), the records concatenate into one struct array and
+    % prof's arrays can be read off it field-for-field. NEVER build a partial record by hand.
+    % G = -chi (meV^-1), ferromagnetic positive J.
+    rec = struct('r',NaN,'m',NaN,'Sigma0',NaN,'K0',NaN,'D_uni',NaN,'Dq_min',NaN, ...
+        'G0bare',NaN,'Gstat',NaN,'accepted',false,'crit',NaN,'Delta',NaN, ...
+        'medium_status','not_applicable','term_reason','not_evaluated', ...
+        'ref_denom',NaN,'ref_margin',NaN,'gstat_local_denom',NaN, ...
+        'omit_mu3',NaN,'omit_cubic',NaN,'omit_max',NaN);
+    end
+
+    function [h0, F] = path_from_nodes(nodes, hgrid)
+    % h0(h) = int_0^h r dh' and F = h0 - J0eff*m on the CURRENT grid, always recomputed from
+    % the SAME record array the export block reads. Called after every grid change (initial
+    % sweep, each extension prepend, redensification) so a published integral can never
+    % describe a superseded grid. First panel seeded with the h = 0 predictor's r (P0-3).
+    if ok0
+        h0 = cumtrapz([0 hgrid], [r0n [nodes.r]]);  h0 = h0(2:end);
+    else
+        h0 = nan(1, numel(hgrid));                 % undefined without a real r(0)
+    end
+    F = h0 - J0eff*[nodes.m];
+    end
+
+    function append_trace_node(rec, info)
+    % THE single trc.nodes finalizer (task 12 step 7). EVERY eval_node exit routes through here
+    % when tracing -- normal, fbare shortcut, and any future domain / degenerate exit -- so no
+    % early return can hand-append a shorter schema. Each entry is: this call's id/h/phase/seed
+    % provenance (cur_node_meta, captured at eval_node ENTRY before Sigma is touched), the outer
+    % loop provenance read from `info`, then EVERY field of the per-node record verbatim. Gate 0
+    % reads this ledger to account for the predictor, extension/redensification nodes, bisection
+    % iterates and the final root -- a missing or short entry silently corrupts that gate.
+    % info = [] for the fbare shortcut: no solver call was made, so there is no loop provenance.
+    nrec = cur_node_meta;                          % id, h, phase, seed_kind, seed_from
+    nrec.outer_iters = 0;  nrec.outer_hit_max = false;  nrec.dS_break = false;
+    nrec.resid_static = NaN;
+    if ~isempty(info)
+        nrec.outer_iters   = info.outer_iters;
+        nrec.dS_break      = info.loop_converged;
+        nrec.outer_hit_max = ~info.loop_converged && info.outer_iters == maxo;
+        nrec.resid_static  = info.so.resid;
+    end
+    nrec.ok_final    = rec.accepted;               % == info.accepted on the solver path
+    nrec.term_reason = rec.term_reason;            % already in THIS file's own vocabulary
+    for fn = fieldnames(rec).'                     % the full record, field for field
+        nrec.(fn{1}) = rec.(fn{1});                % (NOT `f`: that name is a parent loop index,
+    end                                            % and nested functions SHARE parent variables)
+    if isempty(trc.nodes), trc.nodes = nrec; else, trc.nodes(end+1) = nrec; end
+    end
+
+    function [recs, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s)
     % Behavior-neutral factoring of the per-node nH sweep (execution amendment 3):
     % evaluate eval_node at every point of hgrid in ascending order, warm-starting
     % Sigma/K0s across calls. Shared by the initial profile sweep and the re-densify
-    % pass; the extension's 3-node prepends stay inline (unchanged).
-    n = numel(hgrid);
-    [rv, mv, S0v, K0v, Dv, Gbv, Gsv] = deal(nan(1, n));  cnv = false(1, n);
-    for is = 1:n
-        [rv(is), mv(is), S0v(is), K0v(is), Dv(is), Gbv(is), Gsv(is), cnv(is), Sigma, K0s] = ...
-            eval_node(hgrid(is), Sigma, K0s);
+    % pass; the extension's 3-node prepends stay inline (unchanged). Returns the struct
+    % ARRAY of per-node records plus the two continuation carriers.
+    recs = repmat(blank_node_record(), 1, numel(hgrid));
+    for is = 1:numel(hgrid)
+        [recs(is), Sigma, K0s] = eval_node(hgrid(is), Sigma, K0s);
     end
     end
 
-    function [rk, mk, S0k, K0k, Dk, Gbk, Gsk, ok, Sigma, K0s] = eval_node(hp, Sigma, K0s)
+    function [rec, Sigma, K0s] = eval_node(hp, Sigma, K0s)
     % One fixed-field node: si (hz_fixed, NO order), tl, c0/G0, then the ordered
     % Sigma<->EMT loop WITH the static-sector closure each pass (Interfaces bullet).
+    % Returns ONE fixed-schema record (blank_node_record) plus the continuation carriers --
+    % NOT a positional output list; task 12 collapsed the previous ten outputs precisely
+    % because every new diagnostic grew it and every call site destructured a different subset.
+    rec = blank_node_record();
     if tracing                                     % stage-2c task 0: node identity + seed
         node_seq = node_seq + 1;                   % provenance, captured BEFORE Sigma is
-        nrec = struct('id', node_seq, 'h', hp, 'phase', cur_phase, ...             % touched
-            'seed_kind', 'warm', 'seed_from', node_seq - 1, ...    % single sequential thread
-            'outer_iters', NaN, 'outer_hit_max', false, 'dS_break', false, ...
-            'ok_final', false, 'term_reason', '', 'K0', NaN, 'D_uni', NaN, ...
-            'resid_static', NaN);
+        cur_node_meta = struct('id', node_seq, 'h', hp, 'phase', cur_phase, ...     % touched
+            'seed_kind', 'warm', 'seed_from', node_seq - 1);   % single sequential thread
         if isempty(Sigma)                          % this file's OWN cold-start criterion
-            nrec.seed_kind = 'cold';  nrec.seed_from = NaN;
+            cur_node_meta.seed_kind = 'cold';  cur_node_meta.seed_from = NaN;
         end
     end
     sio = sibase;  sio.hz_fixed = hp;
@@ -279,14 +418,13 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
         error('invz:hzFixed', 'hz_fixed not held: si.hz = %.6g vs %.6g', si.hz, hp);
     end
     tl = invz_twolevel_ordered(ion, T, Bx, hp, struct('Jxx0', Jxx0, 'transverse_mf', tmf));
-    mk = si.Jexp(3);
+    rec.m = si.Jexp(3);
+    rec.Delta = tl.Delta;                          % this node's own doublet splitting
     if fbare
-        rk = 1;  S0k = 0;  K0k = 0;  Dk = NaN;  Gbk = NaN;  Gsk = NaN;  ok = true;
-        if tracing                                 % stage-2c task 0: degenerate node record
-            nrec.outer_iters = 0;  nrec.outer_hit_max = false;  nrec.dS_break = false;
-            nrec.ok_final = true;  nrec.term_reason = 'bare_shortcut';
-            if isempty(trc.nodes), trc.nodes = nrec; else, trc.nodes(end+1) = nrec; end
-        end
+        rec.r = 1;  rec.Sigma0 = 0;  rec.K0 = 0;  rec.accepted = true;
+        rec.term_reason = 'bare_shortcut';
+        rec.crit = rec.r + J0eff*rec.G0bare;       % G0bare is not computed here -> NaN crit
+        if tracing, append_trace_node(rec, []); end % degenerate node, same full schema
         return;
     end
     c0 = invz_chi0z(si, T, 1i*wn, struct('elastic', true));
@@ -322,7 +460,10 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
                                           % NOT export its own iterate as the next warm start).
     node = struct('tl', tl, 'G0', G0, 'g', g, 'wts', wts, 'wn', wn, 'beta', beta, ...
         'J0eff', J0eff, 'G0inel0', G0inel0, 'G0el0', G0el0, 'G0bare0', G0bare0, ...
-        'eso', eso, 'eopts', eopts, 'Jnu_flat', Jnu_flat);
+        'eso', eso, 'eopts', eopts, 'Jnu_flat', Jnu_flat, 'Jmom', Jmom);
+    % Jmom (resolved ONCE at the top of this function) is REQUIRED by both the node solver and
+    % the residual checker under a strict scheme and IGNORED by both under 'resummed' -- so it
+    % is threaded unconditionally rather than branching on the scheme at every node.
     if isempty(Sigma_in)                 % this file's OWN cold-start criterion (unchanged)
         seed = [];
     else
@@ -335,35 +476,41 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
     % checker-gated acceptance: info.accepted is the COMPLETE invz_ordered_residual verdict,
     % replacing the old in-loop `dS<tolo && sout.converged` + post-loop `so.converged &&
     % so.resid<ctol` gate -- that logic now lives entirely in the solver/checker.
-    rk = info.so.r;  S0k = state.Sigma(1);  K0k = state.K0s;  Dk = info.so.D_uni;
-    Gbk = G0bare0;   Gsk = info.so.Gstat;   ok = info.accepted;
+    rec.r = info.so.r;  rec.Sigma0 = state.Sigma(1);  rec.K0 = state.K0s;
+    rec.D_uni = info.so.D_uni;  rec.G0bare = G0bare0;  rec.Gstat = info.so.Gstat;
+    rec.accepted = info.accepted;
+    % crit = r + J0eff*G0bare (SS5): the SAME expression prof.slope0 uses at h = 0, evaluated
+    % per node. Diagnostic only -- intermediate path nodes legitimately sit in the unstable
+    % Landau interval (crit < 0); only the accepted root is held to positivity.
+    rec.crit = rec.r + J0eff*rec.G0bare;
+    rec.Dq_min = info.res.stability.Dq_min;        % the CHECKER's independent recomputation
+    rec.gstat_local_denom = info.so.gstat_local_denom;
+    rec.omit_mu3 = info.so.omit_mu3;  rec.omit_cubic = info.so.omit_cubic;
+    rec.omit_max = info.so.omit_max;
+    rec.medium_status = info.medium_status;
+    rec.term_reason   = local_term_reason(info.term_reason);
+    % Reference denominator + ACTUAL distance-to-floor (denom - ref_margin), not the floor and
+    % not the denominator repeated. Both stay NaN under 'resummed', where medium.ref is [].
+    if isstruct(info.medium) && isfield(info.medium, 'ref') && isstruct(info.medium.ref)
+        rec.ref_denom  = info.medium.ref.denom;
+        rec.ref_margin = info.medium.ref.margin;
+    end
 
     % P0-3 seed-safety: thread the ACCEPTED state forward; a non-accepted node instead
     % returns the INPUT Sigma/K0s UNCHANGED (rollback -- a cold input, i.e. Sigma_in = [],
     % rolls back to cold, matching the pre-existing cold criterion for the next node).
-    if ok
+    if rec.accepted
         Sigma = state.Sigma;  K0s = state.K0s;
     else
         Sigma = Sigma_in;  K0s = K0s_in;
     end
 
     if tracing                                     % stage-2c task 1b-ii-A: node record
-        nrec.outer_iters   = info.outer_iters;      % finalize -- relocated to source info/state
-        nrec.dS_break      = info.loop_converged;
-        nrec.outer_hit_max = ~info.loop_converged && info.outer_iters == maxo;
-        nrec.ok_final      = info.accepted;
-        switch info.term_reason                    % solver vocabulary -> this file's own
-            case 'accepted',                    nrec.term_reason = 'converged';
-            case 'loop_converged_not_accepted', nrec.term_reason = 'refresh_failed';
-            case 'max_iter',                    nrec.term_reason = 'max_iter';
-            otherwise,                          nrec.term_reason = info.term_reason;
-        end
-        nrec.K0 = state.K0s;  nrec.D_uni = info.so.D_uni;  nrec.resid_static = info.so.resid;
-        if isempty(trc.nodes), trc.nodes = nrec; else, trc.nodes(end+1) = nrec; end
+        append_trace_node(rec, info);              % task 12: the ONE finalizer, full schema
 
         for ii = 1:numel(info.iters)                % per-outer-iteration records, relocated
             src = info.iters(ii);                   % from info.iters (the solver's own trace)
-            irec = struct('node_id', nrec.id, 'outer', src.outer, 'resid_map', src.dS, ...
+            irec = struct('node_id', cur_node_meta.id, 'outer', src.outer, 'resid_map', src.dS, ...
                 'resid_static', src.resid_static, 'K0', src.K0, 'D_uni', src.D_uni, ...
                 'Dq_min', src.Dq_min, 'Dq_max', src.Dq_max, 'Dq_neg_count', src.Dq_neg_count, ...
                 'idx_pos_flat', src.idx_pos_flat, 'Dq_pos_val', src.Dq_pos_val, ...
@@ -373,4 +520,19 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
         end
     end
     end
+end
+
+% =============================================================================================
+function tr = local_term_reason(info_reason)
+%LOCAL_TERM_REASON invz_ordered_node_solve's vocabulary -> THIS file's own per-node vocabulary
+% {converged, max_iter, refresh_failed, bare_shortcut} (an unmapped solver reason, e.g.
+% 'medium_out_of_domain', passes through verbatim). ONE mapping serves both consumers:
+% prof.node_term_reason and trc.nodes.term_reason (pinned by test_invz_ordered_trace.m), so the
+% profile and the trace ledger can never disagree about a node's outcome.
+switch info_reason
+    case 'accepted',                    tr = 'converged';
+    case 'loop_converged_not_accepted', tr = 'refresh_failed';
+    case 'max_iter',                    tr = 'max_iter';
+    otherwise,                          tr = info_reason;
+end
 end
