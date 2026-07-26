@@ -32,8 +32,10 @@ function [hmf_star, prof, trc] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
 % unaffected either way. When on: trc.nodes has one record per eval_node CALL (id, h,
 % phase in {predictor,sweep,extend,redensify,bisect,root}, seed_kind cold/warm +
 % seed_from node id, outer_iters, term_reason in {converged,max_iter,refresh_failed,
-% bare_shortcut}, K0, D_uni, resid_static, PLUS every field of that call's per-node record --
-% see the diagnostics paragraph below; ONE nested finalizer, append_trace_node, builds every
+% bare_shortcut,medium_out_of_domain} (the last is a strict-scheme reference/closure domain
+% event, passed through verbatim by local_term_reason -- see its own docstring), K0, D_uni,
+% resid_static, PLUS every field of that call's per-node record -- see the diagnostics
+% paragraph below; ONE nested finalizer, append_trace_node, builds every
 % entry, so no exit path can append a shorter schema); trc.iters has one record per OUTER Sigma<->K
 % iteration across all nodes (node_id back-link, the RAW map residual `dS` and the RAW
 % static-closure residual `sout.resid`, K0, D_uni, min/max/neg-count of the static
@@ -136,7 +138,12 @@ hmf_star = NaN;
 % via ordinary nested-function workspace sharing -- the SAME mechanism this file already
 % uses (read-only) for mixo/tolo/maxo/Jxx0/tmf etc.; no new production dependency.
 tracing = isfield(opts, 'trace') && ~isempty(opts.trace) && ~isequal(opts.trace, false);
-trc = struct('schema_version', 1, 'enabled', tracing, 'meta', struct(), ...
+% schema_version 2 (task 12, fix round 1): trc.nodes gained the 18 per-node record fields
+% above and reordered; bumped because that field exists precisely to signal a trc.nodes
+% shape change. No consumer in the repo reads/checks THIS struct's schema_version equality
+% (grepped repo-wide): invz_ordered_trace.m never forwards trcRaw.schema_version into its
+% own (separately-versioned) wrapper, so bumping it is inert everywhere today.
+trc = struct('schema_version', 2, 'enabled', tracing, 'meta', struct(), ...
              'nodes', struct([]), 'iters', struct([]));
 if tracing
     optsRec = opts;
@@ -199,7 +206,9 @@ ok0 = rec0.accepted;  r0n = rec0.r;  Gb0 = rec0.G0bare;   % predictor's own reco
 % conditioning fact shared by both solvers, not a Task-3 algebra issue). The overall
 % verdict is still forced to 'node_failed' / NaN below, never silently 'ok'.
 if ok0
-    slope_pred = r0n + J0eff*Gb0;
+    slope_pred = rec0.crit;              % rec0.crit IS r(0) + J0eff*G0bare(0) (task 12
+                                          % record schema); read it rather than re-deriving
+                                          % the same formula from r0n/Gb0 a second time.
     prof.Sigma0_pm0 = rec0.Sigma0;  prof.K0_pm0 = rec0.K0;  prof.slope0 = slope_pred;
     % Exported predictor seeds: r_pm0/G0bare_pm0 are the SAME two values slope0 is built from
     % (so prof.slope0 == prof.r_pm0 + J0eff*prof.G0bare_pm0 is a literal identity), and
@@ -378,7 +387,6 @@ prof.crit_star = root.crit;
         nrec.resid_static  = info.so.resid;
     end
     nrec.ok_final    = rec.accepted;               % == info.accepted on the solver path
-    nrec.term_reason = rec.term_reason;            % already in THIS file's own vocabulary
     for fn = fieldnames(rec).'                     % the full record, field for field
         nrec.(fn{1}) = rec.(fn{1});                % (NOT `f`: that name is a parent loop index,
     end                                            % and nested functions SHARE parent variables)

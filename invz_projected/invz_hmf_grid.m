@@ -1,6 +1,6 @@
 function [hgrid, ratio] = invz_hmf_grid(hmax, nH, hmin_frac)
 %INVZ_HMF_GRID The initial geometric H_MF profile grid, clustered at 0 (P1-4).
-% Extracted VERBATIM from invz_hmf_ordered.m:144-145 so the prospective Gate-0 scanner
+% Extracted VERBATIM from invz_hmf_ordered.m:212 so the prospective Gate-0 scanner
 % (invz_static_domain_scan) and the solver build the SAME initial grid from one definition
 % rather than two implementations that happen to agree (spec SS7.2).
 %
