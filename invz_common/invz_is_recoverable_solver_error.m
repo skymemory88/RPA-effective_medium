@@ -10,9 +10,10 @@ function tf = invz_is_recoverable_solver_error(id)
 % invz_lambdas / invz_sigma_ordered / invz_sigma) is invz:emtJnu. The strict scheme adds throw
 % sites in that same chain, so a prefix match would silently downgrade a wiring error to "node
 % not accepted" -- a masked column. That is exactly the failure mode that let the original
-% masking defect hide for a whole stage. And there are at least four such absorbers on the path
-% (invz_ordered_residual.safe_eval, invz_spectra_map x2, invz_solve_auto), so narrowing one
-% only relocates the swallow: every catch must use THIS predicate.
+% masking defect hide for a whole stage. And there are at least three such absorbers on the path
+% (invz_spectra_map x2, invz_solve_auto) -- invz_ordered_residual's own per-block safe_eval
+% absorber was REMOVED by task 9 (exceptions now escape that checker unconditionally) -- so
+% narrowing one only relocates the swallow: every catch must use THIS predicate.
 %
 % ADDING AN IDENTIFIER HERE IS A REVIEWED CONTRACT CHANGE, never a convenience response to a
 % failing run. Strict-medium domain outcomes deliberately return STATUSES rather than throwing

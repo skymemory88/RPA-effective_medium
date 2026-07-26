@@ -130,9 +130,19 @@ independent recomputations (Sec. 9, Perturbation 2).
 ## 4. Residual blocks
 
 Every block **recomputes independently from the exported `state`** — never reusing another
-block's intermediate result, never reusing the original solve's cached values. All four blocks
-are evaluated even if one fails (no short-circuit), so a caller always sees the complete
-picture.
+block's intermediate result, never reusing the original solve's cached values. Among the four
+blocks themselves, all four are evaluated even if one fails (**no short-circuit among A–D**), so
+a caller always sees the complete picture.
+
+**The one documented exception (added 2026-07-25, task 9):** a strict-scheme domain preflight
+(independent reference/closure recomputation, detailed in the dated Block-B subsection below)
+runs BEFORE any of the four blocks. On a non-`'ok'` reference/closure status it returns a
+complete, non-accepted `res` immediately, so Blocks A, C, D — and the rest of Block B beyond its
+own status — are never evaluated on that path. This preflight short-circuit precedes all four
+blocks; it does not violate the no-short-circuit rule stated above, which is a claim about the
+relationship AMONG A–D once evaluation of them begins (i.e. no block is skipped because a
+DIFFERENT one of A–D failed). The returned schema still carries every field a normal return
+does (each dead block's `resid=NaN`, `pass=false`), so a caller never sees a smaller struct.
 
 **NaN-propagation in the vector-difference residuals (`rA`, `rC`, `rD`).** MATLAB's `max`
 **ignores individual `NaN` entries** by default (`max(abs([1 NaN 3])) == 3`, unlike `sum`/
@@ -199,14 +209,19 @@ it demands 10 correct digits when `Gstat = O(1)` (far from the pole) and relaxes
 *relative* precision demanded (still `1e-10` relative either way). **Both the abs and rel
 component are the identical, single, pre-existing constant** — nothing here is tuned to any
 run.
-**Additional diagnostics exposed (never folded away):** `so.converged` (`res.blockB.converged`
-— the closure's own PURE-ABSOLUTE flag, `so.resid < rtol_B`; this can legitimately be `false`
-while `res.blockB.pass` is `true` for a large-`|Gstat|` node — that is the combined gate doing
-its job, not a contradiction); `D_uni = so.D_uni` and `Dq = 1+(Jnu_flat-K0_b).*Gstat_b`
+**Additional diagnostics exposed (never folded away) — description below is the `'resummed'`
+scheme; see "Block B under a strict static medium" immediately after for the strict-scheme
+equivalents of both `.converged` and `.pass`:** `so.converged` (`res.blockB.converged` — under
+`'resummed'`, the closure's own PURE-ABSOLUTE flag, `so.resid < rtol_B`; this can legitimately
+be `false` while `res.blockB.pass` is `true` for a large-`|Gstat|` node — that is the combined
+gate doing its job, not a contradiction); `D_uni = so.D_uni` and `Dq = 1+(Jnu_flat-K0_b).*Gstat_b`
 (`Dq_min`, `Dq_max`) are surfaced at the **top level** of `res` (Sec. 6), per the physics note
 in `stage2c-context.md`: a sign-changing `Dq`/`D_uni` may be **physical instability**, not
 noise, and must never be smoothed over or folded into a single pass/fail bit.
-**Pass:** `isfinite(rB) && rB < scale_abs + scale_rel*abs(Gstat_b)`.
+**Pass** (`'resummed'` scheme): `isfinite(rB) && rB < scale_abs + scale_rel*abs(Gstat_b)`. Under
+a strict scheme `res.blockB.converged` is instead a *domain-validity* flag
+(`strcmp(medium.status,'ok')`) and `res.blockB.pass` additionally requires that same status —
+see below. A Task 10/12 consumer reading either field must branch on `res.blockB.scheme`.
 
 ### Block B under a strict static medium (added 2026-07-25)
 
@@ -229,10 +244,18 @@ Block B is revised IN PLACE; there is no fifth block. Under
 - `res.stability` (`crit`, `D_uni`, `Dq_min`, `class`, `pass`) is computed for every node and
   folded into `res.accepted` for NONE. Requiring per-node stability would re-mask the ordered
   phase, since intermediate nodes are the unstable Landau interval by construction.
+  **Scheme-independent:** this tier is computed identically whether the node's static medium is
+  `'resummed'` or a `strict_1z_*` scheme. It is documented in this strict-only-dated section
+  only because task 9 introduced it alongside the strict Block-B revision, not because the tier
+  itself is strict-only.
 - the checker contains no exception absorber. All exceptions escape; domain and numerical
   non-convergence are represented by statuses/residuals before this layer.
 - Block D checks `med.dynamic_converged` (slots `2:end`), not whole-PM `med.converged`, because
   ordered callers replace the discarded PM static slot before lambdas.
+  **Scheme-independent:** `med.dynamic_converged` is set unconditionally at
+  `invz_emt_scalar.m:99`, outside the strict-mode branch, so this switch gates Block D
+  identically under `'resummed'` and under a strict scheme (see the corrected Block D "Pass:"
+  expression above, which now reads `med_D.dynamic_converged` on both paths).
 
 ### Block C — Sigma self-consistency of the derived lambda/Sigma chain
 
@@ -295,10 +318,11 @@ finite — the two checks are deliberately not identical; see Sec. 7).
 **Degenerate-size guard:** if `numel(K_exp) <= 1` (no dynamic frequencies exist to check —
 never the case for any Ecut-derived Matsubara grid used in this repo, but guarded rather than
 left to crash), `rD` is defined as `0` and the block passes trivially (subject to the finite
-clause and `med_D.converged`).
+clause and `med_D.dynamic_converged`).
 **Pass:** `isfinite(rD) && rD < scale_abs + scale_rel*max(abs(med_D.K(2:end)))
 && all(isfinite(K_exp)) && all(isfinite(lam_exp)) && all(isfinite(Sigma_exp))
-&& med_D.converged`.
+&& med_D.dynamic_converged`. (Task 9: gated on `med_D.dynamic_converged` — slots `2:end` only
+— never whole-PM `med_D.converged`; see the dated Block-B subsection's closing bullet for why.)
 
 ## 5. Why lambda is not a fifth, independently-gated block
 

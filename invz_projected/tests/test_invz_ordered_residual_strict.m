@@ -139,3 +139,47 @@ verifyFalse(testCase, res.finite);
 verifyEqual(testCase, res.stability.class, 'undefined');
 verifyTrue(testCase, all(isnan([res.blockA.resid,res.blockC.resid,res.blockD.resid])));
 end
+
+% Review-fix (Important finding #3): Block D's medD.dynamic_converged switch
+% (invz_ordered_residual.m:273,276) had no discriminating test -- reverting it to whole-PM
+% medD.converged left the whole suite green. Corrupt ONLY node.G0(1) (eso/eopts/state all
+% untouched -- no scheme split, per the controller's explicit constraint) and Block D's own
+% fresh invz_emt_scalar(node.G0, state.Sigma, node.Jnu_flat, node.eopts) call gets K(1)=G(1)=NaN
+% straight out of the closed-form solve (invz_emt_scalar.m: A(1)/K(1)/G(1) alone go NaN; every
+% other frequency is an independent elementwise computation of its own G0 element, so 2:end is
+% untouched). medD.converged (invz_emt_scalar.m:128, ALL slots) is therefore false;
+% medD.dynamic_converged (invz_emt_scalar.m:99, slots 2:end only) is true -- exactly the
+% configuration the switch exists to handle. No other block reads node.G0(1) after Block A's
+% own static overwrite (contract Sec. 3: local_F's step (2) clobbers Kf(1) before it is ever
+% used), so A/B/C, and blockD.resid itself (which compares state.K(2:end) to medD.K(2:end)),
+% come back BIT-IDENTICAL to the unperturbed fixture -- measured, not assumed (task9_fix_probe.m
+% probe): only .converged vs .dynamic_converged differ. Reverting :273/:276 to medD.converged
+% flips blockD.pass (and res.accepted) to false on this exact fixture -- the discriminating
+% evidence review finding #3 asked for.
+function test_blockD_gates_on_dynamic_converged_not_whole_pm(testCase)
+[node, state] = build_strict_fixture();
+res0 = invz_ordered_residual(node, state);
+verifyTrue(testCase, res0.accepted, 'fixture must be a genuine accepted state to begin with');
+
+node2 = node;
+node2.G0(1) = NaN;                          % corrupt ONLY the discarded PM static slot
+
+% Confirm the fixture actually discriminates BEFORE trusting the checker's own verdict.
+medD = invz_emt_scalar(node2.G0, state.Sigma, node2.Jnu_flat, node2.eopts);
+verifyFalse(testCase, medD.converged, ...
+    'fixture no longer discriminates: medD.converged unexpectedly true');
+verifyTrue(testCase, medD.dynamic_converged, ...
+    'fixture no longer discriminates: medD.dynamic_converged unexpectedly false');
+verifyTrue(testCase, all(isfinite(medD.K(2:end))) && all(isfinite(medD.G(2:end))));
+
+res = invz_ordered_residual(node2, state);
+% Every OTHER block is untouched -- isolates the corruption to exactly Block D's convergence
+% gate, so a failure below can only be explained by :273/:276.
+verifyEqual(testCase, res.blockA.resid, res0.blockA.resid);
+verifyEqual(testCase, res.blockB.resid, res0.blockB.resid);
+verifyEqual(testCase, res.blockC.resid, res0.blockC.resid);
+verifyEqual(testCase, res.blockD.resid, res0.blockD.resid);   % same rD; only .pass can differ
+verifyTrue(testCase, res.blockD.pass, ...
+    'blockD.pass must gate on medD.dynamic_converged, not whole-PM medD.converged');
+verifyTrue(testCase, res.accepted);
+end
