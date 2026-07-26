@@ -131,14 +131,17 @@ end
 % stable_form=true into production: it proves the two branches are still the same expression,
 % not merely that each is separately finite/continuous.
 %
-% Tolerance: an explicit ULP bound, abs(a-b) <= 4*eps(abs(a)), not a bare RelTol. 4 ulp is this
-% plan's own stated threshold for "still the same expression" (see invz_gstat_ordered.m's
-% opts.stable_form docstring paragraph). It is not an arbitrary loosening: an independent
-% 16-point re-measurement spanning near-pole and sign-crossing Gstat values found a MAX of 1.0
-% ulp (6/16 points differing from bitwise-exact at all), comfortably inside 4 ulp, while a
-% control run with K0 perturbed by 1e-7 relative produced ~2.3e6 ulp -- proving the comparison
-% discriminates real divergence rather than being vacuously loose. A looser tolerance (e.g. a
-% RelTol of 1e-9 or more) would stop catching that kind of regression.
+% Tolerance: an explicit ULP bound, abs(a-b) <= 4*eps(abs(a)), not a bare RelTol. 4 ulp is the
+% implementation plan's own stop-and-report threshold -- "If any value shows more than ~4 ulp,
+% stop and report -- that would mean the two forms are not the same expression"
+% (docs/superpowers/plans/2026-07-25-invzp-strict-static-medium.md, Task 6 Step 1). It is NOT
+% stated in invz_gstat_ordered.m's docstring, which records only the measured value.
+% The bound is not an arbitrary loosening: a separate out-of-band 16-point sweep spanning
+% near-pole and sign-crossing Gstat values found a MAX of 1.0 ulp (6 of those 16 differing from
+% bitwise-exact at all), and the 6-point subset committed below reproduces that same 1.0 ulp
+% maximum -- both comfortably inside 4 ulp. A control run with K0 perturbed by 1e-7 relative
+% produced ~2.3e6 ulp, proving the comparison discriminates real divergence rather than being
+% vacuously loose. A looser tolerance (a RelTol of 1e-9 or more) would stop catching that.
 function test_stable_form_matches_legacy_branch_on_identical_inputs(testCase)
 [tl, beta] = fixture_tl();
 K0 = 5e-3;  G0inel0 = -300;  G0el0 = -20;  lam = [0.01; 0.02; 0.005];
@@ -168,8 +171,9 @@ for k = 1:numel(Sigma0_list)
     u_Gstat = d_Gstat / eps(abs(Gs_legacy));
     u_Gtil0 = d_Gtil0 / eps(abs(out_legacy.Gtil0));
     u_r     = d_r / eps(abs(out_legacy.r));
-    fprintf(['FIX1ULP Sigma0=%.6g Gstat=%.6g  ulp_Gstat=%.3f ulp_Gtil0=%.3f ' ...
-             'ulp_r=%.3f\n'], S0, Gs_legacy, u_Gstat, u_Gtil0, u_r);
+    % No unconditional printing: the suite's output must stay pristine. Every one of these
+    % figures is reproduced in the verifyTrue failure messages below if a bound is ever
+    % breached, which is the only time they are worth reading.
 
     verifyTrue(testCase, d_Gstat <= 4*eps(abs(Gs_legacy)), ...
         sprintf(['Gstat itself differs by %.3f ulp at Sigma0=%g (both branches compute Gstat ' ...

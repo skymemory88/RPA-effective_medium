@@ -28,9 +28,10 @@ function [Gstat, out] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G
 %     static_medium -- not wired there, or anywhere else, as of this task):
 %     the EXACT reassociation 1/Gtil0 = 1/Gstat - K0, i.e.
 %     out.Gtil0 = 1/(1/Gstat - K0);  out.r = G0bare*(1/Gstat - K0).
-%     Algebraically identical to the false branch everywhere away from a pole (measured at
-%     most ~1 ulp over an independent 16-point sweep spanning near-pole and sign-crossing
-%     Gstat values -- see test_invz_gstat_removable_pole's dual-branch equivalence test);
+%     Algebraically identical to the false branch everywhere away from a pole: measured at
+%     most ~1 ulp, both over an out-of-band 16-point sweep spanning near-pole and sign-crossing
+%     Gstat values and over the committed 6-point subset in
+%     test_invz_gstat_removable_pole's dual-branch equivalence test;
 %     NOT a regulariser -- no broadening, no added tolerance, no
 %     sign change. Where Gstat itself diverges (its own local denominator
 %     gstat_local_denom -> 0), the divergence CANCELS in this arrangement --
