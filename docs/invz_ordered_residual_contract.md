@@ -208,6 +208,32 @@ in `stage2c-context.md`: a sign-changing `Dq`/`D_uni` may be **physical instabil
 noise, and must never be smoothed over or folded into a single pass/fail bit.
 **Pass:** `isfinite(rB) && rB < scale_abs + scale_rel*abs(Gstat_b)`.
 
+### Block B under a strict static medium (added 2026-07-25)
+
+Block B is revised IN PLACE; there is no fifth block. Under
+`static_medium` in {`strict_1z_dyson_ref`, `strict_1z_bare_ref`}:
+
+- load-bearing residual: `|K0s - Kstrict(Gref)|`, with `Kstrict` independently recomputed from
+  the exported `Sigma(1)`/`lam(1:2)` via `invz_static_medium_reference` +
+  `invz_medium_moment_closure`. Gate `K_atol + K_rtol*max(|K0s|,|Kstrict|,Jscale)`
+  (`1e-14`/`1e-12`, frozen in docs/invzp_strict_medium_prereg.md §2). Identically zero for a
+  correct one-shot call: it exists to catch mis-wiring.
+- `blockB.pass` additionally requires `blockB.status == 'ok'`, the reference-denominator domain
+  verdict. An out-of-domain node is not accepted, but the CALLER must distinguish that from
+  non-convergence (`prof.status` `'medium_out_of_domain'` vs `'node_failed'`).
+- a strict reference-domain failure is preflighted independently from the exported state and
+  returns a complete nonaccepted schema without evaluating A/C/D on an invalid medium.
+- the resummed q-average closure residual is NOT computed unless `opts.debug_resummed`, and is
+  reported as the nullable diagnostic `blockB.resid_resummed`. It never enters `.finite` or
+  `.accepted`: the analytic-continuation path deliberately crosses its pole.
+- `res.stability` (`crit`, `D_uni`, `Dq_min`, `class`, `pass`) is computed for every node and
+  folded into `res.accepted` for NONE. Requiring per-node stability would re-mask the ordered
+  phase, since intermediate nodes are the unstable Landau interval by construction.
+- the checker contains no exception absorber. All exceptions escape; domain and numerical
+  non-convergence are represented by statuses/residuals before this layer.
+- Block D checks `med.dynamic_converged` (slots `2:end`), not whole-PM `med.converged`, because
+  ordered callers replace the discarded PM static slot before lambdas.
+
 ### Block C — Sigma self-consistency of the derived lambda/Sigma chain
 
 ```
