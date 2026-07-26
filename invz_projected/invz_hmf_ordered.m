@@ -16,6 +16,20 @@ function [hmf_star, prof, trc] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
 % failed to converge/close. Both map to a NaN hmf_star and MUST be read by callers as
 % converged = false, never as a PM label.
 %
+% Task 13 (binding precedence, the pure reducer invz_hmf_status.m): 'degenerate_doublet'
+% means some evaluated node's two-level splitting Delta fell below the 1e-4 meV domain
+% floor (invz_twolevel_ordered opts.domain_policy = 'return', spec SS5.3) -- a labelled
+% domain outcome, not a solver failure. PUBLIC CONTRACT CHANGE: this function previously
+% let that construction's invz:degenerateDoublet throw ESCAPE unchanged (so Bx = 0, in
+% particular, threw); it now returns normally with hmf_star = NaN and this status instead.
+% 'medium_out_of_domain' means some evaluated node's strict-scheme reference/closure event
+% left medium_status outside {'ok','not_applicable'}. Both are prepended ABOVE
+% 'node_failed'/'unresolved' in the binding precedence -- degenerate_doublet >
+% medium_out_of_domain > node_failed > unresolved > ok -- so a domain/degenerate reason on
+% ANY evaluated node (predictor, profile, extension, redensification, bisection iterate,
+% or the final root) is never masked as a generic 'node_failed'/'unresolved' verdict. Both
+% new statuses still map to a NaN hmf_star and MUST be read by callers as converged = false.
+%
 % Third output trc (stage-2c task 0, diagnostic-only; RELOCATED task 1b-ii-A): opts.trace --
 % absent/false/empty by default -- gates a BEHAVIOUR-NEUTRAL trace of this function's node
 % loop (eval_node/run_sweep, including the h=0 predictor call). Every trace statement is
@@ -32,8 +46,11 @@ function [hmf_star, prof, trc] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
 % unaffected either way. When on: trc.nodes has one record per eval_node CALL (id, h,
 % phase in {predictor,sweep,extend,redensify,bisect,root}, seed_kind cold/warm +
 % seed_from node id, outer_iters, term_reason in {converged,max_iter,refresh_failed,
-% bare_shortcut,medium_out_of_domain} (the last is a strict-scheme reference/closure domain
-% event, passed through verbatim by local_term_reason -- see its own docstring), K0, D_uni,
+% bare_shortcut,medium_out_of_domain,degenerate_doublet} (the second-to-last is a
+% strict-scheme reference/closure domain event, passed through verbatim by
+% local_term_reason -- see its own docstring; the last is task 13's two-level Delta
+% domain screen, set directly by eval_node BEFORE local_term_reason ever runs -- see the
+% Status contract paragraph above), K0, D_uni,
 % resid_static, PLUS every field of that call's per-node record -- see the diagnostics
 % paragraph below; ONE nested finalizer, append_trace_node, builds every
 % entry, so no exit path can append a shorter schema); trc.iters has one record per OUTER Sigma<->K
@@ -191,8 +208,12 @@ Ecut  = getf(opts, 'Ecut', 40);
 % predicts root existence INDEPENDENTLY of any sampled profile value.
 Sigma = [];  K0s = 0;                                % warm-start carriers across nodes
 if tracing, cur_phase = 'predictor'; end             % stage-2c task 0: node phase tag (bookkeeping only)
-[rec0, Sigma, K0s] = eval_node(0, Sigma, K0s);
-ok0 = rec0.accepted;  r0n = rec0.r;  Gb0 = rec0.G0bare;   % predictor's own record
+[pred, Sigma, K0s] = eval_node(0, Sigma, K0s);
+% pred is the predictor's own fixed-schema record (task 13): passed to invz_hmf_status
+% below/at every later early return, alongside whichever other records that site has in
+% hand, so a degenerate/domain reason on THIS node is never masked as a generic failure.
+r0n = pred.r;  S0pm = pred.Sigma0;  K0pm = pred.K0;  Gb0 = pred.G0bare; %#ok<NASGU> (S0pm/K0pm: parity locals)
+ok0 = pred.accepted;
 % A predictor-node convergence failure is NOT one of the three enumerated
 % 'node_failed' triggers (round-5 P2: profile/bisection/final-evaluation), and it is
 % NOT 'unresolved' either (that label presupposes a computed slope_pred). It is its
@@ -206,10 +227,10 @@ ok0 = rec0.accepted;  r0n = rec0.r;  Gb0 = rec0.G0bare;   % predictor's own reco
 % conditioning fact shared by both solvers, not a Task-3 algebra issue). The overall
 % verdict is still forced to 'node_failed' / NaN below, never silently 'ok'.
 if ok0
-    slope_pred = rec0.crit;              % rec0.crit IS r(0) + J0eff*G0bare(0) (task 12
+    slope_pred = pred.crit;              % pred.crit IS r(0) + J0eff*G0bare(0) (task 12
                                           % record schema); read it rather than re-deriving
                                           % the same formula from r0n/Gb0 a second time.
-    prof.Sigma0_pm0 = rec0.Sigma0;  prof.K0_pm0 = rec0.K0;  prof.slope0 = slope_pred;
+    prof.Sigma0_pm0 = pred.Sigma0;  prof.K0_pm0 = pred.K0;  prof.slope0 = slope_pred;
     % Exported predictor seeds: r_pm0/G0bare_pm0 are the SAME two values slope0 is built from
     % (so prof.slope0 == prof.r_pm0 + J0eff*prof.G0bare_pm0 is a literal identity), and
     % r_pm0/Sigma0_pm0 are the h = 0 seeds of int_r_minus_1/int_Sigma0 below.
@@ -287,22 +308,19 @@ if ok0
     prof.int_r_minus_1 = trapz([0 hgrid], [r0n - 1, rv - 1]);
 end
 
-if ~ok0                          % predictor never converged: h0/F are undefined (NaN)
-    prof.status = 'node_failed'; % above -- report the honest verdict now that the grid's
-    return;                      % own (convergence-independent) diagnostics are exported;
-end                              % NEVER fall through to the F-based search on NaN data
-if slope_pred < 0 && all(F >= 0)                      % floor hit without a bracket:
-    prof.status = 'unresolved';                       % NEVER silently PM (round-3 P0-3)
+% Task 13: ONE pure precedence reducer replaces the old ~ok0 / slope_pred<0 / any(~cnv)
+% chain -- degenerate_doublet > medium_out_of_domain > node_failed > unresolved > ok. A
+% predictor failure (~ok0) is still correctly labelled 'node_failed' here (pred.accepted
+% is false, and neither of the two domain reasons applies), UNLESS pred itself carries a
+% degenerate/domain reason, in which case that label now correctly takes precedence
+% instead of masking as a generic 'node_failed' verdict.
+prof.status = invz_hmf_status(pred, nodes, slope_pred, F);
+if strcmp(prof.status, 'unresolved')
     warning('invz:hmfUnresolved', ...
         'ordering predicted (slope_pred = %.3g) but no negative F above hmin_abs = %.3g', ...
         slope_pred, hmin_abs);
-    return;                                           % hmf_star stays NaN; the jensen solver
-end                                                   % must return converged = false here
-if any(~cnv)                                          % round-4 P1-C: status must be truthful
-    prof.status = 'node_failed';                      % on node failure -- never 'ok'
-    return;
 end
-prof.status = 'ok';
+if ~strcmp(prof.status, 'ok'), return; end
 s = sign(F);  idx = find(s(1:end-1) < 0 & s(2:end) >= 0, 1, 'last');
 if isempty(idx), return; end                          % no nonzero root: PM side
 
@@ -315,7 +333,11 @@ for it = 1:12
     c = 0.5*(a + b);
     [recc, Sigma, K0s] = eval_node(c, Sigma, K0s);
     if ~recc.accepted                                 % round-5 P1-A: a failed bisection node
-        prof.status = 'node_failed';  hmf_star = NaN; % TERMINATES the solve -- never a root
+        % Task 13: this iterate may itself be the first node to carry a domain/degenerate
+        % reason (Delta is re-screened on every eval_node call, not only the profile) --
+        % the reducer promotes that above a generic 'node_failed' verdict when it applies.
+        prof.status = invz_hmf_status(pred, [nodes recc], slope_pred, F);
+        hmf_star = NaN;                               % TERMINATES the solve -- never a root
         return;                                       % from a partial bracket
     end
     h0c = h0a + 0.5*(ra + recc.r)*(c - a);
@@ -324,7 +346,14 @@ for it = 1:12
     if (b - a) < trt*b, break; end
 end
 if (b - a) >= trt*b                                   % round-5 P1-A: tol_root not reached --
-    prof.status = 'unresolved';  hmf_star = NaN;      % a distinct refinement failure
+    % Task 13: every bisection iterate reaching this line was accepted (else the branch
+    % above already returned), so the reducer can only confirm 'ok' here -- this site's
+    % own default, 'unresolved' (a distinct refinement failure, NOT a node failure), then
+    % applies. Routed through the same reducer regardless, so a future domain/degenerate
+    % reason on an accepted node would still correctly override it.
+    prof.status = invz_hmf_status(pred, [nodes recc], slope_pred, F);
+    if strcmp(prof.status, 'ok'), prof.status = 'unresolved'; end
+    hmf_star = NaN;
     warning('invz:hmfUnresolved', 'root bracket not refined to tol_root: (b-a)/b = %.3g', (b-a)/b);
     return;
 end
@@ -332,7 +361,11 @@ hmf_star = 0.5*(a + b);
 if tracing, cur_phase = 'root'; end                  % stage-2c task 0: node phase tag (bookkeeping only)
 [root, ~, ~] = eval_node(hmf_star, Sigma, K0s);
 if ~root.accepted
-    prof.status = 'node_failed';  hmf_star = NaN;  return;
+    % Task 13: the final root evaluation is also screened -- a domain/degenerate reason
+    % here must not be masked as a generic 'node_failed' verdict either.
+    prof.status = invz_hmf_status(pred, [nodes root], slope_pred, F);
+    hmf_star = NaN;
+    return;
 end
 % the root's COMPLETE record, G0bare included (it was previously discarded here, which is
 % why crit_star was not computable): crit_star = r_star + J0eff*G0bare_star must be > 0 for
@@ -425,7 +458,20 @@ prof.crit_star = root.crit;
     if abs(si.hz - hp) > 1e-12
         error('invz:hzFixed', 'hz_fixed not held: si.hz = %.6g vs %.6g', si.hz, hp);
     end
-    tl = invz_twolevel_ordered(ion, T, Bx, hp, struct('Jxx0', Jxx0, 'transverse_mf', tmf));
+    % Delta domain screen (spec SS5.3), SINGLE evaluation: return mode reuses the one
+    % diagonalization the constructor already performs, instead of pre-screening with a
+    % duplicate one and then calling it again. Delta is measured at THIS node's molecular field
+    % hp, and the geometric grid clusters at 0, so the predictor and lowest nodes are the ones
+    % at risk whenever Bx is small -- not only at exactly Bx = 0. Previously the constructor's
+    % throw escaped this function entirely and the column masked as a solver failure.
+    tl = invz_twolevel_ordered(ion, T, Bx, hp, struct('Jxx0', Jxx0, 'transverse_mf', tmf, ...
+                                                      'domain_policy', 'return'));
+    if ~tl.valid
+        rec.m = si.Jexp(3);  rec.Delta = tl.Delta;
+        rec.accepted = false;  rec.term_reason = 'degenerate_doublet';
+        if tracing, append_trace_node(rec, []); end  % Task-12 single schema finalizer
+        return;
+    end
     rec.m = si.Jexp(3);
     rec.Delta = tl.Delta;                          % this node's own doublet splitting
     if fbare
