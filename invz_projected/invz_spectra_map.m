@@ -47,11 +47,18 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %   between the bracketing labelled fields, so masked or suspect columns between them
 %   widen it -- refine with invz_critical for a solver-grade Bc). S.Sigma0 is the Sigma0
 %   of the state used for
-%   S.chiz. S.m_1z [1 x nB] is the ordered moment of the jensen 1/z state (NaN under
-%   'bare' and on all non-ordered columns). S.D_ord [1 x nB] is the ordered static
-%   inverse response 1 + (J0eff - K(1))*G(1) AT THE FINAL jensen STATE -- the pole
-%   observable, which vanishes at Bc_1z from below so the FM and PM 1/z branches close
-%   at the same field (NaN under 'bare' and on all non-ordered columns). S.Epeak/S.Epeak_rpa (censored, parabolic-refined peak energy;
+%   S.chiz. S.m_1z [1 x nB] is the ordered moment of the jensen 1/z state and S.D_ord [1 x nB]
+%   the ordered static inverse response 1 + (J0eff - K(1))*G(1) AT THE FINAL jensen STATE -- the
+%   pole observable, which vanishes at Bc_1z from below so the FM and PM 1/z branches close
+%   at the same field. BOTH ARE ALWAYS NaN UNDER 'bare'; otherwise they are recorded wherever
+%   the jensen leg RETURNED A CLOSURE-CONSISTENT POINT, which is NOT the same column set as
+%   phase_1z = 1 (review M3, the sibling F8 missed). Under a STRICT scheme they are also finite
+%   on a column MASKED as 'pm_probe_unknown', where the jensen solve ran for DIAGNOSTICS only
+%   (review F2), and they are RETAINED on a 'response_failed' column, where S.Sigma0 is reset to
+%   NaN but these two are not: unlike Sigma0 they are not defined as properties of the state
+%   used for S.chiz, so nulling them would discard a genuine measurement rather than enforce a
+%   definition. Gate on S.phase_1z == 1 if you want labelled ordered columns only.
+%   S.Epeak/S.Epeak_rpa (censored, parabolic-refined peak energy;
 %   NaN at a non-positive or boundary maximum, via invz_peak_energy, shared with
 %   invz_spectra_qpath). Fields with no solution at all (e.g. the degenerate doublet at
 %   Bx -> 0) are left NaN and masked out.
@@ -141,13 +148,27 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %     'unstable_endpoint' 'medium_out_of_domain' 'degenerate_doublet' 'solver_failed'
 %     'pm_probe_unknown' 'boundary_indeterminate' 'not_attempted_longitudinal'
 %     'bare_not_ordered' 'response_failed'                  (masked columns)
-%   S.stability_1z is the ordered 1/z endpoint's OWN stability flag (invz_solve_point_ordered's
-%   pt.stable_1z), NOT a statement about the column's phase: it is recorded whenever the jensen
-%   leg returned it, so it CAN be true on a MASKED column -- e.g. a strict 'unknown' column
-%   where the jensen solve ran for diagnostics only, or 'unstable_endpoint'. Only S.phase_1z
-%   labels a column. It is false wherever the ordered leg never ran (PM, bare escape hatch,
-%   longitudinal tilt, masked auto state) and under o1z = 'bare', where the field is absent
-%   from the returned point altogether.
+%   VOCABULARY EXTENSION, NOT YET RATIFIED IN THE SPEC (review M7). The design spec
+%   docs/superpowers/specs/2026-07-25-invzp-ordered-solver-static-medium-design.md:562-565
+%   enumerates phase_1z_reason as a CLOSED list of ELEVEN values; 'response_failed' (added by
+%   review F3, so a chiz response failure under a strict scheme masks the column instead of
+%   letting an all-NaN spectrum anchor Bc_1z while wearing a 'pm'/'ordered' label) makes TWELVE.
+%   A Stage-4 G12/G16 consumer switching on this enum must handle it. It is unreachable today
+%   (see S.response_error_id below), and its ratification is with the plan owner.
+%   S.stability_1z is NOT a statement about the column's phase, and it does NOT have a single
+%   source. On a 'pm' column it is hard-set TRUE by the PM STABILITY GATE that labelled the
+%   column -- crit_pm > crit_tol under a strict scheme (invz_pm_verdict), crit_pm > 0 on the
+%   'resummed' path -- with NO ordered solve involved at all, so it is true on EVERY 'pm'
+%   column, on all three schemes and under o1z = 'bare' (measured; review I1 corrects the
+%   earlier claim that this flag is always pt.stable_1z and is false under 'bare'). It is the
+%   ordered 1/z endpoint's OWN flag (invz_solve_point_ordered's pt.stable_1z) only on
+%   ORDERED/DIAGNOSTIC columns -- recorded whenever the jensen leg returned it, so it CAN be
+%   true on a MASKED column, e.g. a strict 'unknown' column where the jensen solve ran for
+%   diagnostics only, or 'unstable_endpoint'. It is false only where NEITHER source fired: a
+%   column with no PM label and no ordered solve (bare escape hatch, longitudinal tilt, masked
+%   auto state, and o1z = 'bare' where pt.stable_1z is absent from the returned point
+%   altogether), or an ordered point whose own flag came back false. Only S.phase_1z labels a
+%   column.
 %   S.ordered_diag_reason is the ordered (jensen) solve's OWN reduced verdict, recorded even
 %   where the phase rule does not adopt it: 'not_attempted' (the ordered leg never ran) |
 %   'accepted' (a closure-consistent ordered point was returned) | otherwise the same
@@ -178,11 +199,19 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %   (invz_boundary_interval: 'valid' | 'widened' | 'unbracketed' | 'invalid'); they FEED
 %   S.Bc_1z only under a strict scheme, while 'resummed' keeps invz_boundary_field's
 %   historical scalar reduction. FROM THIS DRIVER 'invalid' can ONLY mean that the sweep's
-%   `fields` are empty, non-finite or not strictly increasing, so the reduction was never run
-%   at all. The helper's other documented 'invalid' cause -- overlapping masks -- is
-%   UNREACHABLE here by construction, because the three masks are built by strcmp against the
-%   single reason string each column carries and are therefore mutually exclusive. Read
-%   invz_boundary_interval's docstring with that restriction in mind.
+%   `fields` are empty, non-finite, non-numeric, non-real or not strictly increasing, so the
+%   reduction was never run at all. The helper's other documented 'invalid' cause -- overlapping
+%   masks -- is UNREACHABLE here by construction, because the three masks are built by strcmp
+%   against the single reason string each column carries and are therefore mutually exclusive.
+%   Read invz_boundary_interval's docstring with that restriction in mind. ONE FURTHER
+%   RESTRICTION ON 'valid' (review M6): only 'pm_probe_unknown' / 'boundary_indeterminate' feed
+%   `unk`, so an INTERVENING column masked for a KNOWABLE cause does not widen the bracket --
+%   'valid' therefore means "no INDETERMINATE column between the anchors", not "every column
+%   between the anchors is labelled". A 'response_failed' column between the anchors would leave
+%   the status 'valid' while the reported interval spans an unlabelled column. That matches how
+%   'medium_out_of_domain' / 'degenerate_doublet' / 'solver_failed' are already treated (a
+%   knowable cause is a reportable defect, not boundary uncertainty), and is unreachable today;
+%   the sweep-summary warning is what surfaces those columns instead.
 %
 %   Cost is one 1/z solve per field (~15-25 min for a 61-point sweep on a 16^3 grid, single
 %   core). Compute S once, then replot freely (invz_plot_spectra_map / invz_run_spectra).
@@ -337,15 +366,29 @@ unk = strcmp(S.phase_1z_reason, 'pm_probe_unknown') | ...
       strcmp(S.phase_1z_reason, 'boundary_indeterminate');
 ord = strcmp(S.phase_1z_reason, 'ordered');       % excludes bare_escape_hatch
 pm  = strcmp(S.phase_1z_reason, 'pm');
-% invz_boundary_interval owns a HARD strictly-increasing-fields contract (NONEMPTY, finite,
-% strictly increasing). The driver has never constrained the sweep order OR required a nonempty
-% sweep, so the precondition is screened HERE rather than allowed to become a new throw on the
-% protected 'resummed' path. ~isempty FIRST and explicitly (review F1): all([]) is TRUE and
-% 0 < 2 is TRUE, so an empty sweep otherwise slips past both clauses and reaches the helper,
-% which correctly rejects it -- turning a call that historically returned an empty S into an
-% invz:boundaryInterval throw on the DEFAULT path. The helper's precondition is right; the
-% screen was incomplete.
-if ~isempty(fields) && all(isfinite(fields)) && (nB < 2 || all(diff(fields) > 0))
+% invz_boundary_interval owns a HARD input contract on `fields`: NUMERIC, REAL, NONEMPTY,
+% FINITE, STRICTLY INCREASING (five predicates -- see its line 33/38 guards). The driver has
+% never constrained the sweep order OR required a nonempty sweep, so the precondition is
+% screened HERE rather than allowed to become a new throw on the protected 'resummed' path.
+%
+% WHY THE SCREEN MUST BE A SUPERSET OF THE HELPER'S PRECONDITION (review F1, completed by M1).
+% The call is pure and its outputs land in fields that did not exist before, so the ONLY way it
+% can change default-path behaviour is by THROWING. G9 therefore holds exactly when this screen
+% rejects everything the helper rejects. Mirror all five, in the helper's own order:
+%   isnumeric  -- MEASURED GAP: a char `fields` sweeps fine (char*double is double) and reaches
+%                 here, where all(isfinite) and diff(...) > 0 both pass, so it hit the helper and
+%                 raised invz:boundaryInterval on the DEFAULT path, where b9082fd returned.
+%   isreal     -- defensive: a genuinely complex `fields` dies earlier at invz_field_vec
+%                 (invz:fieldVec, unchanged since b9082fd), and complex-with-zero-imaginary-part
+%                 narrows to real in fields(:).', so no case is known to reach here. Mirrored
+%                 anyway, because completeness of the mirror is what makes the G9 argument hold
+%                 without a reachability case analysis.
+%   ~isempty   -- FIRST and explicitly: all([]) is TRUE and 0 < 2 is TRUE, so an empty sweep
+%                 otherwise slips past both later clauses (the original F1 defect).
+%   isfinite / strictly increasing -- as before.
+% The helper's precondition is right and is NOT loosened; only the screen was incomplete.
+if isnumeric(fields) && isreal(fields) && ~isempty(fields) && all(isfinite(fields)) && ...
+        (nB < 2 || all(diff(fields) > 0))
     [S.Bc_1z_interval, S.Bc_1z_status, Bc1z_strict] = invz_boundary_interval(fields, ord, pm, unk);
 else
     S.Bc_1z_interval = [NaN NaN];  S.Bc_1z_status = 'invalid';  Bc1z_strict = NaN;
@@ -363,7 +406,15 @@ if sm.is_strict
     % degenerate doublet, and Stage-4 G16 reads these counters. So a MASKED column whose
     % ordered_diag_reason names a knowable cause is attributed to that cause instead. One
     % cause per column, so the reported total is still a column count and never double counts.
-    diag_cause = (ph1z == 0) & ...
+    %
+    % SCOPED TO THE FAILED-PROBE CASE ONLY (review M2). Keying on ph1z == 0 also re-attributed
+    % 'boundary_indeterminate' columns, where the PM probe CONVERGED and merely sits inside the
+    % +/-crit_tol band: there is no failed-probe gap to fill there, and re-labelling such a
+    % column by its diagnostic jensen verdict would hide that it is the band column. Only
+    % 'pm_probe_unknown' -- where the phase reason is PM-probe-dominant precisely BECAUSE the
+    % probe told us nothing -- may borrow the ordered leg's verdict. `unk` itself is untouched,
+    % so S.Bc_1z and S.Bc_1z_interval are unaffected; this is summary attribution only.
+    diag_cause = strcmp(S.phase_1z_reason, 'pm_probe_unknown') & ...
                  ismember(S.ordered_diag_reason, {'medium_out_of_domain', 'degenerate_doublet'});
     cause = S.phase_1z_reason;
     cause(diag_cause) = S.ordered_diag_reason(diag_cause);
@@ -378,13 +429,23 @@ if sm.is_strict
     % that the historical reduction would have anchored on (bare escape hatches) or masked ones.
     n_bare = nnz(strcmp(S.phase_1z_reason, 'bare_escape_hatch'));
     n_msk  = nnz(ph1z == 0);
+    % NO MASKED COLUMN MAY BE SILENT OR UNDERCOUNTED (review I2). n_dom/n_deg/n_unk between them
+    % cover only 4 of the 9 masked reason strings: 'unstable_endpoint', 'solver_failed',
+    % 'not_attempted_longitudinal', 'bare_not_ordered' and 'response_failed' contribute ZERO to
+    % all three. So (a) the HEADLINE is n_msk, the true unlabelled-column count, with the three
+    % attributed causes as a breakdown plus an explicit 'other' remainder that closes the sum,
+    % and (b) n_msk itself arms the trigger. boundary_lost alone could not: it requires
+    % ~isfinite(Bc_1z), so a strict sweep with a FINITE Bc_1z plus one 'solver_failed' column
+    % emitted NO warning at all. The three counts are mutually exclusive and count only masked
+    % columns, so n_oth >= 0 by construction.
+    n_oth = n_msk - (n_dom + n_deg + n_unk);
     boundary_lost = ~isfinite(S.Bc_1z) && (n_bare > 0 || n_msk > 0);
-    if n_dom + n_deg + n_unk > 0 || boundary_lost
+    if n_msk > 0 || boundary_lost
         warning('invz:spectraMapMasked', ...
             ['1/z dispatch left %d of %d columns unlabelled: %d medium-out-of-domain, ' ...
-             '%d degenerate-doublet, %d unknown-PM-probe; %d column(s) are bare-escape-hatch ' ...
-             '(never a 1/z anchor). Bc_1z = %g (status ''%s'').'], ...
-            n_dom + n_deg + n_unk, nB, n_dom, n_deg, n_unk, n_bare, S.Bc_1z, S.Bc_1z_status);
+             '%d degenerate-doublet, %d unknown-PM-probe, %d other; %d column(s) are ' ...
+             'bare-escape-hatch (never a 1/z anchor). Bc_1z = %g (status ''%s'').'], ...
+            n_msk, nB, n_dom, n_deg, n_unk, n_oth, n_bare, S.Bc_1z, S.Bc_1z_status);
     end
 else
     S.Bc_1z = invz_boundary_field(fields, ph1z  == 1, ph1z  == 2);   % historical scalar (G9)
@@ -711,9 +772,14 @@ if abs(B(3)) > bztol
 end
 
 % --- transverse paramagnetic side: unchanged historical logic --------------------------
-% THE ONLY SWEEP-ABORTING SITE LEFT IN THIS FILE (review F4; task-15 report SS10.5). The
-% invz_twolevel call below sits OUTSIDE every invz_try_solver_call boundary and can raise the
-% whitelisted invz:degenerateDoublet (invz_twolevel.m: Delta < 1e-4 meV domain floor), which
+% THE ONLY SITE LEFT IN THIS FILE THAT CAN ABORT THE SWEEP ON A *WHITELISTED RECOVERABLE*
+% SIGNAL (review F4, headline qualified by M4; task-15 report SS10.5). It is NOT the only
+% aborting site, and the unqualified claim was false: the seven unwrapped invz_chi_realaxis
+% calls in this file's historical body (six above, one below) and invz_solve_auto itself abort
+% on any NON-whitelisted invz:* identifier -- deliberately, that is the narrowed error policy.
+% What is unique HERE is that the invz_twolevel call below sits OUTSIDE every
+% invz_try_solver_call boundary and can raise the whitelisted invz:degenerateDoublet
+% (invz_twolevel.m: Delta < 1e-4 meV domain floor), which
 % aborts the whole parfor sweep rather than masking one column. That is deliberate and must stay:
 % wrapping it would WIDEN error absorption on the protected 'resummed' path, the exact opposite
 % of this task's direction, and it is the pre-existing HEAD behaviour. It is reached only when
