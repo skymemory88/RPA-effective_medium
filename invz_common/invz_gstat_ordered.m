@@ -4,7 +4,7 @@ function [Gstat, out] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G
 %   Gstat = G0inel0/(1 + Sigma0 + K0*G0inel0)  +  xi*G0el0
 %   xi    = (1 + tanh(m^2*n01^2*beta*K0 - M2*beta*lam(1)))
 %           / (1 + (4*n01^2*K0*g0 + 2*lam(2) + g0*lam(1))*M2/n01^2)         (J 2.29)
-% G-convention (G = -chi, meV^-1; ferromagnetic positive J). The CALLER supplies the static weights: the production
+% G-convention (G = -chi, meV^-1). The CALLER supplies the static weights: the production
 % loops pass the FULL-electronuclear split (invz_chi0z elastic:false static, and
 % elastic:true minus elastic:false), so the m -> 0 closure fixed point is the PM solver's
 % own (round-2 P0-A); the transcription tests pass the two-level weights
@@ -19,7 +19,9 @@ function [Gstat, out] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G
 %                            -G0bare = d<Jz>/d(hmf)                          (J 2.31)
 %   m = 0 (G0el0 = 0):  Gstat = G0inel0/(1+Sigma0+K0*G0inel0);
 %                       Gtil0 = G0inel0/(1+Sigma0);  r = 1+Sigma0   (any G0inel0)
-% opts.stable_form (default false) selects the arithmetic used for out.Gtil0/out.r:
+% opts.stable_form (default false) selects the arithmetic used for out.Gtil0/out.r (same
+% G-convention throughout: G = -chi, meV^-1, ferromagnetic positive J -- the reassociation
+% below changes no sign):
 %   false (default -- EVERY existing/resummed call site, preserved bit-identically, G9):
 %     out.Gtil0 = Gstat/(1-K0*Gstat);  out.r = G0bare/Gtil0 -- the historical arithmetic.
 %   true (strict mode only; wired by invz_emt_static_ordered under strict static_medium):
