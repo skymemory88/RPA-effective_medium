@@ -4,8 +4,13 @@ function invz_check_solve_opts(sxtra)
 % the driver from the BZ coupling sum and must not be overridden via solve_opts.
 % ordered_mode is likewise driver-owned (stage-2 P1-6): the map's 1/z leg sets it
 % internally (opts.ordered_1z); the auto/overlay leg must never see it.
-if any(isfield(sxtra, {'J0eff', 'Jxx0', 'hyp', 'ordered_mode'}))
+% static_medium/ref_margin are driver-owned at THIS level too (spec SS4.2): the driver
+% resolves the scheme ONCE with invz_check_static_medium and stamps it into every
+% per-field solve, so a value smuggled in through solve_opts could leave the sweep's
+% columns on two different truncation orders while S.static_medium still advertised one.
+if any(isfield(sxtra, {'J0eff', 'Jxx0', 'hyp', 'ordered_mode', 'static_medium', 'ref_margin'}))
     error('invz:solveOpts', ...
-          'solve_opts fields J0eff/Jxx0/hyp/ordered_mode are reserved (driver-owned).');
+          ['solve_opts fields J0eff/Jxx0/hyp/ordered_mode/static_medium/ref_margin ' ...
+           'are reserved (driver-owned).']);
 end
 end
