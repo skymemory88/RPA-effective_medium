@@ -95,8 +95,18 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %                              neither. This is driver-owned: solve_opts.ordered_mode is
 %                              reserved and errors invz:solveOpts (P1-6) so the auto/overlay
 %                              leg can never be flipped by a caller.
+%     .static_medium ('resummed')  omega_n = 0 static-medium scheme (spec SS4.2), resolved
+%                              ONCE here by invz_check_static_medium and threaded into every
+%                              per-field solve: 'resummed' (DEFAULT, legacy and numerically
+%                              bit-identical) | 'strict_1z_dyson_ref' | 'strict_1z_bare_ref'.
+%                              .ref_margin (1e-6) is the reference-denominator floor. BOTH are
+%                              driver-owned: either one inside solve_opts errors invz:solveOpts.
+%                              A STRICT scheme also switches the 1/z leg's phase dispatch to
+%                              the three-way rule described under S.phase_1z_reason below;
+%                              under 'resummed' the historical dispatch is preserved exactly.
 %     .solve_opts (struct())   merged into the per-field invz_solve_auto opts; fields
-%                              J0eff/Jxx0/hyp are reserved (driver-owned) -> error invz:solveOpts.
+%                              J0eff/Jxx0/hyp/ordered_mode/static_medium/ref_margin are
+%                              reserved (driver-owned) -> error invz:solveOpts.
 %                              transverse_mf ('legacy_x' | 'none' | 'vector_ab', default
 %                              'legacy_x') is a legal solve_opts field forwarded to the
 %                              solvers. Under 'legacy_x' (x-only mean field) a nonzero
@@ -119,6 +129,27 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %   Returns S.transverse_mf: the resolved MF mode string (echoes opts.solve_opts.transverse_mf,
 %   default 'legacy_x'). Returns S.ordered_1z: echoes opts.ordered_1z ('jensen' or 'bare').
 %
+%   PHASE PROVENANCE (spec SS4.4). S.static_medium is the scalar REQUESTED scheme and is
+%   always present. Per column: S.static_medium_used (the same string, except
+%   'n/a_bare_escape' on a bare escape-hatch column, which is the retired Stage-1 bare-MF
+%   diagnostic and NOT a result of the requested scheme); S.pm_probe_status
+%   ('not_attempted' | 'nonconverged' | 'nonfinite' | 'boundary_band' | 'stable' |
+%   'unstable' | 'recoverable_error'); S.pm_probe_error_id (the EXACT absorbed identifier,
+%   never collapsed into 'nonconverged'); S.stability_1z; and S.phase_1z_reason -- a reason
+%   for EVERY column, so no phase_1z = 0 is ever unexplained:
+%     'pm' 'ordered' 'bare_escape_hatch'                    (labelled columns)
+%     'unstable_endpoint' 'medium_out_of_domain' 'degenerate_doublet' 'solver_failed'
+%     'pm_probe_unknown' 'boundary_indeterminate' 'not_attempted_longitudinal'
+%     'bare_not_ordered'                                    (masked columns)
+%   Under a STRICT scheme the 1/z leg dispatches on invz_pm_verdict's three-way rule: a
+%   failed or in-band PM probe is 'unknown' and may run the jensen solver for DIAGNOSTICS
+%   only -- it can never emit phase_1z = 1, because solver availability is not a phase
+%   criterion. Under 'resummed' the historical dispatch is byte-preserved and these fields
+%   are pure diagnostics. S.Bc_1z_interval/[S.Bc_1z_status] are the anchor-bracketed boundary
+%   (invz_boundary_interval: 'valid' | 'widened' | 'unbracketed' | 'invalid'); they FEED
+%   S.Bc_1z only under a strict scheme, while 'resummed' keeps invz_boundary_field's
+%   historical scalar reduction.
+%
 %   Cost is one 1/z solve per field (~15-25 min for a 61-point sweep on a 16^3 grid, single
 %   core). Compute S once, then replot freely (invz_plot_spectra_map / invz_run_spectra).
 
@@ -135,6 +166,12 @@ fdir  = getf(opts, 'field_dir', [1 0 0]);
 bztol = getf(opts, 'bz_tol', 1e-9);
 sxtra = getf(opts, 'solve_opts', struct());
 invz_check_solve_opts(sxtra);
+% Static-medium scheme resolved ONCE at this public entry by the sole authority (spec SS4.2)
+% and threaded into every per-field solve below, so a sweep can never mix truncation orders
+% across its columns. static_medium/ref_margin are DRIVER-OWNED at this level --
+% invz_check_solve_opts above rejects either inside solve_opts. Absent => 'resummed' =>
+% numerically identical to the pre-strict path, dispatch included.
+sm = invz_check_static_medium(opts);
 o1z = getf(opts, 'ordered_1z', 'jensen');
 if ~any(strcmp(o1z, {'jensen', 'bare'}))
     error('invz:ordered1z', 'ordered_1z must be ''jensen'' or ''bare''.');
@@ -200,6 +237,10 @@ chizM   = nan(nw, nB);   chirpaM = nan(nw, nB);
 Sig0    = nan(1, nB);    phaseC  = zeros(1, nB);
 ph1z    = zeros(1, nB);  critPM  = nan(1, nB);
 m1zM    = nan(1, nB);    DordM   = nan(1, nB);
+% Per-column dispatch provenance (spec SS4.4). Cells slice under parfor exactly like the
+% numeric arrays; one_field assigns every one of them on every return path.
+smUsed  = cell(1, nB);   pmStat  = cell(1, nB);   pmEid = cell(1, nB);
+reasonC = cell(1, nB);   stab1z  = false(1, nB);
 
 % nWorkers = 0 forces serial execution even inside a parfor, and works without the
 % Parallel Computing Toolbox; Inf lets parfor use (and auto-create) the pool.
@@ -208,10 +249,16 @@ if parallel && ~isempty(ver('parallel')), nWorkers = Inf; end
 
 sopts = sxtra;
 sopts.hyp = hyp;  sopts.J0eff = Jcc0;  sopts.Jxx0 = Jaa0;  sopts.bz_tol = bztol;
+% static_medium/ref_margin are driver-owned at this level: stamped here so BOTH point solvers
+% resolve the SAME scheme. 'resummed' is their own default, so this is inert by construction
+% on the protected path.
+sopts.static_medium = sm.scheme;  sopts.ref_margin = sm.ref_margin;
 
 parfor (k = 1:nB, nWorkers)
-    [chizM(:, k), chirpaM(:, k), Sig0(k), phaseC(k), ph1z(k), critPM(k), m1zM(k), DordM(k)] = ...
-        one_field(ion, T, BvecM(k, :), Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol, o1z);
+    [chizM(:, k), chirpaM(:, k), Sig0(k), phaseC(k), ph1z(k), critPM(k), m1zM(k), DordM(k), ...
+     smUsed{k}, pmStat{k}, pmEid{k}, stab1z(k), reasonC{k}] = ...
+        one_field(ion, T, BvecM(k, :), Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol, ...
+                  o1z, sm);
     if verbose
         ph = {'masked', 'moment-form', 'paramagnet'};
         fprintf('  |B| = %5.2f T : auto-state %-11s 1z-state %-11s Sigma0 = %s\n', ...
@@ -224,6 +271,11 @@ S.fields = fields;  S.w = w;  S.T = T;  S.info = info;
 S.field_dir = fdir;  S.Bvec = BvecM;  S.transverse_mf = tmf;  S.ordered_1z = o1z;
 S.Sigma0 = Sig0;  S.phase = phaseC;   % auto (ordered-first bare-MF) dispatch -- see header
 S.phase_1z = ph1z;  S.crit_pm = critPM;  S.m_1z = m1zM;  S.D_ord = DordM;
+% Dispatch provenance (spec SS4.4): the REQUESTED scheme is scalar and mandatory; everything
+% else is per column, so a masked column's cause is recorded rather than inferred.
+S.static_medium = sm.scheme;      S.static_medium_used = smUsed;
+S.pm_probe_status = pmStat;       S.pm_probe_error_id = pmEid;
+S.stability_1z = stab1z;          S.phase_1z_reason = reasonC;
 S.suspect = (phaseC == 2) & isfinite(critPM) & (critPM <= 0);   % spurious below-Bc auto-PM
 % Validity masks BEFORE the spectra are packed and the peaks extracted (re-review
 % findings 2, R3-1; R4-3 hardening): chiz is masked where there is no valid 1/z label;
@@ -237,13 +289,46 @@ chizM(:, ph1z == 0)      = NaN;
 chirpaM(:, invalid_auto) = NaN;
 S.chiz = chizM;  S.chirpa = chirpaM;
 S.Bc_auto = invz_boundary_field(fields, phaseC == 1, valid_auto_pm);   % suspect never anchors
-S.Bc_1z   = invz_boundary_field(fields, ph1z  == 1, ph1z  == 2);
+% --- 1/z boundary (spec SS4.4) --------------------------------------------------------------
+% Anchor-bracketed reduction: only unknown/indeterminate columns BETWEEN the last ordered and
+% the first stable-PM anchor widen the bracket. 'ordered' deliberately excludes
+% bare_escape_hatch -- the retired Stage-1 diagnostic must never anchor a 1/z boundary.
+unk = strcmp(S.phase_1z_reason, 'pm_probe_unknown') | ...
+      strcmp(S.phase_1z_reason, 'boundary_indeterminate');
+ord = strcmp(S.phase_1z_reason, 'ordered');       % excludes bare_escape_hatch
+pm  = strcmp(S.phase_1z_reason, 'pm');
+% invz_boundary_interval owns a HARD strictly-increasing-fields contract. The driver has never
+% constrained the sweep order, so the precondition is screened HERE rather than allowed to
+% become a new throw on the protected 'resummed' path.
+if all(isfinite(fields)) && (nB < 2 || all(diff(fields) > 0))
+    [S.Bc_1z_interval, S.Bc_1z_status, Bc1z_strict] = invz_boundary_interval(fields, ord, pm, unk);
+else
+    S.Bc_1z_interval = [NaN NaN];  S.Bc_1z_status = 'invalid';  Bc1z_strict = NaN;
+end
+if sm.is_strict
+    S.Bc_1z = Bc1z_strict;
+    % ONE sweep-level summary, never a per-node warning: a 61-point sweep must not emit 61
+    % near-identical messages, and the counts are what a reader needs to judge the map.
+    n_dom = nnz(strcmp(S.phase_1z_reason, 'medium_out_of_domain'));
+    n_deg = nnz(strcmp(S.phase_1z_reason, 'degenerate_doublet'));
+    n_unk = nnz(unk);
+    if n_dom + n_deg + n_unk > 0
+        warning('invz:spectraMapMasked', ...
+            ['1/z dispatch left %d of %d columns unlabelled: %d medium-out-of-domain, ' ...
+             '%d degenerate-doublet, %d unknown-PM-probe (Bc_1z status ''%s'').'], ...
+            n_dom + n_deg + n_unk, nB, n_dom, n_deg, n_unk, S.Bc_1z_status);
+    end
+else
+    S.Bc_1z = invz_boundary_field(fields, ph1z  == 1, ph1z  == 2);   % historical scalar (G9)
+end
 S.Epeak     = invz_peak_energy(chizM,   w, wmin);
 S.Epeak_rpa = invz_peak_energy(chirpaM, w, wmin);
 end
 
 % -------------------------------------------------------------------------------------------
-function [chiz, chirpa, Sigma0, phase, phase_1z, crit_pm, m_1z, D_ord] = one_field(ion, T, B, Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol, o1z)
+function [chiz, chirpa, Sigma0, phase, phase_1z, crit_pm, m_1z, D_ord, static_medium_used, ...
+          pm_probe_status, pm_probe_error_id, stability_1z, phase_1z_reason] = ...
+    one_field(ion, T, B, Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol, o1z, sm)
 %ONE_FIELD chi''_cc(omega) at one field -- TWO independently phased legs (QCP Stage 1,
 % docs/superpowers/plans/2026-07-21-invzp-qcp-stage1-split-overlays.md; ordered 1/z leg
 % below Bc_1z upgraded to the Stage-2 jensen solve, docs/superpowers/plans/
@@ -274,16 +359,142 @@ function [chiz, chirpa, Sigma0, phase, phase_1z, crit_pm, m_1z, D_ord] = one_fie
 % m_1z/D_ord: jensen ordered moment / ordered static inverse response (pole observable) at
 %     this field -- NaN except on a converged jensen-ordered column (phase_1z = 1, o1z =
 %     'jensen'); always NaN under o1z = 'bare'.
+% sm is the resolved static-medium record. sm.is_strict switches the 1/z leg to the three-way
+%     dispatch (spec SS4.4) at the TOP of this function and returns before the historical body
+%     is reached, so the protected 'resummed' path keeps its exact order and arithmetic and the
+%     new phase rule cannot leak into it. phase_1z_reason and the pm_probe_* / stability_1z /
+%     static_medium_used provenance are populated on BOTH paths -- on 'resummed' they are pure
+%     bookkeeping written alongside the existing decisions, never used to make one.
 % Jsel = Jcc0 is the strict-uniform observable, so the demag correction Jshape applies.
 nw = numel(w);
 chiz = nan(nw, 1);  chirpa = nan(nw, 1);  Sigma0 = NaN;  phase = 0;
 phase_1z = 0;  crit_pm = NaN;  m_1z = NaN;  D_ord = NaN;
+pm_probe_status = 'not_attempted';  pm_probe_error_id = '';
+stability_1z = false;  phase_1z_reason = 'solver_failed';
+static_medium_used = sm.scheme;
+crit_tol = getf(sopts, 'crit_tol', 1e-6);   % the frozen band, shared with the ordered checker
 tmf = getf(sopts, 'transverse_mf', 'legacy_x');
 % transverse_mf here so any fallback single-ion rebuild inside invz_chi_realaxis (when a
 % branch below can't supply si) uses the SAME MF model as the solve, not the 'legacy_x'
 % default (review finding I1; the C1 companion bug in invz_spectra_qpath.m).
 copts = struct('Jsel', Jcc0, 'eta', eta, 'Jxx0', Jaa0, 'Jshape', Jshape, 'hyp', hyp, ...
                'transverse_mf', tmf);
+
+if sm.is_strict
+    % =========================================================================================
+    % STRICT ONE-SHOT CLOSURE: three-way phase dispatch (spec SS4.4). Gated, and returning
+    % before the historical body, because an UNGATED three-way rule would classify the
+    % below-Bc_1z PM probe -- which fails for the same pole reason under 'resummed' -- as
+    % 'unknown' and mask MORE columns than today, breaking G9.
+    % =========================================================================================
+    [pt, phase] = invz_solve_auto(ion, T, B, Jnu, sopts);
+
+    % (0) DEFERRED ROBUSTNESS ITEM, stated rather than hidden: this stage does not un-nest the
+    % 1/z leg from auto availability. With no accepted auto state the strict column stays
+    % masked. Stage-4 G16 must expose that as a limitation, never report it as a strict solve.
+    if phase == 0
+        if abs(B(3)) > bztol, phase_1z_reason = 'not_attempted_longitudinal';
+        else,                 phase_1z_reason = 'solver_failed';  end
+        return;
+    end
+    longit = abs(B(3)) > bztol;
+
+    % (1) PM probe, TRANSVERSE ONLY (the strict-PM solver's m = 0 gate raises
+    % invz:orderedPhase under a longitudinal tilt). ONE probe serves BOTH successful auto
+    % states: a converged strict auto-PM point IS the probe, so it is neither skipped on an
+    % auto-PM column (the previous draft's hole: phase == 2 with a negative PM mass never
+    % reached the ordered leg) nor solved a second time.
+    ptp = [];  pm_completed = true;
+    if ~longit
+        if phase == 2 && ~isempty(pt) && isfield(pt, 'converged') && pt.converged && ...
+                isfinite(pt.Sigma0) && strcmp(getf(pt, 'static_medium', ''), sm.scheme)
+            ptp = pt;
+        else
+            [ptp, pm_completed, pm_probe_error_id] = invz_try_solver_call( ...
+                @() invz_solve_point(ion, T, B, Jnu, sopts));
+        end
+    end
+    if ~isempty(ptp) && isfield(ptp, 'crit') && isfinite(ptp.crit), crit_pm = ptp.crit; end
+    if ~pm_completed
+        % The exact identifier is already in pm_probe_error_id and must NEVER be collapsed
+        % into 'nonconverged' -- a recoverable domain signal and a failed iteration are
+        % different causes with different follow-ups.
+        pm_probe_status = 'recoverable_error';  pm_consistent = false;
+    else
+        pm_probe_status = local_pm_status(ptp, crit_pm, crit_tol);
+        pm_consistent = ~isempty(ptp) && isfield(ptp, 'converged') && ptp.converged && ...
+                        isfinite(ptp.Sigma0);
+    end
+    verdict = invz_pm_verdict(crit_pm, pm_consistent, crit_tol);
+
+    % (2) three-way dispatch -------------------------------------------------------------
+    if strcmp(verdict, 'pm')
+        phase_1z = 2;  phase_1z_reason = 'pm';  stability_1z = true;  Sigma0 = ptp.Sigma0;
+        c1 = copts;  c1.si = ptp.si;             % PM chi0 differs from the ordered leg's
+        [o1, ok1] = invz_try_solver_call(@() invz_chi_realaxis(ion, T, B, ptp, w, c1));
+        if ok1, chiz = imag(o1.chi_cc_q(1, :)).'; end
+    elseif longit || strcmp(o1z, 'bare')
+        % Documented escape hatch (longitudinal tilt, or the explicit 'bare' opt-out): the
+        % retired Stage-1 bare-MF diagnostic. It is NOT a result of the requested strict
+        % scheme, so the provenance says so and the strict Bc_1z reduction, which anchors on
+        % 'ordered' alone, never treats it as an ordered anchor.
+        if phase == 1
+            phase_1z = 1;  phase_1z_reason = 'bare_escape_hatch';
+            static_medium_used = 'n/a_bare_escape';  Sigma0 = pt.Sigma0;
+            [ob, okb] = invz_try_solver_call(@() invz_chi_realaxis(ion, T, B, pt, w, copts));
+            if okb, chiz = imag(ob.chi_cc_q(1, :)).'; end
+        elseif longit
+            phase_1z_reason = 'not_attempted_longitudinal';
+        else
+            phase_1z_reason = 'bare_not_ordered';   % 'bare' needs a moment-form auto state
+        end
+    else
+        % Jensen leg. Under 'ordered_eligible' it may LABEL the column, and only when BOTH
+        % acceptance tiers pass; under 'unknown' it is DIAGNOSTIC ONLY, because a failed PM
+        % probe is not evidence for order (invz_pm_verdict's whole point).
+        so2 = sopts;  so2.ordered_mode = 'jensen';
+        [ptj, j_completed, j_error_id] = invz_try_solver_call( ...
+            @() invz_solve_point_ordered(ion, T, B, Jnu, so2));
+        consistent = j_completed && ~isempty(ptj) && ptj.is_ordered && ptj.converged && ...
+                     isfinite(ptj.Sigma0);
+        % stable_1z is jensen-only and ABSENT (not NaN) in bare mode: guard on isfield.
+        stability_1z = j_completed && ~isempty(ptj) && isfield(ptj, 'stable_1z') && ptj.stable_1z;
+        if consistent
+            m_1z = getf(ptj, 'm0', NaN);  D_ord = getf(ptj, 'D_uni', NaN);
+        end
+        if strcmp(verdict, 'ordered_eligible') && consistent && stability_1z
+            phase_1z = 1;  phase_1z_reason = 'ordered';  Sigma0 = ptj.Sigma0;
+            [oj, okj] = invz_try_solver_call(@() invz_chi_realaxis(ion, T, B, ptj, w, copts));
+            if okj, chiz = imag(oj.chi_cc_q(1, :)).'; end
+        elseif strcmp(verdict, 'ordered_eligible')
+            if consistent            % closure-consistent but the endpoint is not stable
+                phase_1z_reason = 'unstable_endpoint';
+            else
+                phase_1z_reason = local_ordered_reason(ptj, j_completed, j_error_id);
+            end
+        elseif strcmp(pm_probe_status, 'boundary_band')
+            phase_1z_reason = 'boundary_indeterminate';   % finite PM point inside the band
+        else
+            phase_1z_reason = 'pm_probe_unknown';         % nonconvergence/nonfinite/recoverable
+        end
+    end
+
+    % (3) auto/RPA overlay: the same branch-specific arithmetic as the historical body, and it
+    % NEVER votes on phase_1z -- the two legs are independently phased.
+    c0s = copts;  c0s.npass = 1;
+    if phase == 1
+        [o0s, ok0s] = invz_try_solver_call( ...
+            @() invz_chi_realaxis(ion, T, B, invz_zero_sigma_overlay(pt), w, c0s));
+    else
+        c0s.si = pt.si;
+        pt0s = struct('alpha', 0, 'lambda', [0; 0], 'tl', pt.tl, 'K', []);
+        [o0s, ok0s] = invz_try_solver_call(@() invz_chi_realaxis(ion, T, B, pt0s, w, c0s));
+    end
+    if ok0s, chirpa = imag(o0s.chi_cc_q(1, :)).'; end
+    return;
+end
+% ============================ HISTORICAL 'resummed' BODY ====================================
+% Unchanged in order and arithmetic; the only additions are provenance assignments.
 
 [pt, phase] = invz_solve_auto(ion, T, B, Jnu, sopts);
 
@@ -292,13 +503,14 @@ if phase == 1                                     % --- moment-form branch (FM o
     % gate would raise invz:orderedPhase under a longitudinal tilt -- review finding 5).
     ptp = [];
     if B(3) == 0
-        try
-            ptp = invz_solve_point(ion, T, B, Jnu, sopts);
-        catch err
-            if ~strncmp(err.identifier, 'invz:', 5), rethrow(err); end
-        end
+        [ptp, pm_completed, pm_probe_error_id] = invz_try_solver_call( ...
+            @() invz_solve_point(ion, T, B, Jnu, sopts));
+        if ~pm_completed, pm_probe_status = 'recoverable_error'; end
     end
     if ~isempty(ptp) && isfield(ptp, 'crit') && isfinite(ptp.crit), crit_pm = ptp.crit; end
+    if ~strcmp(pm_probe_status, 'recoverable_error')       % provenance only -- pm_valid below
+        pm_probe_status = local_pm_status(ptp, crit_pm, crit_tol);   % is the historical gate
+    end
     % crit_pm doubles as the field-guarded crit: pm_valid never touches ptp.crit directly
     % (an early-return ptp may lack the field).
     pm_valid = ~isempty(ptp) && ptp.converged && isfinite(ptp.Sigma0) && ...
@@ -306,6 +518,7 @@ if phase == 1                                     % --- moment-form branch (FM o
 
     if pm_valid                         % --- Bc_1z < |B| < bare boundary: 1/z theory is PM ---
         phase_1z = 2;  Sigma0 = ptp.Sigma0;
+        phase_1z_reason = 'pm';  stability_1z = true;
         copts1 = copts;  copts1.si = ptp.si;      % PM chi0 differs from the ordered leg's:
         o1 = invz_chi_realaxis(ion, T, B, ptp, w, copts1);   % no chi0cc_w sharing possible
         chiz = imag(o1.chi_cc_q(1, :)).';
@@ -320,17 +533,18 @@ if phase == 1                                     % --- moment-form branch (FM o
         % NOT a "jensen failed" masked column, since jensen is never attempted there.
         if strcmp(o1z, 'jensen') && B(3) == 0   % Stage 2: consistent ordered state (H_MF)
             so2 = sopts;  so2.ordered_mode = 'jensen';
-            ptj = [];
-            try
-                ptj = invz_solve_point_ordered(ion, T, B, Jnu, so2);
-            catch err
-                if ~strncmp(err.identifier, 'invz:', 5), rethrow(err); end
-            end
+            [ptj, j_completed, j_error_id] = invz_try_solver_call( ...
+                @() invz_solve_point_ordered(ion, T, B, Jnu, so2));
             if ~isempty(ptj) && ptj.is_ordered && ptj.converged && isfinite(ptj.Sigma0)
                 phase_1z = 1;  Sigma0 = ptj.Sigma0;  m_1z = ptj.m0;  D_ord = ptj.D_uni;
+                phase_1z_reason = 'ordered';
+                stability_1z = isfield(ptj, 'stable_1z') && ptj.stable_1z;
                 oj = invz_chi_realaxis(ion, T, B, ptj, w, copts);   % jensen si differs from
                 chiz = imag(oj.chi_cc_q(1, :)).';                   % the auto pt's -- no sharing
-            end                              % else phase_1z stays 0 -> chiz column masked
+            else                             % phase_1z stays 0 -> chiz column masked, but the
+                                             % CAUSE is now recorded instead of inferred
+                phase_1z_reason = local_ordered_reason(ptj, j_completed, j_error_id);
+            end
             pt0 = invz_zero_sigma_overlay(pt);                      % overlay: UNCHANGED auto state
             c0opts = copts;  c0opts.npass = 1;
             o0  = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
@@ -338,6 +552,8 @@ if phase == 1                                     % --- moment-form branch (FM o
         else                                 % 'bare', or a longitudinal tilt under 'jensen':
                                               % Stage-1 diagnostic escape hatch
             phase_1z = 1;  Sigma0 = pt.Sigma0;
+            phase_1z_reason = 'bare_escape_hatch';
+            static_medium_used = 'n/a_bare_escape';   % not a result of the requested scheme
             o  = invz_chi_realaxis(ion, T, B, pt, w, copts);
             chiz = imag(o.chi_cc_q(1, :)).';
             pt0 = invz_zero_sigma_overlay(pt);
@@ -354,15 +570,12 @@ if abs(B(3)) > bztol
     % would raise invz:orderedPhase and abort the parfor -- review finding 5). If the
     % failed moment-branch pt still carries valid si/tl, compute the RPA-only overlay
     % from the ordered-style pt0; otherwise leave the whole column masked.
+    phase_1z_reason = 'not_attempted_longitudinal';   % neither 1/z leg is defined under a tilt
     if ~isempty(pt) && ~isempty(pt.si) && isfield(pt, 'tl') && ~isempty(pt.tl)
         pt0 = invz_zero_sigma_overlay(pt);
         c0opts = copts;  c0opts.npass = 1;
-        try
-            o0 = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
-            chirpa = imag(o0.chi_cc_q(1, :)).';
-        catch err
-            if ~strncmp(err.identifier, 'invz:', 5), rethrow(err); end
-        end
+        [o0, ok0] = invz_try_solver_call(@() invz_chi_realaxis(ion, T, B, pt0, w, c0opts));
+        if ok0, chirpa = imag(o0.chi_cc_q(1, :)).'; end
     end
     if ~isempty(pt) && isfield(pt, 'Sigma0'), Sigma0 = pt.Sigma0; end
     return;
@@ -372,27 +585,68 @@ end
 if phase == 2 && ~isempty(pt), tl0 = pt.tl;  si0 = pt.si;
 else, tl0 = invz_twolevel(ion, T, B, struct('Jxx0', Jaa0, 'transverse_mf', tmf));  si0 = []; end
 chi0cc = [];
-try
-    pt0 = struct('alpha', 0, 'lambda', [0; 0], 'tl', tl0, 'K', []);
-    c0opts = copts;  c0opts.npass = 1;  c0opts.si = si0;
-    o0  = invz_chi_realaxis(ion, T, B, pt0, w, c0opts);
+pt0 = struct('alpha', 0, 'lambda', [0; 0], 'tl', tl0, 'K', []);
+c0opts = copts;  c0opts.npass = 1;  c0opts.si = si0;
+[o0, ok0] = invz_try_solver_call(@() invz_chi_realaxis(ion, T, B, pt0, w, c0opts));
+if ok0
     chirpa = imag(o0.chi_cc_q(1, :)).';
     chi0cc = o0.chi0cc_w;                          % share the bare cc with the 1/z call
-catch err
-    if ~strncmp(err.identifier, 'invz:', 5), rethrow(err); end
 end
 if ~isempty(pt) && isfield(pt, 'Sigma0'), Sigma0 = pt.Sigma0; end
 if ~isempty(pt) && isfield(pt, 'crit') && isfinite(pt.crit), crit_pm = pt.crit; end
+if ~isempty(pt), pm_probe_status = local_pm_status(pt, crit_pm, crit_tol); end
 if phase == 2                                     % --- converged paramagnetic 1/z ---
     if isfinite(crit_pm) && crit_pm > 0
         phase_1z = 2;                             % the auto PM state IS the 1/z leg here
-    end                                           % crit <= 0: spurious below-Bc PM point
-                                                  % (documented tensor-side failure mode) --
-                                                  % phase_1z stays 0, column flagged suspect
+        phase_1z_reason = 'pm';  stability_1z = true;
+    else                                          % crit <= 0: spurious below-Bc PM point
+        phase_1z_reason = 'unstable_endpoint';    % (documented tensor-side failure mode) --
+    end                                           % phase_1z stays 0, column flagged suspect
     copts1 = copts;  copts1.si = pt.si;           % reuse the solve's si (C1 companion: pt is
     if ~isempty(chi0cc), copts1.chi0cc_w = chi0cc; end   % not is_ordered, so without si this
     o = invz_chi_realaxis(ion, T, B, pt, w, copts1);     % would silently rebuild at 'legacy_x'
     chiz = imag(o.chi_cc_q(1, :)).';
+end
+end
+
+% -------------------------------------------------------------------------------------------
+function s = local_pm_status(ptp, crit_pm, crit_tol)
+%LOCAL_PM_STATUS Narrow PM-probe vocabulary (spec SS4.4), so a masked column's cause is
+% recorded rather than inferred. Fatal/unclassified errors never reach here: they rethrow.
+if isempty(ptp),                          s = 'not_attempted';
+elseif ~isfield(ptp, 'converged') || ~ptp.converged, s = 'nonconverged';
+elseif ~isfinite(crit_pm),                s = 'nonfinite';
+elseif abs(crit_pm) <= crit_tol,           s = 'boundary_band';
+elseif crit_pm > crit_tol,                 s = 'stable';
+else,                                      s = 'unstable';
+end
+end
+
+% -------------------------------------------------------------------------------------------
+function r = local_ordered_reason(ptj, completed, error_id)
+%LOCAL_ORDERED_REASON Narrow masked-column vocabulary for a REJECTED ordered (jensen) leg.
+% The solver already reduces its own node records with a binding precedence
+% (invz_hmf_status.m: degenerate > reference-domain > node failure > unresolved), and exports
+% the verdict as pt.hmf_status / pt.hmf_prof.status. Reading it is what keeps a domain or
+% degeneracy cause from being flattened into a generic 'solver_failed'.
+% completed/error_id come from invz_try_solver_call: only whitelisted recoverable identifiers
+% can arrive here at all, so anything outside them already rethrew.
+if ~completed
+    if strcmp(error_id, 'invz:degenerateDoublet'), r = 'degenerate_doublet';
+    else,                                          r = 'solver_failed';
+    end
+    return;
+end
+if isempty(ptj), r = 'solver_failed';  return; end
+hs = getf(ptj, 'hmf_status', '');
+if isempty(hs), hs = getf(getf(ptj, 'hmf_prof', struct()), 'status', ''); end
+ms = getf(ptj, 'medium_status', 'not_applicable');
+if strcmp(hs, 'degenerate_doublet')
+    r = 'degenerate_doublet';
+elseif strcmp(hs, 'medium_out_of_domain') || ~any(strcmp(ms, {'ok', 'not_applicable'}))
+    r = 'medium_out_of_domain';
+else
+    r = 'solver_failed';         % node_failed / unresolved / no_bare_order / not accepted
 end
 end
 

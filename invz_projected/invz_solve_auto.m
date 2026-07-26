@@ -13,7 +13,11 @@ function [pt, phase, di] = invz_solve_auto(ion, T, Bx, Jnu_flat, opts)
 % the failed pto WHENEVER it carries a nonempty si (RPA-overlay fallback for the map),
 % pt = [] only when no usable single-ion state exists.
 %
-% Error policy: only invz:* identifiers are absorbed into di; anything else rethrows.
+% Error policy (spec SS5.1, narrowed from the historical 'invz:' PREFIX match): the outer
+% dispatcher boundary invz_try_solver_call absorbs ONLY the reviewed recoverable identifiers
+% invz_is_recoverable_solver_error whitelists, and records the exact identifier in di. Every
+% other identifier -- including an unseen invz:* one -- is a wiring or programming error and
+% rethrows, because a prefix match silently downgrades those to a masked "no solution".
 %
 % opts.transverse_mf ('legacy_x' | 'none' | 'vector_ab', default 'legacy_x'): no code change
 % here -- opts is forwarded wholesale to invz_solve_point_ordered / invz_solve_point on both
@@ -26,37 +30,36 @@ pt = [];  phase = 0;  di = struct('ordered_err', '', 'para_err', '');
 
 if B(3) ~= 0
     oo = opts;  oo.forced_moment = true;
-    try
-        pto = invz_solve_point_ordered(ion, T, B, Jnu_flat, oo);
-        if pto.is_ordered && pto.converged && isfinite(pto.Sigma0) && pto.si.mf_converged
-            pt = pto;  phase = 1;
-        elseif ~isempty(pto.si)
-            pt = pto;                          % failed, but si (and maybe tl) support an overlay
-        end
-    catch err
-        if ~strncmp(err.identifier, 'invz:', 5), rethrow(err); end
-        di.ordered_err = err.identifier;
+    [pto, completed, error_id] = invz_try_solver_call( ...
+        @() invz_solve_point_ordered(ion, T, B, Jnu_flat, oo));
+    if ~completed
+        di.ordered_err = error_id;
+    elseif pto.is_ordered && pto.converged && isfinite(pto.Sigma0) && pto.si.mf_converged
+        pt = pto;  phase = 1;
+    elseif ~isempty(pto.si)
+        pt = pto;                              % failed, but si (and maybe tl) support an overlay
     end
     return;
 end
 
-try
-    pto = invz_solve_point_ordered(ion, T, B, Jnu_flat, opts);
-    if pto.is_ordered && pto.converged && isfinite(pto.Sigma0)
-        pt = pto;  phase = 1;  return;
-    end
-catch err
-    if ~strncmp(err.identifier, 'invz:', 5), rethrow(err); end
-    di.ordered_err = err.identifier;
+% The acceptance tests now sit OUTSIDE the boundary: only the solver call itself is eligible
+% for absorption, so a defect in reading the returned point can no longer masquerade as one.
+[pto, completed, error_id] = invz_try_solver_call( ...
+    @() invz_solve_point_ordered(ion, T, B, Jnu_flat, opts));
+if ~completed
+    di.ordered_err = error_id;
+elseif pto.is_ordered && pto.converged && isfinite(pto.Sigma0)
+    pt = pto;  phase = 1;  return;
 end
-try
-    pt = invz_solve_point(ion, T, B, Jnu_flat, opts);
+[ptp, completed, error_id] = invz_try_solver_call( ...
+    @() invz_solve_point(ion, T, B, Jnu_flat, opts));
+if ~completed
+    di.para_err = error_id;
+    pt = [];
+else
+    pt = ptp;
     if pt.converged && isfinite(pt.Sigma0)
         phase = 2;
     end
-catch err
-    if ~strncmp(err.identifier, 'invz:', 5), rethrow(err); end
-    di.para_err = err.identifier;
-    pt = [];
 end
 end
