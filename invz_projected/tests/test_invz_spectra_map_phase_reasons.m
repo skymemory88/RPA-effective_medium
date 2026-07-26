@@ -15,6 +15,11 @@ end
 function w = wgrid()
 w = (0.02:0.04:0.42).';
 end
+function o = syn_opts()
+% Cheap synthetic couplings: no 16^3 lattice sum, so these cases need no INVZ_SLOW gate.
+o = struct('Jnu', linspace(-2e-3, 6.0e-3, 24).', 'info', struct('Jcc0', 6.4e-3), ...
+           'verbose', false);
+end
 
 % Provenance is scalar and mandatory.
 function test_scheme_provenance_present(testCase)
@@ -36,7 +41,8 @@ for k = 1:numel(S.phase_1z)
         verifyTrue(testCase, any(strcmp(S.phase_1z_reason{k}, ...
             {'unstable_endpoint', 'medium_out_of_domain', 'degenerate_doublet', ...
              'solver_failed', 'pm_probe_unknown', 'boundary_indeterminate', ...
-             'not_attempted_longitudinal', 'bare_not_ordered'})), S.phase_1z_reason{k});
+             'not_attempted_longitudinal', 'bare_not_ordered', 'response_failed'})), ...
+             S.phase_1z_reason{k});
     end
 end
 end
@@ -50,6 +56,94 @@ S = invz_spectra_map(ion, 0.31, [0 8], wgrid(), o);
 verifyTrue(testCase, any(strcmp(S.phase_1z_reason{1}, ...
     {'degenerate_doublet', 'bare_not_ordered', 'pm'})));
 verifyNotEqual(testCase, S.phase_1z_reason{1}, 'solver_failed');
+end
+
+% Review F2, STRICT counterpart of the honesty gate above (the resummed sibling accepts only
+% {degenerate_doublet, bare_not_ordered, pm} and would FAIL under a strict scheme). At B = 0 the
+% strict PM probe dies with invz:degenerateDoublet, so the PM-probe-dominant phase reason is
+% 'pm_probe_unknown' BY DESIGN -- a failed PM probe must never vote 'ordered'. The KNOWABLE cause
+% must therefore be recorded on the diagnostic field, and the sweep summary must attribute it:
+% before this fix the summary said "0 degenerate-doublet" for a column that is one, which made
+% the strict path LESS informative than resummed at exactly the knowable column.
+function test_zero_field_column_is_labelled_degenerate_strict(testCase)
+if isempty(getenv('INVZ_SLOW')), assumeFail(testCase, 'set INVZ_SLOW=1'); end
+ion = invz_ion();
+o = base_opts();  o.ordered_1z = 'jensen';  o.static_medium = 'strict_1z_dyson_ref';
+lastwarn('', 'invz:none');
+S = invz_spectra_map(ion, 0.31, [0 8], wgrid(), o);
+verifyEqual(testCase, S.phase_1z(1), 0);
+verifyEqual(testCase, S.ordered_diag_reason{1}, 'degenerate_doublet');
+verifyNotEqual(testCase, S.ordered_diag_reason{1}, 'solver_failed');
+verifyEqual(testCase, S.pm_probe_error_id{1}, 'invz:degenerateDoublet');
+% the counters must be factually true -- Stage-4 G16 reads them
+[wmsg, wid] = lastwarn();
+verifyEqual(testCase, wid, 'invz:spectraMapMasked');
+verifyTrue(testCase, contains(wmsg, '1 degenerate-doublet'), wmsg);
+verifyTrue(testCase, contains(wmsg, '0 unknown-PM-probe'), wmsg);
+end
+
+% Review F1 regression: an EMPTY field sweep must RETURN, not throw. all([]) is true and 0 < 2 is
+% true, so an incomplete pre-screen let fields = [] reach invz_boundary_interval, whose (correct)
+% nonempty precondition then raised invz:boundaryInterval -- on the DEFAULT 'resummed' path,
+% which must stay behaviour-identical. The helper's contract is NOT loosened; the screen is.
+function test_empty_field_sweep_returns(testCase)
+ion = invz_ion();
+w = wgrid();
+S = invz_spectra_map(ion, 0.31, [], w, syn_opts());        % default scheme = 'resummed'
+verifySize(testCase, S.chiz,   [numel(w) 0]);
+verifySize(testCase, S.chirpa, [numel(w) 0]);
+verifyEmpty(testCase, S.phase_1z);
+verifyEmpty(testCase, S.phase_1z_reason);
+verifyTrue(testCase, isnan(S.Bc_1z));
+verifyEqual(testCase, S.Bc_1z_status, 'invalid');   % reduction never ran: no sweep to reduce
+% and under a strict scheme, where the interval reduction actually feeds Bc_1z
+o = syn_opts();  o.static_medium = 'strict_1z_dyson_ref';
+Ss = invz_spectra_map(ion, 0.31, [], w, o);
+verifySize(testCase, Ss.chiz, [numel(w) 0]);
+verifyTrue(testCase, isnan(Ss.Bc_1z));
+end
+
+% Review F3 REACHABILITY PIN. No whitelisted recoverable identifier is reachable through
+% invz_chi_realaxis today (task-15 report SS6), so every response-call boundary must absorb
+% nothing and no column may be masked 'response_failed'. The strict branch now records the
+% identifier AND masks the column if one ever fires; this pins the premise, so a change that
+% makes it reachable fails here instead of silently producing an all-NaN spectrum on a column
+% still labelled 'pm'/'ordered' -- which would anchor Bc_1z with no recorded cause.
+function test_response_boundaries_absorb_nothing(testCase)
+ion = invz_ion();
+w = wgrid();
+schemes = {'resummed', 'strict_1z_dyson_ref'};
+for k = 1:numel(schemes)
+    o = syn_opts();  o.static_medium = schemes{k};
+    S = invz_spectra_map(ion, 0.31, [2.85 5.50], w, o);
+    verifyNumElements(testCase, S.response_error_id, 2, schemes{k});
+    verifyNumElements(testCase, S.ordered_diag_reason, 2, schemes{k});
+    verifyTrue(testCase, all(cellfun(@isempty, S.response_error_id)), schemes{k});
+    verifyFalse(testCase, any(strcmp(S.phase_1z_reason, 'response_failed')), schemes{k});
+    % consequence: every LABELLED column really carries a spectrum, never an all-NaN one
+    lab = S.phase_1z > 0;
+    verifyTrue(testCase, all(any(isfinite(S.chiz(:, lab)), 1)), schemes{k});
+end
+end
+
+% Review F7: under strict + ordered_1z = 'bare' every ordered column reports
+% 'bare_escape_hatch', which by design cannot anchor a 1/z boundary, so `ord` is empty and Bc_1z
+% comes back NaN -- while 'resummed' returns a FINITE one from the same run. With no masked
+% columns the count-based warning trigger never fired, so that asymmetry was silent.
+function test_lost_boundary_under_strict_bare_is_not_silent(testCase)
+ion = invz_ion();
+w = wgrid();
+o = syn_opts();  o.ordered_1z = 'bare';  o.static_medium = 'strict_1z_dyson_ref';
+S = verifyWarning(testCase, ...
+    @() invz_spectra_map(ion, 0.31, [2.85 3.30 5.50], w, o), 'invz:spectraMapMasked');
+verifyTrue(testCase, isnan(S.Bc_1z));
+verifyTrue(testCase, any(strcmp(S.phase_1z_reason, 'bare_escape_hatch')));
+verifyTrue(testCase, all(strcmp(S.static_medium_used(S.phase_1z == 1), 'n/a_bare_escape')));
+% the same sweep under 'resummed' DOES reduce a finite boundary: that is the asymmetry the
+% warning has to surface rather than leave to a reader comparing two runs by eye.
+r = syn_opts();  r.ordered_1z = 'bare';
+Sr = invz_spectra_map(ion, 0.31, [2.85 3.30 5.50], w, r);
+verifyTrue(testCase, isfinite(Sr.Bc_1z));
 end
 
 % The three-way rule is GATED: under 'resummed' the historical dispatch is byte-preserved.
