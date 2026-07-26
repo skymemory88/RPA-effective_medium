@@ -22,6 +22,9 @@ function test_per_node_arrays_are_present_and_aligned(testCase)
 [ion, T, Bx, Jnu, o] = fixture();
 [~, prof] = invz_hmf_ordered(ion, T, Bx, Jnu, o);
 n = numel(prof.hgrid);
+% Without this, a no_bare_order/n==0 regression would make every numel(...)==n check
+% below pass vacuously (0==0) instead of catching the break.
+verifyGreaterThan(testCase, n, 0, 'fixture must produce a non-empty grid');
 for f = {'crit', 'r_minus_1', 'Delta', 'Dq_min', 'ref_denom', 'ref_margin', ...
          'gstat_local_denom', ...
          'omit_mu3', 'omit_cubic', 'omit_max'}
@@ -30,6 +33,63 @@ end
 verifyEqual(testCase, numel(prof.medium_status), n);
 verifyEqual(testCase, numel(prof.node_term_reason), n);
 verifyTrue(testCase, iscell(prof.medium_status));
+end
+
+% Step 7 schema coverage, DOMAIN kind: opts.ref_margin=1e9 forces the strict reference
+% denominator out of domain on every node (measured: status='node_failed', hstar=NaN,
+% medium_status={ref_denom_small}, node_term_reason={medium_out_of_domain} on all 33
+% nodes, ref_denom(1)=1, ref_margin(1)=-999999999). Same structural guarantee as
+% test_per_node_arrays_are_present_and_aligned, plus the domain-specific field provenance
+% (ref_margin is the ACTUAL distance to the configured floor, never the floor itself).
+function test_schema_domain_record(testCase)
+[ion, T, Bx, Jnu, o] = fixture();
+o.ref_margin = 1e9;
+[hstar, prof] = invz_hmf_ordered(ion, T, Bx, Jnu, o);
+verifyEqual(testCase, prof.status, 'node_failed');
+verifyTrue(testCase, isnan(hstar));
+n = numel(prof.hgrid);
+verifyGreaterThan(testCase, n, 0, 'fixture must produce a non-empty grid');
+for f = {'crit', 'r_minus_1', 'Delta', 'Dq_min', 'ref_denom', 'ref_margin', ...
+         'gstat_local_denom', ...
+         'omit_mu3', 'omit_cubic', 'omit_max'}
+    verifyEqual(testCase, numel(prof.(f{1})), n, f{1});
+end
+verifyEqual(testCase, numel(prof.medium_status), n);
+verifyEqual(testCase, numel(prof.node_term_reason), n);
+verifyTrue(testCase, iscell(prof.medium_status));
+verifyTrue(testCase, all(strcmp(prof.medium_status, 'ref_denom_small')));
+verifyTrue(testCase, all(strcmp(prof.node_term_reason, 'medium_out_of_domain')));
+verifyEqual(testCase, prof.ref_margin, prof.ref_denom - 1e9, 'RelTol', 1e-9, ...
+    'ref_margin must be the actual signed distance to the configured floor');
+end
+
+% Step 7 schema coverage, BARE-SHORTCUT kind: opts.force_bare=true routes every node
+% through eval_node's fbare branch (measured: status='ok' with a finite hstar; r==1,
+% Sigma0==0, K0==0, term_reason='bare_shortcut', medium_status='not_applicable' on all
+% 33 nodes; crit stays NaN because G0bare is never computed on this path). Same
+% structural guarantee as test_per_node_arrays_are_present_and_aligned, plus the
+% bare-shortcut-specific field values the implementer's own probe first measured.
+function test_schema_bare_shortcut_record(testCase)
+[ion, T, Bx, Jnu, o] = fixture();
+o.force_bare = true;
+[~, prof] = invz_hmf_ordered(ion, T, Bx, Jnu, o);
+n = numel(prof.hgrid);
+verifyGreaterThan(testCase, n, 0, 'fixture must produce a non-empty grid');
+for f = {'crit', 'r_minus_1', 'Delta', 'Dq_min', 'ref_denom', 'ref_margin', ...
+         'gstat_local_denom', ...
+         'omit_mu3', 'omit_cubic', 'omit_max'}
+    verifyEqual(testCase, numel(prof.(f{1})), n, f{1});
+end
+verifyEqual(testCase, numel(prof.medium_status), n);
+verifyEqual(testCase, numel(prof.node_term_reason), n);
+verifyTrue(testCase, iscell(prof.medium_status));
+verifyTrue(testCase, all(strcmp(prof.node_term_reason, 'bare_shortcut')));
+verifyTrue(testCase, all(strcmp(prof.medium_status, 'not_applicable')));
+verifyTrue(testCase, all(prof.r == 1));
+verifyTrue(testCase, all(prof.Sigma0 == 0));
+verifyTrue(testCase, all(prof.K0 == 0));
+verifyTrue(testCase, all(isnan(prof.crit)));
+verifyTrue(testCase, all(isfinite(prof.Delta)));
 end
 
 % crit is the dimensionless mass r + J0eff*G0bare. The predictor identity is tested at h=0

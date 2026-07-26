@@ -68,8 +68,12 @@ verifyTrue(testCase, any(Duni_all(neg_iters) < 0), ...
     'expected >= 1 negative-Dq iteration to also show D_uni < 0 (the unstable-branch signature)');
 % at least one node genuinely failed to close (never silently exported as 'ok')
 verifyGreaterThanOrEqual(testCase, nnz(~[trc_phys.nodes.ok_final]), 1);
+% Closed set of reachable per-node term_reason values (task 12 fix round 1: made
+% 'medium_out_of_domain' reachable -- a strict-scheme reference/closure domain event,
+% local_term_reason's own pass-through case -- so it belongs in this set alongside the
+% four this file's own vocabulary defines. Still a closed set, not a vacuous check.
 verifyTrue(testCase, all(ismember({trc_phys.nodes.term_reason}, ...
-    {'converged', 'max_iter', 'refresh_failed', 'bare_shortcut'})));
+    {'converged', 'max_iter', 'refresh_failed', 'bare_shortcut', 'medium_out_of_domain'})));
 
 % resolve the closest-to-zero negative Dq mode back to (q, branch) via invz_ordered_trace_
 % resolve.m's flat-index formula (stage2c-context.md: q=mod(k-1,nq)+1, branch=floor((k-1)/nq)+1)
