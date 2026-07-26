@@ -72,9 +72,13 @@ end
 function test_schema_bare_shortcut_record(testCase)
 [ion, T, Bx, Jnu, o] = fixture();
 o.force_bare = true;
-[~, prof] = invz_hmf_ordered(ion, T, Bx, Jnu, o);
+[hstar, prof] = invz_hmf_ordered(ion, T, Bx, Jnu, o);
 n = numel(prof.hgrid);
 verifyGreaterThan(testCase, n, 0, 'fixture must produce a non-empty grid');
+% The comment above claims both of these were measured, so assert them rather than leaving
+% the claim unchecked (task-12 re-review N4).
+verifyEqual(testCase, prof.status, 'ok');
+verifyTrue(testCase, isfinite(hstar), 'bare shortcut must still produce a finite root');
 for f = {'crit', 'r_minus_1', 'Delta', 'Dq_min', 'ref_denom', 'ref_margin', ...
          'gstat_local_denom', ...
          'omit_mu3', 'omit_cubic', 'omit_max'}
