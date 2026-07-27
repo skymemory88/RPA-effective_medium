@@ -17,7 +17,7 @@ function G4 = invzt_gamma4(es, ops, ext, comps, next, lvals, beta)
 %   VERIFIED exprel-stable phis/dphis/d2phis handles of INVZT_KERNELS (already array-safe);
 %   only the I2/I3 divided-difference combinators are re-expressed array-safe here (the
 %   sole change vs invzt_kernels is out(small)=ser(SMALL), needed because x,y are now
-%   arrays too).  Equivalence is gated by test_invzt_a3_threestate.
+%   arrays too).  Equivalence with INVZT_KERNELS is the invariant to preserve here.
 %
 %   Frequency assignment (LOCKED oracle convention, mirrors INVZT_VERTEX4): the four
 %   legs carry O^mu:+z_n, O^nu:-z_n(pinned tau=0), O^rho:+z_l, O^sigma:-z_l; O^nu is

@@ -8,7 +8,7 @@
 %
 % SCOPE: PM side only -- there is still no ordered-phase tensor solve, so
 % nothing below the boundary is computed. Unlike the projected T-cut (which
-% cannot bracket with ODD on, ODD-LOG T2), the tensor A1 solver converges
+% cannot bracket with ODD on), the tensor A1 solver converges
 % metastable PM points inside the ordered phase, so the T-cut brackets with
 % odd on/off alike.
 %
@@ -31,25 +31,28 @@ addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'invz_common'));
 ion = invz_ion();
 
 % ---- knobs ------------------------------------------------------------------
-Ts     = linspace(0.4, 1.4, 11);       % fixed-T FIELD-CUT grid (K); low-T branch.
-                                       % [] disables field cuts.
-Bs     = linspace(0.25, 1.5, 6);       % fixed-B TEMPERATURE-CUT fields (T); the
+% Ts = linspace(0.4, 1.4, 11);       % fixed-T FIELD-CUT grid (K); low-T branch.
+%                                        % [] disables field cuts.
+% Bs = [];
+Brange = [0.1 6];                   % field-cut [Blo Bhi] bracket (T). Blo > 0:
+                                       % mode 'a1' forbids exact zero transverse field.
+Btol   = 0.02;                         % field-cut bracket tolerance (TESLA) ->
+                                       % invzt_critical opts.tol
+
+Ts = [];                                       
+Bs = linspace(0.01, 5.51, 56);       % fixed-B TEMPERATURE-CUT fields (T); the
                                        % near-vertical branch. [] disables T-cuts.
 Twin   = [];                           % [] -> adaptive T-cut window anchored at the
                                        % small-Bx proxy Tc0 (computed below); or an
                                        % explicit HARD [Tlo Thi] bound (K) forwarded
                                        % to invzt_critical_T (no sliding; skips the
                                        % proxy anchor).
-Brange = [0.05 6.0];                   % field-cut [Blo Bhi] bracket (T). Blo > 0:
-                                       % mode 'a1' forbids exact zero transverse field.
-Btol   = 0.02;                         % field-cut bracket tolerance (TESLA) ->
-                                       % invzt_critical opts.tol
 Ttol   = 0.005;                        % T-cut refinement tolerance (KELVIN) ->
                                        % invzt_critical_T opts.tol
-Twidth = 0.5;                          % T-cut adaptive-window width (K)
+Twidth = 1.0;                          % T-cut adaptive-window width (K)
 Tgridstep = 1/30;                      % T-cut coarse-grid step (K)
 gridN  = 16;  gridConv = 'halfopen';   % invzt_qgrid(gridN, gridConv)
-dpRng  = 30;                           % invzt_jq_tensor coupling-sum range
+dpRng  = 50;                           % invzt_jq_tensor coupling-sum range
 useParallel = true;                    % false -> force serial
 solve_opts  = struct('mode', 'a1', 'odd', true, 'nlevels', 'std', 'dress', 'full');
                                        % sigma_floor may be added here too; defaults to

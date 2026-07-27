@@ -32,7 +32,7 @@ function [Tc, out] = invz_odd_zero_field(ion, opts)
 %                      closed-form THEOREM validating the E4/E5 bookkeeping).
 %
 %   DECOMPOSITION (controller adjudication 2026-07-17, GOVERNING split; the source
-%   plan's dTc-space split was ill-posed -- see the module note and ODD-LOG T1.5).
+%   plan's dTc-space split was ill-posed -- see the module note).
 %   out.split (mode 'full') is the sequential condition/Sigma-space factorial in
 %   (J0-shift) x (Sigma-source); neither governing leg enters the invalid regime:
 %     off    : J0 = Jcc0,      Sc = Sc_off                  (Tc_off)
@@ -48,12 +48,12 @@ function [Tc, out] = invz_odd_zero_field(ion, opts)
 %   Tc_c_factorial (modes Vcc + dJ, J0 = Jcc0).
 %
 %   GRID / GAMMA-FILTER / RICHARDSON CONVENTIONS -- copied verbatim from the
-%   published Sigma_c benchmark so ODD-off reproduces the number bitwise:
-%     invz_projected/tests/test_invz_sigma_crit.m, test_lihof4_sigma_crit
-%       line 41: [T,qvec] = evalc("qVec_generator(ion.a,'mode','grid','grid',...
-%                            [n n n],'range',[-0.5 0.5])");   % inclusive linspace
-%       line 42: qvec = qvec(any(abs(qvec) > 1e-12, 2), :);  % Gamma-exclusion
-%       line 46: Sc = 2*S(2) - S(1);                         % Richardson (12,24)
+%   published Sigma_c benchmark so ODD-off reproduces the number bitwise. The
+%   benchmark's three governing lines, reproduced here as the surviving record:
+%       [T,qvec] = evalc("qVec_generator(ion.a,'mode','grid','grid',...
+%                    [n n n],'range',[-0.5 0.5])");   % inclusive linspace
+%       qvec = qvec(any(abs(qvec) > 1e-12, 2), :);    % Gamma-exclusion
+%       Sc = 2*S(2) - S(1);                           % Richardson (12,24)
 %     The range [-0.5 0.5] inclusive grid has no exact Gamma node for n = 12, 24
 %     (linspace step 1/(n-1)), so the filter is a no-op there and 1728 / 13824
 %     points survive -- matching the jq4_ / odd1_ production caches. Richardson
@@ -109,7 +109,7 @@ finestB = [];
 for ig = 1:ng
     n = grids(ig);
     % --- Gamma-excluded uniform mesh: SAME generator + range + Gamma filter as the
-    % Sigma_c benchmark (test_invz_sigma_crit.m lines 41-42); 'verbose',false replaces the
+    % Sigma_c benchmark (quoted in this file's header); 'verbose',false replaces the
     % benchmark's evalc noise-capture -- byte-identical qvec (verbose only gates fprintf),
     % as invz_bz_couplings (the driver's shared grid builder) also does.
     [qvec, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', [n n n], 'range', [-0.5 0.5], 'verbose', false);
@@ -242,7 +242,7 @@ switch recipe.sc
     otherwise
         error('invz:oddZeroFieldSc', 'Unknown Sc source ''%s''.', recipe.sc);
 end
-nex = sum((J0sc - Jf) <= 1e-12);                 % honest excluded-mode count (ODD-LOG T1.3)
+nex = sum((J0sc - Jf) <= 1e-12);                 % honest excluded-mode count
 end
 
 % =========================================================================
@@ -273,7 +273,7 @@ end
 % =========================================================================
 function xr = richardson(grids, xg)
 %RICHARDSON Linear O(1/n) extrapolation over the coarsest/finest grid pair,
-% X_rich = (nf*Xf - nc*Xc)/(nf - nc). Reduces to test_invz_sigma_crit.m line 46
+% X_rich = (nf*Xf - nc*Xc)/(nf - nc). Reduces to the benchmark's Richardson step
 % (2*S_fine - S_coarse) for a 2:1 pair such as {12, 24}. One grid => passthrough.
 if isscalar(grids)
     xr = xg(1);  return;

@@ -24,7 +24,7 @@ design rationale (see `docs/INVZ-DESIGN-RATIONALE.md`).
 | Ewald: derivation / design / preregistration / integration map | `docs/invzp_ewald_*.md` | frozen |
 | Strict static medium: preregistration | `docs/invzp_strict_medium_prereg.md` | **frozen — never edit in place** |
 | Strict static medium: Gate-0 verdict | `docs/invzp_strict_medium_gate0_report.md` | final |
-| Strict static medium: failure analysis | `invzp_convg_fix_attmpt_claude.md` | final |
+| Strict static medium: failure analysis | `invzp_convg_diagnosis_Claude.md` (§9.1–§9.4) | consolidated |
 | Ordered residual contract | `docs/invz_ordered_residual_contract.md` | binding |
 | Stage-2c discriminator matrix | `docs/invzp_task2_prereg.md`, `docs/invzp_task2_report.md` | frozen + final |
 | BZ-quadrature/Γ audit | `docs/invzp_phase1_quadrature_prereg.md`, `docs/invzp_phase1_report.md` | frozen + final |
@@ -104,7 +104,8 @@ continuation, stability-based phase dispatcher, a3d full-response hybrid).
 `invzp-qcp-stage1-split-overlays.md`. The 1/z leg got its own stability-gated phase in
 `invz_spectra_map`; the automatic overlay was honestly renamed `Bc_auto` and restricted to valid-PM
 anchors; phase-0 and suspect columns are masked from both overlays before peak extraction.
-Diagnostics `S.phase_1z`, `S.crit_pm`, `S.suspect` added. Diagnosis: `invzp_QCP_diagnosis.md`.
+Diagnostics `S.phase_1z`, `S.crit_pm`, `S.suspect` added. The original QCP diagnosis is now preserved
+in the consolidated root record `invzp_convg_diagnosis_Claude.md` (§9.5).
 
 ### 2026-07-22 — Stage 2, ordered thermodynamics
 `2026-07-22-invzp-stage2-ordered-thermodynamics.md`, Tasks 0–5 plus 6/6b.
@@ -210,8 +211,8 @@ Hypothesis: truncate the `ω_n=0` medium to strict `O(1/z)` — `K0 = Jbar − m
 denominator feedback — removing the resummed q-denominator pole that dies ~7 % below the uniform
 instability.
 
-**Gate 0: FAIL.** Clauses (a), (c) and (e) of the frozen five-clause predicate fired. The full
-analysis is `invzp_convg_fix_attmpt_claude.md`; the verdict document is
+**Gate 0: FAIL.** Clauses (a), (c) and (e) of the frozen five-clause predicate fired. The current
+interpretation is consolidated in `invzp_convg_diagnosis_Claude.md` §9.2–§9.4; the verdict document is
 `docs/invzp_strict_medium_gate0_report.md`. In one line each:
 
 - **(a)** the reference denominator leaves its domain at **low** field — `B ∈ {0.05, 0.25, 0.5, 1} T`
@@ -306,11 +307,11 @@ Accumulated across the project; all still in force.
    `docs/invzp_ewald_step5-7_plan.md`, kept in the working tree for exactly that reason.
 7. **Deferred Ewald minors** (M-t1/t2/t4/t5/t7abc/t9-1/t9-2) plus the preregistration §5
    exponential-factor erratum, which needs a dated §12 E2 re-registration.
-8. **The strict-medium failure leaves live physics questions** — see §11 of
-   `invzp_convg_fix_attmpt_claude.md`. The most consequential: the strict candidate's own PM phase
-   boundary was never determined, yet it reports a negative PM mass at both frozen controls; and the
-   `ω_n=0` scheme jump was measured only at primitive level, so its propagation into `invz_lambdas` is
-   unknown and cheap to measure.
+8. **The strict-medium failure leaves live physics questions.** The consolidated diagnosis §9.4 has
+   since measured the strict candidate's PM boundary and shown that the frozen PM controls were
+   misplaced for their registered temperature. The robust remaining issue is the low-field reference
+   domain; the `ω_n=0` scheme jump is still measured only at primitive level, so propagation into
+   `invz_lambdas` remains unknown.
 9. **G1 and G5 share a tolerance-structure defect.** Both compare O(h²)-accurate discrete quantities
    against absolute thresholds chosen independently of the grid they run on; both fail while their
    underlying sequences converge cleanly at second order (G5's eight refinement ratios all lie in

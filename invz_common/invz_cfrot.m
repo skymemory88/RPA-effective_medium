@@ -4,7 +4,7 @@ function ion = invz_cfrot(ion, r_deg)
 % on each [Bc; Bs] pair, angle 4*r): the rotated ion gains ion.B44s (sine partner
 % of B44, honoured by invz_single_ion; invz_ion itself carries no B44s -> 0).
 %
-% Equivalence (pinned by test_invz_cfrot_equiv): rotating the CF by r with the
+% Equivalence (the invariant this function must preserve): rotating the CF by r with the
 % field FIXED equals rotating the FIELD by phi_ab = +r with the CF fixed (SAME
 % sign), through the whole scalar-cc pipeline PROVIDED transverse_mf =
 % 'vector_ab' -- the cc coupling channel and the hyperfine term are rotation-

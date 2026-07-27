@@ -29,7 +29,7 @@ ion = invz_ion();
 %     - the strict-uniform (q = 0) chi''_cc is demag-corrected via info.Jshape_cc (saturates
 %       instead of diverging); q-path spectra omit that transform (finite-q = intrinsic
 %       response) but still see demag through info.Jaa0.
-T = 0.001;                             % K
+T = 0.1;                             % K
 useParallel = true;                  % true -> parfor over fields (Parallel Computing Toolbox)
 eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency INPUTS (w, wq) AND
                                      % the plotted axes. Computation always runs in meV; the driver
@@ -37,9 +37,9 @@ eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency 
                                      % meV (below), independent of eUnit.
 
 % fields = [3.6 4.2 4.8 5.4 6.0];       % few -> slices;  many -> colormap
-fields = linspace(0,9,301);
-w = (0:0.005:6).';                  % eUnit -- field-sweep frequency grid (0-108 GHz ~ 0-0.45 meV)
-eta = 2e-5;                          % real-axis Lorentzian HWHM, ALWAYS in meV (1e-3 meV ~ 0.24 GHz),
+fields = linspace(0, 9.0, 101);
+w = (0:0.01:5.5).';                  % eUnit -- field-sweep frequency grid (0-108 GHz ~ 0-0.45 meV)
+eta = 5e-5;                          % real-axis Lorentzian HWHM, ALWAYS in meV (1e-3 meV ~ 0.24 GHz),
                                      % independent of eUnit. Lower -> sharper peaks (resolves the
                                      % sub-6-GHz hyperfine lines); keep eta above the w/wq step
                                      % (converted to meV: step/eScale) or the peaks alias.
@@ -57,11 +57,11 @@ theta_c = 0.0;                         % deg -- tilt of the field OUT of the tra
                                      % range (invz_run_tensor_ref); a longitudinal component
                                      % turns the sharp transition into a rounded crossover.
                                      % Full-tensor propagation: deferred (invz_tensor/). phi_ab: implemented below.
-phi_ab = -11.0;                        % deg -- IN-PLANE rotation of the swept field, a -> b.
+phi_ab = 0.0;                        % deg -- IN-PLANE rotation of the swept field, a -> b.
                                      % phi_ab = -11 deg reproduces the production experimental
                                      % geometry (external stack ion.cfRot(Ho) = -11 deg; SAME
-                                     % sign, pinned by test_invz_cfrot_equiv:
-                                     % cfRot = -11 deg <=> phi_ab = -11 deg).
+                                     % sign: cfRot = -11 deg <=> phi_ab = -11 deg, the
+                                     % equivalence invz_cfrot documents).
                                      % Nonzero phi_ab REQUIRES transverse_mf = 'vector_ab'
                                      % below ('none' also passes, as a bare CF+Zeeman
                                      % diagnostic; the library errors only under
@@ -71,9 +71,9 @@ phi_ab = -11.0;                        % deg -- IN-PLANE rotation of the swept f
                                      % never compare legacy_x and vector_ab runs as if only
                                      % the angle differed. Combined theta_c AND phi_ab is
                                      % NOT validated (tilt bound was measured under legacy_x).
-transverse_mf = 'vector_ab';         % 'legacy_x' | 'none' | 'vector_ab'
+transverse_mf = 'legacy_x';         % 'legacy_x' | 'none' | 'vector_ab'
 
-showPeaks = true;                    % true -> ALSO line-plot chi''_cc peak energy vs field
+showPeaks = false;                    % true -> ALSO line-plot chi''_cc peak energy vs field
                                      % (S.Epeak/S.Epeak_rpa, cf. the q-path E_peak(q) stream)
 
 % ---- q-path view (R 2007 Fig 3 trends): set qpath non-empty to switch views -------------

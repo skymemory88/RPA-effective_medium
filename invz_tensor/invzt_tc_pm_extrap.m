@@ -4,7 +4,7 @@ function [tc, used] = invzt_tc_pm_extrap(critfun, Tg)
 %   critfun on the caller-supplied FIXED grid Tg (house step 1/30 K), keeps the
 %   CONVERGED PARAMAGNETIC points (ok AND crit > 0), and linearly extrapolates the
 %   two LOWEST such points (in T) to crit = 0 -- the small-B-proxy ordering
-%   temperature. This is the projected fixture invz_odd_tc_pm_extrap's MATH,
+%   temperature. This is the projected side's small-B-proxy extrapolation MATH,
 %   RE-OWNED here with a pure handle interface (no ion/B/Jf/opts, no invz_crit_at
 %   dependency), so any tensor-side criticality source can drive it.
 %

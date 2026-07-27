@@ -23,8 +23,8 @@ function P = invz_jq_path(ion, qpath, opts)
 %   h < 1.5 and mirrors the curve about h = 1.5. The four P.Jnu branches remain
 %   available for exploratory branch-resolved views.
 %
-%   Dipolar backend (Step-5 Task 6, opt-in; docs/invzp_ewald_prereg.md FROZEN,
-%   docs/invzp_ewald_integration_map.md Sec.6): opts.dipole = absent | 'bruteforce'
+%   Dipolar backend (Step-5 Task 6, opt-in; parameters frozen 2026-07-24):
+%   opts.dipole = absent | 'bruteforce'
 %   (both resolve to the unchanged brute-force path) | 'ewald' (opts.ewald must then
 %   be a complete {alpha,r_cut,g_cut,boundary} struct; not synthesized here). The
 %   production default remains bruteforce. Either way the Gamma-limit base Greg is

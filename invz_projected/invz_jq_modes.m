@@ -29,9 +29,9 @@ function [Jnu, info, Juni] = invz_jq_modes(ion, qvec, opts)
 % opts.odd remains brute-force-only: an active ODD request combined with the
 % Ewald dipolar backend (below) is rejected before either diversion runs.
 %
-% Dipolar backend (Step-5 Task 2, opt-in; docs/invzp_ewald_prereg.md FROZEN,
-% docs/invzp_ewald_design.md Sec.2.2/2.3/4.2, docs/invzp_ewald_integration_map.md
-% Sec.6.3): opts.dipole = absent | 'bruteforce' (both resolve to the unchanged
+% Dipolar backend (Step-5 Task 2, opt-in; parameters frozen 2026-07-24, summarised
+% in docs/INVZ-DEVELOPMENT-RECORD.md):
+% opts.dipole = absent | 'bruteforce' (both resolve to the unchanged
 % brute-force MF_dipole path; identical cache identity) | 'ewald' (opt-in
 % invz_dipole_ewald primitive; opts.ewald must then be a scalar struct with
 % EXACTLY {alpha,r_cut,g_cut,boundary} -- this function does not synthesize
@@ -49,8 +49,7 @@ function [Jnu, info, Juni] = invz_jq_modes(ion, qvec, opts)
 %                            ewald      = -gfac*dip_reg_cc(0) + Jex_cc(0) - lorz*ones(4)
 %   info.Jgamma_cc      = info.Jpath_base_cc + lorz*ones(4), the exact-Gamma
 %                          backend-agnostic production matrix (this single
-%                          formula reduces to both frozen Gate-C decompositions
-%                          -- see docs/invzp_ewald_prereg.md Sec.5 Gate-C).
+%                          formula reduces to both frozen Gate-C decompositions).
 % Under Ewald, the regularized dipolar tensor already contains the isotropic
 % Lorentz term (design Sec.4.2: "Ewald adds 0 at Gamma"), so the per-q loop and
 % the Gamma-point Jcc0_dipole/Jaa0_dipole priming block add NO extra +lorz;
@@ -75,14 +74,14 @@ dpRng = 30;  if isfield(opts,'dpRng'), dpRng = opts.dpRng; end
 useCache = ~isfield(opts,'cache') || opts.cache;
 
 % --- Backend dispatch (Step-5 Task 2): resolved/validated BEFORE the ODD
-% diversion below, per docs/invzp_ewald_design.md Sec.1.1/2.2. ---
+% diversion below, by design. ---
 [backend, eopts] = local_resolve_dipole_backend(opts);
 
 activeOdd = isfield(opts, 'odd') && ~isempty(opts.odd) && ~isequal(opts.odd, false);
 if strcmp(backend, 'ewald') && activeOdd
     error('invz:jqModesOddEwald', ['the ODD extension (opts.odd) is not supported together with ' ...
         'the Ewald dipolar backend (opts.dipole=''ewald''); opts.odd must be false/absent when ' ...
-        'requesting Ewald. The ODD path remains brute-force-only (docs/invzp_ewald_design.md Sec.1.1).']);
+        'requesting Ewald. The ODD path remains brute-force-only.']);
 end
 
 % --- ODD diversion (T1.3): strictly additive and opt-in. Everything below this
@@ -169,7 +168,7 @@ if strcmp(backend, 'bruteforce')
                            % q=0 dip/ex matrix without re-deriving the geometry (bit-identical either way).
     % ---- Additive Gamma metadata (Step-5 Task 2), appended AFTER all legacy fields. ----
     % Recovers the Gamma exchange tensor the priming call above discards (bit-identical
-    % reuse of the already-built geomX -- docs/invzp_ewald_integration_map.md Sec.6.1).
+    % reuse of the already-built geomX).
     ex0 = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau, geomX);
     info.dipole = struct('backend', 'bruteforce', 'ewald', local_empty_ewald(), ...
         'q_reduction', ['bruteforce: q used directly as MF_dipole/exchange Miller indices ' ...
@@ -234,7 +233,7 @@ function [backend, eopts] = local_resolve_dipole_backend(opts)
 % and strictly validates opts.ewald against the resolved backend. jq_modes does
 % NOT synthesize frozen Ewald defaults -- opts.ewald must already be a
 % complete {alpha,r_cut,g_cut,boundary} struct for the Ewald backend; default
-% derivation is a higher-layer concern (docs/invzp_ewald_design.md Sec.2.2).
+% derivation is a higher-layer concern.
 if ~isfield(opts, 'dipole') || isempty(opts.dipole)
     backend = 'bruteforce';
 else
@@ -425,7 +424,7 @@ function [Jnu, info, Juni] = jq_modes_odd(ion, qvec, opts, dpRng, useCache)
 %                     (r.l.u.) non-Gamma shell of qvec (E1 recomputed exactly
 %                     on that shell) -- report-only; on-axis c* shells sit at
 %                     machine zero, near-a* shells carry the linear-in-q ODD
-%                     residual (ODD-LOG P0.3/T1.3), and tilted rays keep a
+%                     residual, and tilted rays keep a
 %                     direction-dependent macroscopic term, so never gate
 %                     small-q decay off-axis.
 odd = opts.odd;

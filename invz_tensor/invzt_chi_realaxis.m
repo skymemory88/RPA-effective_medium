@@ -50,7 +50,7 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 %       values threaded through the solve). The S4-uniform-mode projector
 %       u = kron(ones(4,1)/2, eye(3)) recovers the uniform-mode response
 %       out.chi_uniform = u'*X*u for ANY chi0, by the SAME exact linear-
-%       algebra identity proven in interop/test_invzt_rpa_parity.m (resolvent
+%       algebra identity (resolvent
 %       identity (I-AB)^-1*A = A*(I-BA)^-1 plus the rank-1 sublattice
 %       projector ones(4)/4 = v*v', v = ones(4,1)/2) -- this is what makes the
 %       force_sigma0 exact-identity gate below hold to numerical precision,
@@ -107,11 +107,11 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 %                                    dominant/rest split; pt.chi_rest is
 %                                    always true for an ordered pt, so the
 %                                    default read is safe but unused there).
-%     Esplit       0.4653          : PM branch only -- dominant/rest split
-%                                    energy (meV), passed to INVZT_CHI0_SPLIT
-%                                    (matches INVZT_SOLVE_POINT's own
-%                                    default). Ignored on the ordered branch
-%                                    (no split; see chi_rest above).
+%     dominant_count pt.mspec.ndom : PM branch fixed-rank dominant selector.
+%     Esplit       absent          : PM branch LEGACY energy-cut override.
+%                                    With neither option, the point's recorded
+%                                    selection is reused exactly. Both are ignored
+%                                    on the ordered branch (no split).
 %     odd          pt.odd          : must equal pt.odd -- mismatch errors
 %                                    'invzt:oddMismatch' (Sigma_w/alpha/lambda/K
 %                                    already bake in the odd flag used at solve
@@ -149,7 +149,6 @@ qsel     = getf(opts, 'qsel', 'gamma_uniform');
 dpRng    = getf(opts, 'dpRng', 30);
 cacheq   = getf(opts, 'cache', true);
 chi_rest = getf(opts, 'chi_rest', pt.chi_rest);
-Esplit   = getf(opts, 'Esplit', 0.4653);
 odd_req  = getf(opts, 'odd', pt.odd);
 force_sigma0 = isfield(opts, 'force_sigma0') && ~isempty(opts.force_sigma0) ...
     && ~isequal(opts.force_sigma0, false);
@@ -198,7 +197,17 @@ if ordered
     c0w  = invz_chi0z(pt.si, T, z, struct('elastic', false));   % full local chi0, elastic OFF
     ctil = c0w ./ reshape(1 + Sw, 1, 1, nw);                    % Sw [nw,1] -> [1,1,nw] broadcast
 else
-    [cdom, crest] = invzt_chi0_split(pt.si, T, z, struct('Esplit', Esplit, 'elastic', false));
+    split_opts = struct('elastic', false);
+    if isfield(opts, 'dominant_count') && ~isempty(opts.dominant_count)
+        split_opts.dominant_count = opts.dominant_count;
+    elseif isfield(opts, 'Esplit') && ~isempty(opts.Esplit)
+        split_opts.Esplit = opts.Esplit;
+    elseif isfield(pt, 'mspec') && strcmp(getf(pt.mspec, 'selection', ''), 'fixed_rank')
+        split_opts.dominant_count = pt.mspec.ndom;
+    elseif isfield(pt, 'mspec') && strcmp(getf(pt.mspec, 'selection', ''), 'energy')
+        split_opts.Esplit = pt.mspec.Esplit;
+    end
+    [cdom, crest] = invzt_chi0_split(pt.si, T, z, split_opts);
     if ~chi_rest
         crest = zeros(size(crest));
     end

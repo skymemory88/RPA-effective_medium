@@ -13,9 +13,8 @@
 % verified 0.11 vs 2.2/20 at 6T, ~0.28 vs 7.7/20 at 2T). eps_spec/eps_tilt are
 % reported diagnostics; lineshape fidelity is explicitly not claimed.
 %   supported(theta > 0) <=> eps_amp <= 0.10 AND dE_peak <= max(0.02*Epeak_ten, eta)
-%   at EVERY tested field. Copy the printed table into
-%   docs/SESSION-2026-07-16-field-angle.md and the constants of
-%   invz/tests/test_invz_tensor_ref.m (reproducibility assertion).
+%   at EVERY tested field. The table is printed for the caller to record; this driver
+%   writes no files.
 addpath(fileparts(mfilename('fullpath')));  addpath(fullfile(fileparts(mfilename('fullpath')), '..'));  addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'invz_common'));
 ion = invz_ion();
 T       = 0.1;                       % K -- the spectra-driver default temperature

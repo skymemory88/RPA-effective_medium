@@ -33,7 +33,7 @@ function [dip, counts, geom] = invz_dipole_ewald(q, a, tau, eopts, geom)
 %   dip    [3,3,ntau,ntau] for nq==1, else [3,3,ntau,ntau,nq]. dip(:,:,n,m) is the
 %          block for pair (n,m); dip(:,:,m,n) = conj(dip(:,:,n,m)) is an EMERGENT
 %          property (every ordered pair is built independently).
-%   counts diagnostic struct (frozen schema, see invzp_ewald_prereg.md sec 1):
+%   counts diagnostic struct (frozen schema v1 -- the field set below IS the schema):
 %            .real_pair                       [ntau,ntau] retained real vectors
 %            .recip_candidates                scalar cached candidate count
 %            .recip_used                      [nq,1] per-q retained reciprocal count
@@ -48,7 +48,7 @@ function [dip, counts, geom] = invz_dipole_ewald(q, a, tau, eopts, geom)
 % The preflight is a hard pre-ALLOCATION gate: conservative real/reciprocal cube
 % bounds and a byte manifest are enforced against the frozen caps BEFORE any
 % ndgrid / large allocation (invz:ewaldRealCap / invz:ewaldRecipCap /
-% invz:ewaldMemoryCap). See docs/invzp_ewald_prereg.md (FROZEN 2026-07-24).
+% invz:ewaldMemoryCap). Caps frozen 2026-07-24; the values are the constants below.
 
 % ---- frozen constants -------------------------------------------------------
 SCHEMA    = 'invz_dipole_ewald/v1';
@@ -232,9 +232,7 @@ function [real_cube_bound, recip_cube_bound, B, Vc, taucart, sa, sb] = ...
 % B [3,3] and taucart [ntau,3] (both retained into geom) and real_cube_bound
 % [ntau,ntau] (retained into geom + returned to counts.preflight) are
 % BOUND-INDEPENDENT O(1) -- fixed/ntau-scaled, never RBmax/RBsum/GC/nq --
-% excluded from local_manifest, documented+tested in
-% test_invz_dipole_ewald.m's excluded_o1_table() (see local_manifest's
-% header comment, set (ii)).
+% excluded from local_manifest (see local_manifest's header comment, set (ii)).
 B  = 2*pi*inv(a).';                 %#ok<MINV> reciprocal rows, B = 2*pi*inv(a)'
 Vc = abs(det(a));
 taucart = tau*a;
@@ -304,10 +302,8 @@ end
 %      qmax corner enumeration corners/c1/c2/c3, local_boxmin_dist's M/MFF
 %      [3,3] metric/active-set scratch, its <=3-element active-set index
 %      vectors s/F/Cc (control flow only, never stored as data), and the
-%      per-pair displacement d [1,3]. See test_invz_dipole_ewald.m's
-%      excluded_o1_table() for the full name/source/bytes/reason inventory
-%      and the tested aggregate-bytes bound (<64 KiB -- negligible next to
-%      CAP_BYTES=4 GiB), the tested authority-supported exclusion reason.
+%      per-pair displacement d [1,3]. Their aggregate is bounded by <64 KiB --
+%      negligible next to CAP_BYTES=4 GiB, which is the exclusion reason.
 %
 % (Genuine scalars -- tol, loop indices, sa, sb, Vc, alpha, nq, ntau -- were
 % never arrays; they are neither rows nor in the set-(ii) list.)
@@ -355,9 +351,8 @@ rows(end+1) = local_mkrow('recip_dmin',     'double',  false, [GC 1]);
 rows(end+1) = local_mkrow('recip_keepG',    'logical', false, [GC 1]);
 % -- local_boxmin_dist SIZE-DEPENDENT temporaries (nG = GC candidate rows).
 %    The fixed [3,3] SPD metric M and conservative [3,3] active-set MFF are
-%    BOUND-INDEPENDENT O(1) -- excluded here, documented+tested in
-%    test_invz_dipole_ewald.m's excluded_o1_table() instead (see this
-%    function's header comment, set (ii)) --
+%    BOUND-INDEPENDENT O(1) -- excluded here (see this function's header
+%    comment, set (ii)) --
 rows(end+1) = local_mkrow('boxmin_lo',      'double',  false, [GC 3]);
 rows(end+1) = local_mkrow('boxmin_hi',      'double',  false, [GC 3]);
 rows(end+1) = local_mkrow('boxmin_v',       'double',  false, [GC 3]);
@@ -529,8 +524,8 @@ function dmin = local_boxmin_dist(G, B)
 % The SIZE-DEPENDENT temporaries below (lo/hi/v/RHS/VF/feas/f/fbest, ~[nG,*])
 % are accounted in local_manifest as boxmin_* -- keep the two in sync. The
 % fixed [3,3] metric M and the conservative [3,3] active-set MFF are
-% BOUND-INDEPENDENT O(1) -- excluded_o1_table() in test_invz_dipole_ewald.m,
-% NOT local_manifest rows (see local_manifest's header comment, set (ii)).
+% BOUND-INDEPENDENT O(1) -- NOT local_manifest rows (see local_manifest's
+% header comment, set (ii)).
 % The active-set index vectors s/F/Cc (<=3 elements) are likewise O(1),
 % control flow only, never stored as data.
 M  = B*B.';

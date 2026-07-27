@@ -14,7 +14,7 @@ function [Gstat, out] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G
 % effective-medium form G(q,0) = Gstat/[1 + (J(q)-K0)*Gstat], and K0 itself requires the
 % static closure of INVZ_EMT_STATIC_ORDERED (invz_emt_scalar's direct solve is
 % ordinary-Dyson only).
-% Identities pinned by test_invz_gstat_ordered (NEVER adjust signs to pass them, SS9):
+% Identities this function must satisfy (NEVER adjust signs to make them hold, SS9):
 %   bare (Sigma0=K0=lam=0):  xi = 1,  Gstat = G0bare = G0inel0 + G0el0,
 %                            -G0bare = d<Jz>/d(hmf)                          (J 2.31)
 %   m = 0 (G0el0 = 0):  Gstat = G0inel0/(1+Sigma0+K0*G0inel0);
@@ -29,14 +29,13 @@ function [Gstat, out] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G
 %     the EXACT reassociation 1/Gtil0 = 1/Gstat - K0, i.e.
 %     out.Gtil0 = 1/(1/Gstat - K0);  out.r = G0bare*(1/Gstat - K0).
 %     Algebraically identical to the false branch everywhere away from a pole: measured at
-%     most ~1 ulp, both over an out-of-band 16-point sweep spanning near-pole and sign-crossing
-%     Gstat values and over the committed 6-point subset in
-%     test_invz_gstat_removable_pole's dual-branch equivalence test;
+%     most ~1 ulp, over an out-of-band 16-point sweep spanning near-pole and sign-crossing
+%     Gstat values;
 %     NOT a regulariser -- no broadening, no added tolerance, no
 %     sign change. Where Gstat itself diverges (its own local denominator
 %     gstat_local_denom -> 0), the divergence CANCELS in this arrangement --
 %     Gtil0 -> -1/K0, r -> -G0bare*K0 -- while the false-branch form evaluates
-%     Inf/(-Inf) = NaN there. See test_invz_gstat_removable_pole (spec G17).
+%     Inf/(-Inf) = NaN there (spec G17).
 % out: xi, h0 = beta*(1-n01^2), G0bare, Gtil0, r (per opts.stable_form above -- the H_MF
 %   integrand of J 2.33), and gstat_local_denom = 1 + Sigma0 + K0*G0inel0, the signed local
 %   denominator of the first Gstat term (identical on both branches; exposed for G17/Gate 0).
@@ -55,8 +54,8 @@ if nargin >= 8 && getf(opts, 'stable_form', false)
 %   Gtil0 -> -1/K0,   r -> -G0bare*K0,   crit = r + J0eff*G0bare -> G0bare*(J0eff - K0)
 % all finite, with the same limit from both sides. The former arrangement
 % (Gtil0 = Gstat/(1-K0*Gstat); r = G0bare/Gtil0) evaluates Inf/(-Inf) = NaN at the crossing and
-% loses precision approaching it, which would turn a removable singularity into a node failure.
-% Pinned by test_invz_gstat_removable_pole.m (spec G17).
+% loses precision approaching it, which would turn a removable singularity into a node failure
+% (spec G17).
     invGtil0 = 1/Gstat - K0;
     Gtil0    = 1/invGtil0;
     r        = G0bare*invGtil0;

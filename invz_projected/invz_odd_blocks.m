@@ -15,7 +15,7 @@ function [Vca, Vcb, Vcc, info] = invz_odd_blocks(ion, qvec, opts)
 %            (the same Gamma info block invz_jq_modes reports; verified equal by
 %            the parity test test_vcc_parity_with_jq_modes).
 %
-%   CONVENTIONS & UNITS (must match the codebase; ODD plan §1.3, ODD-LOG §P0.1)
+%   CONVENTIONS & UNITS (must match the codebase; ODD plan §1.3)
 %     - Energies meV. `dip` from MF_dipole is [3,3,4,4] in Å^-3, pre-gfac;
 %       Cartesian index mu,nu = 1..3 = (a,b,c) = (x,y,z); sublattice s,s' = 1..4.
 %       `C.gfac` carries mu0/4pi*(gL*muB)^2, so J^{calpha} = -gfac*dip is in meV.

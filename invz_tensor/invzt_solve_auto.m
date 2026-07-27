@@ -3,7 +3,7 @@ function [pt, phase, di] = invzt_solve_auto(ion, T, B, lat, opts)
 %   [pt, phase, di] = INVZT_SOLVE_AUTO(ion, T, B, lat, opts) assigns the phase
 %   by STABILITY, not by moment onset (review P0-1, 2026-07-19): the bare-MF
 %   ordered leg keeps m0 > 0 well onto the PM side (measured 0.1 K: m0 = 1.17
-%   at 4.8 T vs the tensor crit = 0 QPT at 4.65-4.70 T), so the projected
+%   at 4.8 T vs the corrected tensor QPT between 4.64 and 4.65 T), so the projected
 %   ordered-first pattern would misassign [Bc, ~5.0 T]. Here the PM leg decides
 %   FIRST via the three-part validity rule -- its crit > 0 IS the tensor QPT
 %   criterion -- and the ordered leg is consulted only when the PM sample is
@@ -63,7 +63,7 @@ RECOVERABLE = {'invz:degenerateDoublet', 'invzt:a1ZeroField', 'invz:orderedPhase
 leg0 = struct('attempted', false, 'accepted', false, 'converged', false, ...
               'm0', NaN, 'crit', NaN, 'Sigma0', NaN, 'err', '');
 di = struct('para', leg0, 'ordered', leg0);
-pt = [];  phase = 0;
+pt = [];  ptp = [];  phase = 0;
 
 % --- PM leg first: its crit > 0 is the QPT criterion ----------------------------
 di.para.attempted = true;
@@ -82,9 +82,38 @@ catch err
 end
 
 % --- ordered leg: only when the PM sample is invalid ----------------------------
+% The ordered single-ion state must be expanded about Jensen's modified molecular
+% field, not the bare MF field.  The full H_MF <-> H integral is non-local in the
+% longitudinal field; at a continuous transition its linearized form is exact:
+% J0z_mf = J0z*chi_tilde_PM(0)/chi_full_PM(0). This uses the PM solver's ACTUAL
+% local convention, chi_tilde = cdom/(1+Sigma0)+crest, rather than incorrectly
+% assuming that the full electronuclear response is divided by 1+Sigma0.
+% Passing the rejected PM point supplies that boundary-matched factor (and an
+% excellent Sigma seed) to the ordered leg.
+% This removes the old mismatch in which the PM instability occurred near 4.65 T
+% while the ordered eigenstates still carried the large bare-MF moment associated
+% with the ~5 T MF boundary.
 di.ordered.attempted = true;
 try
-    pto = invzt_solve_point_ordered(ion, T, B, lat, opts);
+    oo = opts;
+    if ~isempty(ptp) && ptp.converged && isfinite(ptp.Sigma0) && (1 + ptp.Sigma0) > 0
+        oo.hmf_sigma0 = ptp.Sigma0;
+        split0 = struct('elastic', true);
+        if isfield(ptp, 'mspec') && strcmp(getf(ptp.mspec, 'selection', ''), 'fixed_rank')
+            split0.dominant_count = ptp.mspec.ndom;
+        elseif isfield(ptp, 'mspec') && strcmp(getf(ptp.mspec, 'selection', ''), 'energy')
+            split0.Esplit = ptp.mspec.Esplit;
+        end
+        [cdom0, crest0] = invzt_chi0_split(ptp.si, T, 0, split0);
+        if ~ptp.chi_rest, crest0 = zeros(size(crest0)); end
+        cfull0 = invz_chi0z(ptp.si, T, 0, struct('elastic', true));
+        ctilde0 = cdom0/(1 + ptp.Sigma0) + crest0;
+        oo.hmf_J0z = lat.info.Jcc0 * real(ctilde0(3,3,1)) / real(cfull0(3,3,1));
+        if isfield(ptp, 'Sigma') && all(isfinite(ptp.Sigma))
+            oo.Sigma_seed = ptp.Sigma;
+        end
+    end
+    pto = invzt_solve_point_ordered(ion, T, B, lat, oo);
     di.ordered.converged = pto.converged;
     di.ordered.m0 = pto.m0;  di.ordered.crit = pto.crit;  di.ordered.Sigma0 = pto.Sigma0;
     if pto.is_ordered && pto.converged && isfinite(pto.Sigma0) ...

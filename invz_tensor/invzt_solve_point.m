@@ -37,7 +37,10 @@ function pt = invzt_solve_point(ion, T, B, lat, opts)
 %     chi_rest      true      : false drops the crest (non-dominant) part of the
 %                               local chi0 -- only the dominant (ground-manifold)
 %                               sector is renormalized/mediated.
-%     Esplit        0.4653    : dominant/rest split energy (meV), passed to split.
+%     dominant_count []       : fixed dominant rank (default inferred: 16 for
+%                               full electronuclear, 2 for electronic/reduced).
+%     Esplit        absent    : LEGACY diagnostic energy-cut selector. Supplying
+%                               it overrides the fixed-rank default.
 %     chi0_diag     false     : TEST HOOK. Zeroes the cross-Cartesian elements of
 %                               the local tensor ctil (and ctil0) before use, so
 %                               with odd=false the cc sector EXACTLY decouples
@@ -106,7 +109,6 @@ tmf   = getf(opts, 'transverse_mf', 'legacy_x');
 mixo  = getf(opts, 'mix_outer', 0.7);
 tolo  = getf(opts, 'tol_outer', 1e-8);
 maxo  = getf(opts, 'max_outer', 120);
-Esplit    = getf(opts, 'Esplit', 0.4653);
 chi_rest  = ~isfield(opts, 'chi_rest') || isempty(opts.chi_rest) || ~isequal(opts.chi_rest, false);
 chi0_diag = isfield(opts, 'chi0_diag') && ~isempty(opts.chi0_diag) && ~isequal(opts.chi0_diag, false);
 odd = ~isfield(opts, 'odd') || isempty(opts.odd) || ~isequal(opts.odd, false);
@@ -186,7 +188,14 @@ else
     si = invz_single_ion(ion, T, B, struct('hyp', hyp, 'transverse_mf', tmf, 'Jxx0', Jxx0));
     tl = invz_twolevel(ion, T, B, struct('Jxx0', Jxx0, 'transverse_mf', tmf));
 end
-[cdom, crest, mspec] = invzt_chi0_split(si, T, 1i*wn, struct('Esplit', Esplit));
+split_opts = struct();
+if isfield(opts, 'dominant_count') && ~isempty(opts.dominant_count)
+    split_opts.dominant_count = opts.dominant_count;
+end
+if isfield(opts, 'Esplit') && ~isempty(opts.Esplit)
+    split_opts.Esplit = opts.Esplit;
+end
+[cdom, crest, mspec] = invzt_chi0_split(si, T, 1i*wn, split_opts);
 g   = real(invz_g(tl, 1i*wn));
 
 % cc (3,3) branches are real at imaginary Matsubara frequency (conjugate pairs
@@ -260,7 +269,7 @@ if strcmp(mode, 'a3')
     % beta*c_d, read off the elastic-on/off difference of the SAME chi0 convention
     % the solve consumes). Review P1-4 (2026-07-19): the previous formula used the
     % FULL equal-time variance si.JzJz_fluct -- an upper bound; prior logged eps_el
-    % values are upper bounds (ODD-LOG, Task 8).
+    % values are upper bounds.
     c0_el     = invz_chi0z(si, T, 1i*wn(1), struct('elastic', true));
     c0_inel   = invz_chi0z(si, T, 1i*wn(1), struct('elastic', false));
     c_d       = real(c0_el(3,3,1) - c0_inel(3,3,1)) / beta;

@@ -1,17 +1,20 @@
 function g = invz_phase1_qgrid(ion, N, offsetFlags, convention, gammaPolicy)
 %INVZ_PHASE1_QGRID Phase-1 BZ quadrature/offset/Gamma-policy grid builder (stage-2c coupling-only
-% audit, ADDITIVE; docs/invzp_phase1_quadrature_prereg.md "Conventions"/"Offsets"/"Gamma policy",
-% FROZEN). Calls qVec_generator (the SAME grid function invz_bz_couplings.m /
-% invz_task2_couplings_shifted_grid.m call) and invz_is_gamma_equiv (the SAME Gamma-equivalence
-% test invz_jq_modes.m / invz_task2_couplings_shifted_grid.m use); does NOT modify either file.
-% NO field argument anywhere (Phase 1 is field-independent, prereg "Scope").
+% audit, ADDITIVE; conventions/offsets/Gamma policy FROZEN 2026-07-23). Calls qVec_generator
+% (the SAME grid function invz_bz_couplings.m calls) and invz_is_gamma_equiv (the SAME
+% Gamma-equivalence test invz_jq_modes.m uses); does NOT modify either file.
+% NO field argument anywhere (Phase 1 is field-independent).
+%
+% STILL LIVE PRODUCTION: invz_bz_couplings.m calls this for the
+% gridOffset/gridConvention/gammaPolicy route. The rest of the Phase-1 audit harness was
+% removed 2026-07-27; this builder was kept because that call site depends on it.
 %
 % CONSTRUCTION ("built by constructing the refined 2N grid once and partitioning it into the
 % eight sub-offsets", prereg "Offsets"). Per axis (h,k,l) this builds exactly TWO 1-D coordinate
 % arrays:
 %   ax0 = this convention's own DIRECT N-point axis (a single qVec_generator call at grid=N),
-%         i.e. bit-identical to what invz_bz_couplings.m/invz_task2_couplings_shifted_grid.m
-%         themselves call for the "no shift" case, for BOTH conventions.
+%         i.e. bit-identical to what invz_bz_couplings.m itself calls for the "no shift"
+%         case, for BOTH conventions.
 %   ax1 = ax0 + halfstep, where halfstep = (ax0(2)-ax0(1))/2 -- HALF of this convention's own
 %         N-axis spacing -- the literal "{0,1/2}" phase-offset language.
 % Each of the 3 axes independently selects ax0 (flag false) or ax1 (flag true); the eight
@@ -22,8 +25,7 @@ function g = invz_phase1_qgrid(ion, N, offsetFlags, convention, gammaPolicy)
 % qVec_generator(ion.a,'grid',[N N N],...) call bit-for-bit -- SAME VALUES AND SAME ROW ORDER,
 % since ax0 itself (from a [N 1 1] call) is computed by the identical internal formula
 % (depending only on grid_size(1)=N, not on grid_size(2)/(3)) that a direct NxNxN call would use
-% for its own qx. Verified in test_invz_phase1_quadrature.m (test_offset_000_matches_direct_call)
-% -- no special-casing is needed in this file for the baseline offset.
+% for its own qx -- no special-casing is needed in this file for the baseline offset.
 %
 % WHY THIS IS "the refined 2N grid, partitioned" for the convention that matters, and an honest,
 % documented choice for the legacy-parity diagnostic:
@@ -51,16 +53,15 @@ function g = invz_phase1_qgrid(ion, N, offsetFlags, convention, gammaPolicy)
 %   collides its own first and last point. Consequence (confirmed numerically): under this
 %   builder, EVERY ONE of the eight legacy offsets exhibits the endpoint-duplicate defect, not
 %   just [0 0 0] -- correctly demonstrating that the defect is intrinsic to the endpoint-inclusive
-%   CONVENTION itself, not an artifact of one particular offset choice. Reported per-offset,
-%   honestly, in docs/invzp_phase1_report.md (item 1 table); legacy_inclusive remains "retained
-%   ONLY as a labeled legacy-parity diagnostic" (prereg) throughout -- this file makes no
-%   convention selection.
+%   CONVENTION itself, not an artifact of one particular offset choice. legacy_inclusive is
+%   retained ONLY as a labeled legacy-parity diagnostic -- this file makes no convention
+%   selection.
 %
 % INPUTS
 %   ion          invz_ion()-shaped struct (needs .a, .tau).
 %   N            positive integer grid size per axis (12, 16, 20 in the frozen ladder).
 %   offsetFlags  [1x3] logical/0-1, [oh ok ol] -- true means that axis sits at the ax1 (half-step
-%                shifted) phase. Use invz_phase1_offsets() to enumerate the canonical eight.
+%                shifted) phase. The canonical eight are the {0,1/2}^3 combinations.
 %   convention   'halfopen' | 'legacy_inclusive' (qVec_generator's 'endpoint' false/true resp.).
 %   gammaPolicy  'P_complete' (keep Gamma, uniform weight 1/N^3) | 'P_drop' (remove exact-Gamma
 %                rows via invz_is_gamma_equiv, renormalize to 1/(N^3-n_gamma)).

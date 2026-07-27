@@ -32,7 +32,7 @@ function [C, info] = invz_odd_fieldvar(ion, pt, S, T, opts)
 %   and PSD (when S_nu >= 0). This needs only two 4x4 products (Vca'*U,
 %   Vcb'*U) per q on top of the eig that is recomputed anyway, and never forms
 %   Scc explicitly; the sublattice-basis route (explicit Scc + traces) is the
-%   brute-force cross-check in test_invz_odd_fieldvar. The eigendecomposition
+%   equivalent brute-force route. The eigendecomposition
 %   [U, ev] = eig(Vcc + dJ hermitized) is sorted ascending with U permuted in
 %   lockstep (the T2.1 w_odd pattern in invz_solve_point). dJ is rebuilt from
 %   pt.odd.Xp via invz_odd_deltaJ, so C is evaluated at the SAME converged

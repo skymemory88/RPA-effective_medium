@@ -1,6 +1,7 @@
 function rep = invz_gate0_report(ion, T, ordered_fields, pm_fields, Jnu_flat, opts)
-%INVZ_GATE0_REPORT Gate-0 domain/omitted-order diagnostic driver (Task 18; prereg
-% docs/invzp_strict_medium_prereg.md SS3, SS8). A DIAGNOSTIC DRIVER, NOT A TEST: it measures
+%INVZ_GATE0_REPORT Gate-0 domain/omitted-order diagnostic driver (Task 18). The frozen
+% predicate it measures is quoted verbatim in
+% docs/invzp_strict_medium_gate0_report.md SS1. A DIAGNOSTIC DRIVER, NOT A TEST: it measures
 % and reports the frozen promotion predicate on the real production coupling multiset. It
 % never widens a tolerance, switches scheme, or filters a failed node out of the gate. G = -chi
 % (meV^-1), ferromagnetic positive J.
@@ -12,7 +13,8 @@ function rep = invz_gate0_report(ion, T, ordered_fields, pm_fields, Jnu_flat, op
 %   does not fit one foreground MATLAB call (600 s cap), so the intended usage is to invoke
 %   this function ONCE PER CHUNK (one field, or one (field,nH) pair) and merge the returned
 %   `rep.ordered` / `rep.pm` rows across calls before a FINAL invz_gate0_aggregate call on the
-%   union -- see .superpowers/sdd/task-18-report.md for the exact chunk plan used. The digest
+%   union -- the chunk plan actually used is recorded in
+%   docs/invzp_strict_medium_gate0_report.md. The digest
 %   check below runs on EVERY invocation regardless: reloading Jnu_flat from a .mat does not
 %   exempt a caller from it.
 % Jnu_flat: the exact production coupling column (invz_bz_couplings, frozen tuple, prereg SS8).
@@ -41,8 +43,9 @@ function rep = invz_gate0_report(ion, T, ordered_fields, pm_fields, Jnu_flat, op
 % unchanged and aborts this report, exactly like an unclassified/wiring error should.
 if nargin < 6, opts = struct(); end
 
-% ---- FROZEN constants (docs/invzp_strict_medium_prereg.md SS1, SS2, SS4, SS5, SS10; user
-% approval 2026-07-25). Never derived from output, never widened on a failure. -------------
+% ---- FROZEN constants (user approval 2026-07-25; quoted in
+% docs/invzp_strict_medium_gate0_report.md SS1).
+% Never derived from output, never widened on a failure. ------------------------------------
 FROZEN_DIGEST  = 'ddb9532d11326458554b93b2ce09c80a3299cca9baa69202dc311f138b4fae17';
 CRIT_TOL       = 1e-6;
 OMIT_PROMOTE   = 0.10;    %#ok<NASGU> -- consumed inside invz_gate0_aggregate, recorded here too

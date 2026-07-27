@@ -2,8 +2,15 @@ function pt = invzt_solve_point_ordered(ion, T, B, lat, opts)
 %INVZT_SOLVE_POINT_ORDERED Tensor a1 solve at one FERROMAGNETIC (T, B) point.
 %   pt = INVZT_SOLVE_POINT_ORDERED(ion, T, B, lat, opts) is the ordered-phase
 %   counterpart of INVZT_SOLVE_POINT mode 'a1': the single-ion problem is solved
-%   with the longitudinal ORDERING mean field (spontaneous m0 = <Jz>, hz =
-%   J0z*<Jz> with J0z = lat.info.Jcc0 -- tensor-native threading, NOT ion.J0eff),
+%   with the longitudinal ORDERING mean field (spontaneous m0 = <Jz>). Direct
+%   calls retain the bare relation hz = J0z*<Jz>, J0z = lat.info.Jcc0. The
+%   phase dispatcher additionally passes opts.hmf_J0z from its rejected PM
+%   leg, activating the boundary-exact linearized Jensen modified field
+%       hz = J0z*chi_tilde_PM(0)/chi_full_PM(0) * <Jz>.
+%   That makes the ordered moment vanish at the renormalized PM instability,
+%   rather than at the higher bare-MF boundary, and prevents a spectral jump at
+%   the phase handoff. The nonzero scalar root is bracketed directly (fixed-hz
+%   single-ion solves), avoiding critical slowing of Picard MF iteration.
 %   the self-energy uses the moment form (INVZ_SIGMA_ORDERED, HTML eqs 37-38,
 %   lambda_{1,2,3}), and the medium step is the SAME tensor lattice engine as
 %   the PM solver (INVZT_GCC_LATTICE 12x12 RPA + LOCKED K bookkeeping).
@@ -27,13 +34,9 @@ function pt = invzt_solve_point_ordered(ion, T, B, lat, opts)
 %   form, Task 3) and 'a3d' (full-response fixed-rank dominant-VERTEX hybrid,
 %   Matsubara-only, Task 7D -- see the a3d branch below); full-dress 'a3' is
 %   PERMANENTLY rejected (invzt:orderedMode, 136-state vertex budget-refused).
-%   nlevels 'std' only (invzt:orderedNlevels). Option-A parity with the projected
-%   ordered solver:
-%   m0 is the BARE mean-field order parameter -- it onsets at the MF boundary
-%   (~5.0 T at 0.1 K, MEASURED 2026-07-19), well above the tensor crit = 0 QPT
-%   (4.65-4.70 T). A converged ordered point is therefore NOT evidence of being
-%   in the FM phase; phase assignment belongs to INVZT_SOLVE_AUTO's
-%   stability-based rule, never to this solver.
+%   nlevels 'std' only (invzt:orderedNlevels). Direct calls without
+%   opts.hmf_J0z retain the historical bare-MF state for a3d/parity work.
+%   INVZT_SOLVE_AUTO supplies hmf_J0z for production a1 phase-crossing runs.
 %
 %   Mixing: plain damped mixing, CHECK-BEFORE-MIX (same loop ordering as the PM
 %   solver, review P2-2): on every exit -- converged or not -- the returned
@@ -42,8 +45,10 @@ function pt = invzt_solve_point_ordered(ion, T, B, lat, opts)
 %   OPTIONS (getf defaults): Ecut 40, hyp true, transverse_mf 'legacy_x',
 %   mix_outer 0.7, tol_outer 1e-8, max_outer 80, m_tol 1e-2, bz_tol 1e-9,
 %   odd true, rank_tol 1e-12, mz_seed/mf_maxit/mf_mix forwarded to
-%   invz_single_ion. 'Esplit'/'chi_rest' (the PM dominant/rest split knobs) are
-%   REJECTED here (invzt:orderedSplitKnobs) -- see MEDIUM above.
+%   invz_single_ion. hmf_J0z/hmf_sigma0 (normally internal, supplied by
+%   INVZT_SOLVE_AUTO) activates the linearized modified-field relation above;
+%   Sigma_seed may seed the moment-form fixed point. 'Esplit'/'chi_rest' (the
+%   PM dominant/rest split knobs) are REJECTED here (invzt:orderedSplitKnobs).
 %
 %   Returns the INVZT_SOLVE_POINT pt surface plus m0, alpha_m, is_ordered,
 %   moment_branch ('spontaneous' | 'none'), J0z_used. Early returns (PM
@@ -116,12 +121,44 @@ Jxx0 = lat.info.Jaa0;                                % v3 threading (parity with
 [wn, wts, beta] = invz_matsubara(T, Ecut);
 nwn = numel(wn);
 
-% --- ordered single-ion mean-field fixed point (full electronuclear space) -------
-siopts = struct('hyp', hyp, 'order', true, 'J0z', J0z, 'Jxx0', Jxx0, 'transverse_mf', tmf);
-for f = {'mz_seed', 'mf_maxit', 'mf_mix'}
-    if isfield(opts, f{1}), siopts.(f{1}) = opts.(f{1}); end
+% --- ordered single-ion mean-field state (full electronuclear space) -------------
+% Auto-dispatched a1 points use the boundary-exact linearized modified field.
+% Direct calls (including the expensive a3d validation path) retain the historical
+% bare-MF fixed point unless hmf_sigma0 is explicitly supplied.
+J0z_mf = J0z;
+hmf_sigma0 = NaN;
+hmf_residual = NaN;
+if isfield(opts, 'hmf_J0z') && ~isempty(opts.hmf_J0z)
+    if ~strcmp(char(mode), 'a1')
+        error('invzt:hmfMode', 'opts.hmf_sigma0 is supported for ordered mode ''a1'' only.');
+    end
+    hmf_sigma0 = getf(opts, 'hmf_sigma0', NaN);
+    if ~(isscalar(hmf_sigma0) && isreal(hmf_sigma0) ...
+            && (isnan(hmf_sigma0) || (isfinite(hmf_sigma0) && (1 + hmf_sigma0) > 0)))
+        error('invzt:hmfSigma0', ...
+            'opts.hmf_sigma0 must be a finite real scalar with 1+Sigma0 > 0.');
+    end
+    J0z_mf = opts.hmf_J0z;
+    if ~(isscalar(J0z_mf) && isreal(J0z_mf) && isfinite(J0z_mf) && J0z_mf > 0)
+        error('invzt:hmfJ0z', 'opts.hmf_J0z must be a finite positive real scalar.');
+    end
+    [si, has_order, hmf_residual] = modified_mf_state( ...
+        ion, T, B, hyp, Jxx0, tmf, J0z_mf, opts);
+    if ~has_order
+        pt = early_return(si.Jexp(3), si, 'none');
+        pt.J0z_mf = J0z_mf;
+        pt.hmf_sigma0 = hmf_sigma0;
+        pt.hmf_residual = hmf_residual;
+        return;
+    end
+else
+    siopts = struct('hyp', hyp, 'order', true, 'J0z', J0z, ...
+                    'Jxx0', Jxx0, 'transverse_mf', tmf);
+    for f = {'mz_seed', 'mf_maxit', 'mf_mix'}
+        if isfield(opts, f{1}), siopts.(f{1}) = opts.(f{1}); end
+    end
+    si = invz_single_ion(ion, T, B, siopts);
 end
-si = invz_single_ion(ion, T, B, siopts);
 m0 = si.Jexp(3);
 if ~si.mf_converged
     pt = early_return(m0, si, 'spontaneous');
@@ -293,12 +330,23 @@ if strcmp(char(mode), 'a3d')
     return;
 end
 
-% --- outer moment-form loop: damped mixing, CHECK-BEFORE-MIX (P2-2) --------------
+% --- outer moment-form loop: Anderson-accelerated mixing, CHECK-BEFORE-MIX -------
 Sigma = zeros(nwn, 1);
+if isfield(opts, 'Sigma_seed') && ~isempty(opts.Sigma_seed)
+    if numel(opts.Sigma_seed) ~= nwn || any(~isfinite(opts.Sigma_seed(:)))
+        error('invzt:orderedSigmaSeed', ...
+            'opts.Sigma_seed must contain %d finite entries.', nwn);
+    end
+    Sigma = real(opts.Sigma_seed(:));
+end
 denom = @(s) reshape(1 + s, 1, 1, nwn);
 converged = false;
 Gloc = nan(nwn, 1);  K = nan(nwn, 1);  diag4 = nan(4, nwn);
 lam = nan(3, 1);  sg = struct('alpha', NaN, 'alpha_m', NaN, 'gamma', nan(nwn,1), 'Sigma', nan(nwn,1));
+mAA = getf(opts, 'anderson_depth', 5);
+Fhist = cell(1, 0);  Xhist = cell(1, 0);
+wstate = warning('off', 'MATLAB:rankDeficientMatrix');
+cleaner = onCleanup(@() warning(wstate));
 for outer = 1:maxo
     ctil = c0 ./ denom(Sigma);                       % [3,3,nwn] WHOLE-CC renormalized chi0
     [Gcc, diag4] = invzt_gcc_lattice(ctil, lat_eff);
@@ -307,9 +355,25 @@ for outer = 1:maxo
     K = 1 ./ Gloc - 1 ./ G0til;                      % LOCKED K bookkeeping (same as PM)
     lam = invz_lambdas(K, g, wts, beta, [1 2 3]);    % moment form needs lambda_3
     sg  = invz_sigma_ordered(tl, lam, K, g, beta);   % HTML eqs 37-38
-    dS  = max(abs(sg.Sigma - Sigma));
+    f = sg.Sigma - Sigma;
+    dS  = max(abs(f));
     if dS < tolo, converged = true; break; end       % exit BEFORE mixing: state consistent
-    Sigma = Sigma + mixo*(sg.Sigma - Sigma);
+    Fhist{end+1} = f;  Xhist{end+1} = sg.Sigma; %#ok<AGROW>
+    if numel(Fhist) > mAA, Fhist(1) = []; Xhist(1) = []; end
+    mk = numel(Fhist);
+    if mk == 1
+        Sigma = Sigma + mixo*f;
+    else
+        DF = zeros(nwn, mk-1);  DX = zeros(nwn, mk-1);
+        for j = 1:mk-1
+            DF(:,j) = Fhist{j+1} - Fhist{j};
+            DX(:,j) = Xhist{j+1} - Xhist{j};
+        end
+        gcoef = DF \ f;
+        Snew = sg.Sigma - DX*gcoef;
+        if any(~isfinite(Snew)), Snew = Sigma + mixo*f; end
+        Sigma = Snew;
+    end
 end
 
 ctil0 = c0(:,:,1) / (1 + Sigma(1));
@@ -344,6 +408,9 @@ pt.chi_rest = true;   % interface parity with invzt_solve_point: WHOLE response 
 pt.mspec = [];         % no chi0 split performed (mspec is a PM-solver-only diagnostic)
 pt.Jxx0_used = Jxx0;
 pt.J0z_used  = J0z;
+pt.J0z_mf = J0z_mf;
+pt.hmf_sigma0 = hmf_sigma0;
+pt.hmf_residual = hmf_residual;
 pt.nlevels = 'std';
 pt.lat = struct('qvec_hash', hash_vec(lat.qvec(:)), 'conv', lat.conv, ...
     'JtGamma', lat.JtGamma, 'info', lat.info, 'Jxx0_used', Jxx0);
@@ -354,6 +421,61 @@ function pt = early_return(m0, si, branch)
 %EARLY_RETURN Complete field set for every non-accepted exit (projected parity).
 pt = struct('m0', m0, 'is_ordered', false, 'converged', false, 'Sigma0', NaN, ...
             'crit', NaN, 'si', si, 'tl', [], 'moment_branch', branch);
+end
+
+function [si, has_order, resid] = modified_mf_state(ion, T, B, hyp, Jxx0, tmf, J0z_mf, opts)
+%MODIFIED_MF_STATE Nonzero solution of hz = J0z_mf*<Jz>(hz).
+% Fixed-hz single-ion solves remove the critical slowing of the ordinary
+% hz-Picard loop. The slope test at hz=0 rejects the PM solution without ever
+% allowing fzero to fall onto the symmetry-enforced trivial root.
+siopts = struct('hyp', hyp, 'hz_fixed', 0, 'Jxx0', Jxx0, 'transverse_mf', tmf);
+for f = {'mf_maxit', 'mf_mix'}
+    if isfield(opts, f{1}), siopts.(f{1}) = opts.(f{1}); end
+end
+si0 = invz_single_ion(ion, T, B, siopts);
+c00 = invz_chi0z(si0, T, 0, struct('elastic', true));
+slope0 = 1 - J0z_mf*real(c00(3,3,1));
+if ~si0.mf_converged || ~(slope0 < 0)
+    si = si0;
+    has_order = false;
+    resid = 0;
+    return;
+end
+
+% A positive nonzero root is bracketed between a small symmetry-breaking
+% field and a field slightly beyond the saturated-moment molecular field.
+hhi = 1.05*J0z_mf*max(abs(ion.J), 1);
+hlo = max(1e-12, 1e-6*hhi);
+flo = mf_residual(hlo, ion, T, B, siopts, J0z_mf);
+fhi = mf_residual(hhi, ion, T, B, siopts, J0z_mf);
+if flo >= 0
+    % Very close to Bc the negative interval can be narrower than the first
+    % numerical probe. Use the analytic zero-field slope to move inward.
+    hlo = max(1e-14, 1e-9*hhi);
+    flo = mf_residual(hlo, ion, T, B, siopts, J0z_mf);
+end
+for k = 1:4
+    if fhi > 0, break; end
+    hhi = 2*hhi;
+    fhi = mf_residual(hhi, ion, T, B, siopts, J0z_mf);
+end
+if ~(flo < 0 && fhi > 0)
+    error('invzt:hmfBracket', ...
+        'Could not bracket the nonzero modified-MF root (flo=%.3g, fhi=%.3g).', flo, fhi);
+end
+
+hz = fzero(@(h) mf_residual(h, ion, T, B, siopts, J0z_mf), [hlo hhi], ...
+           optimset('TolX', 1e-11, 'Display', 'off'));
+siopts.hz_fixed = hz;
+si = invz_single_ion(ion, T, B, siopts);
+resid = hz - J0z_mf*si.Jexp(3);
+has_order = si.mf_converged && abs(si.Jexp(3)) > 0;
+end
+
+function r = mf_residual(hz, ion, T, B, siopts, J0z_mf)
+siopts.hz_fixed = hz;
+s = invz_single_ion(ion, T, B, siopts);
+r = hz - J0z_mf*s.Jexp(3);
 end
 
 function h = hash_vec(v)

@@ -14,8 +14,8 @@ function med = invz_emt_scalar(G0, Sigma, Jnu_flat, opts)
 % average, paired with the caller's Matsubara grid in invz_matsubara order
 % (wn(1) = 0 first). Any vector input takes the original code path unchanged;
 % a matrix with identical columns is bitwise-equal to the vector path (each
-% element sees the same multiply/divide, no accumulation differences --
-% regression-gated by test_invz_odd_retarded/test_emt_matrix_column_constant_bitwise).
+% element sees the same multiply/divide, no accumulation differences -- that
+% column-constant bitwise equality is the invariant to preserve).
 %
 % opts.static_medium ('resummed' default): 'strict_1z_dyson_ref' / 'strict_1z_bare_ref' replace
 % the omega_n = 0 slot with the one-shot moment closure K0 = Jbar - mu2*Gref (spec SS4.2). Set it

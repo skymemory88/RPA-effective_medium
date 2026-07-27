@@ -12,9 +12,9 @@ function trace = invz_ordered_trace(ion, T, Bx, Jnu_flat, opts)
 % reproduced or re-derived here, only trace.result.hstar/hmf_status (invz_hmf_ordered's own
 % root + profile status). For the pt-level fields, call invz_solve_point_ordered separately
 % on the SAME (ion, T, Bx, Jnu_flat, solve opts): both functions are deterministic, so the two
-% calls agree by construction -- this is exactly the behaviour-neutrality property
-% test_invz_ordered_trace.m pins (a traced invz_hmf_ordered call reproduces the untraced
-% production result bit-for-bit).
+% calls agree by construction -- this is exactly the behaviour-neutrality property required
+% here: a traced invz_hmf_ordered call must reproduce the untraced production result
+% bit-for-bit.
 %
 % ion, T, Bx, Jnu_flat: EXACTLY the production positional arguments (flat Jnu_flat -- see
 %   invz_bz_couplings.m:17, Jnu = Jnu(:)). This interface is UNCHANGED (stage-2c task 0 does

@@ -152,8 +152,7 @@ if oddOn
         % differ in last bits), so the elastic column of the retarded solve
         % is exactly the static spectrum. Degenerate pairs make individual
         % u_nu ambiguous; the first-order error that induces is part of
-        % what the surrogate-vs-exact gate (AbsTol 1e-3 on Sigma0,
-        % test_invz_odd_retarded) measures.
+        % what the surrogate-vs-exact gate (AbsTol 1e-3 on Sigma0) measures.
         for iq = 1:nqo
             M = ob.Vcc(:,:,iq) + dJ(:,:,iq);
             M = (M + M')/2;                    % both terms Hermitian; cleans rounding only

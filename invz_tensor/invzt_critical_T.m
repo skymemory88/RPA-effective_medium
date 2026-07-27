@@ -21,7 +21,7 @@ function [tc, out] = invzt_critical_T(ion, B, lat, opts)
 %   NB unlike the projected solver, the tensor A1 map CONVERGES metastable PM
 %   fixed points inside the ordered phase (crit < 0, valid) -- so votes exist
 %   on both sides of the crossing even with odd on, where the projected T-cut
-%   cannot bracket at all (ODD-LOG T2).
+%   cannot bracket at all.
 %
 %   WINDOW: opts.window = [Tlo Thi] (K) is a HARD bound -- exactly one grid
 %   pass, no sliding; if it contains no returnable root the function errors

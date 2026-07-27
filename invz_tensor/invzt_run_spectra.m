@@ -35,21 +35,22 @@ ion = invz_ion();
 
 % ---- knobs (mirroring invz_run_spectra's names where the concept carries over) --
 T = 0.1;                            % K
-fields = linspace(3.0, 7.0, 101);   % T -- SPANS the QPT (crit = 0 bracket 4.65-4.70 T at
+fields = linspace(4.0, 6.0, 101);   % T -- SPANS the QPT (corrected QPT lies between 4.64 and 4.65 T at
                                     % 0.1 K): stability-based auto solve assigns FM below,
                                     % PM above (invzt_solve_auto; NOT the bare-MF moment,
                                     % which persists to ~5.0 T -- review P0-1)
-w = linspace(0, 0.6, 601).';        % meV, uniform (invz_peak_energy assumes it). Window must
-                                    % contain the soft mode: 0.26-0.34 meV on the PM side at
-                                    % 4.8-6 T (measured 2026-07-19) -- the old 0-0.025 meV
-                                    % port of the projected GHz window cut 97% of the weight.
-eta = 2e-3;                         % meV, real-axis Lorentzian HWHM. MUST stay >= the w step
-                                    % (1e-3 here) or peaks alias between grid points (measured
+w = linspace(0, 0.018, 401).';      % meV, uniform (invz_peak_energy assumes it). This LOW-energy
+                                    % window targets the experimentally observed electro-nuclear
+                                    % soft branch (roughly 0-4.35 GHz). The predominantly electronic
+                                    % excitation at O(0.3 meV) is a separate branch and is deliberately
+                                    % outside this view; it need not soften to zero after hybridization.
+eta = 5e-5;                         % meV, real-axis Lorentzian HWHM. MUST stay >= the w step
+                                    % (4.5e-5 here) or peaks alias between grid points (measured
                                     % 10x peak-height error at eta/step = 0.16); guarded below.
 sliceMax = 6;                       % field count at/below which line slices are drawn
-peak_wmin = 0.05;                   % meV -- excludes the low-frequency hyperfine line so
-                                    % Epeak tracks the SOFT MODE (the 0.003-0.009 meV
-                                    % hyperfine feature dominates the raw max below ~5 T).
+peak_wmin = 0;                      % meV -- include the electro-nuclear mode all the way to Bc.
+                                    % invz_peak_energy censors a maximum in the first bin, so an
+                                    % exactly critical zero-energy pole is NaN rather than a fake gap.
 theta_c = 0.0;  phi_ab = 0.0;       % tilt knobs (deg). theta_c ~= 0 gives Bz ~= 0 ->
                                     % invzt:orderedLongitudinal (no tensor forced-moment
                                     % route; 2026-07-19 scope).
@@ -74,7 +75,8 @@ qpath = [];                            % [] = field sweep; [nq x 3] r.l.u. = q-p
                                        % a dispersion plot wants -- start at finite q.
 % qpath = [linspace(0.1, 0.5, 41).' zeros(41, 2)];   % example: toward (0.5,0,0)
 Bq    = 2.0;                           % T -- fixed field for the q-path view
-wq    = linspace(0, 0.6, 400).';       % meV -- own frequency grid for the q-path view
+wq = w;
+% wq    = linspace(0, 0.6, 400).';       % meV -- own frequency grid for the q-path view
 % -----------------------------------------------------------------------------
 
 if eta < (wq(2) - wq(1))
@@ -134,8 +136,21 @@ if ~isempty(qpath)
     out = invzt_chi_realaxis(ion, T, Bq*dhat, pt, wq, ...
             struct('qsel', qpath, 'dpRng', dpRng, 'eta', eta));
     chipp_q = imag(out.chi_cc_q);                 % [nq, nw] positive chi'' (Component 0)
-    figure; imagesc(wq, 1:size(chipp_q, 1), chipp_q); set(gca, 'YDir', 'normal');
-    xlabel('\omega (meV)'); ylabel('q index along path'); colorbar;
+    finiteMask = isfinite(chipp_q);
+    Z = log10(max(chipp_q, realmin));
+    figure;
+    im = imagesc(wq, 1:size(chipp_q, 1), Z);
+    set(im, 'AlphaData', double(finiteMask));
+    set(gca, 'YDir', 'normal', 'Color', [0.8 0.8 0.8], 'Layer', 'top');
+    pos = chipp_q(finiteMask & chipp_q > 0);
+    if ~isempty(pos)
+        ps = sort(pos(:));
+        hi = ps(max(1, min(numel(ps), ceil(0.995*numel(ps)))));
+        clim([log10(hi/1e3) log10(hi)]);
+    end
+    colormap(turbo);
+    xlabel('\omega (meV)'); ylabel('q index along path');
+    cb = colorbar;  cb.Label.String = 'log_{10} \chi''''_{cc}';
     title(sprintf('tensor 1/z \\chi''''_{cc}(q,\\omega), T = %.2f K, B = %.2f T (phase %d)', ...
         T, Bq, phaseq));
     Epeak_q = invz_peak_energy(chipp_q.', wq, peak_wmin);   % columns must be per-q
@@ -190,9 +205,28 @@ else
         xlabel('\omega (meV)'); ylabel('\chi''''_{cc}');
         title(sprintf('tensor 1/z, T = %.2f K', T)); legend show;
     else
-        figure; imagesc(fields, w, chipp); set(gca, 'YDir', 'normal');
-        xlabel('B (T)'); ylabel('\omega (meV)'); colorbar;
+        % Match invz_projected's spectrum-map display: log10(chi'') over the
+        % three decades below the robust 99.5th-percentile peak. The full
+        % tensor data contains weak electronuclear satellites at 1e-3 and
+        % below relative weight; a raw linear colour scale hides them behind
+        % the bright collective soft pole even though the poles are present.
+        finiteMask = isfinite(chipp);
+        Z = log10(max(chipp, realmin));
+        figure;
+        im = imagesc(fields, w, Z);
+        set(im, 'AlphaData', double(finiteMask));
+        set(gca, 'YDir', 'normal', 'Color', [0.8 0.8 0.8], 'Layer', 'top');
+        pos = chipp(finiteMask & chipp > 0);
+        if ~isempty(pos)
+            ps = sort(pos(:));                     % toolbox-free robust percentile
+            hi = ps(max(1, min(numel(ps), ceil(0.995*numel(ps)))));
+            lo = hi / 1e3;
+            clim([log10(lo) log10(hi)]);
+        end
+        colormap(turbo);
+        xlabel('B (T)'); ylabel('\omega (meV)');
         title(sprintf('tensor 1/z \\chi''''_{cc}(B,\\omega), T = %.2f K, across B_c', T));
+        cb = colorbar;  cb.Label.String = 'log_{10} \chi''''_{cc}';
     end
 
     Epeak = invz_peak_energy(chipp, w, peak_wmin);
