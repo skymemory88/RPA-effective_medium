@@ -200,7 +200,7 @@ end
 % =========================================================================================
 sgA_Sigma = local_F(tl, G0, Jnu_flat, eopts, g, wts, beta, J0eff, ...
                      G0inel0, G0el0, eso, Sigma, lam, K0s);
-rA = robust_max_abs(sgA_Sigma, Sigma);
+rA = invz_finite_max_abs(sgA_Sigma, Sigma);
 scaleA_abs = tol_outer;  scaleA_rel = tol_outer;   % Sigma dimensionless O(1): abs === rel
 passA = isfinite(rA) && (rA < scaleA_abs);
 res.blockA = struct('resid', rA, 'scale_abs', scaleA_abs, 'scale_rel', scaleA_rel, ...
@@ -295,7 +295,7 @@ medD = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
 finite_D = all(isfinite(K)) && all(isfinite(lam)) && all(isfinite(Sigma));
 scaleD_abs = tol_outer * Jscale;  scaleD_rel = tol_outer;
 if numel(K) > 1
-    rD    = robust_max_abs(K(2:end), medD.K(2:end));
+    rD    = invz_finite_max_abs(K(2:end), medD.K(2:end));
     refD  = max(abs(medD.K(2:end)));
     passD = isfinite(rD) && (rD < scaleD_abs + scaleD_rel*refD) && finite_D && medD.dynamic_converged;
 else                                          % degenerate-size guard (contract Sec. 4)
@@ -390,21 +390,5 @@ function rC = local_blockC(tl, K, g, wts, beta, Sigma)
 % mirrors invz_solve_point_ordered.m:232-234's final_resid exactly).
 lam_check = invz_lambdas(K, g, wts, beta, [1 2 3]);
 sg = invz_sigma_ordered(tl, lam_check, K, g, beta);
-rC = robust_max_abs(sg.Sigma, Sigma);
-end
-
-% =============================================================================================
-function r = robust_max_abs(a, b)
-%ROBUST_MAX_ABS max(abs(a-b)), but NaN-PROPAGATING. MATLAB's max() ignores individual NaN
-% entries by default (unlike sum/mean), so a bare max(abs(a-b)) would silently ignore a single
-% non-finite component in an otherwise-finite vector rather than reporting the block as failed
-% -- exactly the kind of silent masking this diagnostic stage must not do. Any non-finite entry
-% in either operand makes the whole residual NaN (isfinite(NaN) is false, so the block's own
-% .pass then correctly reads false, without relying on the separate top-level .finite flag to
-% catch it).
-if any(~isfinite(a(:))) || any(~isfinite(b(:)))
-    r = NaN;
-else
-    r = max(abs(a(:) - b(:)));
-end
+rC = invz_finite_max_abs(sg.Sigma, Sigma);
 end

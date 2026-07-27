@@ -243,7 +243,7 @@ for outer = 1:sopts.max_outer
     % (3)-(5) lambdas, ordered Sigma map, pre-mix step -- MIRRORS both loops verbatim
     lam = invz_lambdas(K, g, wts, node.beta, [1 2 3]);
     sg  = invz_sigma_ordered(node.tl, lam, K, g, node.beta);
-    dS  = max(abs(sg.Sigma - Sigma));
+    dS  = invz_finite_max_abs(sg.Sigma, Sigma);
     if sopts.trace
         iters = append_iter(iters, outer, dS, sout, K0s, Gstat_it, ...
             Sigma(1), G0(1), jdiag, sopts.tol_outer);
