@@ -42,7 +42,7 @@ function trace = invz_ordered_trace(ion, T, Bx, Jnu_flat, opts)
 %   .save_path     char    if given, `save(save_path, 'trace')` -- the .mat IS the schema;
 %                          nothing here is printed text meant to be parsed back.
 %
-% Returns trace (schema_version = 1):
+% Returns trace (schema_version = 2):
 %   .schema_version  (double) versioning for downstream (Task 2) consumers.
 %   .meta            run-level, stored ONCE: T, Bx, J0eff (the value invz_hmf_ordered
 %                    actually used), solve_opts (verbatim), qc, Jnu_unflat, nq,
@@ -50,8 +50,8 @@ function trace = invz_ordered_trace(ion, T, Bx, Jnu_flat, opts)
 %   .nodes, .iters   invz_hmf_ordered's OWN per-node / per-outer-iteration trace records,
 %                    copied verbatim -- see invz_hmf_ordered.m's header for the full field
 %                    list (phase/seed provenance/term_reason per node; raw map + static
-%                    residuals, K0, D_uni, Dq min/max/neg-count + closest-mode flat indices
-%                    per iteration).
+%                    residuals, dynamic/static pole coordinates, K0, Gstat, D_uni, Dq
+%                    min/max/absolute-min/neg-count + closest-mode flat indices per iteration).
 %   .result          struct('hstar', ..., 'hmf_status', ...) -- invz_hmf_ordered's own
 %                    verdict for this call.
 if nargin < 5, opts = struct(); end
@@ -95,7 +95,7 @@ if ~is_synthetic
     meta.lattice_hash = weak_hash([qc(:); dpRng_(:)]);
 end
 
-trace = struct('schema_version', 1, 'meta', meta, ...
+trace = struct('schema_version', 2, 'meta', meta, ...
     'nodes', trcRaw.nodes, 'iters', trcRaw.iters, ...
     'result', struct('hstar', hstar, 'hmf_status', hprof.status));
 

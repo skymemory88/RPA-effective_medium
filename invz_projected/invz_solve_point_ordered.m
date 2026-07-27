@@ -203,7 +203,19 @@ if strcmp(omode, 'jensen')
         si = invz_single_ion(ion, T, Bx, struct('hyp', hyp, 'hz_fixed', 0, ...
                                                 'Jxx0', Jxx0, 'transverse_mf', tmf));
         pt = early_return(0, si, 'none', sm, Jmom);  % paramagnetic: PM leg owns this field
-        pt.ordered_mode = omode;  pt.hmf_status = hprof.status;
+        pt.ordered_mode = omode;  pt.hmf_status = hprof.status;  pt.hmf_prof = hprof;
+        % Preserve the reducer's deterministic binding cause at point level. The shared early
+        % builder supplied safe defaults; override them only when a failed/domain node exists.
+        if isfield(hprof, 'status_detail') && isstruct(hprof.status_detail) && ...
+                isscalar(hprof.status_detail) && ...
+                isfield(hprof.status_detail, 'binding_node') && ...
+                isstruct(hprof.status_detail.binding_node) && ...
+                isscalar(hprof.status_detail.binding_node)
+            binding = hprof.status_detail.binding_node;
+            pt.medium_status = binding.medium_status;
+            pt.medium_denom = binding.ref_denom;
+            pt.medium_margin = binding.ref_margin;
+        end
         % Jensen-only members, blanked so the jensen exit schema is uniform. This is the ONLY
         % early return reachable in jensen mode (the other three sit behind forced_moment,
         % which jensen rejects, and behind ~is_ordered, which jensen overrides to true), so
