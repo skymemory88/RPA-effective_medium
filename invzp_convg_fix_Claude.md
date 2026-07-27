@@ -21,6 +21,24 @@ physical `mean(Gq)` event, evaluates the diagnostic in the exact reciprocal char
 `stable_form = true`, and defers structured-linear-algebra optimization until a profile or a
 low-temperature run justifies it.
 
+**Execution update, 2026-07-27.** First-hand inspection of the current `invz_run_spectra` output added
+an important constraint: convergence is non-uniform across the ordered field range; usable columns
+can occur near the apparent QCP while moderate-field columns (for example 1.5 T) are masked. A direct
+solver-only pilot on the exact legacy 16³/brute-force production coupling confirmed that pattern.
+At `T = 0.10 K`, Picard accepted 30/33 profile nodes at 3.6 T but only 11/33 at 1.5 T. Reversing the
+3.6 T node traversal left exactly the same three failed nodes, whereas a defactored residual Newton
+corrector repaired only those nodes in 4/4/8 iterations; the unchanged HMF equations then gave
+33/33 nodes, `hmf = 0.01949623263696515 meV`, and a stable endpoint. At 1.5 T the same method repaired
+the predictor and two nodes but left the path incomplete (13/33). Thus a local numerical-stability
+defect is established at 3.6 T, while the moderate-field failure has additional branch geometry.
+
+That result changes the near-term priority, not the rigor threshold. The retained Newton kernel lives
+under `docs/diagnostics/invzp_solver_stability_2026-07-27/` and is not wired into production HMF:
+an A–D-accepted fixed-`h` root is not automatically the continuous branch required by the Jensen
+integral. The next work is the smallest branch-tracked numerical continuation across the measured
+failed intervals, followed by the field map. Theory candidates remain deferred unless this
+solver-only route reaches a reproducible pole/fold/branch-selection obstruction.
+
 Line numbers below are as of the 2026-07-27 working tree; confirm each before editing.
 
 ---
@@ -186,6 +204,11 @@ convergence alone, establish the physical off-shell prescription.
 **Entirely a diagnostic script — no production file is modified, so there is no G9 or preregistration
 exposure.** Build the first guard in `/tmp`; retain it under `docs/diagnostics/` only if its outputs
 become part of the scientific record.
+
+The first guards did become part of the scientific record and are retained in
+`docs/diagnostics/invzp_solver_stability_2026-07-27/`. The implementation deliberately stops at a
+fixed-node corrector. Temporary end-to-end wiring was used once to establish the 3.6 T numerical
+result above, then removed because it had no branch-identity gate.
 
 ### 1.1 Expose a square vector residual
 
@@ -506,8 +529,10 @@ where the present one does not.
    the analytic dense Jacobian, then run the 0.31 K/3.6 T edge pilot. Do not build pseudo-arclength,
    Woodbury, the four-variable reduction, the full field sweep, or the three-grid campaign until its
    corresponding trigger above occurs.
-3. If a branch survives the edge and deep-ordered pilots, run the promoted reproducibility funnel and
-   only then consider Phase 2′.
+3. Before pseudo-arclength, use the retained corrector only at isolated Picard-failed nodes and require
+   step-reduction branch continuity. This already repairs the 0.10 K/3.6 T path, but not 1.5 T.
+4. At the moderate-field gap, add pseudo-arclength only after confirming the fixed-`h` rank/tangent
+   trigger; then run the promoted reproducibility funnel and only afterward consider Phase 2′.
 
 Two scientific decisions remain external to this implementation sequence: Candidate A still needs a
 derived formula before it can be compared with Candidate B, and any amendment of the frozen Gate-0
