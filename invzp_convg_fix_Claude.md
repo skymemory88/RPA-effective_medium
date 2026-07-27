@@ -66,6 +66,17 @@ preregistered branch-selection prescription (or the common-functional formulatio
 secant-root component may be traced only if its topology is needed to choose or falsify such a
 prescription.
 
+**Theory-route update, 2026-07-28.** The explicit-prescription backup is now specified in
+`biased_convergence_solution.md`, with global smoothness of `r(h)` as its primary declared bias and
+state/QCP continuity as binding gates. The preferred-route audit is recorded in
+`invzp_functional_derivation_audit.md`: Jensen's field equation supplies a one-dimensional potential
+only after an internal branch has been selected, and the scalar EMT closure has an isolated log
+potential, but neither is a common functional for the coupled resummed equations. The current Newton
+residual is not a direct or diagonally rescaled gradient. The next preferred deliverable is therefore
+the strict scalar two-level WP0 derivation described in `rigorous_z^1_extension_Codex.md`, with no
+production solver edits. Its initial conventions and exact algebra gates are now frozen in
+`invzp_functional_wp0_spec.md`.
+
 Line numbers below are as of the 2026-07-27 working tree; confirm each before editing.
 
 ---
@@ -468,6 +479,11 @@ functional, with χ from the stationary Hessian. The ordered state then comes fr
 than from integrating a separately resummed susceptibility across an undefined unstable branch.
 Multiple stationary solutions and spinodals may still require numerical continuation, but the
 functional supplies the missing thermodynamic comparison/selection principle.
+
+The 2026-07-28 focused audit in `invzp_functional_derivation_audit.md` found no already implied common
+functional or thermodynamic branch rule in the current hybrid. It did identify the branch-conditioned
+`Phi_path` and an isolated scalar-EMT log potential; both are useful checks for WP0, but neither
+authorizes selecting the present multiple roots.
 
 Their checklist, adopted unchanged: strict retained-order vacuum / one-point / two-point diagrams;
 validation against a small exact finite-cluster oracle; analytic handling of the elastic zero-frequency
