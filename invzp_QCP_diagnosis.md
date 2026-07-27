@@ -2,6 +2,23 @@
 
 Date: 2026-07-21
 
+> **Status banner added 2026-07-27 — the body below is unchanged and remains the authoritative
+> record of the 2026-07-21 diagnosis. Three of its point-in-time observations have since been
+> overtaken by work it recommended:**
+>
+> - *"The ordered elastic static sector is NOT implemented … J 2.28–2.29 exists nowhere."* Implemented
+>   2026-07-22 (Stage 2, commits `1259ffc`, `1c8d64d`, `5fc7d6e`), together with the H_MF
+>   self-consistency (J 2.31–2.33) and the free-energy route (J 2.34). Closure achieved at
+>   `Bc_1z = 3.025 T` vs the PM `crit`-zero at `3.033 T`.
+> - *"The fast suite is NOT currently green"* — the nominally-zero off-diagonal tolerance bug was
+>   repaired in `3244f12` (AbsTol floor).
+> - *Tensor-path handoff status* — since superseded by the committed stability-based dispatcher.
+>
+> The central analysis — that the non-closure follows from comparing two approximations with
+> different static pole conditions, and must not be forced to close — was acted on and **stands**.
+> Current project state: `docs/invzp_ordered_1z_state.md`. Execution history:
+> `docs/INVZ-DEVELOPMENT-RECORD.md`.
+
 Provenance: original diagnosis by Codex; revised the same day after code verification, then corrected again following the Codex plan review (`invzp_QCP_plan_review_Codex.md`), whose findings were independently re-verified: the free-energy section (framework §9.4) is restored to the citation record, the HEAD-vs-working-tree equation renumbering is documented, the `invz_sigma_ordered` implementation scope is corrected, and the tensor handoff status is downgraded from "production" to working-tree.
 
 Status: the experimental projected-spin phase-handoff change has been reverted. The existing ordered-first behavior and its known finite-gap/discontinuity limitation are restored. The full-tensor logarithmic plotting change is intentionally retained.
