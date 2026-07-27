@@ -29,6 +29,8 @@ function [hmf_star, prof, trc] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
 % ANY evaluated node (predictor, profile, extension, redensification, bisection iterate,
 % or the final root) is never masked as a generic 'node_failed'/'unresolved' verdict. Both
 % new statuses still map to a NaN hmf_star and MUST be read by callers as converged = false.
+% prof.status_detail is [] on 'ok'; otherwise it carries the compact failed-node census and
+% deterministic binding node returned by invz_hmf_status.
 %
 % Third output trc (stage-2c task 0, diagnostic-only; RELOCATED task 1b-ii-A): opts.trace --
 % absent/false/empty by default -- gates a BEHAVIOUR-NEUTRAL trace of this function's node
@@ -55,9 +57,11 @@ function [hmf_star, prof, trc] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
 % paragraph below; ONE nested finalizer, append_trace_node, builds every
 % entry, so no exit path can append a shorter schema); trc.iters has one record per OUTER Sigma<->K
 % iteration across all nodes (node_id back-link, the RAW map residual `dS` and the RAW
-% static-closure residual `sout.resid`, K0, D_uni, min/max/neg-count of the static
-% Dq = 1+(J(q)-K0)*Gstat, and the closest-to-zero positive/negative Dq flat indices +
-% values). trc.meta carries this call's own (T, Bx, J0eff, Jnu_flat, opts) -- q/branch
+% static-closure residual `sout.resid`, dynamic x/denominator proximity, static y/coupling
+% interval, K0, Gstat/local denominator/xi, D_uni, min/max/absolute-min/negative-count of
+% Dq = 1+(J(q)-K0)*Gstat, closest-to-zero positive/negative Dq flat indices + values, and
+% the static-closed/outer-open discriminator). trc.meta carries this call's own
+% (T, Bx, J0eff, Jnu_flat, opts) -- q/branch
 % lattice provenance is NOT available here (flat-Jnu interface, unchanged) and is
 % reconstructed by the caller; see invz_projected/invz_ordered_trace.m, the packaging
 % helper that adds qc/unflattened-Jnu/hashes and documents the versioned schema in full.
@@ -142,6 +146,7 @@ prof = struct('hgrid', [], 'r', [], 'h0', [], 'm', [], 'Sigma0', [], 'K0', [], .
               'slope0', NaN, 'r_pm0', NaN, 'G0bare_pm0', NaN, ...
               'Sigma0_pm0', NaN, 'K0_pm0', NaN, 'J0eff', J0eff, ...
               'n_extend', 0, 'hmin_initial', NaN, 'status', 'no_bare_order', ...
+              'status_detail', [], ...
               'redensified', false, 'int_Sigma0', NaN, 'int_r_minus_1', NaN, ...
               'm_star', NaN, 'D_uni_star', NaN, 'r_star', NaN, 'Gstat_star', NaN, ...
               'G0bare_star', NaN, 'crit_star', NaN, 'Dq_min_star', NaN, ...
@@ -155,12 +160,13 @@ hmf_star = NaN;
 % via ordinary nested-function workspace sharing -- the SAME mechanism this file already
 % uses (read-only) for mixo/tolo/maxo/Jxx0/tmf etc.; no new production dependency.
 tracing = isfield(opts, 'trace') && ~isempty(opts.trace) && ~isequal(opts.trace, false);
-% schema_version 2 (task 12, fix round 1): trc.nodes gained the 18 per-node record fields
-% above and reordered; bumped because that field exists precisely to signal a trc.nodes
-% shape change. No consumer in the repo reads/checks THIS struct's schema_version equality
+% schema_version 3: trc.nodes gained the compact failure-ledger fields from the fixed node
+% record, and trc.iters gained the Phase-0 pole-proximity fields. Bumped because this field
+% exists precisely to signal a trace-record shape change. No consumer in the repo reads/checks
+% THIS struct's schema_version equality
 % (grepped repo-wide): invz_ordered_trace.m never forwards trcRaw.schema_version into its
 % own (separately-versioned) wrapper, so bumping it is inert everywhere today.
-trc = struct('schema_version', 2, 'enabled', tracing, 'meta', struct(), ...
+trc = struct('schema_version', 3, 'enabled', tracing, 'meta', struct(), ...
              'nodes', struct([]), 'iters', struct([]));
 if tracing
     optsRec = opts;
@@ -209,6 +215,7 @@ Ecut  = getf(opts, 'Ecut', 40);
 Sigma = [];  K0s = 0;                                % warm-start carriers across nodes
 if tracing, cur_phase = 'predictor'; end             % stage-2c task 0: node phase tag (bookkeeping only)
 [pred, Sigma, K0s] = eval_node(0, Sigma, K0s);
+pred.is_predictor = true;
 % pred is the predictor's own fixed-schema record (task 13): passed to invz_hmf_status
 % below/at every later early return, alongside whichever other records that site has in
 % hand, so a degenerate/domain reason on THIS node is never masked as a generic failure.
@@ -314,7 +321,7 @@ end
 % is false, and neither of the two domain reasons applies), UNLESS pred itself carries a
 % degenerate/domain reason, in which case that label now correctly takes precedence
 % instead of masking as a generic 'node_failed' verdict.
-prof.status = invz_hmf_status(pred, nodes, slope_pred, F);
+[prof.status, prof.status_detail] = invz_hmf_status(pred, nodes, slope_pred, F);
 if strcmp(prof.status, 'unresolved')
     warning('invz:hmfUnresolved', ...
         'ordering predicted (slope_pred = %.3g) but no negative F above hmin_abs = %.3g', ...
@@ -336,7 +343,8 @@ for it = 1:12
         % Task 13: this iterate may itself be the first node to carry a domain/degenerate
         % reason (Delta is re-screened on every eval_node call, not only the profile) --
         % the reducer promotes that above a generic 'node_failed' verdict when it applies.
-        prof.status = invz_hmf_status(pred, [nodes recc], slope_pred, F);
+        recc.in_bracket = true;
+        [prof.status, prof.status_detail] = invz_hmf_status(pred, [nodes recc], slope_pred, F);
         hmf_star = NaN;                               % TERMINATES the solve -- never a root
         return;                                       % from a partial bracket
     end
@@ -351,8 +359,9 @@ if (b - a) >= trt*b                                   % round-5 P1-A: tol_root n
     % own default, 'unresolved' (a distinct refinement failure, NOT a node failure), then
     % applies. Routed through the same reducer regardless, so a future domain/degenerate
     % reason on an accepted node would still correctly override it.
-    prof.status = invz_hmf_status(pred, [nodes recc], slope_pred, F);
-    if strcmp(prof.status, 'ok'), prof.status = 'unresolved'; end
+    recc.in_bracket = true;
+    [prof.status, prof.status_detail] = invz_hmf_status( ...
+        pred, [nodes recc], slope_pred, F, 'unresolved');
     hmf_star = NaN;
     warning('invz:hmfUnresolved', 'root bracket not refined to tol_root: (b-a)/b = %.3g', (b-a)/b);
     return;
@@ -360,10 +369,11 @@ end
 hmf_star = 0.5*(a + b);
 if tracing, cur_phase = 'root'; end                  % stage-2c task 0: node phase tag (bookkeeping only)
 [root, ~, ~] = eval_node(hmf_star, Sigma, K0s);
+root.in_bracket = true;
 if ~root.accepted
     % Task 13: the final root evaluation is also screened -- a domain/degenerate reason
     % here must not be masked as a generic 'node_failed' verdict either.
-    prof.status = invz_hmf_status(pred, [nodes root], slope_pred, F);
+    [prof.status, prof.status_detail] = invz_hmf_status(pred, [nodes root], slope_pred, F);
     hmf_star = NaN;
     return;
 end
@@ -381,11 +391,15 @@ prof.crit_star = root.crit;
     % future domain / degenerate-doublet exit), the records concatenate into one struct array and
     % prof's arrays can be read off it field-for-field. NEVER build a partial record by hand.
     % G = -chi (meV^-1), ferromagnetic positive J.
-    rec = struct('r',NaN,'m',NaN,'Sigma0',NaN,'K0',NaN,'D_uni',NaN,'Dq_min',NaN, ...
+    rec = struct('h',NaN,'r',NaN,'m',NaN,'Sigma0',NaN,'K0',NaN, ...
+        'D_uni',NaN,'Dq_min',NaN,'Dq_abs_min',NaN, ...
         'G0bare',NaN,'Gstat',NaN,'accepted',false,'crit',NaN,'Delta',NaN, ...
         'medium_status','not_applicable','term_reason','not_evaluated', ...
         'ref_denom',NaN,'ref_margin',NaN,'gstat_local_denom',NaN, ...
-        'omit_mu3',NaN,'omit_cubic',NaN,'omit_max',NaN);
+        'omit_mu3',NaN,'omit_cubic',NaN,'omit_max',NaN, ...
+        'outer_iters',0,'resid_static',NaN, ...
+        'resid_A',NaN,'resid_B',NaN,'resid_C',NaN,'resid_D',NaN, ...
+        'resid_norm',NaN,'is_predictor',false,'in_bracket',false);
     end
 
     function [h0, F] = path_from_nodes(nodes, hgrid)
@@ -445,6 +459,11 @@ prof.crit_star = root.crit;
     % NOT a positional output list; task 12 collapsed the previous ten outputs precisely
     % because every new diagnostic grew it and every call site destructured a different subset.
     rec = blank_node_record();
+    rec.h = hp;
+    if tracing
+        rec.is_predictor = strcmp(cur_phase, 'predictor');
+        rec.in_bracket = any(strcmp(cur_phase, {'bisect', 'root'}));
+    end
     if tracing                                     % stage-2c task 0: node identity + seed
         node_seq = node_seq + 1;                   % provenance, captured BEFORE Sigma is
         cur_node_meta = struct('id', node_seq, 'h', hp, 'phase', cur_phase, ...     % touched
@@ -533,11 +552,24 @@ prof.crit_star = root.crit;
     rec.r = info.so.r;  rec.Sigma0 = state.Sigma(1);  rec.K0 = state.K0s;
     rec.D_uni = info.so.D_uni;  rec.G0bare = G0bare0;  rec.Gstat = info.so.Gstat;
     rec.accepted = info.accepted;
+    rec.outer_iters = info.outer_iters;  rec.resid_static = info.so.resid;
+    rec.resid_A = info.res.blockA.resid;  rec.resid_B = info.res.blockB.resid;
+    rec.resid_C = info.res.blockC.resid;  rec.resid_D = info.res.blockD.resid;
+    block_resid = [rec.resid_A rec.resid_B rec.resid_C rec.resid_D];
+    block_scale = [info.res.blockA.scale_abs info.res.blockB.scale_abs ...
+                   info.res.blockC.scale_abs info.res.blockD.scale_abs];
+    if all(isfinite(block_resid)) && all(isfinite(block_scale)) && all(block_scale > 0)
+        rec.resid_norm = max(abs(block_resid)./block_scale);
+    end
     % crit = r + J0eff*G0bare (SS5): the SAME expression prof.slope0 uses at h = 0, evaluated
     % per node. Diagnostic only -- intermediate path nodes legitimately sit in the unstable
     % Landau interval (crit < 0); only the accepted root is held to positivity.
     rec.crit = rec.r + J0eff*rec.G0bare;
     rec.Dq_min = info.res.stability.Dq_min;        % the CHECKER's independent recomputation
+    if ~rec.accepted
+        Dq_final = 1 + (Jnu_flat(:) - state.K0s).*info.so.Gstat;
+        if all(isfinite(Dq_final)), rec.Dq_abs_min = min(abs(Dq_final)); end
+    end
     rec.gstat_local_denom = info.so.gstat_local_denom;
     rec.omit_mu3 = info.so.omit_mu3;  rec.omit_cubic = info.so.omit_cubic;
     rec.omit_max = info.so.omit_max;
@@ -567,9 +599,17 @@ prof.crit_star = root.crit;
             irec = struct('node_id', cur_node_meta.id, 'outer', src.outer, 'resid_map', src.dS, ...
                 'resid_static', src.resid_static, 'K0', src.K0, 'D_uni', src.D_uni, ...
                 'Dq_min', src.Dq_min, 'Dq_max', src.Dq_max, 'Dq_neg_count', src.Dq_neg_count, ...
+                'Dq_abs_min', src.Dq_abs_min, ...
                 'idx_pos_flat', src.idx_pos_flat, 'Dq_pos_val', src.Dq_pos_val, ...
                 'idx_neg_flat', src.idx_neg_flat, 'Dq_neg_val', src.Dq_neg_val, ...
-                'converged_flag', src.converged_flag);
+                'converged_flag', src.converged_flag, ...
+                'x', src.x, 'x_minus_Jmax', src.x_minus_Jmax, ...
+                'Ddyn_abs_min', src.Ddyn_abs_min, ...
+                'Ddyn_nonpositive_count', src.Ddyn_nonpositive_count, ...
+                'y', src.y, 'y_rank', src.y_rank, ...
+                'y_interval_lo', src.y_interval_lo, 'y_interval_hi', src.y_interval_hi, ...
+                'Gstat', src.Gstat, 'gstat_local_denom', src.gstat_local_denom, ...
+                'xi', src.xi, 'static_closed_outer_open', src.static_closed_outer_open);
             if isempty(trc.iters), trc.iters = irec; else, trc.iters(end+1) = irec; end
         end
     end

@@ -80,7 +80,9 @@ function [state, info] = invz_ordered_node_solve(node, seed, sopts)
 %                   populated ONLY when sopts.trace: fields `outer`, `dS` (raw pre-mix Sigma-
 %                   map residual), `resid_static` (sout.resid), `K0` (=K0s), `D_uni`
 %                   (sout.D_uni), `converged_flag` (sout.converged), `Dq_min`, `Dq_max`,
-%                   `Dq_neg_count`, `idx_pos_flat`, `Dq_pos_val`, `idx_neg_flat`, `Dq_neg_val`
+%                   `Dq_abs_min`, `Dq_neg_count`, `idx_pos_flat`, `Dq_pos_val`, `idx_neg_flat`,
+%                   `Dq_neg_val`, dynamic `x`/denominator proximity, static `y`/coupling
+%                   interval, Gstat/local denominator/xi, and `static_closed_outer_open`
 %                   (closest-to-zero positive/negative Dq = 1+(Jnu_flat-K0s).*Gstat, flat
 %                   indices + values) -- mirroring invz_hmf_ordered.m eval_node's own per-
 %                   iteration trace record (:329-349) field-for-field, except `dS` (named
@@ -151,6 +153,12 @@ sopts = struct('mix_outer',  getf(sopts, 'mix_outer', 0.7), ...
                'tol_outer',  getf(sopts, 'tol_outer', 1e-8), ...
                'cold_retry', getf(sopts, 'cold_retry', true), ...
                'trace',      getf(sopts, 'trace', false));
+if sopts.trace
+    Jflat = node.Jnu_flat(:);
+    jdiag = struct('flat', Jflat, 'max', max(Jflat), 'sorted', sort(Jflat));
+else
+    jdiag = struct([]);
+end
 
 is_warm = isstruct(seed) && isscalar(seed) && isfield(seed, 'Sigma') && isfield(seed, 'K0s') ...
           && ~isempty(seed.Sigma);
@@ -160,14 +168,14 @@ else
     Sigma0 = zeros(size(node.wn));  K0s0 = 0;  seed_kind0 = 'cold';
 end
 
-[state1, info1] = run_attempt(node, Sigma0, K0s0, sopts);
+[state1, info1] = run_attempt(node, Sigma0, K0s0, sopts, jdiag);
 
 if info1.res.accepted || ~(sopts.cold_retry && strcmp(seed_kind0, 'warm'))
     state = state1;  info = info1;  seed_kind = seed_kind0;
 else
     % deterministic cold retry: fresh cold start, the failed warm attempt is discarded
     % entirely (not merged/blended) -- point 3 of the brief.
-    [state2, info2] = run_attempt(node, zeros(size(node.wn)), 0, sopts);
+    [state2, info2] = run_attempt(node, zeros(size(node.wn)), 0, sopts, jdiag);
     state = state2;  info = info2;  seed_kind = 'cold_after_warm_fail';
 end
 info.seed_kind = seed_kind;
@@ -175,7 +183,7 @@ info.accepted  = info.res.accepted;
 end
 
 % =============================================================================================
-function [state, info] = run_attempt(node, Sigma0, K0s0, sopts)
+function [state, info] = run_attempt(node, Sigma0, K0s0, sopts, jdiag)
 %RUN_ATTEMPT One full damped-Picard attempt: the outer Sigma<->EMT loop
 % (invz_solve_point_ordered.m:206-221 / invz_hmf_ordered.m eval_node:313-328, VERBATIM) plus
 % the post-loop static refresh (invz_solve_point_ordered.m:225-227, VERBATIM), from a given
@@ -224,6 +232,10 @@ for outer = 1:sopts.max_outer
     medium_status = getf(sout, 'medium_status', 'not_applicable');
     medium        = getf(sout, 'medium', medium);
     if ~any(strcmp(medium_status, {'not_applicable', 'ok'}))
+        if sopts.trace
+            iters = append_iter(iters, outer, NaN, sout, K0s, Gstat_it, ...
+                Sigma(1), G0(1), jdiag, sopts.tol_outer);
+        end
         outer_used = outer;
         break;
     end
@@ -233,7 +245,8 @@ for outer = 1:sopts.max_outer
     sg  = invz_sigma_ordered(node.tl, lam, K, g, node.beta);
     dS  = max(abs(sg.Sigma - Sigma));
     if sopts.trace
-        iters = append_iter(iters, outer, dS, sout, K0s, Gstat_it, Jnu_flat);
+        iters = append_iter(iters, outer, dS, sout, K0s, Gstat_it, ...
+            Sigma(1), G0(1), jdiag, sopts.tol_outer);
     end
     % (6) damped mix
     Sigma = Sigma + sopts.mix_outer*(sg.Sigma - Sigma);
@@ -282,16 +295,37 @@ info = struct('res', res, 'loop_converged', loop_converged, 'so', so_out, 'med',
 end
 
 % =============================================================================================
-function iters = append_iter(iters, outer, dS, sout, K0s, Gstat_it, Jnu_flat)
+function iters = append_iter(iters, outer, dS, sout, K0s, Gstat_it, ...
+                             Sigma0, G00, jdiag, tol_outer)
 %APPEND_ITER One per-outer-iteration trace record (sopts.trace only), mirroring
 % invz_hmf_ordered.m eval_node's own per-iteration record (:329-349) field-for-field except
 % `dS` (named `resid_map` there; `dS` is the name this brief specifies).
-Dq = 1 + (Jnu_flat(:) - K0s) .* Gstat_it;
+Jflat = jdiag.flat;
+Dq = 1 + (Jflat - K0s) .* Gstat_it;
+Ddyn = 1 + Sigma0 + Jflat.*G00;
+x = -(1 + Sigma0)/G00;
+y = K0s - 1/Gstat_it;
+Dq_abs_min = NaN;
+Ddyn_abs_min = NaN;
+if all(isfinite(Dq)), Dq_abs_min = min(abs(Dq)); end
+if all(isfinite(Ddyn)), Ddyn_abs_min = min(abs(Ddyn)); end
+[y_rank, y_lo, y_hi] = coupling_interval(jdiag.sorted, y);
 irec = struct('outer', outer, 'dS', dS, 'resid_static', sout.resid, 'K0', K0s, ...
               'D_uni', sout.D_uni, 'converged_flag', sout.converged, ...
               'Dq_min', min(Dq), 'Dq_max', max(Dq), 'Dq_neg_count', nnz(Dq <= 0), ...
+              'Dq_abs_min', Dq_abs_min, ...
               'idx_pos_flat', NaN, 'Dq_pos_val', NaN, ...
-              'idx_neg_flat', NaN, 'Dq_neg_val', NaN);
+              'idx_neg_flat', NaN, 'Dq_neg_val', NaN, ...
+              'x', x, 'x_minus_Jmax', x-jdiag.max, ...
+              'Ddyn_abs_min', Ddyn_abs_min, ...
+              'Ddyn_nonpositive_count', nnz(Ddyn <= 0), ...
+              'y', y, 'y_rank', y_rank, ...
+              'y_interval_lo', y_lo, 'y_interval_hi', y_hi, ...
+              'Gstat', Gstat_it, ...
+              'gstat_local_denom', getf(sout, 'gstat_local_denom', NaN), ...
+              'xi', getf(sout, 'xi', NaN), ...
+              'static_closed_outer_open', sout.converged && ...
+                  ~(isfinite(dS) && dS < tol_outer));
 posmask = Dq > 0;
 if any(posmask)
     ix = find(posmask);  [vmin, jm] = min(Dq(ix));
@@ -303,4 +337,17 @@ if any(negmask)
     irec.idx_neg_flat = ix(jm);  irec.Dq_neg_val = vmax;
 end
 if isempty(iters), iters = irec; else, iters(end+1) = irec; end
+end
+
+function [rank_lower, lo, hi] = coupling_interval(sorted_J, y)
+rank_lower = NaN;  lo = NaN;  hi = NaN;
+if ~isfinite(y) || isempty(sorted_J), return; end
+rank_lower = nnz(sorted_J < y);
+if rank_lower == 0
+    lo = -Inf;  hi = sorted_J(1);
+elseif rank_lower == numel(sorted_J)
+    lo = sorted_J(end);  hi = Inf;
+else
+    lo = sorted_J(rank_lower);  hi = sorted_J(rank_lower + 1);
+end
 end
