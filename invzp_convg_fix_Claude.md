@@ -32,16 +32,39 @@ corrector repaired only those nodes in 4/4/8 iterations; the unchanged HMF equat
 the predictor and two nodes but left the path incomplete (13/33). Thus a local numerical-stability
 defect is established at 3.6 T, while the moderate-field failure needs continuation rather than a
 one-node solver swap. A subsequent 300-node natural-`h` trace at 1.5 T remained A–D accepted down to
-`h = 0.003414300661 meV` without a pole or mean-cancellation event. Its endpoint was steep but regular:
-scaled `|dh/ds| = 0.1050`, `sigma_min(J) = 0.9242`, and the augmented row block had
-`sigma_min = 0.9754`. This does not trigger pseudo-arclength; use a scaled tangent predictor next.
+`h = 0.003414300661 meV` without a pole or mean-cancellation event, but it did not have a sufficient
+branch-identity gate. Repeating the trace with scaled variables and an analytic tangent predictor
+instead stopped at `h = 0.005243548157786061 meV`, where `rcond(J) = 1.027e-11`,
+`|deta/ds| = 1.771e-6`, and `sigma_min(J) = 9.672e-6`, while the augmented tangent block remained
+regular with `sigma_min([J R_eta]) = 0.4581`. Scaled pseudo-arclength crossed this fold with all A–D
+audits accepted and changed `deta/ds` from `-1.771e-6` to `+8.358e-4`. Thus the clean high-`h`
+branch turns back toward increasing `h`; the earlier lower-`h` secant roots were reached by a branch
+jump and are not evidence of a continuous Jensen path. Repeating the local segment at one-quarter
+the initial arc step resolved `min(h) = 0.005243548147122800 meV`, bracketed the zero of `deta/ds`,
+and kept successive oriented-tangent overlap above `0.9999999999`.
+
+An independent low-`h` test then used three declared deterministic cold seeds, none derived from the
+high-`h` trace. All converged to the same `h = 0` root within a scaled-state diameter of `4.278e-12`.
+Upward tangent continuation reached a second fixed-`h` rank loss at only
+`h = 1.130400753628218e-5 meV`: `sigma_min(J) = 1.558e-5` while
+`sigma_min([J R_eta]) = 0.5629`. Pseudo-arclength crossed it with all A–D audits accepted and changed
+`deta/ds` from `+2.677e-7` to `-5.243e-7`, resolving a local maximum
+`h = 1.130402502867847e-5 meV`. The directly traced low- and high-`h` neighborhoods are disjoint and
+turn away from the intervening range. Roots returned by the earlier secant experiment between the two
+folds must lie on at least one additional branch segment. More remote folds could in principle join
+segments globally, but the two local folds already establish multiple real fixed-`h` roots and hence
+the branch-selection obstruction.
 
 That result changes the near-term priority, not the rigor threshold. The retained Newton kernel lives
 under `docs/diagnostics/invzp_solver_stability_2026-07-27/` and is not wired into production HMF:
 an A–D-accepted fixed-`h` root is not automatically the continuous branch required by the Jensen
-integral. The next work is the smallest branch-tracked numerical continuation across the measured
-failed intervals, followed by the field map. Theory candidates remain deferred unless this
-solver-only route reaches a reproducible pole/fold/branch-selection obstruction.
+integral. The low-`h` overlap test is now complete and has reached the second row of the Phase-1 fork:
+multiple reproducible real branches/components. No fixed-node Newton fallback is eligible for
+production, and a wider field map or expensive grid/cutoff funnel would not resolve which component
+belongs in the Jensen integral. The next implementation requires a separately justified and
+preregistered branch-selection prescription (or the common-functional formulation). The intermediate
+secant-root component may be traced only if its topology is needed to choose or falsify such a
+prescription.
 
 Line numbers below are as of the 2026-07-27 working tree; confirm each before editing.
 
@@ -211,8 +234,10 @@ become part of the scientific record.
 
 The first guards did become part of the scientific record and are retained in
 `docs/diagnostics/invzp_solver_stability_2026-07-27/`. The implementation deliberately stops at a
-fixed-node corrector. Temporary end-to-end wiring was used once to establish the 3.6 T numerical
-result above, then removed because it had no branch-identity gate.
+fixed-node corrector. One-off scaled-tangent and pseudo-arclength drivers remained under `/tmp`; they
+established the 1.5 T fold described above but are not a production solver. Temporary end-to-end
+wiring was used once to establish the 3.6 T numerical result above, then removed because it had no
+branch-identity gate.
 
 ### 1.1 Expose a square vector residual
 
@@ -535,9 +560,12 @@ where the present one does not.
    corresponding trigger above occurs.
 3. Before pseudo-arclength, use the retained corrector only at isolated Picard-failed nodes and require
    step-reduction branch continuity. This already repairs the 0.10 K/3.6 T path, but not 1.5 T.
-4. At the moderate-field gap, replace the crude secant/iteration-count controller with a scaled
-   tangent predictor. Add pseudo-arclength only after confirming the fixed-`h` rank/tangent trigger;
-   then run the promoted reproducibility funnel and only afterward consider Phase 2′.
+4. The scaled tangent predictor has now confirmed the fixed-`h` rank/tangent trigger at 0.10 K/1.5 T,
+   and pseudo-arclength has confirmed that the high-`h` branch turns toward increasing `h`. The
+   independent low-`h` trace also terminates in a regular fold, far below the high-branch fold, and
+   turns toward decreasing `h`. This enters the second row of the Phase-1 fork. Do not run the
+   expensive reproducibility funnel, wire a fallback into production, or consider Phase 2′ until an
+   explicit branch prescription exists.
 
 Two scientific decisions remain external to this implementation sequence: Candidate A still needs a
 derived formula before it can be compared with Candidate B, and any amendment of the frozen Gate-0
