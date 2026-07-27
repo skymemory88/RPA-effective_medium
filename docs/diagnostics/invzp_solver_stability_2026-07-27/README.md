@@ -31,14 +31,18 @@ be inserted into Jensen quadrature without branch-tracked continuation.
 | 0.10 | 3.6 | temporary end-to-end experimental wiring | `status='ok'`, `hmf=0.01949623263696515` meV, 33/33 profile nodes, stable endpoint, 34.8 s |
 | 0.10 | 1.5 | production Picard | `node_failed`, 11/33 profile nodes |
 | 0.10 | 1.5 | same hybrid pilot | `h=0` and two additional nodes corrected, but only 13/33 profile nodes; the path remains incomplete |
+| 0.10 | 1.5 | adaptive natural-`h` continuation from the clean high-`h` branch | 300-node budget reached at `h=0.003414300661` without a pole/mean event; maximum residual `5.35e-12` |
+| 0.10 | 1.5 | tangent at that endpoint | scaled `abs(dh/ds)=0.1050`, `norm(du/dh)=223.4`, `sigma_min(J)=0.9242`, augmented row-block `sigma_min=0.9754`: steep but not a detected fold |
 | 0.31 | 3.6 | adaptive natural-`h` reciprocal continuation from a clean high-`h` node | reaches `h=0` in 12 accepted nodes; minimum pole margin `1.4827e-3` |
 | 0.31 | 1.0 | same continuation | step collapse near `h=0.00793448728`; 258 accepted nodes, condition number rising to `9.84e7`, no pole/mean event |
 
 The temporary HMF wiring used to obtain the end-to-end 3.6 T result was removed after review: a
 fixed-`h` residual root is not automatically the same continuous branch required by the Jensen
 integral. The result is evidence that Picard non-contraction is a numerical defect at that field, not
-yet authorization to publish a corrected spectrum. The 1.5 T gap and the 0.31 K/1 T fold show why a
-branch-identity check is still necessary.
+yet authorization to publish a corrected spectrum. At 1.5 T, the first natural-parameter controller
+spent its node budget on a steep but locally regular branch, so a scaled tangent predictor should be
+tried before pseudo-arclength. The separate 0.31 K/1 T step collapse still shows why branch/rank
+diagnostics are necessary.
 
 One-off drivers and `.mat` files stayed under `/tmp` and were not retained. The surviving
 `invz_ordered_node_newton.m` is the audited numerical kernel; a future retained continuation driver

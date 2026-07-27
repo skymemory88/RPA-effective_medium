@@ -30,7 +30,11 @@ At `T = 0.10 K`, Picard accepted 30/33 profile nodes at 3.6 T but only 11/33 at 
 corrector repaired only those nodes in 4/4/8 iterations; the unchanged HMF equations then gave
 33/33 nodes, `hmf = 0.01949623263696515 meV`, and a stable endpoint. At 1.5 T the same method repaired
 the predictor and two nodes but left the path incomplete (13/33). Thus a local numerical-stability
-defect is established at 3.6 T, while the moderate-field failure has additional branch geometry.
+defect is established at 3.6 T, while the moderate-field failure needs continuation rather than a
+one-node solver swap. A subsequent 300-node natural-`h` trace at 1.5 T remained A–D accepted down to
+`h = 0.003414300661 meV` without a pole or mean-cancellation event. Its endpoint was steep but regular:
+scaled `|dh/ds| = 0.1050`, `sigma_min(J) = 0.9242`, and the augmented row block had
+`sigma_min = 0.9754`. This does not trigger pseudo-arclength; use a scaled tangent predictor next.
 
 That result changes the near-term priority, not the rigor threshold. The retained Newton kernel lives
 under `docs/diagnostics/invzp_solver_stability_2026-07-27/` and is not wired into production HMF:
@@ -531,8 +535,9 @@ where the present one does not.
    corresponding trigger above occurs.
 3. Before pseudo-arclength, use the retained corrector only at isolated Picard-failed nodes and require
    step-reduction branch continuity. This already repairs the 0.10 K/3.6 T path, but not 1.5 T.
-4. At the moderate-field gap, add pseudo-arclength only after confirming the fixed-`h` rank/tangent
-   trigger; then run the promoted reproducibility funnel and only afterward consider Phase 2′.
+4. At the moderate-field gap, replace the crude secant/iteration-count controller with a scaled
+   tangent predictor. Add pseudo-arclength only after confirming the fixed-`h` rank/tangent trigger;
+   then run the promoted reproducibility funnel and only afterward consider Phase 2′.
 
 Two scientific decisions remain external to this implementation sequence: Candidate A still needs a
 derived formula before it can be compared with Candidate B, and any amendment of the frozen Gate-0
