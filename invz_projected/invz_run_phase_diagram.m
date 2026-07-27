@@ -45,13 +45,13 @@ J0 = info.Jcc0;   % scalar hoist: avoids broadcasting the whole info struct to w
 % 12/24) and the R 2007 Fig. 1 experimental anchors, with a second panel of the
 % critical self-energy Sigma(0) along the boundary with/without ODD.
 %
-% Method (ODD-LOG V4.1): B-CUT points ONLY (invz_critical), at a few temperatures
+% Method: B-CUT points ONLY (invz_critical), at a few temperatures
 % below Tc_ODD(0) = 1.509 K. invz_critical survives with ODD on through its
-% `para_edge` fallback (the ordered side never re-converges with ODD on, ODD-LOG
-% T2.2); invz_critical_T CANNOT bracket with ODD on (no metastable PM window
+% `para_edge` fallback (the ordered side never re-converges with ODD on);
+% invz_critical_T CANNOT bracket with ODD on (no metastable PM window
 % below the boundary -> it lacks the para_edge fallback), so the near-Tc0 T-cut
 % region of the ODD curves is LEFT BLANK here -- the missing `para_edge` analog
-% for the T-cut finder is a documented V4-scope item (ODD-LOG T2), not fixed
+% for the T-cut finder is a known open item, not fixed
 % here. Runs in-session on warm caches (~5-15 min; the Tier-2 B-cuts are the
 % slow pole -- if they exceed a ~15 min budget the remaining Tier-2 points are
 % dropped and noted). The PRODUCTION sweep (dense T grid, full para-edge
@@ -96,14 +96,14 @@ if overlay_quick
                 t12_drop = true;
                 warning('invz:oddOverlayT2Budget', ...
                     ['Tier-2 B-cuts used %.1f min after %d point(s) (> %.0f min budget); ' ...
-                     'dropping the remaining Tier-2 points (ODD-LOG V4.1).'], t12_used/60, it, t12_budget_s/60);
+                     'dropping the remaining Tier-2 points.'], t12_used/60, it, t12_budget_s/60);
             end
         end
         fprintf('  overlay T = %.2f K: Bc off/T1/T12/MF = %.3f / %.3f / %.3f / %.3f T\n', ...
                 T, Bc_off(it), Bc_t1(it), Bc_t12(it), Bc_mf(it));
     end
 
-    % --- closed-form zero-field endpoints (Richardson 12/24, ODD-LOG T1.5) ------
+    % --- closed-form zero-field endpoints (Richardson 12/24) --------------------
     [Tc0_off,  zOff]  = invz_odd_zero_field(ion, struct('mode', 'off'));
     [Tc0_full, zFull] = invz_odd_zero_field(ion, struct('mode', 'full'));
     Tc0_mf = invz_critical_T0field(ion, 0, J0);        % mean-field Tc(0) (Sc = 0) ~ 2.26 K
@@ -126,7 +126,7 @@ if overlay_quick
     title(ax1, 'LiHoF_4 phase boundary: ODD overlay (quick, B-cuts + closed-form endpoints)');
     legend(ax1, 'Location', 'northeast');  xlim(ax1, [0 2.4]);  ylim(ax1, [0 6]);
     text(ax1, 0.05, 0.05, {'Near-T_c(0) T-cut region left blank for ODD curves', ...
-        '(invz\_critical\_T cannot bracket with ODD on; ODD-LOG T2/V4.1).'}, ...
+        '(invz\_critical\_T cannot bracket with ODD on).'}, ...
         'Units', 'normalized', 'VerticalAlignment', 'bottom', 'FontSize', 8, 'Color', [0.3 0.3 0.3]);
     % Panel 2: critical self-energy Sigma(0) along the boundary.
     ax2 = subplot(2, 1, 2);  hold(ax2, 'on');  box(ax2, 'on');
@@ -165,7 +165,7 @@ if ion.odd
     % here on the SINGLE driver grid (16^3) so the adaptive-window anchor matches the parfor
     % solves' mesh (not the {12,24} Richardson production value). invz_critical_T refuses to
     % anchor adaptively with opts.odd on (invz:oddTc0), so Tc0 MUST be odd-aware. The engine
-    % suppresses the known 16^3 invz:sigmaCritExcluded warning internally (ODD-LOG T1.3), so no
+    % suppresses the known 16^3 invz:sigmaCritExcluded warning internally, so no
     % wrapper is needed here.
     Tc0 = invz_odd_zero_field(ion, struct('mode', 'full', 'grids', {{16}}, 'dpRng', 30, 'cache', true));
 else

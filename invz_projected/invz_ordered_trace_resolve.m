@@ -3,9 +3,8 @@ function [q_idx, branch_idx, Jq] = invz_ordered_trace_resolve(meta, flat_idx)
 % Uses an invz_ordered_trace.m run's meta block (meta.nq, meta.Jnu_unflat) to invert the
 % flattening invz_bz_couplings.m:17 performs (Jnu = Jnu(:), column-major over
 % invz_jq_modes' [nq x 4] branch matrix): flat k -> q = mod(k-1,nq)+1,
-% branch = floor((k-1)/nq)+1 (both 1-based). This is the SAME formula documented in
-% .superpowers/sdd/stage2c-context.md's key-code-anchors list; kept here as ONE canonical,
-% tested implementation rather than re-derived ad hoc at each call site.
+% branch = floor((k-1)/nq)+1 (both 1-based). Kept here as ONE canonical implementation
+% rather than re-derived ad hoc at each call site.
 %
 % Errors ('invz:orderedTraceResolve') when the run has no lattice provenance (synthetic
 % Jnu_flat, meta.is_synthetic true) or when flat_idx is not a valid finite index (in

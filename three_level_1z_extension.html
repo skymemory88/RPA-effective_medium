@@ -82,7 +82,7 @@ footer{margin-top:3.6rem; border-top:1px solid var(--rule); padding-top:1rem; fo
 <div class="wrap">
 <header>
 <h1>The 1/z Effective-Medium Expansion for the Transverse Spin-1 Ising Model with Single-Ion Anisotropy</h1>
-<div class="subtitle">Completed strict-first-order analytical formulation of the three-state extension of Jensen's singlet–singlet theory, including the exact finite-frequency four-point vertex, the finite-longitudinal-field problem, the modified mean-field condition, controlled limiting cases, explicit KMS and divided-difference guidance, and a quantitative warning for the low-temperature elastic sector.</div>
+<div class="subtitle">Completed strict-first-order analytical formulation of the three-state extension of Jensen's singlet–singlet theory, including the exact finite-frequency four-point vertex, the finite-longitudinal-field problem, the modified mean-field condition, controlled limiting cases, explicit KMS and divided-difference guidance, a quantitative warning for the low-temperature elastic sector, and a nuclear-spin extension (onsite isotropic hyperfine plus nuclear Zeeman) with the resulting electro-nuclear branch spectrum.</div>
 <div class="legend">
 <span><span class="swatch" style="background:var(--exact)"></span> exact finite expression or explicit derivation</span>
 <span><span class="swatch" style="background:var(--note)"></span> interpretation or controlled approximation</span>
@@ -93,6 +93,7 @@ footer{margin-top:3.6rem; border-top:1px solid var(--rule); padding-top:1rem; fo
 
 <div class="box note"><span class="tag">What has been completed and corrected</span>
 <p>This revision replaces the previously deferred coefficient assembly by an exact finite spectral sum; derives the strict-first-order finite-field three-level vertex that replaces Jensen's Eqs. (2.26)–(2.27); gives an exact three-point vertex for the tadpole-cancelling mean field and for population/energy shifts; treats an active two-state channel with a spectator using normalized subspace probabilities rather than inserting unnormalized populations into Jensen's final formulas; separates the fully connected fourth cumulant from Jensen's partially subtracted bracket in the classical limit; corrects the nonzero-Matsubara scaling in the \(\Delta\to0\) check; and removes unsupported numerical and critical-scaling claims. The present update also distinguishes an analogous residual-field omission from a proven term-by-term reproduction of Jensen's approximation, confines the \((\Gamma/D)^4\) estimate to the canonical one-parameter model, treats repeated-node divided differences as a mandatory numerical case, strengthens the low-temperature elastic-sector warning, and restores the KMS boundary-layer explanation and the observables synthesis. No external verification script is assumed.</p>
+<p>Sections 16&ndash;17 are new. They add nuclear spins under an onsite-only assumption, establish that the entire effective-medium construction is unchanged apart from a single substitution rule, derive the parity selection rule that removes the elastic weight at zero longitudinal field, prove an interlacing bound showing that RPA alone cannot soften a non-critical electro-nuclear branch below the next-lower bare gap, give the regular \(1/z\) pole condition and the first-order branch shift, and separate the three distinct mechanisms by which the first-order vertex evades that bound. The symmetry, interlacing, branch-shift and Matsubara-reduction statements were checked numerically before inclusion; no other numerical claim is made.</p>
 </div>
 
 <nav>
@@ -114,7 +115,9 @@ footer{margin-top:3.6rem; border-top:1px solid var(--rule); padding-top:1rem; fo
 <li><a href="#s13">Two-level \(\Delta\to0\) check</a></li>
 <li><a href="#s14">Energy, heat capacity, and observable fingerprints</a></li>
 <li><a href="#s15">Implementation and validation</a></li>
-<li><a href="#s16">Conclusions</a></li>
+<li><a href="#s16">Nuclear spins: onsite hyperfine and nuclear Zeeman</a></li>
+<li><a href="#s17">Electro-nuclear spectrum from the \(1/z\) calculation</a></li>
+<li><a href="#s18">Conclusions</a></li>
 </ol>
 </nav>
 
@@ -175,7 +178,7 @@ E_k=-\frac{2D}{3}+\frac{2\sqrt A}{3}
 \right],\qquad k=0,1,2,
 \tag{6}
 $$
-<p>followed by ordering \(E_1<E_2<E_3\). For nondegenerate levels, the spectral projectors are</p>
+<p>followed by ordering \(E_1&lt;E_2&lt;E_3\). For nondegenerate levels, the spectral projectors are</p>
 $$
 P_r=\prod_{s\ne r}\frac{H_{\rm loc}-E_s\mathbf1}{E_r-E_s}.
 \tag{7}
@@ -246,7 +249,7 @@ $$
 $$
 C_n=
 \beta\delta_{n0}\sum_rp_r x_{rr}^2
-+\sum_{r<s}
++\sum_{r&lt;s}
 \frac{2(p_r-p_s)(E_s-E_r)|x_{rs}|^2}
 {(E_s-E_r)^2+\omega_n^2},
 \qquad G_{0n}=-C_n.
@@ -647,7 +650,7 @@ $$
 <p>At zeroth order, Eq. (13) gives</p>
 $$
 \frac1\beta\sum_nG_{0n}
-=-\sum_rp_rx_{rr}^2-\sum_{r<s}(p_r+p_s)|x_{rs}|^2
+=-\sum_rp_rx_{rr}^2-\sum_{r&lt;s}(p_r+p_s)|x_{rs}|^2
 =-\langle X^2\rangle_0.
 \tag{46}
 $$
@@ -920,13 +923,237 @@ $$
 <tr><td>Field symmetry</td><td>At \(H=0\), scalar response functions are even in \(h\), and the three-point tadpole is odd.</td></tr>
 </table>
 
-<h2 id="s16">16 &nbsp;Conclusions</h2>
+<h2 id="s16">16 &nbsp;Nuclear spins: onsite hyperfine and nuclear Zeeman</h2>
+<p>The model is now enlarged by a nuclear spin \(\mathbf I\) on every site, coupled to the electronic spin by an isotropic onsite hyperfine interaction and to the external field by a nuclear Zeeman term:</p>
+$$
+\mathcal H\;\longrightarrow\;\mathcal H+\sum_i\Big[
+A\,\mathbf S_i\cdot\mathbf I_i-\gamma_zI_i^z-\gamma_xI_i^x\Big].
+\tag{72}
+$$
+<div class="box note"><span class="tag">Scope of the nuclear sector</span>
+<p>Included: the onsite contact/dipolar hyperfine coupling in isotropic form, and the nuclear Zeeman energy. Excluded by assumption: transferred and intersite hyperfine coupling, the internuclear dipolar interaction, and the nuclear electric quadrupole term. The single structural consequence of these exclusions is decisive: <em>the lattice interaction still couples one operator, and that operator is still purely electronic</em>, \(S^z\otimes\mathbf1_I\). Every step of Secs. 2–9 was derived without reference to the dimension of the local Hilbert space, so the entire effective-medium construction survives verbatim.</p>
+</div>
+<div class="warn"><span class="tag">The nuclear Zeeman term must not see the exchange field</span>
+<p>In Eq. (1) the symbols \(\Gamma\) and \(H\) are <em>energies</em>, absorbing \(g\mu_B\). The mean field \(h=H+\Jc_0m_0-\delta h\) of Eq. (3) is the exchange/dipolar field acting on the <em>electronic</em> moment; the nucleus does not experience it, because the only intersite channel that would transmit it — transferred hyperfine and internuclear dipolar coupling — has been excluded. The nuclear Zeeman couplings are therefore fixed by the external field alone,</p>
+$$
+\gamma_z=\frac{g_n\mu_N}{g_\parallel\mu_B}\,H,
+\qquad
+\gamma_x=\frac{g_n\mu_N}{g_\perp\mu_B}\,\Gamma,
+\qquad
+\frac{g_n\mu_N}{g\mu_B}\sim10^{-4}\!-\!10^{-3},
+\tag{73}
+$$
+<p>and they must be held fixed while \(h\) is iterated to self-consistency in Eq. (42). Substituting \(h\) for \(H\) in Eq. (73) would give the nucleus a spurious exchange field three to four orders of magnitude too large, and would corrupt the mean-field iteration itself, since \(\gamma_z\) would then feed back into \(m_0(h)\).</p>
+</div>
+<p>The local problem is defined on \(\mathcal H_{\rm loc}=\mathbb C^{3}\otimes\mathbb C^{2I+1}\), of dimension \(N_t=3(2I+1)\):</p>
+$$
+H_{\rm loc}(h)=-D(S^z)^2-\Gamma S^x-hS^z
++A\Big[S^zI^z+\tfrac12\big(S^+I^-+S^-I^+\big)\Big]
+-\gamma_zI^z-\gamma_xI^x .
+\tag{74}
+$$
+<p>For \(S=1\) and \(I=7/2\), \(N_t=24\). The matrix is small; it is the <em>vertex</em> cost, not the diagonalization, that scales badly (Sec. 17.5).</p>
+
+<h3>16.1 &nbsp;What is unchanged, and the single substitution rule</h3>
+<div class="box exact"><span class="tag">Substitution rule</span>
+<p>Diagonalize Eq. (74), order the \(N_t\) eigenvalues \(E_1\le\dots\le E_{N_t}\), and set</p>
+$$
+p_r=\frac{e^{-\beta E_r}}{Z_0},\qquad
+m_0(h)=\langle S^z\rangle_0,\qquad
+x_{rs}=\langle r|S^z|s\rangle-m_0\delta_{rs}.
+\tag{75}
+$$
+<p>With this replacement, and with all state sums \(r,s,t,u\) running over \(1,\dots,N_t\) instead of \(1,2,3\), the following are unchanged as written: the exact rearrangement (3); the Lehmann correlator (13); the medium definition (15); the first-order derivation and Dyson form (16)–(22); the divided-difference kernels and exact four-point sum (23)–(27); the finite-field self-energy (36); the three-point vertex, tadpole condition and modified mean field (38)–(42); the general one-point correction (43)–(44); the sum rule and its first-order consistency condition (45)–(47); and the energy and heat-capacity relations (69)–(71).</p>
+</div>
+<p>What does <em>not</em> survive is everything in Secs. 1.1, 5, 6, 10, 11 and 13 that used the specific three-state chain pattern: the parity labels \(g,a,e\), the two amplitudes \(M_1,M_2\) with \(M_1^2+M_2^2=1\), the two-pole reduction (14), the closed-form eigenvalues (6), the strong-anisotropy expansions (53a)–(53b), and the cross-channel ratio \(\epsilon_\times\) of Eq. (56). Those were spin-1 specializations of the general formulas, not inputs to them, and they must be recomputed numerically from Eq. (74).</p>
+
+<h3>16.2 &nbsp;Symmetry, selection rules, and the elastic sector</h3>
+<p>Two exact statements about Eq. (74) are worth isolating, because both are cheap unit tests and one of them controls the elastic sector.</p>
+<p><b>(a) Conserved projection.</b> Since \(-D(S^z)^2\), \(-hS^z\), \(-\gamma_zI^z\) and \(\mathbf S\cdot\mathbf I\) all commute with \(M=S^z+I^z\),</p>
+$$
+[H_{\rm loc},\,S^z+I^z]=0
+\qquad\Longleftrightarrow\qquad
+\Gamma=\gamma_x=0 .
+\tag{76}
+$$
+<p>At \(\Gamma=\gamma_x=0\) the local problem block-diagonalizes into sectors of fixed \(M\), which is a strong and easily automated correctness check on the enlarged Hamiltonian. For any \(\Gamma\neq0\) there is no such quantum number and the matrix must be treated as dense.</p>
+<p><b>(b) Parity at zero longitudinal field.</b> Let \(\Pi\) be the common \(\pi\)-rotation of both spins about \(x\),</p>
+$$
+\Pi=e^{i\pi/2}\,e^{-i\pi S^x}e^{-i\pi I^x}
+\quad(\text{phase chosen so that }\Pi^2=\mathbf1\text{ for half-integer }I).
+$$
+<p>Because \(\mathbf S\cdot\mathbf I\) is invariant under a <em>common</em> rotation, and \(S^x\), \(I^x\), \((S^z)^2\) are invariant under this particular one,</p>
+$$
+[\Pi,H_{\rm loc}]=0 \ \ \text{when}\ \ h=\gamma_z=0,
+\qquad
+\Pi S^z\Pi^\dagger=-S^z .
+\tag{77}
+$$
+<div class="box exact"><span class="tag">Consequences of Eq. (77)</span>
+<ul class="tight">
+<li>\(S^z\) is odd under \(\Pi\), so it connects the two parity sectors only. Hence <b>\(x_{rr}=0\) for every \(r\), and the elastic term \(\beta\delta_{n0}\sum_rp_rx_{rr}^2\) of Eq. (13) vanishes identically</b> at \(h=\gamma_z=0\), exactly as it did in the purely electronic problem.</li>
+<li>For half-integer \(I\) the two sectors have equal dimension \(N_t/2\), so Eq. (13) supports at most \((N_t/2)^2\) distinct inelastic lines — \(144\) for \(S=1,I=7/2\). Individual weights may be numerically tiny, but they are not forbidden. For integer \(I\) the sector dimensions are unequal and the count is \(d_+d_-\).</li>
+<li>Either \(h\neq0\) (ordered phase) or \(\gamma_z\neq0\) (longitudinal external field) breaks \(\Pi\), restores a nonzero \(x_{rr}\), and activates the full ordered-phase machinery of Secs. 7–8 together with the elastic-sector caveat of Eq. (37a).</li>
+</ul>
+</div>
+<div class="warn"><span class="tag">This is specific to the isotropic form</span>
+<p>The vanishing of the elastic weight is <em>not</em> a generic hyperfine result. For a purely axial coupling \(A_\parallel S^zI^z\), the nuclear projection \(m_I\) is exactly conserved, the local problem factorizes into \(2I+1\) copies of the three-level problem at shifted longitudinal fields \(h\to h-A_\parallel m_I\), and each copy carries a static electronic moment. Then \(x_{rr}\neq0\) even at \(h=0\) — only \(\sum_rp_rx_{rr}\) vanishes, by the pairing \(m_I\leftrightarrow-m_I\) — and a genuine Curie-like elastic term survives to \(T=0\). The isotropic model adopted here converts that strictly elastic weight into a dense set of low-energy inelastic lines instead. The distinction changes which term of Eq. (13) carries the low-frequency weight, and therefore which control parameter of Sec. 17.4 is the binding one; it should not be blurred.</p>
+</div>
+
+<h3>16.3 &nbsp;Structure of the local spectrum</h3>
+<p>Three regimes, distinguished by the ratio of the hyperfine scale \(|A|I\) to the lower electronic gap \(\Delta_1\) of Eq. (10):</p>
+<table>
+<tr><th>Regime</th><th>Local spectrum</th></tr>
+<tr><td>\(|A|I\ll\Delta_1\)</td><td>Three weakly split hyperfine manifolds of \(2I+1\) levels each, tracking the electronic levels \(g,a,e\). Perturbatively the first-order shift \(A\langle S^z\rangle_{\rm el}m_I\) vanishes in each unperturbed electronic state at \(h=0\), so the leading splitting is second order in \(A\) and set by \(A^2M_1^2/\Delta_1\) within the lower pair.</td></tr>
+<tr><td>\(|A|I\sim\Delta_1\)</td><td>The lower \(2(2I+1)\) states mix strongly and reorganize into an electro-nuclear ladder. The lowest gaps are no longer \(\Delta_1\) but a set of scale \(|A|\), and the electronic and nuclear characters of individual levels cease to be separately meaningful. This is the regime in which a nominally electronic soft mode is replaced by a family of electro-nuclear branches.</td></tr>
+<tr><td>\(|A|I\gg\Delta_1\)</td><td>Hyperfine-dominated; the residual nuclear Zeeman terms \(\gamma_{x,z}\), which are smaller again by Eq. (73), lift what would otherwise be near-degeneracies and set the smallest gaps in the problem.</td></tr>
+</table>
+<p>Nothing in the formalism requires a hierarchy among these scales, and none should be imposed: near a field-tuned instability \(\Delta_1\) is driven small by construction and passes through the second regime, so any expansion that presumes \(|A|I\ll\Delta_1\) fails precisely where the calculation is being used.</p>
+
+<h2 id="s17">17 &nbsp;Electro-nuclear spectrum from the \(1/z\) calculation</h2>
+<p>Write the allowed transitions of Eq. (13) as a single index \(\lambda=(r,s)\) with \(r&lt;s\), and define</p>
+$$
+\Delta_\lambda=E_s-E_r,
+\qquad
+a_\lambda=2(p_r-p_s)\Delta_\lambda|x_{rs}|^2\;>0\ \text{in the paramagnet},
+$$
+$$
+C(\omega)=\sum_\lambda\frac{a_\lambda}{\Delta_\lambda^2-\omega^2},
+\qquad
+G_0(\omega)=-C(\omega),
+\qquad
+c_d=\sum_rp_rx_{rr}^2,
+\tag{78}
+$$
+<p>obtained from the inelastic part of Eq. (13) by \(\omega_n^2\to-\omega^2\). There are up to \((N_t/2)^2\) poles rather than the two of Eq. (14).</p>
+<div class="warn"><span class="tag">The elastic term does not continue</span>
+<p>The \(\beta\delta_{n0}c_d\) term of Eq. (13) lives on the single Matsubara point \(n=0\) and has no continuation to nonzero real frequency; on the real axis it is a zero-frequency delta function in \(\chi''\), not a pole. It must therefore be included in every <em>static</em> quantity — the ordering condition (51), the medium \(K_0\), the control parameter (84) — and omitted from the dynamic branch equations of Secs. 17.1–17.3. Using one convention in both places is a silent and common error: it shifts the apparent instability point relative to the frequency at which the lowest branch reaches zero, which then looks like a physical failure of the soft mode to soften completely. At \(h=\gamma_z=0\) the issue is moot, since \(c_d=0\) by Eq. (77); it becomes live as soon as a longitudinal field or an ordered moment is switched on. A static and a dynamic evaluation of the same instability must be run against each other as a consistency check.</p>
+</div>
+
+<h3>17.1 &nbsp;RPA baseline and an exact bound on non-critical branches</h3>
+<p>With \(\Sigma=0\), Eq. (22) gives the generalization of Eq. (48):</p>
+$$
+1-\Jc(\mathbf q)\,C(\omega)=0,
+\qquad\text{i.e.}\qquad
+\sum_\lambda\frac{a_\lambda}{\Delta_\lambda^2-\omega^2}=\frac{1}{\Jc(\mathbf q)} .
+\tag{79}
+$$
+<p>Let \(0&lt;\Delta_{(1)}&lt;\dots&lt;\Delta_{(P)}\) be the <em>distinct</em> gaps carrying nonzero weight, with degenerate transitions merged into a single pole of summed weight, and let \(u=\omega^2\). Then \(C'(u)=\sum_\lambda a_\lambda(\Delta_\lambda^2-u)^{-2}>0\) whenever all \(a_\lambda>0\), so \(C\) increases strictly and monotonically on every interval between consecutive poles, running from \(0^+\) to \(+\infty\) on \((-\infty,\Delta_{(1)}^2)\), from \(-\infty\) to \(+\infty\) on each \((\Delta_{(k-1)}^2,\Delta_{(k)}^2)\), and from \(-\infty\) to \(0^-\) on \((\Delta_{(P)}^2,\infty)\).</p>
+<div class="box exact"><span class="tag">Interlacing theorem for the RPA branches</span>
+<p>For \(\Jc(\mathbf q)>0\) and paramagnetic populations, Eq. (79) has exactly \(P\) roots, and they interlace with the bare gaps:</p>
+$$
+\omega_1^2&lt;\Delta_{(1)}^2&lt;\omega_2^2&lt;\Delta_{(2)}^2&lt;\dots&lt;\omega_P^2&lt;\Delta_{(P)}^2 .
+\tag{80}
+$$
+<p>Consequently \(\omega_k>\Delta_{(k-1)}\) strictly for every \(k\ge2\), <b>uniformly in \(\mathbf q\) and in the magnitude of \(\Jc\)</b>. Only the lowest branch can reach \(\omega=0\); it does so exactly at the instability \(\Jc(\mathbf q_0)C(0)=1\) of Eq. (51) with \(\Sigma=0\), and passes to \(\omega_1^2&lt;0\) beyond it. For \(\Jc(\mathbf q)&lt;0\) the roots interlace upward instead, \(\Delta_{(k)}^2&lt;\omega_k^2&lt;\Delta_{(k+1)}^2\), and the lowest branch is bounded below by \(\Delta_{(1)}\).</p>
+</div>
+<div class="box note"><span class="tag">What this rules out</span>
+<p>Within mean field plus RPA, the intersite coupling <em>cannot</em> push a non-critical electro-nuclear branch below the next-lower bare local gap, no matter how strong the coupling or how close the system is to the transition. Any partial softening of an adjacent branch seen in an RPA calculation is therefore inherited entirely from the temperature and field dependence of the local spectrum itself — the motion of the \(\Delta_{(k)}\) with \(h\), \(\Gamma\), and the populations \(p_r\) in Eq. (74) — and not from the RPA resummation. This is a sharp statement, and it is the natural place to start when asking whether an observed incomplete softening requires physics beyond RPA: first check whether the bare \(\Delta_{(k)}\) themselves move enough to account for it.</p>
+<p>The three hypotheses of the theorem are the loopholes, and each should be checked rather than assumed: positivity of every \(a_\lambda\) (violated once populations invert, e.g. in a driven or metastable state), a single scalar coupled operator (violated by a tensorial or multi-operator interaction), and a real, frequency-independent \(\Jc(\mathbf q)\).</p>
+</div>
+
+<h3>17.2 &nbsp;The \(1/z\) pole condition in regular form</h3>
+<p>Section 3 warned that \(\Sigma_n=\Vtx_n^{K}/G_{0n}\) carries artificial poles at zeros of the multi-pole \(G_{0n}\). With \(N_t\) levels there are many more such zeros, and the warning becomes a practical obstruction: root-finding on \(1+\Sigma+\Jc G_0\) will chase spurious structure. Multiplying through by \(G_0\) removes it.</p>
+<div class="box exact"><span class="tag">Spectrum condition to first order in \(1/z\)</span>
+$$
+\boxed{\displaystyle
+\mathcal D(\mathbf q,\omega)\equiv
+G_0(\omega)\big[1+\Jc(\mathbf q)G_0(\omega)\big]+\Vtx^{K}(\omega)=0,
+\qquad
+G(\mathbf q,\omega)=\frac{G_0(\omega)^2}{\mathcal D(\mathbf q,\omega)} .}
+\tag{81}
+$$
+<p>Equivalently, defining the dressed <em>local</em> propagator</p>
+$$
+\hat G(\omega)=\frac{G_0}{1+\Sigma}=\frac{G_0^2}{G_0+\Vtx^{K}},
+\qquad
+G(\mathbf q,\omega)=\frac{\hat G}{1+\Jc(\mathbf q)\hat G},
+\tag{82}
+$$
+<p>so that the whole effect of the first-order vertex on the spectrum is the replacement \(G_0\to\hat G\) inside an otherwise RPA-shaped denominator. Both \(\mathcal D\) and \(\Vtx^{K}\) are regular where \(\Sigma\) is not; solve Eq. (81) by direct root-finding on the meromorphic \(\mathcal D\), and locate the poles of \(\hat G\) as zeros of \(G_0+\Vtx^{K}\).</p>
+</div>
+
+<h3>17.3 &nbsp;First-order shift of a branch</h3>
+<p>Let \(\omega_k\) be a simple root of the RPA condition (79) at which \(\Vtx^{K}\) is regular, and write \(\mathcal D_0=G_0(1+\Jc G_0)\). Since \(\mathcal D_0'=G_0'(1+2\Jc G_0)\) and \(\Jc G_0=-1\) at the root, \(\mathcal D_0'=-G_0'=C'\), giving</p>
+<div class="box exact"><span class="tag">Branch shift</span>
+$$
+\boxed{\displaystyle
+\delta\big(\omega_k^2\big)=-\frac{\Vtx^{K}(\omega_k)}{C'(\omega_k^2)},
+\qquad
+C'(u)=\sum_\lambda\frac{a_\lambda}{(\Delta_\lambda^2-u)^2}>0 .}
+\tag{83}
+$$
+<p>A positive contracted vertex therefore pushes a branch down and a negative one up, for every branch alike. The denominator gives the sensitivity structure: \(C'\) is large for a branch pinned close to a bare pole and small for one that RPA has repelled far from every \(\Delta_\lambda\). Strongly repelled branches are thus the ones whose position is most exposed to a vertex error, while branches sitting just above their interlacing floor are stiff. Equation (83) is a diagnostic for sensitivity and a first-order estimate only; near-degenerate roots, and roots close to a pole of \(\Vtx^{K}\), require the full solution of Eq. (81).</p>
+</div>
+
+<h3>17.4 &nbsp;How the first-order vertex evades the interlacing floor</h3>
+<p>The bound (80) applies to \(\hat G\) with its own poles and residues, not to \(G_0\). Three distinct mechanisms therefore separate the \(1/z\) spectrum from the RPA one, and they should be distinguished in any numerical claim.</p>
+<ol class="steps">
+<li><b>Floor renormalization.</b> The poles of \(\hat G\) are the zeros of \(G_0+\Vtx^{K}\), which do not coincide with the poles \(\Delta_\lambda\) of \(G_0\). The floors \(\tilde\Delta_{(k)}\) that bound the higher branches are themselves shifted, and they inherit the temperature, field and \(\mathbf q\)-averaged dependence of the medium \(K_\ell\). A non-critical branch can then soften because its floor softens — an effect with no RPA counterpart.</li>
+<li><b>Residue transfer.</b> The weights \(\tilde a_\lambda\) of \(\hat G\) differ from \(a_\lambda\). A branch may keep a finite pole while losing residue, which in a scattering experiment is a disappearance rather than a softening, or gain residue and become visible where RPA predicted nothing. Position and intensity must be reported separately; conflating them is the commonest way to over-read a spectrum.</li>
+<li><b>Loss of positivity.</b> If any \(\tilde a_\lambda&lt;0\), or if \(G_0+\Vtx^{K}\) acquires complex zeros, the hypotheses of Eq. (80) fail outright and no interlacing bound of any kind constrains the higher branches.</li>
+</ol>
+<div class="warn"><span class="tag">First order does not by itself generate a linewidth</span>
+<p>\(\Vtx^{K}(\omega)\) is built from Eq. (26), a finite Lehmann sum over a finite local Hilbert space. Continued to the real axis it is a finite collection of real poles at combinations of local level differences, and it is <em>real</em> between them. Strict first order therefore moves branch positions and redistributes residues, but produces no intrinsic damping: a computed \(\operatorname{Im}\Sigma\) that vanishes as the numerical broadening \(\eta\to0\) is telling the truth about the approximation, and a finite width obtained at fixed \(\eta\) is an artifact of the broadening, not a physical linewidth. Any genuine width at this order must enter through \(\operatorname{Im}K(\omega+i0^+)\), that is, through the analytic continuation of the \(\mathbf q\)-average in Eq. (15), which is a separate and considerably more delicate continuation problem than continuing the local sums. Whether that route is legitimate within a strictly first-order scheme is not settled by the formalism presented here.</p>
+</div>
+<div class="box note"><span class="tag">Minimal audit before reporting incomplete softening</span>
+<ol class="steps">
+<li>Confirm \(a_\lambda>0\) for all \(\lambda\) and verify Eq. (80) numerically at \(\Vtx^{K}=0\). A violation is a bug or a sign error, not physics.</li>
+<li>Compute the RPA branches with the fully temperature- and field-dependent local spectrum, to separate the trivial mechanism of Sec. 17.1 from any genuine vertex effect.</li>
+<li>Solve Eq. (81) by root-finding over the whole low-frequency interval, including below any resolution or plotting floor. A search restricted to \(\omega\) above a fixed minimum will silently miss the hyperfine branches, whose gaps are of order \(|A|\) or \(\gamma\) and are exactly the ones at issue.</li>
+<li>Verify on the paramagnetic side that \(\mathcal D(\mathbf q_0,\omega\to0)\to0\) as the transition is approached. A continuous transition requires spectral support at zero energy; a finite-energy maximum of \(\chi''\) is permitted, a true lower gap is not.</li>
+<li>Report the static control parameter of Sec. 17.5, and treat any demagnetizing or shape correction as a separate stage applied to the internal response, not folded into the pole condition.</li>
+</ol>
+</div>
+
+<h3>17.5 &nbsp;Static control parameter with hyperfine, and cost</h3>
+<div class="warn"><span class="tag">The elastic caveat of Eq. (37a) tightens, and moves</span>
+<p>The natural static expansion parameter is the chain term of Eq. (20) at \(n=0\),</p>
+$$
+\epsilon_{\rm stat}=\big|K_0G_{00}\big|
+=|K_0|\left[\beta c_d+\sum_{r&lt;s}\frac{2(p_r-p_s)|x_{rs}|^2}{\Delta_{rs}}\right],
+\tag{84}
+$$
+<p>which reduces to \(\epsilon_{\rm el}=\beta|K_0|c_d\) of Eq. (37a) when the elastic term dominates. With isotropic hyperfine at \(h=\gamma_z=0\) the elastic term is absent altogether (Sec. 16.2), so the binding contribution is the second sum, which is bounded below at \(T\to0\) by \(\sum_{s>1}2|x_{1s}|^2/\Delta_{1s}\) and therefore grows as the inverse of the smallest electro-nuclear gap. Hyperfine coupling manufactures gaps of order \(|A|\), and nuclear Zeeman splitting gaps smaller still, where the electronic problem had only \(\Delta_1\); \(\epsilon_{\rm stat}\) is enhanced accordingly, and the enhancement is largest in the intermediate regime \(|A|I\sim\Delta_1\) of Sec. 16.3 — which is exactly the regime in which the low branches are electro-nuclear and in which their softening is being studied. Direct evaluation of Eq. (84) in a spin-1 caricature shows this enhancement reaching one to two orders of magnitude relative to the same model at \(A=0\); the number is strongly parameter dependent and should be recomputed for the case at hand rather than quoted. The practical consequence is unambiguous: <b>report \(\epsilon_{\rm stat}\) alongside any statement about branch positions</b>, and when it is not small, compare Eq. (81) against a static-sector resummation or a direct numerical solution of the effective single-site problem before attributing incomplete softening to the vertex.</p>
+</div>
+<p>The vertex cost is the real obstacle. Equation (26) has \(6N_t^4\) nominal terms, which is \(2.0\times10^6\) per frequency pair at \(S=1,I=7/2\), against \(2.9\times10^3\) for the bare three-level problem. Two exact reductions apply.</p>
+<div class="box exact"><span class="tag">Parity reduction</span>
+<p>At \(h=\gamma_z=0\), Eq. (77) forces the closed path \(r\to s\to t\to u\to r\) to alternate between the two parity sectors, so \(r,t\) lie in one sector and \(s,u\) in the other. Only \(2(N_t/2)^4=N_t^4/8\) of the \(N_t^4\) paths survive — \(41\,472\) of \(331\,776\) at \(I=7/2\). The same argument kills all odd cumulants, consistent with \(\delta m_K=0\) below Eq. (42).</p>
+</div>
+<div class="box exact"><span class="tag">Matsubara reduction of the divided differences</span>
+<p>All frequencies in Eqs. (23)–(27) are bosonic, so \(e^{\beta\zeta_n}=e^{\beta\zeta_\ell}=1\) and, for any real \(E\) and any bosonic \(\zeta\),</p>
+$$
+\phi(E+\zeta)=\frac{e^{\beta E}-1}{E+\zeta},
+\qquad
+\phi(\zeta_\ell)=\beta\delta_{\ell0}.
+\tag{85}
+$$
+<p>Every \(\phi\) appearing in \(\mathcal I_2\) and \(\mathcal I_3\) therefore reduces to a real Boltzmann numerator over a linear denominator, and \(\mathcal I_3\) becomes a <em>rational</em> function of \(\zeta_\ell\) at fixed \(\zeta_n\). The internal sum in Eq. (19) is then a rational Matsubara sum, amenable to partial fractions or contour methods rather than brute-force truncation — which matters, because the naive cost is the product of the path count and the number of retained \(\ell\).</p>
+<p>This simplification does <em>not</em> remove the repeated-node requirement of Sec. 15.1. The coincident-node cases now appear as vanishing denominators \(y\), \(z\), or \(y+z\) in Eqs. (24)–(25), and the Hermite branches (25a)–(25b) must still be implemented; only the exponentials have simplified, not the divided differences.</p>
+</div>
+
+<h3>17.6 &nbsp;Additional validation tests</h3>
+<table>
+<tr><th>Test</th><th>Expected result</th></tr>
+<tr><td>Decoupling limit</td><td>\(A,\gamma_{x},\gamma_z\to0\): the spectrum of Eq. (74) becomes \((2I+1)\) exact copies of Eqs. (6)/(10), and \(\Vtx^{K}\), \(\Sigma\), and every observable reduce to the results of Secs. 1–15 with no residual \(I\) dependence.</td></tr>
+<tr><td>Conserved projection</td><td>At \(\Gamma=\gamma_x=0\), \([H_{\rm loc},S^z+I^z]=0\) to machine precision, and block-diagonalization by \(M\) reproduces the dense-matrix spectrum.</td></tr>
+<tr><td>Parity</td><td>At \(h=\gamma_z=0\): \(|x_{rr}|=0\) for all \(r\), \(|x_{rs}|=0\) for same-sector pairs, and the sectors have dimension \(N_t/2\) each for half-integer \(I\). Switching on \(\gamma_z\) must restore a nonzero \(c_d\) continuously.</td></tr>
+<tr><td>Interlacing</td><td>With \(\Vtx^{K}=0\) and \(\Jc(\mathbf q)>0\), the roots of Eq. (79) satisfy Eq. (80) for every \(\mathbf q\), \(T\), and coupling strength. Enforce this as an assertion, not a plot.</td></tr>
+<tr><td>Branch shift</td><td>Scaling \(\Vtx^{K}\to\varepsilon\Vtx^{K}\), the root of Eq. (81) approaches the RPA root with an error linear in \(\varepsilon\) and slope given by Eq. (83).</td></tr>
+<tr><td>Matsubara reduction</td><td>Equation (85) reproduces \(\phi\) evaluated directly at complex bosonic arguments, and \(\phi(\zeta_\ell)\) vanishes for \(\ell\neq0\).</td></tr>
+<tr><td>Sum rule</td><td>Equation (47), evaluated over the enlarged \(N_t\)-state trace, still agrees with the independent one-point calculation (43)–(44).</td></tr>
+<tr><td>Static control</td><td>Report \(\epsilon_{\rm stat}\) of Eq. (84) at every parameter point, together with its ratio to the same quantity at \(A=\gamma=0\).</td></tr>
+</table>
+
+
+<h2 id="s18">18 &nbsp;Conclusions</h2>
 <p>The structural analogue of Jensen's Eq. (2.15) survives unchanged for any finite local Hilbert space. What changes at spin 1 is the local irreducible vertex. In the zero-field transverse spin-1 Ising model the bare response has two transition channels, and the fourth cumulant contains both spectator corrections to the pure channels and a genuinely three-level virtual path. At finite longitudinal field the local problem becomes fully three-level, so no single \(\alpha_m\) can represent the ordered-phase correction.</p>
 <p>The exact strict-first-order completion is the finite spectral construction in Eqs. (23)–(30) and (36), supplemented by the three-point construction in Eqs. (38)–(44). These formulas retain the shifted-frequency dependence omitted in Jensen's compact ordered-phase approximation and provide direct checks through the sum rule, the static-source derivative, the two-level limit, and the classical Blume–Capel limit. Their implementation must treat repeated-node divided differences as a routine case and preserve KMS endpoint layers before any asymptotic truncation.</p>
+<p>Adding nuclear spins with onsite hyperfine and nuclear Zeeman terms changes nothing structural. Because the lattice interaction still couples the single electronic operator \(S^z\otimes\mathbf1_I\), and because the derivation of Sec. 3 never used the dimension of the local Hilbert space, Eqs. (13), (15)&ndash;(22), (26)&ndash;(27), (36), (38)&ndash;(44) and (69)&ndash;(71) hold verbatim once the state sums run over the \(N_t=3(2I+1)\) electro-nuclear levels. What changes is quantitative and, for the spectrum, decisive: the bare response acquires up to \((N_t/2)^2\) poles, the smallest of which are set by the hyperfine and nuclear Zeeman scales rather than by the electronic gap. The interlacing theorem (80) then makes a sharp negative statement &mdash; mean field plus RPA cannot push any non-critical branch below the next-lower bare gap, uniformly in \(\mathbf q\) and coupling strength &mdash; so partial softening of an adjacent electro-nuclear branch is either inherited from the motion of the local spectrum itself or requires the vertex. The first-order vertex can supply it, through floor renormalization, residue transfer, or loss of positivity, but it supplies no intrinsic linewidth, and the static control parameter (84) degrades by orders of magnitude in exactly the regime \(|A|I\sim\Delta_1\) where the question is posed. Quantitative claims in that regime should be accompanied by \(\epsilon_{\rm stat}\) and by the audit of Sec. 17.4.</p>
 <p>Two scope boundaries are essential. First, omitting \(\delta hL_n\) is analogous to Jensen's neglect of the residual-field perturbation but is not yet proven to be an identical term-by-term reduction. Second, the generic cross-channel measure is \(\epsilon_\times=(M_2^2/M_1^2)(\Delta_1/\Delta_2)\); the \((\Gamma/D)^4\) estimate belongs only to the canonical one-parameter spin-1 Hamiltonian. Finally, the zero-frequency elastic sector can require a partial resummation whenever \(\epsilon_{\rm el}=\beta|K_0|c_d\) is not small, even though the formal first-order expressions remain correct order by order.</p>
 
 <footer>
-Review-updated revision of the supplied three-level extension, July 2026. The derivation follows the effective-medium organization of J. Jensen, Phys. Rev. B <b>49</b>, 11833 (1994), but the finite three-level spectral sums and strict-first-order ordered-phase formulas are written explicitly here. The document now includes the residual-field attribution caveat, material-specific cross-channel scaling, mandatory repeated-node handling, a strengthened elastic-sector warning, explicit KMS boundary-layer guidance, and an observables synthesis. MathJax is embedded in this file, so equation rendering works offline.
+Review-updated revision of the supplied three-level extension, July 2026. The derivation follows the effective-medium organization of J. Jensen, Phys. Rev. B <b>49</b>, 11833 (1994), but the finite three-level spectral sums and strict-first-order ordered-phase formulas are written explicitly here. The document now includes the residual-field attribution caveat, material-specific cross-channel scaling, mandatory repeated-node handling, a strengthened elastic-sector warning, explicit KMS boundary-layer guidance, and an observables synthesis. Sections 16&ndash;17, added July 2026, extend the model to nuclear spins under an onsite-only hyperfine assumption together with the nuclear Zeeman term, and derive the electro-nuclear branch spectrum from the first-order \(1/z\) calculation. MathJax is embedded in this file, so equation rendering works offline.
 </footer>
 </div>
 </body>

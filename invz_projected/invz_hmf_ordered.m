@@ -581,8 +581,8 @@ function tr = local_term_reason(info_reason)
 %LOCAL_TERM_REASON invz_ordered_node_solve's vocabulary -> THIS file's own per-node vocabulary
 % {converged, max_iter, refresh_failed, bare_shortcut} (an unmapped solver reason, e.g.
 % 'medium_out_of_domain', passes through verbatim). ONE mapping serves both consumers:
-% prof.node_term_reason and trc.nodes.term_reason (pinned by test_invz_ordered_trace.m), so the
-% profile and the trace ledger can never disagree about a node's outcome.
+% prof.node_term_reason and trc.nodes.term_reason, so the profile and the trace ledger can
+% never disagree about a node's outcome.
 switch info_reason
     case 'accepted',                    tr = 'converged';
     case 'loop_converged_not_accepted', tr = 'refresh_failed';

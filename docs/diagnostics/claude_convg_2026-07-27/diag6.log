@@ -1,0 +1,23 @@
+===== invz_spectra_map, static_medium = resummed =====
+   B   phase phase_1z  reason                 ordered_diag        chiz_finite  m_1z    D_ord
+ 1.00     1       0  solver_failed          solver_failed              0      NaN       NaN
+ 2.00     1       0  solver_failed          solver_failed              0      NaN       NaN
+ 3.00     1       0  solver_failed          solver_failed              0      NaN       NaN
+ 3.60     1       0  solver_failed          solver_failed              0      NaN       NaN
+ 3.80     1       1  ordered                accepted                  35    1.687    0.1139
+ 4.00     1       1  ordered                accepted                  35   0.4919    0.0111
+ 4.20     1       2  pm                     not_attempted             35      NaN       NaN
+ 4.60     2       2  pm                     not_attempted             35      NaN       NaN
+  Bc_1z = 4.1 ; Bc_auto = 4.4
+===== invz_spectra_map, static_medium = strict_1z_dyson_ref =====
+   B   phase phase_1z  reason                 ordered_diag        chiz_finite  m_1z    D_ord
+ 1.00     1       0  medium_out_of_domain   medium_out_of_domain       0      NaN       NaN
+ 2.00     1       1  ordered                accepted                  35    4.948    0.8527
+ 3.00     1       1  ordered                accepted                  35    3.784    0.5103
+ 3.60     1       1  ordered                accepted                  35    2.501    0.2394
+ 3.80     1       1  ordered                accepted                  35    1.864    0.1416
+ 4.00     1       1  ordered                accepted                  35   0.8804    0.0351
+ 4.20     1       2  pm                     not_attempted             35      NaN       NaN
+ 4.60     2       2  pm                     not_attempted             35      NaN       NaN
+  Bc_1z = 4.1 ; Bc_auto = 4.4
+done

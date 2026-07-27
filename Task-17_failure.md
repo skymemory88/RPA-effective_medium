@@ -10,8 +10,8 @@ below records what was checked, so the audit trail survives the file's removal.
 
 **Later correction (2026-07-27, rev. 2 of the successor record).** §4 below states that G1a and G1b
 are the same test and implies G1c is independent. **G1c is dependent too** —
-`G1c = ρ·(a+g)/(a·g) = ρ/(a·g) · G1a`, so all three forms vanish together. See
-`docs/invzp_convg_fix_attmpt_claude.md` §7 for the derivation and §12 for the verification log.
+`G1c = ρ·(a+g)/(a·g) = ρ/(a·g) · G1a`, so all three forms vanish together. The retired successor
+record that carried the expanded derivation and verification log remains recoverable from Git.
 
 Task 17 added two test-only files (`test_invz_strict_identities.m`, `test_invz_strict_contracts.m`,
 254 insertions, no production file touched). **Seven of its eleven gate tests fail.** The branch is

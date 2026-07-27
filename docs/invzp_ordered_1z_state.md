@@ -23,7 +23,8 @@ open.** Two candidate root causes have been tested to conclusion:
    q-denominator pole that dies ~7 % below the uniform instability. A strict-`O(1/z)` one-shot
    truncation `K0 = Jbar − mu2·Gref` was specified, preregistered, implemented additively, and
    **FAILED its own Gate 0** on 2026-07-27 (clauses a, c, e). Full analysis:
-   `invzp_convg_fix_attmpt_claude.md`; verdict: `docs/invzp_strict_medium_gate0_report.md`.
+   `invzp_convg_diagnosis_Claude.md` §9.1–§9.4; verdict:
+   `docs/invzp_strict_medium_gate0_report.md`.
 
 **Ewald Steps 6–7 (Gate-D rerun, Gate-E physics anchors, default flip) were never executed** — they
 were sequenced behind a masking fix that has not arrived. The production default remains
@@ -48,7 +49,8 @@ were sequenced behind a masking fix that has not arrived. The production default
 7. `docs/invzp_phase1_report.md` + `docs/invzp_phase1_quadrature_prereg.md` — the audit that motivated
    Ewald (committed, frozen).
 8. `docs/invzp_task2_report.md` + `docs/invzp_task2_prereg.md` — the LATTICE/MESH-UNRESOLVED verdict.
-9. `invzp_QCP_diagnosis.md` (root, tracked) — the authoritative QCP diagnosis + Stage 1/2 history.
+9. `invzp_convg_diagnosis_Claude.md` (root) — the consolidated ordered-leg/QCP diagnosis, including
+   the independent QCP replication and surviving Stage 1/2 conclusions in §9.5.
 10. Memory `invzp-jensen-realcoupling-nonconvergence` (`~/.claude/.../memory/`) — the sharp cross-session
     statement of the discovery + the physics correction.
 
@@ -96,8 +98,9 @@ were sequenced behind a masking fix that has not arrived. The production default
   preregistered before the first strict run, and **FAILED Gate 0**: the reference denominator leaves
   its domain at *low* field, the omitted-order ratio exceeds its frozen limit on every measured row
   including those that solve cleanly, and both PM controls converge to a *negative* mass. Six gate
-  tests are red **by design** pending a dated preregistration amendment. Read
-  `invzp_convg_fix_attmpt_claude.md` before proposing a successor.
+  tests are red **by design** pending a dated preregistration amendment. Read the consolidated
+  `invzp_convg_diagnosis_Claude.md` and implementation plan `invzp_convg_fix_Claude.md` before
+  proposing a successor.
 
 ## The Ewald reformulation — decisions (authority: design/prereg)
 
@@ -164,10 +167,10 @@ correctness stands on its own evidence and does not need the ordered leg to work
 The strict-`O(1/z)` static medium was the tested successor hypothesis and it failed Gate 0. Per the
 frozen preregistration §3, any of: carrying another moment, changing `Gref`, or truncating other
 Matsubara sectors is a **new theory candidate requiring its own spec and fresh preregistration** —
-never an in-run fallback. §11 of `invzp_convg_fix_attmpt_claude.md` lists what a successor must
-answer; the sharpest open questions are the strict candidate's own (never-determined) PM boundary
-against its negative-mass controls, and whether the `ω_n=0` scheme jump propagates past the primitive
-level into `invz_lambdas`.
+never an in-run fallback. The consolidated diagnosis §9.4/§10.2 records what a successor must answer:
+the PM boundary has now been measured, leaving the reference construction at large moment and whether
+the `ω_n=0` scheme jump propagates past the primitive level into `invz_lambdas` as sharper open
+questions.
 
 The original ordered exact-`h` lattice audit ("Phase 3") and the underived-unstable-branch paths
 (3A/3B) remain hard-stopped.

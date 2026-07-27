@@ -36,8 +36,8 @@ function [dm, T3] = invzt_vertex3(es, ops, wn, beta, opts)
 %     T3 : numel(wn) x 1 complex, the three-point vertex at each l in wn.
 %
 %   Regular at exact degeneracy (Bx=0 doublet) by the exprel Hermite limits of I2;
-%   validated in test_invzt_vertex against independent Gauss-Legendre simplex
-%   quadrature (the same methodology the oracle uses for the four-point F).
+%   validated against independent Gauss-Legendre simplex quadrature (the same
+%   methodology the oracle uses for the four-point F).
 %
 %   See also INVZT_VERTEX4, INVZT_KERNELS.
 

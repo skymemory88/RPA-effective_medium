@@ -16,6 +16,15 @@ Two things, mirroring the projected branch's ordered stack onto the tensor latti
 
 Full-dress 136-state ordered `a3` remains permanently out of scope (budget-refused, `invzt:orderedMode`) — it is a different name from `a3d` on purpose (round-2 review minor: never conflate the two).
 
+### 2026-07-20 electro-nuclear spectra correction
+
+The historical driver diagnosis below concerns the broad predominantly electronic branch. The current `invzt_run_spectra.m` intentionally uses `[0, 0.018]` meV to resolve the experimentally measured electro-nuclear soft mode. Two independent near-QCP defects were subsequently fixed:
+
+1. `invzt_solve_auto` now supplies the ordered a1 leg with the boundary-matched linearized Jensen modified field, so its moment vanishes at the PM instability instead of retaining the large bare-MF moment to ~5 T.
+2. The PM dominant manifold now uses the fixed-rank lowest 16 electronuclear states. The former `E < 0.4653` meV cut changed rank 11→10→9→8 at 4.65/4.76/4.88 T even though the state-16→17 gap remained ~2.4–2.5 meV; those bookkeeping changes were the source of the repeated unphysical spectral jumps.
+
+Measured after the correction (0.1 K, 16³ halfopen/dpRng-30): ordered through 4.64 T, PM from 4.65 T, zero masked; electro-nuclear peak 0.000113 meV at 4.64 T and 0.000754 meV at 4.65 T; PM-side hardening is smooth to 0.005609 meV at 5.05 T. Tensor CORE: 98 passed / 0 failed / 5 expected `INVZ_SLOW` incompletes.
+
 ---
 
 ## The driver-knob diagnosis (three measured failures, 2026-07-19)

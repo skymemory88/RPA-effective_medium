@@ -1,0 +1,17 @@
+T = 1.00 K  (diag8: Bc_1z(1.00 K) ~ 3.03 T -- the boundary the Gate-0 field set fits)
+
+--- Gate-0 ORDERED field set at T = 1.00 K, nH = 33 ---
+   B    resummed                             strict_1z_dyson_ref
+ 0.05   node_failed          m0=      0 omit=    NaN medium_out_of_domain m0=      0 omit=    NaN
+ 0.25   node_failed          m0=      0 omit=    NaN medium_out_of_domain m0=      0 omit=    NaN
+ 0.50   node_failed          m0=      0 omit=    NaN medium_out_of_domain m0=      0 omit=    NaN
+ 1.00   node_failed          m0=      0 omit=    NaN medium_out_of_domain m0=      0 omit=    NaN
+ 2.00   node_failed          m0=      0 omit=    NaN medium_out_of_domain m0=      0 omit=    NaN
+ 2.50   node_failed          m0=      0 omit=    NaN ok                   m0=  3.998 omit=0.07485
+ 2.90   ok                   m0=  2.258 omit=    NaN ok                   m0=  2.834 omit=0.06055
+ 3.00   ok                   m0=  1.375 omit=    NaN ok                   m0=    2.4 omit=0.05791
+
+--- Gate-0 PM CONTROLS at T = 1.00 K (prereg requires converged, finite, POSITIVE mass) ---
+  B=3.10  resummed: conv=1 crit= +0.00689635 it= 13 not_applicable | strict: conv=1 crit=  -0.0397528 it= 13 ok
+  B=3.50  resummed: conv=1 crit=  +0.0839567 it= 13 not_applicable | strict: conv=1 crit=  +0.0587204 it= 13 ok
+done

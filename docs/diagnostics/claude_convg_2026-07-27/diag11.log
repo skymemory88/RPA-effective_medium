@@ -1,0 +1,19 @@
+--- (b,c,d) invz_chi_realaxis given a VALID state, T = 0.31 K, 60-point w grid ---
+  B   mode      solved  Sigma0        finite chi''   finite Sigma(w)   max|chi''|
+  1.0  bare      yes     -0.0607314    60 / 60      60 / 60        15.5103
+        npass 3 -> 12 : max|d chi''| = 0.000e+00  (0 confirms no lattice loop runs)
+  3.8  jensen    yes     0.0604428     60 / 60      60 / 60        8616.39
+        npass 3 -> 12 : max|d chi''| = 0.000e+00  (0 confirms no lattice loop runs)
+  4.0  jensen    yes     0.0965479     60 / 60      60 / 60        10000.4
+        npass 3 -> 12 : max|d chi''| = 0.000e+00  (0 confirms no lattice loop runs)
+  4.6  pm        yes     0.0733638     60 / 60      60 / 60        6273.31
+        npass 3 -> 12 : max|d chi''| = 0.000e+00  (0 confirms no lattice loop runs)
+
+--- (e) min_q Dq - D_uni = (J0eff - max_q Jnu)*|Gstat| ---
+  J0eff        = 0.00642443566 meV
+  max_q Jnu    = 0.00598513893 meV
+  J0eff-max_q  = 0.000439296726 meV   (ratio J0eff/max_q = 1.073398)
+  1/J0eff      = 155.65570     1/max_q Jnu = 167.08050   (the record's |G0| ladder)
+  at the B=4.0 T jensen endpoint: Gstat = -194.496
+    D_uni = +0.011104    min_q Dq = +0.0965457    gap = 0.0854417  (predicted 0.0854417)
+done

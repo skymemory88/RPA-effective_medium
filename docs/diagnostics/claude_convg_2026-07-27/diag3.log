@@ -1,0 +1,19 @@
+===== static_medium = resummed =====
+B=1.00 ord=0 conv=0 status=node_failed          m0=        0 D_uni=       NaN stable=0 omit=     NaN  []
+B=2.00 ord=0 conv=0 status=node_failed          m0=        0 D_uni=       NaN stable=0 omit=     NaN  []
+B=3.00 ord=0 conv=0 status=node_failed          m0=        0 D_uni=       NaN stable=0 omit=     NaN  []
+B=3.60 ord=0 conv=0 status=node_failed          m0=        0 D_uni=       NaN stable=0 omit=     NaN  []
+B=3.80 ord=1 conv=1 status=ok                   m0=    1.687 D_uni=    0.1139 stable=1 omit=     NaN  [converged=33]
+B=3.90 ord=1 conv=1 status=ok                   m0=    1.243 D_uni=    0.0656 stable=1 omit=     NaN  [converged=33]
+B=4.00 ord=1 conv=1 status=ok                   m0=   0.4919 D_uni=    0.0111 stable=1 omit=     NaN  [converged=33]
+B=4.10 ord=0 conv=0 status=ok                   m0=        0 D_uni=       NaN stable=0 omit=     NaN  []
+===== static_medium = strict_1z_dyson_ref =====
+B=1.00 ord=0 conv=0 status=medium_out_of_domain m0=        0 D_uni=       NaN stable=0 omit=     NaN  []
+B=2.00 ord=1 conv=1 status=ok                   m0=    4.948 D_uni=    0.8527 stable=1 omit=   0.217  [converged=33]
+B=3.00 ord=1 conv=1 status=ok                   m0=    3.784 D_uni=    0.5103 stable=1 omit=  0.0995  [converged=33]
+B=3.60 ord=1 conv=1 status=ok                   m0=    2.501 D_uni=    0.2394 stable=1 omit=  0.0668  [converged=33]
+B=3.80 ord=1 conv=1 status=ok                   m0=    1.864 D_uni=    0.1416 stable=1 omit=  0.0595  [converged=33]
+B=3.90 ord=1 conv=1 status=ok                   m0=    1.452 D_uni=   0.08994 stable=1 omit=  0.0563  [converged=33]
+B=4.00 ord=1 conv=1 status=ok                   m0=   0.8804 D_uni=    0.0351 stable=1 omit=  0.0534  [converged=33]
+B=4.10 ord=0 conv=0 status=ok                   m0=        0 D_uni=       NaN stable=0 omit=     NaN  []
+done

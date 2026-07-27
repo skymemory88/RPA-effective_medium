@@ -134,7 +134,7 @@ lvals = (-Lmax:Lmax).';
 mu_i = zeros(npair, 1);  nu_i = zeros(npair, 1);
 for ip = 1:npair, mu_i(ip) = idx.(ext{ip}{1});  nu_i(ip) = idx.(ext{ip}{2}); end
 % Gamma4[npair,nc,nc,nwn,nl] -- vectorized over the (n,l) grid (bit-identical to
-% invzt_vertex4 stage 'Gamma', gated by test_invzt_a3_threestate). Cached across
+% invzt_vertex4 stage 'Gamma' -- that bit-identity is the invariant here). Cached across
 % solves at the same toy: the same (T,B,toy) drives every odd-on/off and lambda-scaled
 % A3 solve (Gamma4 depends on the single ion only, NOT the lattice).
 G4   = [];      % full-dress five-D vertex (npair,nc,nc,nwn,nl); used only when ~dom

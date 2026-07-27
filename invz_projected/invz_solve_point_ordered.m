@@ -359,7 +359,7 @@ if strcmp(omode, 'jensen')
     % final_resid is diagnostic-only from here on: exposed as block C (the derived lam/Sigma
     % chain from the exported K) -- the EXACT quantity the old final_resid computed
     % (production's own invz_ordered_residual.m docstring: "this is production's existing
-    % final_resid, named ... here"; test_invz_ordered_residual.m:81 pins the two byte-equal).
+    % final_resid, named ... here" -- the two must stay byte-equal).
     pt.final_resid = info.res.blockC.resid;
     pt.converged = info.accepted;
     pt.ordered_mode = omode;  pt.hmf = hstar;  pt.hmf_prof = hprof;
@@ -384,8 +384,9 @@ if strcmp(omode, 'jensen')
     pt.omit_max = getf(info.so, 'omit_max', NaN);
     % path_omit_max FAILS CLOSED (plan-owner ruling 2026-07-26, mirroring the task-3 omit_max
     % ruling and DELIBERATELY replacing this brief's isfinite-filtered version): it is a
-    % load-bearing promotion gate (frozen prereg docs/invzp_strict_medium_prereg.md SS48,
-    % SS64-65 compare max(omit_max) over the solved path against omit_promote = 0.10), so a
+    % load-bearing promotion gate (the frozen predicate compares max(omit_max) over the
+    % solved path against omit_promote = 0.10 -- quoted in
+    % docs/invzp_strict_medium_gate0_report.md SS1), so a
     % corrupted node must never be quietly dropped from the maximum. Inf DOMINATES, NaN POISONS.
     if isempty(hprof.omit_max)
         pt.path_omit_max = NaN;

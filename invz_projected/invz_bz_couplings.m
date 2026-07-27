@@ -8,8 +8,7 @@ function [Jnu, info, Jaa0] = invz_bz_couplings(ion, opts)
 %   opts.dpRng (30)          real-space dipole cutoff
 %   opts.cache (true)        invz_jq_modes file cache
 %
-% Ewald Step-5 Task 4 (docs/superpowers/plans/2026-07-24-ewald-step5-integration.md;
-% authority docs/invzp_ewald_integration_map.md Sec.5.4, docs/invzp_phase1_quadrature_prereg.md):
+% Ewald Step-5 Task 4 (summarised in docs/INVZ-DEVELOPMENT-RECORD.md, 2026-07-24):
 %   opts.dipole/opts.ewald   forwarded into invz_jq_modes BY PRESENCE only (absent here means
 %                            absent there too -- see invz_jq_modes.m for their exact contract).
 %   opts.gridConvention      'legacy_inclusive' | 'halfopen'

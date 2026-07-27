@@ -10,7 +10,7 @@ function k = invzt_kernels()
 %   engine vectorise the innermost path-sum index.
 %
 %   PLAIN kernels (population-free divided differences; reference of record is the
-%   mpmath oracle verify_tensor_vertex.py -> vertex_oracle.json):
+%   mpmath oracle ../verify_tensor_vertex.py, which regenerates the vertex-oracle JSON):
 %       k.phi(a,beta)          phi(a)   = (exp(beta a) - 1)/a           (exprel)
 %       k.dphi(a,beta)         phi'(a),  k.d2phi(a,beta)  phi''(a)
 %       k.I2(x,y,beta)         first divided difference of phi at {x, x+y}

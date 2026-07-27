@@ -1,12 +1,12 @@
 function txt = invzt_report_ladder(out)
-%INVZT_REPORT_LADDER  Serialize a completed A4 ladder run for ODD-LOG SS-A4 pasting.
+%INVZT_REPORT_LADDER  Serialize a completed A4 ladder run as a pasteable report block.
 %
 %   txt = INVZT_REPORT_LADDER(out) formats the struct returned by INVZT_RUN_LADDER into a
 %   plain-text report block (per-rung table + budget verdict + monitors + cross-validation
 %   comparators) and RETURNS it as a char array. With no output argument it also prints to
-%   stdout. It WRITES NO FILES: the controller pastes the returned text into
-%   docs/ODD-LOG.md (Section A4) -- this serializer never touches ODD-LOG or any tracked
-%   file (Task-13 data-only discipline).
+%   stdout. It WRITES NO FILES: the controller pastes the returned text wherever the run
+%   is being recorded -- this serializer never touches any tracked file (Task-13
+%   data-only discipline).
 %
 %   The table columns:
 %     rung / N / dim   basis label, vertex Hilbert dimension, actual (multiplet-complete) dim

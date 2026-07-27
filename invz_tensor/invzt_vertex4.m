@@ -4,8 +4,8 @@ function out = invzt_vertex4(es, ops, Kmat, wn, beta, opts)
 %   out = INVZT_VERTEX4(es, ops, Kmat, wn, beta, opts)
 %
 %   The DENSE ordered path-sum reference-of-record for the tensor 1/z self-energy
-%   correction V_{mu nu}(i omega_n).  Reproduces the mpmath oracle
-%   invz_tensor/tests/fixtures/vertex_oracle.json (Task 10) to ~1e-14 on every
+%   correction V_{mu nu}(i omega_n).  Reproduces the mpmath oracle of
+%   ../verify_tensor_vertex.py (Task 10) to ~1e-14 on every
 %   fixture system.  The engine has one PRODUCTION entry (stage 'V', the contracted
 %   correction) plus three intermediate stages ('F','Gamma','C') that expose the
 %   un-contracted four-/two-point objects the oracle stores row-by-row.

@@ -45,7 +45,7 @@ No numeric threshold proposed below was selected by inspecting a failing value. 
 
 ## A1 — §5 G1 identity gates: ALL THREE forms are one identity, and the threshold tests the grid
 
-> **Revision 2026-07-27, after external review (`invzp_fix_attmpt_review_Codex.md` §1).** A1.1 below
+> **Revision 2026-07-27, after an external review whose standalone note was later retired.** A1.1 below
 > originally claimed only that form 2 is dependent, and proposed retaining forms 1 and 3 as "the two
 > independent G1 identity checks". **That proposal is invalid — form 3 is dependent too.** With
 > `a = Δm/Δh`, `g = midpoint-avg(G0bare)`, `ρ = midpoint-avg(r)`, `J = J0eff`:

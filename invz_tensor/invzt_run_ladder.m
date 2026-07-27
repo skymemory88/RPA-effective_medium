@@ -7,7 +7,7 @@ function out = invzt_run_ladder(ion, opts)
 %   their 'xI8' nuclear products -- and reports how the tensor 1/z ODD physics evolves with
 %   BASIS CONTENT, cross-validated against the projected Tier-1+2 numbers. It RETURNS A
 %   STRUCT and WRITES NO FILES; INVZT_REPORT_LADDER serializes a completed run for the
-%   controller to paste into docs/ODD-LOG.md (this driver never touches ODD-LOG).
+%   controller to paste wherever the run is being recorded (this driver writes nothing).
 %
 %   BUDGET REFUSAL (LOCKED, consumes Task-11's measured dense-vertex scaling). Each rung's
 %   PROJECTED one-solve cost is estimated (conservative N^4 anchored at the Task-11 e6

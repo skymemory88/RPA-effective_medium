@@ -4,15 +4,21 @@ function [cdom, crest, mspec] = invzt_chi0_split(si, T, z, opts)
 %
 %   [cdom, crest, mspec] = INVZT_CHI0_SPLIT(si, T, z, opts) partitions every
 %   transition (a,b) of INVZ_CHI0Z's single-ion susceptibility sum into
-%   DOMINANT (both si.E(a) < Esplit and si.E(b) < Esplit) or REST, per
-%   Jensen's "dominant transition renormalized, weak transitions kept at
-%   RPA" rule (PRB 49 Sec. III; odd_implementation_plan.html). Esplit
-%   defaults to 0.4653 meV, half the ~0.9306 meV (10.8 K) gap from the
-%   LiHoF4 Ho3+ ground Gamma_{3,4} doublet to the first excited
-%   crystal-field level, so the dominant group is exactly the ground
-%   electronic doublet together with its (near-degenerate, hyperfine-scale
-%   split) nuclear sublevels: ndom = 16 with opts.hyp = true (2 electronic
-%   x 8 nuclear I=7/2 sublevels), ndom = 2 without hyperfine.
+%   DOMINANT or REST, per Jensen's "dominant transition renormalized, weak
+%   transitions kept at RPA" rule (PRB 49 Sec. III).
+%
+%   DEFAULT = FIXED-RANK FIELD-ADAPTED GROUND MANIFOLD. The lowest 16 states
+%   are selected for a full electronuclear Hilbert space (ground electronic
+%   doublet x all 8 I=7/2 states), and the lowest 2 for an electronic/reduced
+%   space. Fixing the rank is essential in transverse-field sweeps: the old
+%   fixed Esplit=0.4653 meV cut dropped one member of the SAME ground
+%   electronuclear manifold at 4.65, 4.76, and 4.88 T (ndom 11->10->9->8),
+%   creating discontinuous, unphysical soft modes even though the gap from
+%   state 16 to state 17 remained ~2.4-2.5 meV.
+%
+%   opts.dominant_count overrides the default fixed rank. opts.Esplit is a
+%   LEGACY/diagnostic override selecting si.E < Esplit; it is never the
+%   production default. Passing both errors invzt:splitSelector.
 %
 %   cdom is a masked re-run of INVZ_CHI0Z's per-transition sum, restricted
 %   to dominant-dominant pairs (inelastic transitions AND elastic/degenerate
@@ -51,7 +57,10 @@ function [cdom, crest, mspec] = invzt_chi0_split(si, T, z, opts)
 %   mspec fields (fdom_* and elastic_conv_share are evaluated at the STATIC
 %   point z=0 regardless of the z argument, since they are properties of
 %   si/T alone, not of whichever frequencies were requested for cdom/crest):
-%     ndom               number of states with si.E < Esplit
+%     ndom               number of selected dominant states
+%     selection          'fixed_rank' | 'energy'
+%     dominant_count     requested fixed rank (NaN for energy selection)
+%     Esplit             requested cutoff (NaN for fixed-rank selection)
 %     fdom_cc0           real(cdom_cc(0)) / real(full_cc(0)), cc = (3,3)
 %                        (report; expected close to 1 -- the Ising/c-axis
 %                        response is carried almost entirely by the ground
@@ -65,19 +74,52 @@ function [cdom, crest, mspec] = invzt_chi0_split(si, T, z, opts)
 %   si   : output of INVZ_SINGLE_ION.
 %   T    : temperature, K.
 %   z    : frequency argument(s) (meV), forwarded to INVZ_CHI0Z.
-%   opts : Esplit (meV, default 0.4653), degtol/ztol/elastic (passthrough
-%          to INVZ_CHI0Z's opts_pass, same defaults as INVZ_CHI0Z).
+%   opts : dominant_count (default 16 electronuclear / 2 electronic), or
+%          legacy Esplit (meV); degtol/ztol/elastic pass through to
+%          INVZ_CHI0Z with the same defaults.
 %
 %   See also INVZ_CHI0Z, INVZ_SINGLE_ION.
 if nargin < 4, opts = struct(); end
-Esplit = getf(opts, 'Esplit', 0.4653);
+hasCount = isfield(opts, 'dominant_count') && ~isempty(opts.dominant_count);
+hasSplit = isfield(opts, 'Esplit') && ~isempty(opts.Esplit);
+if hasCount && hasSplit
+    error('invzt:splitSelector', ...
+        'Pass either opts.dominant_count or legacy opts.Esplit, not both.');
+end
 degtol = getf(opts, 'degtol', 1e-8);
 ztol   = getf(opts, 'ztol', 1e-12);
 elast  = getf(opts, 'elastic', true);
 opts_pass = struct('degtol', degtol, 'ztol', ztol, 'elastic', elast);
 
 E = si.E;
-domVec  = E < Esplit;                  % dominant-group membership, n x 1
+n = numel(E);
+if hasSplit
+    Esplit = opts.Esplit;
+    if ~(isscalar(Esplit) && isreal(Esplit) && isfinite(Esplit))
+        error('invzt:Esplit', 'opts.Esplit must be a finite real scalar.');
+    end
+    domVec = E < Esplit;
+    selection = 'energy';
+    dominant_count = NaN;
+else
+    if hasCount
+        dominant_count = opts.dominant_count;
+    elseif n > 17 && mod(n, 8) == 0
+        dominant_count = 16;             % electronic doublet x full I=7/2 space
+    else
+        dominant_count = min(2, n);      % electronic/reduced ground doublet
+    end
+    if ~(isscalar(dominant_count) && isreal(dominant_count) ...
+            && isfinite(dominant_count) && dominant_count == round(dominant_count) ...
+            && dominant_count >= 1 && dominant_count <= n)
+        error('invzt:dominantCount', ...
+            'opts.dominant_count must be an integer in [1,%d].', n);
+    end
+    domVec = false(n, 1);
+    domVec(1:dominant_count) = true;
+    selection = 'fixed_rank';
+    Esplit = NaN;
+end
 domMask = domVec & domVec.';           % (a,b) dominant iff BOTH endpoints are
 ndom    = sum(domVec);
 Jdom    = dominant_mean(si, domVec);   % [3,1] dominant-group counterterm mean
@@ -90,6 +132,9 @@ crest = full - cdom;                   % exact by construction
 full0 = invz_chi0z(si, T, 0, opts_pass);
 cdom0 = masked_chi0(si, T, 0, domMask, Jdom, degtol, ztol, elast);
 mspec.ndom       = ndom;
+mspec.selection  = selection;
+mspec.dominant_count = dominant_count;
+mspec.Esplit     = Esplit;
 mspec.fdom_cc0   = real(cdom0(3,3)) / real(full0(3,3));
 mspec.fdom_perp0 = real(cdom0(1,1)) / real(full0(1,1));
 

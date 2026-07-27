@@ -19,7 +19,8 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %   Per-field diagnostics: S.phase (1 = moment-form (spontaneous FM below Bc, or field-induced
 %   under a longitudinal tilt -- a rounded crossover, no sharp Bc), 2 = strict paramagnet,
 %   0 = masked). RPA and 1/z are DIFFERENT theories with different critical fields
-%   (invzp_QCP_diagnosis.md). S.phase stays the AUTO dispatch (ordered-first bare-MF); the
+%   (invzp_convg_diagnosis_Claude.md, especially SS9.5). S.phase stays the AUTO dispatch
+%   (ordered-first bare-MF); the
 %   Sigma = 0 overlay built from it approximates the RPA state only where the ordered 1/z
 %   EMT converged to the bare boundary -- an RPA-independent dispatcher is a scheduled
 %   follow-up (diagnosis regression 4 stays OPEN), hence the boundary output is named
@@ -80,8 +81,7 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %                              invz_bz_couplings when the couplings are computed (absent =>
 %                              unchanged brute-force default). .dipole is 'bruteforce' |
 %                              'ewald'; .ewald is a complete {alpha,r_cut,g_cut,boundary}
-%                              struct, required only with .dipole = 'ewald'
-%                              (docs/invzp_ewald_integration_map.md Sec.5A).
+%                              struct, required only with .dipole = 'ewald'.
 %     .gridConvention, .gridOffset, .gammaPolicy   opt-in BZ quadrature policy, forwarded BY
 %                              PRESENCE into invz_bz_couplings when computed (any one present
 %                              there switches to the invz_phase1_qgrid route; all absent here
@@ -92,7 +92,11 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %                              sweep direction of `fields` (|B|). Error invz:fieldDir if
 %                              invalid. A nonzero z-component routes through the longitudinal
 %                              (field-induced moment) solve once |Bz| clears .bz_tol.
-%                              Validated envelope: ac-plane directions [cos(theta) 0 sin(theta)] with theta_c <= 5 deg (see docs/SESSION-2026-07-16-field-angle.md); By ~= 0 now errors under the legacy x-only transverse MF (invz:transverseMF) and is validated under vector_ab (peak observables, all tested in-plane angles; see docs/SESSION-2026-07-16-inplane-rotation.md); demag ~= 0 with tilt is unvalidated.
+%                              Validated envelope: ac-plane directions [cos(theta) 0 sin(theta)]
+%                              with theta_c <= 5 deg; By ~= 0 now errors under the legacy x-only
+%                              transverse MF (invz:transverseMF) and is validated under
+%                              vector_ab (peak observables, all tested in-plane angles);
+%                              demag ~= 0 with tilt is unvalidated.
 %     .bz_tol    (1e-9)        T; dead band on Bz -- resolved ONCE, applied to the field table
 %                              BEFORE any solve, and forwarded to invz_solve_auto/one_field.
 %     .ordered_1z ('jensen')   the 1/z leg's ordered-side solve below Bc_1z: 'jensen' (default)
@@ -255,7 +259,7 @@ BvecM(abs(BvecM(:, 3)) <= bztol, 3) = 0;         % dead band: identical rule to 
 
 tmf = invz_check_transverse_mf(sxtra, BvecM(:, 2));
 
-% Ewald Step-5 Task 7 (docs/invzp_ewald_integration_map.md Sec.5A): backend/grid options are
+% Ewald Step-5 Task 7: backend/grid options are
 % forwarded BY PRESENCE into invz_bz_couplings on the compute branch, and a precomputed
 % opts.Jnu/opts.info pair is validated against any EXPLICIT backend/grid-policy request rather
 % than trusted blindly -- see invz_check_coupling_opts.m (shared with invz_spectra_qpath.m,

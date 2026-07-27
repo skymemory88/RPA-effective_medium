@@ -6,8 +6,8 @@ function [sm, eopts, eso] = invz_check_static_medium(opts, eopts, eso)
 %   opts.static_medium : 'resummed'             (DEFAULT -- legacy, bit-identical)
 %                        'strict_1z_dyson_ref'  (selected strict candidate, spec SS0.3)
 %                        'strict_1z_bare_ref'   (systematic comparator)
-%   opts.ref_margin    : reference-denominator floor (default 1e-6, FROZEN in
-%                        docs/invzp_strict_medium_prereg.md SS2)
+%   opts.ref_margin    : reference-denominator floor (default 1e-6, FROZEN 2026-07-25;
+%                        quoted in docs/invzp_strict_medium_gate0_report.md SS1)
 %
 % Returns sm = struct('scheme','is_strict','ref_margin') and STAMPS the resolved scheme plus
 % ref_margin into BOTH internal leg option structs -- eopts (invz_emt_scalar, the PM static

@@ -54,7 +54,7 @@ function S = invz_spectra_qpath(ion, T, B, qpath, w, opts)
 %                        forwarded to invz_jq_path (absent => unchanged brute-force default
 %                        throughout). .dipole is 'bruteforce' | 'ewald'; .ewald is a complete
 %                        {alpha,r_cut,g_cut,boundary} struct, required only with .dipole =
-%                        'ewald' (docs/invzp_ewald_integration_map.md Sec.5A/6).
+%                        'ewald'.
 %     .gridConvention, .gridOffset, .gammaPolicy   opt-in BZ quadrature policy, forwarded BY
 %                        PRESENCE into invz_bz_couplings when computed (any one present there
 %                        switches to the invz_phase1_qgrid route). NEVER forwarded to
@@ -87,7 +87,7 @@ tmf = invz_check_transverse_mf(sxtra, B(2));
 
 w = w(:);
 
-% Ewald Step-5 Task 7 (docs/invzp_ewald_integration_map.md Sec.5A): backend/grid options are
+% Ewald Step-5 Task 7: backend/grid options are
 % forwarded BY PRESENCE into invz_bz_couplings on the compute branch, and a precomputed
 % opts.Jnu/opts.info pair is validated against any EXPLICIT backend/grid-policy request rather
 % than trusted blindly -- see invz_check_coupling_opts.m (shared with invz_spectra_map.m,
@@ -139,7 +139,7 @@ end
 
 % guarded coupling along the path: physical uniform FM mode by default (P.Juni), or an
 % exploratory sorted eigenvalue branch when opts.branch is 1..4. Resolve ONE dipolar backend
-% for the path (Ewald Step-5 Task 7, docs/invzp_ewald_integration_map.md Sec.5A): an explicit
+% for the path (Ewald Step-5 Task 7): an explicit
 % spectra-level request is forwarded verbatim (already checked against info above when
 % precomputed); otherwise a complete BZ info.dipole naming the Ewald backend is INHERITED so
 % the path never silently falls back to brute force under it; an (inherited-or-default)

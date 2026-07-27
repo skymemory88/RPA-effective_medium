@@ -1,11 +1,10 @@
 function H = invz_check_coupling_opts()
 %INVZ_CHECK_COUPLING_OPTS Shared precomputed-coupling backend/grid provenance
 % and conflict validation, used by BOTH invz_spectra_map.m and
-% invz_spectra_qpath.m (Ewald Step-5 Task 7, docs/invzp_ewald_integration_map.md
-% Sec.5A). Extracted (task-7 review, dedup fix) from a ~116-line block that was
-% previously duplicated byte-for-byte in both drivers -- same shared-helper
-% precedent as invz_check_solve_opts.m / invz_common/invz_check_transverse_mf.m,
-% structured as a struct-of-handles like tests/invz_legacy_coupling_reference.m
+% invz_spectra_qpath.m (Ewald Step-5 Task 7). Extracted (task-7 review, dedup fix)
+% from a ~116-line block that was previously duplicated byte-for-byte in both
+% drivers -- same shared-helper precedent as invz_check_solve_opts.m /
+% invz_common/invz_check_transverse_mf.m, structured as a struct-of-handles
 % because several of the five functions are called directly from the drivers'
 % own control flow, not only from one another.
 %
