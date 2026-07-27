@@ -26,6 +26,7 @@ are unmaintained and may drift from the APIs they call.
 | item | what it is |
 |---|---|
 | `claude_convg_2026-07-27/` | the ordered-leg non-convergence diagnosis written up in `../../invzp_convg_diagnosis_Claude.md`: `diag1`–`diag11` plus their logs, on the real 16³ multiset at T = 0.31, 0.10 and 1.00 K. `diag7`/`diag8`/`diag9` are the ones that bear on the Gate-0 verdict (head-to-head resummed-vs-strict, B_c(T), and the Gate-0 field set re-run at the temperature it fits). `diag10` verifies the Stieltjes reduction of both medium sectors and the zero-parameter `x` vs `supp(ρ)` computability criterion; `diag11` re-measures the independent QCP claims now consolidated in §9.5 (the response evaluator is healthy given a state; the exact Γ-exclusion gap) |
+| `invzp_solver_stability_2026-07-27/` | solver-only follow-up on the unchanged resummed equations: positive-control Jacobian oracle, traversal-direction test, local Picard-to-residual-Newton repairs, and the moderate-field branch gap. The retained Newton kernel is diagnostic-only and is not wired into HMF quadrature |
 
 ## Provenance for numbers in committed documents
 
