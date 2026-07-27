@@ -4,6 +4,21 @@
 **Recorded:** 2026-07-22  
 **Motivation:** the Task 6b closed-model J 2.34 comparison leaves a stable 13.65% route mismatch. The independent assessment (adjudicated against the published Jensen paper) is folded into §7b of the Stage-2 plan ([docs/superpowers/plans/2026-07-22-invzp-stage2-ordered-thermodynamics.md](docs/superpowers/plans/2026-07-22-invzp-stage2-ordered-thermodynamics.md)) and preserved in the consolidated [ordered-leg diagnosis](invzp_convg_diagnosis_Claude.md); the standalone review and QCP diagnosis notes were retired after consolidation.
 
+**Feasibility audit, 2026-07-28:** `invzp_functional_derivation_audit.md` tested whether the current
+resummed/Jensen implementation already contains the needed functional. It found a
+branch-conditioned one-dimensional `Phi_path` and an isolated scalar-EMT log potential, but no common
+functional for the coupled ordered equations and no thermodynamic selector for their multiple roots.
+The present Newton residual also fails the symmetry/zero-pattern test for a direct or diagonally
+rescaled gradient. WP0 therefore remains the correct entry point; production equations are not to be
+modified during the derivation.
+
+The initial WP0 conventions and immutable algebra gates are now recorded in
+`invzp_functional_wp0_spec.md`. They include the exact mean-field/tadpole rearrangement, the strict
+Gaussian ring functional, an exact two-site free-energy coefficient, the paramagnetic self-energy's
+quadratic primitive, and the ordered mixed-derivative discriminator. The `C4` vacuum symmetry factor
+and full ordered one-point/two-point diagram set remain derivation outputs rather than assumed
+formulas.
+
 ## 1. Decision summary
 
 The present Jensen ordered machinery should remain available as an explicitly labelled, inexpensive approximation. It should not become the universal thermodynamic foundation of the code.
