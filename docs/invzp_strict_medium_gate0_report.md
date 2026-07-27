@@ -101,10 +101,17 @@ rows: `n_unrec` is 0 everywhere). `min_refmar` = minimum finite `ref_margin` (de
 over the ledger; `maxomitL` = `max(omit_max)` over ledger nodes labelled `medium_status='ok'`.
 
 **The `1 T` row is the mandatory direct comparison with Task 17's G11 measurement**: `status =
-medium_out_of_domain`, `hstar = NaN`, `n_nod = 34` at `nH=33`, `max(omit_max) = 1.2011` vs the
-frozen `omit_promote = 0.10` -- matching G11's recorded `1.20077` to the digit (small residual
-difference is display rounding, not a discrepancy: both are the same node population). The **`3
-T`** row (the closest required ordered field to the legacy 3.025 T PM boundary) is `status='ok'`
+medium_out_of_domain`, `hstar = NaN`, `n_nod = 34` at `nH=33`. `max(omit_max)` over the COMPLETE
+ledger (34 nodes, predictor included, per this task's "read the complete trace ledger" mandate)
+is `1.201054187`; restricted to the 33-node PROFILE alone (excluding the predictor, matching what
+`prof.omit_max` -- the population G11 characterized -- would give) it is `1.200766324`, which
+rounds to G11's recorded `1.20077` exactly. The small difference between the two is real and
+understood, not display rounding: the predictor node (`h=0`) itself carries `omit_max=
+1.201054187`, marginally the single largest value in the whole ledger at this field, so including
+it (as this task's brief requires) versus excluding it (as the profile-only characterization
+does) genuinely changes the reported maximum in the 4th significant figure. Both values obviously
+still exceed `omit_promote=0.10` by more than 12x either way. The **`3 T`** row (the closest
+required ordered field to the legacy 3.025 T PM boundary) is `status='ok'`
 with a finite root, but still exceeds `omit_promote` (`max(omit_max) = 0.17782`), and its
 `int_r_minus_1` (`0.0012`) is over **150,000 times** the low-field rows' `NaN` -- see SS5 below on
 why that boundary-adjacent shift cannot bound the low-field integrals.
@@ -205,7 +212,7 @@ defined for G7 (prereg SS6); it is reported as a measurement.
 Prereg SS4's binding caution states explicitly that the legacy ~0.3% PM boundary shift "bounds
 neither integral Sigma0 dh nor integral (r-1) dh deep in the ordered phase." The measurements
 above confirm this directly: at `B=0.05 T`, `int_Sigma0 = -10.75` (nH=129) -- **~3500x** larger in
-magnitude than a 0.3% shift could plausibly bound: -- and at every low field `int_r_minus_1` is
+magnitude than a 0.3% shift could plausibly bound -- and at every low field `int_r_minus_1` is
 not even finite. A ~0.3%-scale boundary observation cannot be extrapolated into a bound on either
 path integral away from the boundary, and this task did not attempt to use it as one.
 
