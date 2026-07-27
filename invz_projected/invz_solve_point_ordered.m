@@ -337,7 +337,7 @@ else
         end
         lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
         sg  = invz_sigma_ordered(tl, lam, K, g, beta);
-        dS  = max(abs(sg.Sigma - Sigma));
+        dS  = invz_finite_max_abs(sg.Sigma, Sigma);
         Sigma = Sigma + mixo*(sg.Sigma - Sigma);
         if dS < tolo, converged = true; break; end
     end
