@@ -236,6 +236,24 @@ Legendre kernel, not another symmetry-factor or pole patch.  The preferred route
 reached a genuine new-derivation boundary; production spectra remain blocked and the documented
 smooth-`r(h)` prescription is now the only implementation-ready backup route.
 
+**Exact local-curvature follow-up, 2026-07-28.** The rejected 1PI local mass has now been replaced
+at oracle level by the exact connected bilinear response.  For an off-shell `(m,h,D)` functional,
+the required curvature is the fixed-source partial-Legendre block `K^-1/beta`; using the fixed-moment
+Schur block before eliminating `h` adds a forbidden `C3^2` chain coefficient.  The finite-mode
+three-site re-expansion with `K^-1/beta` reproduces the complete dynamic connected-`C4` residual.
+A general retained-rank multilevel cumulant engine now supplies electronuclear `C3/C4` without
+enumerating `d^4` state paths.  Its rank truncation remains unproved for virtual intermediate states
+and is not authorized as a functional input.
+
+**Quadratic-bilocal discriminator, 2026-07-28.** At a C3-zero input, an isolated Gaussian-trace plus
+exact-local-curvature pilot has one positive-domain stationary medium at every symmetric
+`Bx=4.6--4.9 T` fixture on the cutoff-3/rank-64/legacy-16³ input.  Thus the corrected local kernel
+removes the strict Gaussian pole gap without a floor in this finite trial functional.  This is not
+yet an ordered state or a spectrum: roots are only those found from the declared starts, the
+nonzero-source `C3-C3` core is absent by scope, and the Matsubara sequence is not converged
+(`Sigma(0)` at `4.8 T` moves from `0.0003251` at cutoff 1 to `0.0005728 meV` at cutoff 10).
+Production and spectral dispatch remain prohibited.
+
 Line numbers below are as of the 2026-07-27 working tree; confirm each before editing.
 
 ---
