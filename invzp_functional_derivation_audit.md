@@ -250,6 +250,64 @@ The repository goes further from a single declared functional by combining:
 Several of these are reasonable approximations individually. Their mixture is precisely why
 functional derivability must be demonstrated rather than presumed.
 
+### 4.1 McKenzie--Stamp auxiliary-field functional: a valid starting point, not a selector for the current roots
+
+The newly supplied paper
+`References/Thermodynamics of a quantum Ising system coupled to a spin bath.pdf`
+(McKenzie and Stamp, *Phys. Rev. B* **97**, 214430 (2018)) provides a useful independent route.
+Its status must be separated into three levels.
+
+1. Equations (19)--(36) rewrite the partition function with a Hubbard--Stratonovich field and an
+   all-orders local-cumulant action. In the paper's notation,
+
+   \[
+   Z_\phi=Z/Z_{\rm MF}=\int\mathcal D\phi\,e^{-\beta H_{\rm eff}[\phi]},
+   \qquad
+   H_{\rm eff}[\phi]
+   =\frac1\beta\sum_{n\geq1}\frac{u_n}{n!}\phi^n ,
+   \]
+
+   with the frequency and momentum labels and conservation deltas implicit. Subject to the paper's
+   preceding low-energy Hamiltonian truncation, this transformation and the untruncated cumulant
+   series are exact. Equations (23)--(26) derive the one- and two-point spin responses from the same
+   source-dependent partition function. This is precisely the common-generator property required
+   for thermodynamic consistency.
+
+2. Equation (37) truncates that action at quartic order. Its quadratic term gives RPA, while its
+   `u3` and `u4` vertices are fixed by the local connected three- and four-spin cumulants. The paper
+   then uses these interactions perturbatively in a high-density expansion; equation (59) is the
+   leading `O(1/z_c)` magnetization correction. The schematic double-well discussion in Fig. 6 is
+   tied to that quartic/high-density framework. In particular, the reported `u2,u4>0` result is a
+   zero-temperature result for the models evaluated there, not a general stability theorem for the
+   present finite-temperature electronuclear closure.
+
+3. The paper does **not** derive the repository's self-consistent resummed
+   `Sigma <-> EMT <-> K0` equations by varying this action, does not construct a 2PI functional of a
+   dressed propagator, and does not evaluate a common free energy on the multiple
+   `[\Sigma,K0]` roots found here. `H_eff[phi]` is the auxiliary-field action inside a functional
+   integral; away from a declared saddle approximation, comparing its raw value at two field
+   configurations is not the same as comparing thermodynamic free energies. The physical one-point
+   functional would be the source Legendre transform, and a stationary dressed-propagator theory
+   requires the corresponding bilocal/2PI transform and its double-counting terms.
+
+Consequently, the paper is a genuine derivational clue but not a drop-in branch selector. It supports
+the existing WP0/WP4 direction:
+
+- use one source-dependent local Hamiltonian to generate `C1--C4`;
+- adopt the Hubbard--Stratonovich action as the normalization/sign starting point;
+- derive either a strict vacuum/free-energy expansion without re-stationarizing it, or a complete
+  1PI/2PI Legendre functional whose variations generate both the self-energy and one-point equation;
+- compare stationary values only after the trace-log, skeleton, source, and double-counting pieces
+  have been derived at one declared order.
+
+The smallest new check suggested by the paper is therefore not another production solver. It is a
+normalization cross-audit: translate equations (34)--(37) into the WP0 conventions and verify that
+the already exact local `C2/C3/C4` oracles reproduce the paper's quadratic, cubic, and quartic
+vertices, including Matsubara weights and the static degenerate limits. Passing that check would
+anchor the starting action. It would not by itself repair the rejected varied-covariance WP4
+candidate; the exact local bilocal Legendre kernel, same-order `C3-C3` sector, source derivatives,
+and electronuclear Matsubara tail would remain necessary.
+
 ## 5. Existing branch-selection mechanics are not thermodynamic rules
 
 The current code:
