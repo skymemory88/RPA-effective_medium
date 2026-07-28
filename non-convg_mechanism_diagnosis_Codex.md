@@ -432,10 +432,42 @@ and branch selection nevertheless remain distinct: at the identical
 separated by only `0.00103702` in the frozen scaled state metric. Natural-`h` Newton selected the
 latter; QCP-anchored arclength selected the former smoothly.
 
+### 7.2 QCP-first susceptibility result on 2026-07-28
+
+The research-priority observable does not require the unresolved low-field
+component. A direct production run at `T=0.10 K`, `q=[0 0 0]`, `B=4.60--4.90
+T`, and `0--6 GHz` completed all 61 field columns:
+
+- 19 Jensen-ordered columns and 42 stable paramagnetic columns;
+- no masked, suspect, or non-finite peak columns;
+- `Bc_1z = 4.6925 T`, with the finite-sweep bracket
+  `[4.690,4.695] T`;
+- a continuous V-shaped 1/z mode, falling from about `1.00 GHz` at
+  `4.60 T` to `0.174 GHz` at `4.690 T`, then rising from `0.110 GHz`
+  at `4.695 T` to about `1.02 GHz` at `4.90 T`.
+
+The nonzero sampled minimum is not evidence for a finite critical gap: the
+field mesh does not contain the inferred critical field, the frequency mesh
+is `0.01 GHz`, and the real-axis HWHM is `5e-5 meV` (about `0.012 GHz`).
+Resolving the asymptotic gap more closely requires a local field/frequency
+refinement and a controlled broadening check, not a different ordered
+branch.
+
+This result separates two questions that had become entangled. The
+near-QCP susceptibility and poles are now available from the accepted
+production equations. Robust coverage of the low-field ordered phase
+remains an algorithmic branch-selection problem, but it is not a blocker
+for comparison with experiments near the QCP.
+
 ## 8. Current work estimate
 
-The earlier estimate of one implementation-and-test cycle to a preview is no
-longer defensible. Three inexpensive candidates have now been tested:
+For the research-priority QCP visual inspection, no further solver work is
+required: `invz_projected/invz_run_spectra.m` now defaults to the verified
+`4.60--4.90 T`, `0--6 GHz` run and displays both the susceptibility map and
+the extracted peak-energy curve.
+
+The following results still govern any later attempt to make the full
+`0--9 T` ordered map complete:
 
 1. a coupled Newton correction repairs the small `3.6 T` node deficit but
    does not complete the `1.5 T` path;
@@ -444,20 +476,11 @@ longer defensible. Three inexpensive candidates have now been tested:
 3. matched field-to-field profile seeding can reduce, rather than improve,
    the accepted-node count.
 
-The retained fixed-`w` samples also do not yet certify continuous graph
-edges. Therefore the next honest visual preview is no longer a small solver
-tuning task. It requires either a deliberately labelled implementation of
-the explicit branch prescription in Route B, with ambiguous columns masked,
-or enough of the common-functional Route A to select states without the HMF
-path. Both are substantive work; quoting a short percentage or wall-clock
-estimate before choosing between them would be misleading.
-
-**Dated correction.** The audit-level mechanism in §7.1 supersedes the claim that no simple
-numerical improvement remained. A branch-free simultaneous audit is now verified. Remaining preview
-work is narrower: finish the fine arclength segment, reconstruct the Jensen integral/endpoint with
-refinement, then wire an opt-in ordered solver and run field/grid guards. Fine tracking remains
-necessary because nearby accepted roots can differ strongly in `r`; a larger iteration budget
-cannot replace it.
+The retained fixed-`w` samples still do not certify continuous graph edges.
+Accordingly, low-field production coverage still requires either the
+explicit Route-B branch prescription with ambiguity masking or a successful
+common-functional Route-A selector. That longer task is now secondary and
+can be resumed without holding up QCP spectra.
 
 ## 9. Bottom line
 
