@@ -21,10 +21,13 @@
 - `invzf_stationary_scalar`: bounded root enumeration, reduced-curvature classification, and
   functional-value comparison without breaking degenerate minima;
 - `invzf_cluster_exact`: dense exact one- through eight-site scalar clusters with arbitrary symmetric
-  zero-diagonal coupling matrices, thermodynamics, and stable KMS/Hermite Lehmann response;
+  zero-diagonal coupling matrices, scalar or site-dependent sources, thermodynamics, and stable
+  KMS/Hermite Lehmann response;
 - `invzf_two_site_exact`: the pair-specialized wrapper used by the Jensen dynamic gate;
 - `invzf_centered_pair_exact`: the fixed-reference centred-bond pair whose cubic coefficient isolates
   the leading nonzero-source `C3-C3` topology;
+- `invzf_centered_cluster_exact`: arbitrary fixed-reference centred finite clusters, including the
+  nonzero-source mixed-`C4` cancellation oracle;
 - `invzf_projected_inputs`: a read-only bridge from the production transverse doublet, derived
   `Jcc0/Jaa0`, and scalar BZ spectrum into the isolated pilot;
 - `invzf_stationary_convergence`: complete root re-enumeration across Matsubara cutoffs;
@@ -36,7 +39,11 @@
   source used by the full local oracle;
 - `invzf_scalar_functional_local`: common-functional assembly from either analytic two-level or
   precomputed multilevel local data;
-- `invzf_local_1pi_static`: the first static connected-to-1PI amputation gate for WP4.
+- `invzf_local_1pi_static`: the first static connected-to-1PI amputation gate for WP4;
+- `invzf_twolevel_cumulant`: exact frequency-labelled two-level `C2/C3/C4` using analytic
+  ordered-simplex matrix exponentials;
+- `invzf_twolevel_1pi_vertex`: dynamic scalar amputation including all three
+  `gamma3*C2*gamma3` quartic channels.
 
 No production spectrum or phase solver dispatches into this directory.  The local exact/ring
 fixtures are self-contained; the explicitly named production-input adapters call existing
@@ -102,8 +109,15 @@ The checks cover:
 20. q-resolved `Jcc` pages reproduce the pre-existing sorted eigenvalues below `1e-14` for both
     brute-force and Ewald backends, are exactly Hermitian in the fixtures, and leave ordinary
     one- through three-output calls bitwise unchanged.
+21. dynamic `C2` against the analytic local helper, `C3(n,-n,0)=dC2/dh`,
+    `C4(n,-n,0,0)=d2C2/dh2`, permutation symmetry, the near-degenerate `gamma4=2/beta` limit, and the
+    exact zero-source beta-delta `C4` formula; the largest displayed error is `5.4e-15`.
+22. the centred nonzero-source chain coefficient
+    `[a^2b^2]F=-0.164804530473080162...`, its ring part
+    `-0.265982296240050260...`, and its connected-`C4` residual
+    `+0.101177765766970098...`.
 
-MATLAB `checkcode` returned no findings for all fifteen isolated implementation files and the two
+MATLAB `checkcode` returned no findings for all eighteen isolated implementation files and the two
 extended coupling APIs.
 
 ## 3. Demonstrated state selection
@@ -218,11 +232,12 @@ transition on the expected field scale but does not remove the strict Gaussian p
 
 This prototype does not yet justify a LiHoF4 production calculation. The next contained steps are:
 
-1. build exact frequency-labelled local `C3/C4` vertices with analytic KMS/Hermite limits;
-2. complete the higher-power nonzero-source cluster oracle that grades the combined
-   `Phi4+Phi33` re-expansion;
-3. only then implement the already specified stationary nonlocal-return skeleton, and do not wire a
-   spectral backend until the thermodynamic and local-frequency gates pass.
+1. embed the frozen two-level vertices and q-resolved matrices in the smallest varied-`D` skeleton
+   and reproduce every entry oracle before any LiHoF4 calculation;
+2. build the full electronuclear frequency-labelled vertex engine with explicit local-rank and
+   Matsubara-convolution ladders;
+3. do not wire a spectral backend until the skeleton thermodynamic, domain, and discretization gates
+   pass.
 
 The deferred `O(1/z^2)` non-Gaussian vacuum and the production ordered `tanh/xi` machinery remain out
 of scope.

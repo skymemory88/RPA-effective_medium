@@ -106,6 +106,17 @@ the complete one-`C4` and `C3-C3` 2PI cores; a zero-frequency-only mass patch is
 That candidate and its stop gates are now pre-registered in
 `invzp_functional_wp4_skeleton_spec.md`.
 
+**WP4 entry-gate result, 2026-07-28.** The smallest skeleton has not yet been run, but its immutable
+two-level inputs are now complete.  Exact frequency-labelled `C2/C3/C4` and 1PI
+`gamma2/gamma3/gamma4` use ordered-simplex matrix exponentials and pass the source-derivative,
+permutation, zero-source beta-delta, and near-degenerate gates.  A centred pair fixes the leading
+`C3-C3` coefficient; a centred three-site chain fixes the nonzero-source mixed-`C4` coefficient that
+must cancel reducible `C3*C2*C3` content after 1PI conversion.  Optional q-resolved Hermitian
+coupling pages are exposed for both brute-force and Ewald backends without changing ordinary
+production outputs.  These results authorize only the isolated two-level varied-covariance
+prototype; full electronuclear vertices, thermodynamic exit gates, and production spectra remain
+blocked.
+
 Line numbers below are as of the 2026-07-27 working tree; confirm each before editing.
 
 ---

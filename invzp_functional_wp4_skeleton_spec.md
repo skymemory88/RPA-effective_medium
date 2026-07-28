@@ -288,14 +288,19 @@ theory failure of this candidate. The backup smooth-`r(h)` prescription remains 
 - The near-degenerate symmetric gate initially failed because of cancellation in
   `invzf_twolevel_local`; its analytic Hermite series is now used and gives
   `gamma4=2/beta` to `5.6e-17`.
+- Exact frequency-labelled two-level `C2/C3/C4` now use ordered-simplex matrix exponentials.
+  They reproduce `C3(n,-n,0)=dC2(n)/dh` and `C4(n,-n,0,0)=d2C2(n)/dh2` below `3e-15`;
+  the closed zero-source `C4(n,-n,m,-m)` formula, including its anomalous
+  `beta*(delta_mn+delta_m,-n)` term, closes below `2e-15`.
 - The ring-reduction implementation already exists, but has not yet been embedded in a varied-`D`
   skeleton object.
 - The zero-source three-site `C4` oracle and the leading centred-pair nonzero-source `C3-C3` oracle
-  exist.  The q-resolved coupling-matrix input is now exposed for both dipolar backends.  The
-  higher-power combined `Phi4+Phi33` oracle is still missing.
+  exist.  The nonzero-source centred-chain mixed-`C4` cancellation oracle also exists, and the
+  q-resolved coupling-matrix input is exposed for both dipolar backends.
 
-Therefore WP4 implementation remains blocked at gate 1 beyond its static subset and at the combined
-part of gate 4.
+The immutable two-level fixtures required by gates 1--4 are now present.  This authorizes an isolated
+smallest-skeleton implementation, but not a LiHoF4 run: the full electronuclear frequency-labelled
+vertex engine and the remaining exit gates are still absent.
 
 ## 10. Immutable centred-pair `C3-C3` oracle
 
@@ -395,3 +400,62 @@ Fresh two-q gates found zero Hermiticity residual and reproduced the existing so
 below `1e-14` for both brute-force and Ewald backends.  Repeated ordinary versus detailed calls gave
 bitwise-identical `Jnu`, `info`, `Juni/Jaa0` outputs.  This closes the input-availability part of the
 WP4 entry gate without enabling a skeleton or changing a production default.
+
+## 12. Nonzero-source mixed-`C4` cancellation oracle
+
+The higher-power nonzero-source gate uses a centred three-site open chain,
+
+\[
+\mathcal H_c(a,b)
+=\sum_{i=1}^3[\Delta n_i-hX_i]
+-a\,\delta X_1\delta X_2
+-b\,\delta X_2\delta X_3,\qquad
+\delta X=X-m_0 .
+\]
+
+The monomial `[a^2 b^2]` has local degrees `(2,4,2)`.  Its exact connected graph inventory is
+therefore the fourth-order Gaussian ring plus one connected `C4` at site 2.  No `C1` attachment
+survives the centring and no pair of degree-three vertices can match this monomial.  This makes the
+fixture decisive away from symmetry: after converting connected vertices to 1PI vertices, the
+`C3*C2*C3` channels inside `gamma4` and the compensating stationary `Phi33`/trace contributions must
+cancel in the total re-expansion.  Grading `Phi4` alone would fail this oracle.
+
+At the same frozen local point as section 10,
+
+```text
+Delta=1.3, M=1, beta=1.7, h=0.37,
+```
+
+120-digit `8x8` matrix-exponential evaluation and two Richardson levels give
+
+\[
+[a^2b^2]F_{\rm exact}
+=-0.16480453047308016228870453332302872015\ldots .
+\]
+
+For a scalar local `C2`, `Tr J^4` has mixed coefficient `4a^2b^2`, so the ring contribution is
+
+\[
+[a^2b^2]F_{\rm ring}
+=-\frac{1}{2\beta}\sum_{n=-\infty}^{\infty}C_2(i\omega_n)^4
+=-0.26598229624005026010142443376005660462\ldots .
+\]
+
+The immutable connected-`C4` residual is consequently
+
+\[
+\boxed{
+[a^2b^2](F_{\rm exact}-F_{\rm ring})
+=+0.10117776576697009781271990043702788447\ldots } .
+\]
+
+An independent direct contraction of the exact dynamic vertex,
+
+\[
+-\frac{1}{4\beta^2}\sum_{n,m}
+C_4(n,-n,m,-m)C_2(n)C_2(m),
+\]
+
+converges to the same residual.  A fresh double-precision centred-cluster scan gives the total
+coefficient within `6.5e-10`; the signed Matsubara ring sum through `|n|=320` agrees with the displayed
+ring value within `1e-15`.

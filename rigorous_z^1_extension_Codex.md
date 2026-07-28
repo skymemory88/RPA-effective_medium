@@ -38,6 +38,13 @@ couplings, and moves the ordered solutions to `3.6--4.6 T`. A narrower no-state 
 specification level in `invzp_functional_wp4_skeleton_spec.md`; no static-only pole patch is
 authorized.
 
+The WP4 two-level entry fixtures are now complete.  Exact dynamic `C2/C3/C4` and their 1PI
+amputations pass analytic source, permutation, beta-delta, and degeneracy gates.  Centred two- and
+three-site clusters freeze the leading `C3-C3` coefficient and the nonzero-source mixed-`C4`
+cancellation coefficient.  Both dipolar backends can now expose the exact q-resolved Hermitian
+coupling pages behind an optional output while leaving ordinary production calls unchanged.  The
+next authorized task is the smallest isolated varied-covariance skeleton, not production wiring.
+
 ## 1. Decision summary
 
 The present Jensen ordered machinery should remain available as an explicitly labelled, inexpensive approximation. It should not become the universal thermodynamic foundation of the code.
@@ -244,11 +251,11 @@ Generalize the existing tensor vertex engine into a stable local-vertex service.
 - agreement with the existing JSON high-precision oracle;
 - rank-ladder convergence of both static susceptibility and connected variance.
 
-**2026-07-28 status:** scalar two-level subset implemented in `invz_functional/invzf_twolevel_local.m`
-with analytic `C2`, `dC2/dh=C3(...,0)`, `d2C2/dh2=C4(...,0,0)`, and the elastic zero mode. A full
-source-biased electronuclear `C2` oracle with verified nested-stencil source derivatives is also
-implemented in `invzf_electronuclear_local.m`. General component-labelled `C3/C4` vertices and
-multilevel rank gates remain open.
+**2026-07-28 status:** the scalar two-level service now includes analytic `C2`, exact
+frequency-labelled `C3/C4`, all static/source identities, connected beta-delta subtraction, and
+dynamic 1PI `gamma2/gamma3/gamma4`.  A full source-biased electronuclear `C2` oracle with verified
+nested-stencil source derivatives is also implemented.  Component-labelled electronuclear `C3/C4`
+and multilevel rank gates remain open.
 
 ### WP2 — strict functional on a scalar closed model
 
@@ -266,8 +273,9 @@ finite-mode ring, analytic source derivatives, common `(m,h)` functional/Hessian
 root enumerator that compares stable roots by functional value. The stationary envelope identity
 `U=d(beta F)/d beta` and the independent field identities for `m` and `chi` pass. The scalar
 Matsubara free-energy tail has a rigorous bound plus a Richardson audit. Complete stationary-root
-re-enumeration across Matsubara cutoffs and production BZ grids is implemented; broader lattice
-fixtures and a mathematically consistent electronuclear local reference remain open.
+re-enumeration across Matsubara cutoffs and production BZ grids is implemented, as is a
+single-generator electronuclear local reference.  The non-Gaussian skeleton is deliberately a
+separate WP4 resummation rather than a silent addition to this strict ring theory.
 
 ### WP3 — exact finite-cluster oracle
 
@@ -286,7 +294,9 @@ Start with dimensions small enough for dense diagonalization. Increase site coun
 **2026-07-28 status:** dense scalar cluster oracles through eight sites are implemented. The pair
 `j^2` coefficient passes, and a four-site ring fixture gives exact-minus-functional powers
 `epsilon^4` at the symmetric point and asymptotically `epsilon^3` at nonzero source, matching the
-first omitted `C4` and `C3-C3` classes.
+first omitted `C4` and `C3-C3` classes.  Fixed-reference centred clusters additionally isolate the
+leading nonzero-source `C3-C3` coefficient and the mixed-chain connected-`C4` coefficient required
+to grade the 1PI cancellation.
 
 ### WP4 — Φ-derived self-consistent solver
 
@@ -295,8 +305,9 @@ Introduce stationary dressed lines and compare strict-order versus self-consiste
 **2026-07-28 specification:** the first candidate varies the full covariance and builds its skeleton
 from the subtracted nonlocal return `R_ij=D_ij-delta_ij*C2`. The one-`C4` double-return and the
 same-order `C3-C3` three-line core are inseparable. The latter is momentum/sublattice dependent and
-cannot be reconstructed from `Jnu_flat`; q-resolved coupling matrices and eigenvectors are an entry
-requirement. See `invzp_functional_wp4_skeleton_spec.md`.
+cannot be reconstructed from `Jnu_flat`; q-resolved coupling matrices or an equivalent real-space
+transform are required.  Those matrices and all two-level entry fixtures are now available, so the
+smallest isolated implementation is authorized.  See `invzp_functional_wp4_skeleton_spec.md`.
 
 **Exit gates:**
 

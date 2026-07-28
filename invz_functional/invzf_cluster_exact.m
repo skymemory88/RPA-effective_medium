@@ -3,24 +3,33 @@ function out = invzf_cluster_exact(Delta, M, h, J, beta, wn, sites)
 %
 %   OUT = INVZF_CLUSTER_EXACT(DELTA,M,H,J,BETA,WN,SITES) diagonalizes
 %
-%     H = sum_i [DELTA*|1><1|_i - H*X_i]
+%     H = sum_i [DELTA*|1><1|_i - H_i*X_i]
 %         - sum_{i<j} J(i,j)*X_i*X_j,  X=M*sigma_x.
 %
-%   J must be finite, real symmetric, and have zero diagonal.  The initial
-%   dense oracle is capped at eight sites.  OUT contains F, U, site moments,
-%   the total uniform static susceptibility, and connected local Matsubara
-%   susceptibilities for SITES (default all sites).  KMS/Hermite divided
-%   differences are evaluated without subtracting nearly equal populations.
+%   H may be scalar or one source per site.  J must be finite, real
+%   symmetric, and have zero diagonal.  The initial dense oracle is capped
+%   at eight sites.  OUT contains F, U, site moments, the total uniform
+%   static susceptibility, and connected local Matsubara susceptibilities
+%   for SITES (default all sites).  KMS/Hermite divided differences are
+%   evaluated without subtracting nearly equal populations.
 
 validateattributes(Delta, {'numeric'}, {'real','scalar','finite','positive'});
 validateattributes(M, {'numeric'}, {'real','scalar','finite','positive'});
-validateattributes(h, {'numeric'}, {'real','scalar','finite'});
+validateattributes(h, {'numeric'}, {'real','vector','finite'});
 validateattributes(beta, {'numeric'}, {'real','scalar','finite','positive'});
 validateattributes(J, {'numeric'}, {'real','finite','2d','square'});
 validateattributes(wn, {'numeric'}, {'real','vector','finite','integer'});
 N = size(J,1);
 if N < 1 || N > 8
     error('invzf:clusterSize', 'Dense exact clusters require 1 <= N <= 8.');
+end
+if isscalar(h)
+    hsite = repmat(h,N,1);
+elseif numel(h) == N
+    hsite = h(:);
+else
+    error('invzf:clusterSource', ...
+        'h must be scalar or contain one source for each of the %d sites.',N);
 end
 scale = max(1,max(abs(J),[],'all'));
 if norm(J-J.',inf) > 64*eps(scale) || any(abs(diag(J)) > 64*eps(scale))
@@ -39,10 +48,10 @@ end
 d = 2^N;
 I2 = eye(2);
 X1 = M*[0 1;1 0];
-Hloc1 = [0 0;0 Delta]-h*X1;
 Xops = cell(N,1);
 H = zeros(d);
 for i = 1:N
+    Hloc1 = [0 0;0 Delta]-hsite(i)*X1;
     Xops{i} = embed_one(X1,I2,i,N);
     H = H+embed_one(Hloc1,I2,i,N);
 end
@@ -89,7 +98,7 @@ end
 
 out = struct('F',F,'U',U,'m_site',m_site,'m_total',m_total, ...
     'chi_uniform',chi_uniform,'C_local',C_local,'sites',sites, ...
-    'wn',wn,'E',E,'p',p,'J',J);
+    'wn',wn,'E',E,'p',p,'J',J,'h_site',hsite);
 end
 
 function A = embed_one(op,I2,site,N)
