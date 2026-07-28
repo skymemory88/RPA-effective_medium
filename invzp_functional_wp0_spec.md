@@ -2,7 +2,8 @@
 
 **Recorded:** 2026-07-28
 
-**Status:** derivation specification; no production implementation authorized
+**Status:** strict `O(1/z)` scope closed; isolated prototype authorized, production replacement not
+authorized
 
 **Purpose:** smallest common-functional construction capable of deciding whether the Jensen
 paramagnetic self-energy, ordered source equation, and lattice closure can arise from one controlled
@@ -19,8 +20,9 @@ WP0 uses a finite scalar two-level lattice and exact local cumulants. It exclude
 - a production effective-medium solver;
 - any branch-selection rule fitted to spectra.
 
-No new solver is written until the vacuum, one-point, and two-point derivatives have been derived with
-their signs and symmetry factors and independently checked against the exact cluster oracle below.
+The derivation and its exact gates are now recorded in
+`invzp_functional_wp0_ring_derivation.md`. They authorize only the isolated scalar prototype described
+there. A dressed/EMT solver and every production Jensen entry point remain outside this scope.
 
 ## 2. Hamiltonian and exact mean-field rearrangement
 
@@ -36,26 +38,37 @@ Let `X_i` be the scalar ordering operator and
 with real symmetric `J`, `J_ii=0`, and translational row sum
 `J0=sum_j J_ij`. Ferromagnetic coupling is positive.
 
-Choose a local reference field
+Introduce a local reference field and an independently varied physical moment,
 
 \[
-h=H+J_0m,\qquad
-\delta X_i=X_i-m,\qquad
-m=\langle X_i\rangle_{\rm loc}.
+h,\qquad
+m.
 \]
 
-Then the Hamiltonian is exactly
+For the exact mean-field rearrangement define
+`\delta X_i^(m)=X_i-m`. When the source stationarity relation `h=H+J0*m` holds, the Hamiltonian is
+exactly
 
 \[
 \mathcal H=
 \sum_i[\mathcal H_{{\rm cf},i}-hX_i]
 +\frac N2J_0m^2
--\frac12\sum_{i\ne j}J_{ij}\delta X_i\delta X_j .
+-\frac12\sum_{i\ne j}J_{ij}\delta X_i^{(m)}\delta X_j^{(m)} .
 \]
 
-This fixes the mean-field double counting and makes the interaction tadpole-free at the local
-reference. In the final stationary construction, the physical moment—not merely the isolated local
-moment—must satisfy the one-point equation derived from the same functional.
+This fixes the mean-field double counting. It does **not** define the off-shell centring used in the
+linked graphs. Let
+
+\[
+m_{\rm loc}(h)=\langle X\rangle_{0,h},\qquad
+\delta X_i^{(0)}=X_i-m_{\rm loc}(h),
+\]
+
+so `⟨delta X^(0)⟩_0=0`; all ring vertices below use `delta X^(0)`. At pure mean-field stationarity
+`m=m_loc`, and the two subtractions coincide. With ring corrections, `m` is the physical stationary
+moment and differs from `m_loc` by the one-point ring derivative. The exact rearrangement above fixes
+the source and double-counting signs, while the centred local generator/Legendre construction defines
+the strict functional; an uncentred off-shell expansion in `X-m` must not be substituted for it.
 
 For the closed paramagnetic oracle,
 
@@ -73,7 +86,7 @@ Use the positive connected local correlator
 
 \[
 C_2(\tau)=
-\langle T_\tau\,\delta X(\tau)\delta X(0)\rangle_{\rm loc},
+\langle T_\tau\,\delta X^{(0)}(\tau)\delta X^{(0)}(0)\rangle_{\rm loc},
 \]
 
 and retain the repository convention `G=-chi=-C2` only at the API boundary. Bosonic frequencies are
@@ -92,9 +105,10 @@ T_\tau\exp\left[
 \]
 
 The required local objects are `C1` through `C4`, obtained as connected source derivatives of the same
-`W0`; `C1=m`, and the higher connected derivatives are equivalently cumulants of `delta X=X-m`.
-All static/degenerate limits must be analytic KMS/Hermite limits. No elastic contribution is replaced
-after the vertices are constructed.
+`W0`; `C1=m_loc(h)`, while the independently varied physical `m` is a separate functional variable.
+The higher connected derivatives are cumulants of `delta X^(0)=X-m_loc(h)`. All static/degenerate
+limits must be analytic KMS/Hermite limits. No elastic contribution is replaced after the vertices
+are constructed.
 
 ## 4. High-density and weak-coupling bookkeeping
 
@@ -105,9 +119,20 @@ For a coordination sequence, scale a typical off-diagonal coupling as `J_ij=O(1/
 \frac1N\operatorname{Tr}J^2=O(1/z).
 \]
 
+For a connected centred graph with `V` occupied sites and `E` bonds, the nominal embedding count
+gives `O(z^{-(E-V+1)})` per site. A connected unicyclic `O(1/z)` graph has `E=V`; because the centred
+one-leg vertex `⟨delta X^(0)⟩_0` vanishes, every occupied local vertex has degree two. The complete
+retained vacuum family is therefore the `C2` ring family. The first explicit `C3-C3` vacuum is
+`O(1/z^2)`, and a one-`C4` vacuum is also `O(1/z^2)`.
+
 For exact finite clusters, introduce a separate scalar coupling `epsilon`, `J -> epsilon J`, and
 extract symmetric weak-coupling coefficients. The `epsilon` expansion is the numerical oracle; its
 powers must not be relabelled as `1/z` without the declared coordination scaling.
+
+The retained WP0 rule is explicit: keep the complete unicyclic `C2` ring family and all of its source
+derivatives. Do not add a lone `C4` vacuum to that theory. A calculation retaining `O(1/z^2)` must add
+the one-`C4` class, every same-order `C3-C3` bicyclic class, and the `C5/C6` objects required by their
+one-/two-point derivatives as one new closed work package.
 
 ## 5. Vacuum-functional inventory
 
@@ -166,37 +191,87 @@ The linear subtraction is kept explicitly even when `Tr J=0`. Its expansion begi
 \operatorname{Tr}(JC_{2,n})^2+O(J^3),
 \]
 
-fixing the sign and symmetry factor of the first nonzero linked vacuum diagram. Differentiating this
-same term with respect to the source must reproduce the Gaussian one-point correction; its stationary
-Hessian must reproduce the RPA response.
+fixing the sign and symmetry factor of the first nonzero linked vacuum diagram.
 
-### 5.3 First non-Gaussian local vertex
-
-The first Jensen single-site correction is generated by a connected local `C4` vertex inserted into
-the lattice/medium chains. WP0 must derive the matching vacuum topology: one local four-leg vertex
-with its legs paired into two lattice-return/medium contractions, including all inequivalent
-frequency routings and the exact symmetry factor.
-
-Write only schematically until that derivation is closed:
+Define
 
 \[
-\Phi_4
-=S_4\sum_{n,m}
-C_4(n,-n,m,-m)\,\mathcal K_n\mathcal K_m .
+L_n=I-JC_{2,n},\qquad
+P_n=L_n^{-1}J,\qquad
+Q_n=P_n-J.
 \]
 
-`S4`, the Matsubara powers of `beta`, signs, subtraction of disconnected `C2*C2` pieces, and the
-definition of `mathcal K` are WP0 derivation outputs. They must not be inferred by fitting the existing
-`Sigma` formula.
+For a diagonal local variation,
 
-### 5.4 Ordered one-point and three-leg content
+\[
+\delta\Delta F_{\rm ring}
+=-\frac1{2\beta}\sum_n\operatorname{Tr}(Q_n\delta C_{2,n}),
+\]
 
-At nonzero source, `C3` and source derivatives of `C2/C4` are generally nonzero. Enumerate every
-vacuum and one-point diagram at the same retained order. The one-point fluctuation field and the
-two-point self-energy must obey the Maxwell relation generated by the same functional.
+and
 
-The static replacement used in J 2.26–2.27 is not admitted at this stage: its matching ordered vacuum
-term is unknown and its reduced self-energy fails the mixed-derivative gate in §7.3.
+\[
+\delta_b\delta_a\Delta F_{\rm ring}
+=-\frac1{2\beta}\sum_n\left[
+\operatorname{Tr}(P_n\delta_bC_{2,n}P_n\delta_aC_{2,n})
++\operatorname{Tr}(Q_n\delta_b\delta_aC_{2,n})
+\right].
+\]
+
+These identities, not an independently postulated self-energy, generate the retained one- and
+two-point terms.
+
+### 5.3 Ordered source derivatives at the retained order
+
+At nonzero source,
+
+\[
+\partial_h C_2(i\omega_n)=C_3(i\omega_n,-i\omega_n,0),
+\]
+
+\[
+\partial_h^2 C_2(i\omega_n)=C_4(i\omega_n,-i\omega_n,0,0).
+\]
+
+The one-point correction therefore contains one `C3` insertion. The fixed-reference Hessian contains
+both a two-`C3` insertion and a one-`C4` insertion. Trace cyclicity and the common local generator make
+the Hessian symmetric. This is the complete ordered inventory at strict `O(1/z)`.
+
+The full scalar functional per site is
+
+\[
+f(m,h;H)
+=f_0(h)+(h-H)m-\frac12J_0m^2+f_{\rm ring}(h),
+\]
+
+with stationarity equations
+
+\[
+h=H+J_0m,\qquad
+m=m_{\rm loc}(h)-\partial_h f_{\rm ring}.
+\]
+
+Its stationary Hessian supplies the physical response.
+
+### 5.4 Deferred explicit non-Gaussian vacuum order
+
+An explicit local `C4` vacuum vertex first occurs in the `O(1/z^2)` one-`C4`/two-return topology,
+
+\[
+W_{422}
+=\frac1{8\beta}
+\sum_i\sum_{\substack{j\ne i,\;k\ne i\\j\ne k}}\sum_{n,m}
+J_{ij}^2J_{ik}^2
+C_{4,i}(-n,n,-m,m)C_{2,j}(n)C_{2,k}(m).
+\]
+
+This is the dimensionless linked-log contribution; `Delta F_422=-W_422/beta`. The symmetry factor is
+`1/8` for the ordered distinct-neighbour sum. A coincident return `j=k` carries four legs at the
+neighbour, needs a separate `C4_j` plus Wick decomposition, and is `O(1/z^3)`. At `O(1/z^2)`, all
+two-`C3` bicyclic classes—the triple bond and its `C2`-decorated theta/dumbbell/handcuff
+continuations—are also present. Their source derivatives and those of `W_422` require `C5` and `C6`.
+They are all deferred together. The static replacement used in J 2.26–2.27 remains excluded because
+it is not generated by the retained ring functional.
 
 ## 6. Exact two-site oracle
 
@@ -246,8 +321,56 @@ C_2(i\omega_n)^2 ,
 which is the one-bond specialization of the ring functional. This equality is the first immutable WP0
 sign/factor gate.
 
-Use at least `beta*Delta` values on both sides of unity and nonzero source points after the zero-source
-oracle is reproduced.
+The nonzero-source exact expansion and numerical gates are given in
+`invzp_functional_wp0_ring_derivation.md`. They verify the independently varied mean-field plus ring
+functional through `j^2` for `F`, `m`, and `chi`, without a commuting/classical approximation.
+
+The sourced oracle Hamiltonian is
+
+\[
+\mathcal H_2(H,j)
+=\sum_{i=1}^2[\Delta n_i-HX_i]-jX_1X_2.
+\]
+
+At each declared `(beta,Delta,H,j)`, dense diagonalization evaluates `F`, `U`, total moment, uniform
+static susceptibility, and local Matsubara susceptibility from stable KMS/Hermite Lehmann sums.
+Symmetric `j` scans extract retained and first-omitted coefficients. This protocol supplies the
+ordered Maxwell and thermodynamic gates; the displayed closed-form `Z2` is only its `H=0` special
+case.
+
+### 6.1 Deferred `O(1/z^2)` three-site mixed oracle
+
+The first deferred one-`C4` topology has a cheap isolating oracle:
+
+\[
+\mathcal H_3
+=\Delta\sum_{i=1}^3n_i
+-\epsilon_{12}X_1X_2-\epsilon_{23}X_2X_3 .
+\]
+
+At zero source, `C3=0`. The mixed coefficient
+`[epsilon12^2 epsilon23^2]F3` contains only the already fixed fourth-order ring walk and one connected
+`C4` at site 2 with one return through each distinct bond. Four-line single-bond and two-direct-`C4`
+topologies cannot contribute to this mixed monomial.
+
+For `Delta=1.3`, `M=1`, and `beta=1.7`, 90-digit diagonalization and Richardson-extrapolated mixed
+differences give
+
+\[
+[e_{12}^2e_{23}^2]F_3=-0.08044383697039255840,
+\]
+
+\[
+[e_{12}^2e_{23}^2]F_{\rm ring}=-0.68283669835647082546,
+\]
+
+\[
+[e_{12}^2e_{23}^2](F_3-F_{\rm ring})
+=+0.60239286138607826706.
+\]
+
+These values are an immutable future `C4` sign/routing/symmetry-factor gate. They do not add that
+topology to the retained strict ring prototype.
 
 ## 7. Existing moment-form identities as derivation gates
 
@@ -279,8 +402,35 @@ is a weighted derivative of
 =w_ng_n\Sigma_n .
 \]
 
-The explicit `C4` vacuum derivation must reduce to this primitive, including its normalization, without
-using the primitive as an ansatz.
+This is an exact integrability identity of the resummed PM map, not the strict ring vacuum. Expanding
+the leading cavity return as `K_n/j^2=C_2(i omega_n)` reproduces the exact two-site local Matsubara
+susceptibility coefficient through `j^2`, including the Gaussian-return and connected-`C4` pieces.
+That coefficient-by-coefficient comparison is binding. Equality of the full resummed primitive with
+the strict vacuum is neither required nor asserted.
+
+The primitive's double- and single-frequency sums make a sharper exact-vertex prediction. On a signed
+frequency grid, the scalar two-level connected vertex must be
+
+\[
+\Gamma_4(n,-n,l,-l)
+=-2M^2p\,g_n
+\left[g_l^2-Ag_l+g_ng_l\right]
++\beta M^2pc\,g_n^2
+\left(\delta_{l,n}+\delta_{l,-n}\right).
+\]
+
+The first term is smooth in `(n,l)` and generates the `lambda1*lambda2-A*lambda1^2/2` double sum.
+The anomalous KMS/Hermite term proportional to
+
+\[
+\beta\left(\delta_{l,n}+\delta_{l,-n}\right)c,\qquad
+c=1-n_{01}^2=\operatorname{sech}^2(\beta\Delta/2),
+\]
+
+collapses one frequency sum and generates the `sum_n K_n^2 g_n^2` part. At `n=l=0` the two Kronecker
+deltas coincide and correctly contribute twice. The dense exact `invzt_vertex4` path sum verifies
+this formula for `n,l=0,+/-1,+/-2` at `beta=1.7`, `Delta=1.3`, `M=1` to below `2e-13`. Failure of
+this identity at any KMS/degenerate fixture blocks a future EMT/2PI extension.
 
 ### 7.2 Scalar EMT leaf
 
@@ -300,6 +450,21 @@ has
 WP0 either derives the complementary local/Dyson and double-counting terms that embed this leaf in
 the common functional, or initially omits EMT and evaluates the finite lattice propagator directly.
 
+The weight mismatch is itself a gate. Naively adding `Phi_Sigma_PM[K]` changes the `K` variation by
+`w_n g_n Sigma_n` and no longer yields the EMT closure. In independent `(K,G,Sigma)` variables, the
+minimal cancellation has the schematic Legendre structure
+
+\[
+\Gamma
+=\mathcal V_{\rm EMT}(K;G)+\Phi_\Sigma(K)
+-\sum_n w_ng_nK_n\Sigma_n+\Gamma_{\rm loc}(G,\Sigma).
+\]
+
+The `K` derivative then cancels `partial Phi_Sigma/partial K=w g Sigma` before imposing the EMT
+closure; the `Sigma` derivative must generate the matching local/Dyson relation through
+`Gamma_loc`. A conventional `-sum w Sigma G` form would require first transforming to a functional
+whose natural variable is `G`; it cannot be appended directly to the present `K` primitive.
+
 ### 7.3 Ordered mixed-derivative discriminator
 
 For the current ordered correction, two generic nonzero-frequency slots obey
@@ -312,12 +477,49 @@ w_ig_i\frac{\partial\Delta\Sigma_i}{\partial K_j}
 \qquad a=\frac{m^2}{n_{01}^2}.
 \]
 
-It is generically nonzero. The three-frequency diagonal-symmetrizer cycle also contains the nonzero
-factor
+It is generically nonzero. To make the stronger test reproducible, let
 
 \[
-a(2a-p)(g_i-g_j)(g_i-g_k)(g_j-g_k).
+M_{ij}=\frac{\partial\Sigma_i^{\rm ord}}{\partial K_j},\qquad i\ne j.
 \]
+
+For three generic nonzero-frequency slots,
+
+\[
+M_{ij}=\frac{w_jg_j}{\beta}\{\phi(g_j)+qg_i\},
+\quad q=p-2a,
+\]
+
+\[
+\phi(x)=(p-a)x-\frac{4a}{g_0}x^2+ag_0-pA.
+\]
+
+A finite nonzero diagonal symmetrizer requires the cycle identity
+
+\[
+M_{ij}M_{jk}M_{ki}=M_{ji}M_{kj}M_{ik}.
+\]
+
+The difference factors as
+
+\[
+\frac{w_iw_jw_kg_ig_jg_k}{\beta^3}\,
+\frac{a(2a-p)}{g_0^2}
+(g_i-g_j)(g_i-g_k)(g_j-g_k)\,\mathcal P_{ijk},
+\]
+
+where
+
+\[
+\mathcal P_{ijk}
+=3ag_0^2-4A g_0p+g_0^2p
+-4ag_0(g_i+g_j+g_k)
++16a(g_ig_j+g_ig_k+g_jg_k).
+\]
+
+There is no additional standalone `(p-a)` factor. This cycle obstruction rules out every finite
+diagonal reweighting, whereas the preceding two-index display rules out only the canonical
+`diag(w_i g_i)` pairing.
 
 The strict ordered derivation must either restore the omitted frequency/source terms so the correct
 weighted Hessian is symmetric or demonstrate a different explicit set of conjugate variables. Failure
@@ -325,18 +527,22 @@ of this gate excludes the candidate from a common-functional implementation.
 
 ## 8. WP0 exit gates
 
-WP0 completes only when:
+The corrected strict `O(1/z)` WP0 scope is complete because:
 
 1. every retained vacuum, one-point, and two-point diagram is listed with sign and symmetry factor;
-2. source and propagator derivatives of the same expression reproduce the separately evaluated
-   vertices;
-3. the two-site coefficient in §6 is reproduced analytically and numerically;
-4. the derived `C4` vacuum reduces to the paramagnetic primitive in §7.1;
-5. the ordered Maxwell/mixed-derivative identities close;
-6. the treatment of the zero Matsubara mode follows from the same local cumulants;
-7. EMT is either functionally embedded or explicitly excluded from the first implementation;
-8. the first omitted diagram class and its `epsilon`/`1/z` scaling are stated.
+2. first and second source derivatives of the same ring expression generate `C3` and
+   `C4+C3^2`, with a symmetric Hessian;
+3. zero- and nonzero-source two-site coefficients are reproduced analytically and numerically;
+4. the leading bare-coupling expansion of the PM Jensen self-energy reproduces the exact local
+   Matsubara coefficient;
+5. the zero Matsubara contribution comes from the same analytic local cumulants;
+6. EMT and dressed self-consistency are explicitly excluded from the first implementation;
+7. the first omitted `C3-C3` and one-`C4` vacuum classes are identified as `O(1/z^2)` and their
+   higher local-vertex requirements are stated;
+8. at every stationary solution, independent derivatives verify
+   `m=-dF/dH`, `chi=-d2F/dH2`, and `U=d(beta F)/d beta`.
 
-Only then should WP1/WP2 interfaces or tests be implemented. Production
+WP1/WP2 may now begin only as the isolated strict scalar prototype in
+`invzp_functional_wp0_ring_derivation.md`. Production
 `invz_sigma_ordered`, `invz_gstat_ordered`, `invz_emt_static_ordered`, and
-`invz_hmf_ordered` remain unchanged throughout WP0.
+`invz_hmf_ordered` remain unchanged.

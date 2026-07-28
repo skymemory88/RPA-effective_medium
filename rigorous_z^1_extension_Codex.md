@@ -1,6 +1,6 @@
 # Rigorous and system-general 1/z extension
 
-**Status:** future extension project; design and continuation note, not an active implementation plan  
+**Status:** active isolated scalar prototype; not connected to production
 **Recorded:** 2026-07-22  
 **Motivation:** the Task 6b closed-model J 2.34 comparison leaves a stable 13.65% route mismatch. The independent assessment (adjudicated against the published Jensen paper) is folded into §7b of the Stage-2 plan ([docs/superpowers/plans/2026-07-22-invzp-stage2-ordered-thermodynamics.md](docs/superpowers/plans/2026-07-22-invzp-stage2-ordered-thermodynamics.md)) and preserved in the consolidated [ordered-leg diagnosis](invzp_convg_diagnosis_Claude.md); the standalone review and QCP diagnosis notes were retired after consolidation.
 
@@ -12,12 +12,14 @@ The present Newton residual also fails the symmetry/zero-pattern test for a dire
 rescaled gradient. WP0 therefore remains the correct entry point; production equations are not to be
 modified during the derivation.
 
-The initial WP0 conventions and immutable algebra gates are now recorded in
-`invzp_functional_wp0_spec.md`. They include the exact mean-field/tadpole rearrangement, the strict
-Gaussian ring functional, an exact two-site free-energy coefficient, the paramagnetic self-energy's
-quadratic primitive, and the ordered mixed-derivative discriminator. The `C4` vacuum symmetry factor
-and full ordered one-point/two-point diagram set remain derivation outputs rather than assumed
-formulas.
+WP0 is now closed at the strict unicyclic `O(1/z)` scope by
+`invzp_functional_wp0_spec.md` and `invzp_functional_wp0_ring_derivation.md`. The complete retained
+vacuum is the `C2` ring family; its source derivatives generate the ordered `C3` one-point term and
+the symmetric `C4+C3^2` Hessian. Exact nonzero-source two-site coefficients and the leading Jensen PM
+dynamic coefficient pass independent checks. An explicit `C4` vacuum belongs to the deferred
+`O(1/z^2)` bicyclic scope, where all `C3-C3` classes and local `C5/C6` derivatives must also be kept.
+The isolated `invz_functional/` prototype implements the closed scope without EMT or production
+dispatch.
 
 ## 1. Decision summary
 
@@ -208,6 +210,10 @@ Deliver a theory specification containing the diagram list, power counting, sign
 
 **Exit gate:** an independent hand calculation on the closed two-level model reproduces the PM Jensen first-order self-energy and free-energy correction without using J 2.28–2.29.
 
+**2026-07-28 status:** passed at the strict unicyclic scope. The exact pair free-energy coefficient,
+nonzero-source derivatives, and local Matsubara `j^2` coefficient reproduce the ring/Jensen expansion.
+The full resummed EMT primitive is explicitly not claimed as the strict vacuum functional.
+
 ### WP1 — exact local vertices
 
 Generalize the existing tensor vertex engine into a stable local-vertex service. First support a two-level model, then three-level fixtures, then a field-adapted multilevel basis.
@@ -221,6 +227,10 @@ Generalize the existing tensor vertex engine into a stable local-vertex service.
 - agreement with the existing JSON high-precision oracle;
 - rank-ladder convergence of both static susceptibility and connected variance.
 
+**2026-07-28 status:** scalar two-level subset implemented in `invz_functional/invzf_twolevel_local.m`
+with analytic `C2`, `dC2/dh=C3(...,0)`, `d2C2/dh2=C4(...,0,0)`, and the elastic zero mode. General
+component-labelled vertices and multilevel/rank gates remain open.
+
 ### WP2 — strict functional on a scalar closed model
 
 Implement the vacuum diagrams and their derivatives without self-consistent resummation.
@@ -231,6 +241,13 @@ Implement the vacuum diagrams and their derivatives without self-consistent resu
 - differentiating the functional reproduces the separately implemented strict-order self-energy and moment vertex;
 - field and temperature thermodynamic identities close to the measured quadrature/derivative error;
 - expansion coefficients match an exact finite-cluster calculation as the coupling scale tends to zero.
+
+**2026-07-28 status:** initial scalar implementation exists in `invz_functional/`. It contains the
+finite-mode ring, analytic source derivatives, common `(m,h)` functional/Hessian, and a stationary
+root enumerator that compares stable roots by functional value. The stationary envelope identity
+`U=d(beta F)/d beta` and the independent field identities for `m` and `chi` pass. The scalar
+Matsubara free-energy tail has a rigorous bound plus a Richardson audit. Mode-grid error plumbing and
+broader lattice fixtures remain open.
 
 ### WP3 — exact finite-cluster oracle
 
@@ -245,6 +262,11 @@ directly. Extract weak-coupling coefficients by symmetric coupling scans or anal
 Start with dimensions small enough for dense diagonalization. Increase site count or use sparse methods only after the oracle itself is independently verified. A full 136-state multi-site cluster is not an initial deliverable.
 
 **Exit gate:** the functional reproduces the exact cluster's coefficient at every retained order; the residual follows the analytically predicted first-omitted power.
+
+**2026-07-28 status:** dense scalar cluster oracles through eight sites are implemented. The pair
+`j^2` coefficient passes, and a four-site ring fixture gives exact-minus-functional powers
+`epsilon^4` at the symmetric point and asymptotically `epsilon^3` at nonzero source, matching the
+first omitted `C4` and `C3-C3` classes.
 
 ### WP4 — Φ-derived self-consistent solver
 
