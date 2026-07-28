@@ -113,9 +113,16 @@ permutation, zero-source beta-delta, and near-degenerate gates.  A centred pair 
 `C3-C3` coefficient; a centred three-site chain fixes the nonzero-source mixed-`C4` coefficient that
 must cancel reducible `C3*C2*C3` content after 1PI conversion.  Optional q-resolved Hermitian
 coupling pages are exposed for both brute-force and Ewald backends without changing ordinary
-production outputs.  These results authorize only the isolated two-level varied-covariance
-prototype; full electronuclear vertices, thermodynamic exit gates, and production spectra remain
-blocked.
+production outputs.
+
+**WP4 gate verdict, 2026-07-28.** The preregistered varied-covariance ansatz was then implemented
+temporarily and failed that mixed-chain gate already at zero source, where `C3=Phi33=0`.  The failure
+is analytic: varying a Gaussian local covariance trace plus the exact local 1PI `gamma4` generates a
+spurious local-return denominator and changes the retained `a^2b^2` coefficient.  The temporary
+solver was removed before commit.  A corrected functional would need the exact local bilocal/2PI
+Legendre kernel, not another symmetry-factor or pole patch.  The preferred route has therefore
+reached a genuine new-derivation boundary; production spectra remain blocked and the documented
+smooth-`r(h)` prescription is now the only implementation-ready backup route.
 
 Line numbers below are as of the 2026-07-27 working tree; confirm each before editing.
 
