@@ -49,7 +49,9 @@
 - `invzf_local_bilocal_hessian_static`: exact `Q=0` local response Hessian from the connected
   zero-mode `C2/C3/C4` block, exposing both fixed-source and fixed-moment curvatures;
 - `invzf_local_bilocal_hessian_modes`: the corresponding finite nonnegative-frequency response and
-  bilocal Hessians, with explicit zero/nonzero-mode pairing multiplicities.
+  bilocal Hessians, with explicit zero/nonzero-mode pairing multiplicities;
+- `invzf_multilevel_cumulant`: `C2/C3/C4` exact for an explicitly retained multilevel local space,
+  using block exponentials and a wide-spectrum dense-generator exponential-action fallback.
 
 No production spectrum or phase solver dispatches into this directory.  The local exact/ring
 fixtures are self-contained; the explicitly named production-input adapters call existing
@@ -143,8 +145,18 @@ The checks cover:
     `1.7e-15` at zero source and `3.4e-16` at `h=0.37`.  At the latter point the cutoff-3 ring and
     residual are `-0.265982292019735` and `+0.101148371627387`; the remaining difference from the
     frozen infinite-frequency residual is a cutoff tail, not a normalization error.
+25. the multilevel block-cumulant engine.  Across rank-2/3/4 zero- and nonzero-frequency two-level
+    fixtures, including a near-degenerate case, its connected values agree with the independently
+    enumerated state-path oracle within `1.8e-15`.  For the full 136-state electronuclear fixture at
+    `T=0.1 K`, `Bx=1.5 T`, and `h=0.0340929334913 meV`, its exact
+    `C4(0,0,0,0)=26642.9548328` agrees with the stable large-step source-derivative plateau within
+    `2.1e-5`.  For `C4(1,-1,2,-2)`, the rank-48 to rank-64 drift is `1.56e-4` relatively at
+    `1.5 T`, `1.64e-4` at `4.6 T`, and `1.09e-4` at the symmetric `4.9 T` fixture.  These are
+    empirical ladder errors, not certified discarded-state bounds.  The API rejects a rank cut
+    through a roundoff-degenerate multiplet, records every dense/action contribution and similarity
+    amplification, and leaves `functional_use_authorized=false`.
 
-MATLAB `checkcode` returned no findings for all twenty-one isolated implementation files and the two
+MATLAB `checkcode` returned no findings for all twenty-two isolated implementation files and the two
 extended coupling APIs.
 
 ## 3. Demonstrated state selection
@@ -260,9 +272,9 @@ transition on the expected field scale but does not remove the strict Gaussian p
 This prototype does not yet justify a LiHoF4 production calculation. The next contained steps are:
 
 1. do not revive the rejected Gaussian-local-trace plus 1PI-vertex skeleton;
-2. derive the nonlinear fixed-source local partial-Legendre functional and an explicit
-   Matsubara-tail budget before attempting another stationary lattice functional; or activate the
-   separately documented biased smooth-`r(h)` backup as an explicit experimental prescription;
+2. freeze a multilevel local-rank/cutoff error budget, then derive the nonlinear fixed-source local
+   partial-Legendre functional before attempting another stationary lattice functional; or activate
+   the separately documented biased smooth-`r(h)` backup as an explicit experimental prescription;
 3. do not wire a spectral backend until whichever route is chosen passes its thermodynamic, domain,
    discretization, and branch-identity gates.
 

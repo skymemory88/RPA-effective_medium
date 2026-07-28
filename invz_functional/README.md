@@ -62,5 +62,14 @@ the full construction: the Matsubara-tail completion and nonlinear local partial
 functional remain underived.  No skeleton solver remains in this directory; a corrected route must
 pass those gates rather than patching the failed ansatz.
 
+`invzf_multilevel_cumulant` provides the first production-local feasibility oracle.  It evaluates
+connected `C2/C3/C4` for an arbitrary retained finite-level Hamiltonian by block matrix exponentials,
+not an explicit `d^rank` state-path enumeration, and switches to a dense-generator exponential
+action when a wide retained spectrum makes the full dense exponential nonfinite.  Per-contribution
+backend and similarity-scaling provenance are exported.  A local-rank truncation is exact only for
+the retained Hilbert space: discarded thermal weight does not bound virtual intermediate states,
+near-degenerate rank cuts are rejected, and truncated results require an external rank ladder.
+`functional_use_authorized` therefore remains false.
+
 It does not contain EMT, a dressed self-energy, the ordered `tanh/xi` replacement, spectral
 continuation, or any production branch solver.
