@@ -39,6 +39,17 @@ margins, and the field-Jacobian refinement drift normalized by
 `max(1,norm(dR/dh,Inf))`. It still adapts one supplied initial root; it is not a root enumerator or
 Jensen-path constructor.
 
+`invz_ordered_node_jacobian_factors` and `invzp_solve_bordered_factors` expose and solve the exact
+frequency-block form
+
+```text
+J_sigma,sigma = diag(d) + U*V',  rank(U*V') <= 2,
+```
+
+with `K0` and `h` left as a two-variable border. At the 742-variable 1.5 T fold, the factor solve
+agrees with the dense solve to `1.66e-15` in the solution norm and `1.60e-14` backward residual.
+It is an oracle, not currently dispatched by the tracer.
+
 ## Input boundary
 
 Every path must contain:
@@ -129,7 +140,11 @@ Hermite fold field               0.0052435482911986821 meV
 
 Every corrected root passed the independent A--D audit. The fold value differs by
 `1.44e-10 meV` from the earlier one-off quarter-step result
-`0.005243548147122800 meV`. The dense/Richardson oracle took 1292.9 s over six bounded segments;
-this makes the already-derived diagonal-plus-low-rank bordered solve a measured prerequisite for
-global enumeration, not a change to the residual or acceptance rules. Temporary `.mat` traces stayed
-under `/tmp` and are not retained.
+`0.005243548147122800 meV`. The dense/Richardson oracle took 1292.9 s over six bounded segments.
+Subsequent profiling corrected the initial bottleneck attribution: at the fold, dense solve and
+`rcond` take only `0.00745 s` and `0.00670 s`, while one Richardson equation/Jacobian evaluation takes
+`1.771 s`. The exact factor solve takes `0.00290 s`, too small a saving to justify replacing the
+dense oracle now. Exact last-point caching instead reduces a repeated evaluation from `1.748 s` to
+`6.2e-5 s` and shortened a fresh three-step fold trace to `5.67 s/step` without changing arithmetic.
+The next optimization target is redundant local node/field-derivative evaluation, not linear
+algebra. Temporary `.mat` traces stayed under `/tmp` and are not retained.

@@ -223,8 +223,9 @@ its invZ adapter retains complete frequency-resolved states. On the frozen 0.10 
 fixture it traced 149 accepted roots from the clean high-field endpoint through the known regular
 fold and reproduced its field to `1.44e-10 meV`; every A--D audit passed. The global cold-seed root
 enumerator and single-valued path-construction fixture remain to be built before step 1 as a whole is
-complete. The dense low-temperature trace cost 1292.9 s, so the existing diagonal-plus-low-rank
-Jacobian structure must be used before global enumeration.
+complete. The dense low-temperature trace cost 1292.9 s. Profiling showed that local node and
+Richardson field-derivative evaluation, not the dense bordered solve, dominates this cost; exact
+last-point caching is now active, while an exact low-rank solve is retained only as an oracle.
 
 ## 6. Failure conditions
 

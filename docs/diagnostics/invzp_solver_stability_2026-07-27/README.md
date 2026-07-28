@@ -60,8 +60,9 @@ shows why branch/rank diagnostics are necessary.
 
 One-off drivers and `.mat` files stayed under `/tmp`. The audited numerical kernel now consists of
 `invz_ordered_node_context.m`, `invz_ordered_make_node.m`,
-`invz_ordered_node_equations.m`, and `invz_ordered_node_newton.m`. The extraction leaves the
-fixed-node equations unchanged while exposing the full residual/Jacobian and exact HMF node
+`invz_ordered_node_equations.m`, `invz_ordered_node_jacobian_factors.m`, and
+`invz_ordered_node_newton.m`. The extraction leaves the fixed-node equations unchanged while exposing
+the full residual/Jacobian, its exact diagonal-plus-rank-two frequency block, and exact HMF node
 construction to the separately isolated continuation oracle. A future retained enumerator must still
 add forward/reverse branch tracking, cold checkpoints, grid/cutoff checks, event-crossing control,
 and Jensen-integral error control before promotion.
