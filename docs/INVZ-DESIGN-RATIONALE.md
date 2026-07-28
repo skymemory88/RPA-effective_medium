@@ -537,7 +537,7 @@ own rolling seed is the interpolating scheme, scoped to one finder's internal us
 > (e)** fired on the real production coupling multiset (clauses (b) and (d) held); per
 > the predicate's own binding rule, the run **stopped at diagnosis** — no scheme
 > switch, tolerance widening, or regularization was applied, and the `'resummed'`
-> production default was never flipped. See `../invzp_convg_diagnosis_Claude.md`
+> production default was never flipped. See `../invzp_convg_diagnosis.md`
 > §9.1–§9.4 for the consolidated interpretation and `invzp_strict_medium_gate0_report.md`
 > for the measured verdict; neither is restated here. **The theory basis (§A/§B below —
 > the `crit(h) = F'(h)` Landau formulation and the moment expansion showing both legs

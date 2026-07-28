@@ -18,12 +18,12 @@ coupling-support edge with the phase boundary, and no longer describes a 16384-p
 having a branch cut; R3 is withdrawn entirely and D4 demoted from defect to documentation. The final
 consolidation also corrects the NaN-site count, defers the proposed h-grid regrading, scopes `omit_max`
 to the closure that defines it, and points the continuation experiment at the explicit defactored
-square residual in `invzp_convg_fix_Claude.md`. Withdrawn historical claims are identified rather than
+square residual in `invzp_convg_fix.md`. Withdrawn historical claims are identified rather than
 silently reused. Passages marked as belonging to §1–§8 were written before any of that reading.
 
 **Current-status update, 2026-07-28.** The historical 0.31 K diagnosis
 below remains valid for the field cut on which it was measured, but it is
-not the current global availability statement. Three later results now
+not the current global availability statement. Four later results now
 govern:
 
 1. The response evaluator is still healthy once an accepted state exists.
@@ -41,6 +41,10 @@ govern:
    crossing. This is the cheapest decisive gate on the proposed smooth-`r`
    backup and prevents an off-shell diagnostic from becoming a production
    spectrum.
+4. The accepted near-QCP ordered band is a finite-grid computability
+   sliver. Across `12^3--24^3` its contiguous width scales approximately
+   as `N^-1.076`, and `Bc_1z` moves by `0.02067 T`. The `16^3` spectrum is
+   a visual regression, not a grid-converged critical result.
 
 Section 11 records the measurements and revised net diagnosis. Sections
 1--10 preserve the causal derivation and historical decision trail.
@@ -1434,7 +1438,7 @@ that every smooth auxiliary-`h` component is thermodynamically admissible.
 The smooth component is an accurate simultaneous-equation branch, but it
 returns `no_admissible_endpoint` and remains off-shell for spectra.
 
-### 11.5 The research-priority QCP susceptibility is already available
+### 11.5 The research-priority QCP susceptibility is available as a finite-grid preview
 
 A separate direct production run used the accepted default equations at
 `T=0.10 K`, `q=[0 0 0]`, `B=4.60--4.90 T`, and `0--6 GHz`, with 61 field
@@ -1453,18 +1457,78 @@ broadening and is not evidence for a finite critical gap. A closer
 asymptotic comparison requires local field/frequency and HWHM refinement,
 not a new low-field state solver.
 
-This is a deliberately narrow availability claim. The verified interval is
-4.60--4.90 T; a user-broadened 3--6 T driver range has not thereby acquired
-the same all-column verification.
+This is a deliberately narrow, finite-`16^3` availability claim. The
+verified interval is 4.60--4.90 T; a user-broadened 3--6 T driver range has
+not thereby acquired the same all-column verification, and the accepted
+ordered width must not be interpreted as grid-converged.
 
-### 11.6 Revised net diagnosis
+### 11.6 The QCP coverage is a finite-grid computability sliver
+
+A prediction-driven grid gate then separated physical criticality from
+finite-grid state availability. It retained the exact legacy grid route and
+evaluated no real-axis response. On one common `4.000:0.025:4.700 T` mesh:
+
+| grid | solver-grade `Bc_1z` (T) | total accepted | contiguous accepted width below `Bc` (T) |
+|---:|---:|---:|---:|
+| 12³ | 4.682284546 | 23 | 0.382284546 |
+| 16³ | 4.692758179 | 14 | 0.267758179 |
+| 20³ | 4.699093628 | 11 | 0.224093628 |
+| 24³ | 4.702957153 | 11 | 0.177957153 |
+
+The contiguous widths scale approximately as `N^-1.076`; `N*width` stays
+between `4.27` and `4.59 T`. This verifies that the near-QCP ordered
+availability band is tied to the excluded-Γ finite-grid edge and shrinks
+toward the continuum. Accepted low-field islands remain, so this is not a
+single monotone iteration boundary.
+
+The preregistered expectation that `Bc` would move by at most `0.01 T`
+between `12^3` and `24^3` was falsified: it moves `0.02067 T`. Linear and
+quadratic four-grid `1/N` fits give `4.72386` and `4.72224 T`, but their
+agreement is model sensitivity, not a rigorous continuum error bar.
+
+The coupling-only quantities explain both trends. With
+`W=Jmax-Jmin`, the excluded-Γ gap falls approximately as `N^-1.103`;
+`S_N(J0)` moves from `-196.7302` to `-199.3844 meV^-1`. At the `16^3`
+mass root the PM static propagator is `-198.0070 meV^-1`, matching
+`S_16(J0)=-198.0061 meV^-1`. The four-grid extrapolation of the latter is
+still model-sensitive (`-201.81` linear versus `-202.84 meV^-1`
+quadratic).
+
+A traced `16^3` edge pair also localizes the numerical failure. At both
+4.400 T (rejected) and 4.425 T (accepted), every iterate stays in the same
+rightmost static interval `y>Jmax`; no pole-index switch occurs. At
+4.400 T the inner static residual is about `5e-11`, while the outer
+Σ-map predictor oscillates with asymptotic residual ratio about `0.916`
+and stops at `8.41e-6` after 200 iterations. At 4.425 T the same predictor
+reaches `6.37e-9` in 13 iterations. A 1000-iteration cap accepts 4.400 T
+but still fails at 4.300 T with Block-A residual `0.00833`: it moves the
+edge rather than curing it.
+
+This also rejects a proposed simple inner replacement as currently stated.
+`invz_emt_static_ordered` recomputes `Gstat(K0)` inside each K0 iteration;
+the implemented scalar equation is not `S_N(y)=constant`, and the measured
+failed block already has a converged inner closure. A rightmost fixed-G
+bisection would therefore solve a different equation and target the wrong
+block unless the coupled scalar reduction and monotonicity are first
+derived.
+
+Finally, the exact identity
+`F=h0-J0*m=integral(crit dh)` is useful as a cancellation/quadrature
+oracle, not as a missing-state fix. At 4.05 T, increasing the HMF grid from
+33 to 65 nodes reduces the route difference by about fourfold, but the
+65-node profile hits one newly sampled `node_failed` point despite an inner
+static residual `4.24e-11`. The complete evidence and reproducible fixtures
+are in `docs/diagnostics/invzp_qcp_grid_2026-07-28/`.
+
+### 11.7 Revised net diagnosis
 
 The apparent ordered-state “susceptibility nonconvergence” consists of two
 separable issues:
 
-1. **Observable availability near the QCP:** solved for the verified window.
-   The response code is not the failing component, and accepted ordered/PM
-   states produce a continuous mode suitable for visual comparison.
+1. **Observable availability near the QCP:** available for visual inspection
+   on the verified finite-`16^3` window. The response code is not the failing
+   component, and accepted ordered/PM states produce a continuous mode, but
+   the ordered coverage and `Bc` are not yet grid-converged.
 2. **Complete low-field Jensen coverage:** open and secondary. The nested
    Picard map is noncontractive and badly conditioned in parts of the
    auxiliary path; simultaneous equations have multiple roots and folds;
@@ -1472,7 +1536,8 @@ separable issues:
    thermodynamic branch; and a smooth root component may fail its own
    branch-specific Jensen endpoint.
 
-Thus the failure is nonuniform, deterministic numerical sensitivity
-combined with an unresolved off-shell branch prescription—not universal
-critical slowing, not a failure of real-axis susceptibility evaluation, and
-not something an iteration limit alone can cure.
+Thus the failure is nonuniform, deterministic numerical sensitivity of the
+outer Σ closure, amplified by a finite-grid pole edge and combined with an
+unresolved off-shell branch prescription—not universal critical slowing,
+not a failure of real-axis susceptibility evaluation, and not something an
+iteration limit or a fixed-G inner bisection alone can cure.

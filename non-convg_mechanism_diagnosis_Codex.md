@@ -12,7 +12,7 @@ column is masked before the susceptibility is evaluated because the ordered
 Jensen solver cannot construct every state on the auxiliary molecular-field
 path needed for its free-energy integral.
 
-The apparently stochastic pattern is the combined effect of three distinct
+The apparently stochastic pattern is the combined effect of four distinct
 problems:
 
 1. **Numerical instability of the production iteration.** The damped Picard
@@ -27,13 +27,17 @@ problems:
    fully residual-accepted real roots coexist at the same `h`. Newton or
    pseudo-arclength continuation can find roots, but the equations alone do
    not say which root supplies the physical, continuous Jensen integrand.
+4. **A finite-grid coupling edge.** Excluding Γ leaves
+   `Jmax<J(0)`. The resulting ordered-availability sliver shrinks
+   approximately as `1/N` and the inferred critical field moves with grid
+   size. Near-QCP convergence on one grid is therefore not evidence of a
+   continuum ordered solution.
 
-The first two layers admit relatively simple numerical improvements. The
-third is why a numerically converged patch cannot immediately become the
-default physics. The shortest useful route is therefore to produce an
-**opt-in, explicitly labelled preview solver** using the better-conditioned
-coordinate and strict branch-history guards, while retaining stronger
-branch-selection requirements for the final solver.
+The first two layers admit numerical improvements. The third prevents a
+numerically converged patch from immediately becoming the default physics,
+and the fourth prevents a single-grid preview from becoming a quantitative
+QCP claim. The current finite-`16^3` spectrum is useful for visual
+inspection; a final result additionally needs branch and grid convergence.
 
 ## 1. What actually fails
 
@@ -459,12 +463,51 @@ production equations. Robust coverage of the low-field ordered phase
 remains an algorithmic branch-selection problem, but it is not a blocker
 for comparison with experiments near the QCP.
 
+### 7.3 Finite-grid and edge-pair result on 2026-07-28
+
+The last sentence above must be read as a visual-availability statement,
+not a quantitative comparison authorization. A state-only grid ladder found:
+
+| grid | `Bc_1z` (T) | contiguous accepted ordered width (T) |
+|---:|---:|---:|
+| 12³ | 4.682284546 | 0.382284546 |
+| 16³ | 4.692758179 | 0.267758179 |
+| 20³ | 4.699093628 | 0.224093628 |
+| 24³ | 4.702957153 | 0.177957153 |
+
+The width scales approximately as `N^-1.076`, while the excluded-Γ coupling
+gap scales as `N^-1.103`. The QCP-side accepted band is therefore a
+finite-grid computability sliver. The `0.02067 T` movement of `Bc` across
+the ladder also falsifies the prior expectation that it would stay within
+`0.01 T`.
+
+The representative `16^3` rejected/accepted pair at 4.400/4.425 T does not
+change static pole interval: every iterate remains on the rightmost
+`y>Jmax` root. The rejected predictor already has a static closure residual
+near `5e-11`; its outer Σ residual contracts only by about `0.916` per
+iteration and misses the 200-step budget. Raising the cap to 1000 accepts
+4.400 T but still fails 4.300 T. This is direct evidence that the mask edge
+is controlled by outer-map conditioning near the finite-grid pole, not by
+critical slowing or a universally wrong inner root.
+
+The exact area identity
+`h0-J0*m=integral(crit dh)` improves the conditioning audit but does not
+remove this obstacle. Doubling the HMF grid approximately quarters the
+two-route quadrature discrepancy, yet the finer grid samples a new failed
+node. The reproducible packet is
+`docs/diagnostics/invzp_qcp_grid_2026-07-28/`.
+
 ## 8. Current work estimate
 
-For the research-priority QCP visual inspection, no further solver work is
-required: `invz_projected/invz_run_spectra.m` now defaults to the verified
-`4.60--4.90 T`, `0--6 GHz` run and displays both the susceptibility map and
-the extracted peak-energy curve.
+For a research-priority QCP visual inspection, no further solver work is
+required: the verified finite-`16^3`, `4.60--4.90 T`, `0--6 GHz` subset
+displays both the susceptibility map and extracted peak-energy curve. The
+interactive driver currently spans 3--6 T, so masked lower-field columns are
+expected.
+
+For a quantitative QCP comparison, work remains: extend the coupling/state
+grid ladder until `S_N(J0)`, solver-grade `Bc`, accepted-state support, and
+the pole/peak curve have a defensible continuum limit.
 
 The following results still govern any later attempt to make the full
 `0--9 T` ordered map complete:
@@ -489,9 +532,10 @@ the nonconvergence is nonuniform and substantially numerical. Near-QCP
 success and moderate-field failure do not contradict a continuous physical
 transition because the failing iteration is not physical dynamics.
 
-The simple part of the fix is to replace a noncontractive, badly scaled
-natural-`h` iteration by a coupled, guarded continuation in a better
-coordinate. The non-simple part is preventing that stronger solver from
-quietly choosing among several mathematically valid roots. The current plan
-therefore pursues the simple numerical improvement first, while making every
-unresolved branch choice visible and fail-closed.
+The simple diagnostic improvement is to replace a noncontractive, badly
+scaled natural-`h` iteration by a coupled, guarded solve in a better
+coordinate. The non-simple parts are preventing that stronger solver from
+quietly choosing among several valid roots and establishing a coupling-grid
+limit. A fixed-G rightmost-root bisection is not a drop-in cure: the
+implemented inner equation recomputes `Gstat(K0)`, and the measured edge
+failure occurs in the outer Σ block after the inner block is already closed.

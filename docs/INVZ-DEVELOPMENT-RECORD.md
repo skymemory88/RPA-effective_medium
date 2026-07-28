@@ -24,11 +24,11 @@ design rationale (see `docs/INVZ-DESIGN-RATIONALE.md`).
 | Ewald design and integration history | §§2–4 of this file and `docs/INVZ-DESIGN-RATIONALE.md` | consolidated; source documents archived in Git |
 | Strict static medium: preregistration | `2a8d5b7^:docs/invzp_strict_medium_prereg.md` | frozen historical source, archived in Git |
 | Strict static medium: Gate-0 verdict | `docs/invzp_strict_medium_gate0_report.md` | final |
-| Strict static medium: failure analysis | `invzp_convg_diagnosis_Claude.md` (§9.1–§9.4) | consolidated |
+| Strict static medium: failure analysis | `invzp_convg_diagnosis.md` (§9.1–§9.4) | consolidated |
 | Ordered residual contract | `docs/invz_ordered_residual_contract.md` | binding |
 | Stage-2c discriminator matrix | `2a8d5b7^:docs/invzp_task2_{prereg,report}.md` | frozen historical sources, archived in Git |
 | BZ-quadrature/Γ audit | `2a8d5b7^:docs/invzp_phase1_{quadrature_prereg,report}.md` | frozen historical sources, archived in Git |
-| Current ordered-leg diagnosis and plan | `invzp_convg_diagnosis_Claude.md`, `invzp_convg_fix_Claude.md` | current |
+| Current ordered-leg diagnosis and plan | `invzp_convg_diagnosis.md`, `invzp_convg_fix.md` | current |
 | Low-field backup prescription | `biased_convergence_solution.md` | current, fail-closed |
 | Retained numerical oracles | `docs/diagnostics/` | current diagnostic scope, off-path |
 
@@ -104,7 +104,7 @@ continuation, stability-based phase dispatcher, a3d full-response hybrid).
 `invz_spectra_map`; the automatic overlay was honestly renamed `Bc_auto` and restricted to valid-PM
 anchors; phase-0 and suspect columns are masked from both overlays before peak extraction.
 Diagnostics `S.phase_1z`, `S.crit_pm`, `S.suspect` added. The original QCP diagnosis is now preserved
-in the consolidated root record `invzp_convg_diagnosis_Claude.md` (§9.5).
+in the consolidated root record `invzp_convg_diagnosis.md` (§9.5).
 
 ### 2026-07-22 — Stage 2, ordered thermodynamics
 `2026-07-22-invzp-stage2-ordered-thermodynamics.md`, Tasks 0–5 plus 6/6b.
@@ -215,7 +215,7 @@ denominator feedback — removing the resummed q-denominator pole that dies ~7 %
 instability.
 
 **Gate 0: FAIL.** Clauses (a), (c) and (e) of the frozen five-clause predicate fired. The current
-interpretation is consolidated in `invzp_convg_diagnosis_Claude.md` §9.2–§9.4; the verdict document is
+interpretation is consolidated in `invzp_convg_diagnosis.md` §9.2–§9.4; the verdict document is
 `docs/invzp_strict_medium_gate0_report.md`. In one line each:
 
 - **(a)** the reference denominator leaves its domain at **low** field — `B ∈ {0.05, 0.25, 0.5, 1} T`
@@ -293,7 +293,7 @@ Accumulated across the project; all still in force.
 ## 4. Open items recorded on 2026-07-27 (historical)
 
 This list records the state at consolidation time. The current ordered-leg
-priorities and disposition are governed by `invzp_convg_fix_Claude.md` and
+priorities and disposition are governed by `invzp_convg_fix.md` and
 `biased_convergence_solution.md`; this historical list is not a live task
 queue.
 
