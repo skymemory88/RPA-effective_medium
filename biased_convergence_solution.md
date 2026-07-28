@@ -235,6 +235,15 @@ solve is retained only as an oracle. The tracer now also caps attempts per accep
 evaluations per corrector attempt; hitting either envelope is a retained `budget_exhausted` failure,
 not a branch endpoint or an accepted extrapolation.
 
+The first graph layer is now frozen as
+`docs/diagnostics/biased_smooth_r_2026-07-28/invzp_assemble_audited_graph.m`. It normalizes only
+explicit accepted-root and local-continuation certificates, requires tangent evidence for any
+equal-`h` adjacency, permits resolved termination only for preregistered successful statuses, and
+retains missing event/termination evidence as nonconnections. It never
+matches roots by proximity, infers an endpoint, splits a fold, or claims a complete Jensen
+candidate. Consequently it can expose the currently demonstrated components without changing the
+unresolved endpoint verdict.
+
 The unresolved low endpoint has a diagnostic positive-side coordinate
 `q=(h/h_reference)^2`. It preserves the original equations pointwise for every `q>0` and has advanced
 the returning leg from `q=1` to `q=0.775` with A--D acceptance, whereas the h-coordinate corrector

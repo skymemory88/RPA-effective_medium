@@ -130,6 +130,14 @@ is now closed at the unicyclic `O(1/z)` scope in `invzp_functional_wp0_spec.md` 
 ring common functional and exact two-site oracle without modifying or dispatching from the production
 solver. This remains the preferred staged route.
 
+The backup route now also has an evidence-only graph assembler. It creates no edge from geometric
+proximity: every vertex must carry strict residual, A--D, domain, and signed-margin certificates,
+and every edge must carry local-continuation, predictor-tube, signed-event-bracket, and applicable
+tangent evidence. Equal-`h` adjacencies always require the tangent gate. Nonmonotone fold segments
+remain graph evidence rather than Jensen sections, and unresolved terminations remain blockers.
+This closes graph normalization only; it does not supply the missing low endpoint or authorize path
+selection.
+
 **First production-input functional pilot, 2026-07-28.** The isolated strict functional now has a
 read-only adapter to the actual scalar BZ coupling multiset and transverse electronic doublet. At
 `T=0.1 K, Bx=1.5 T` it finds two stable, degenerate ordered minima on the legacy `16^3` couplings;

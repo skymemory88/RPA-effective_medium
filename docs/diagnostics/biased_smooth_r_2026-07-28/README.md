@@ -71,6 +71,22 @@ full-state predictor tube. It retains every scheduled point, including the first
 trailing `not_run_after_stop` records. This is useful for cheap regular segments on either side of a
 fold; it neither retries nor crosses a fixed-`h` rank loss.
 
+`invzp_assemble_audited_graph` is the first evidence-only connectivity layer. It accepts only
+caller-supplied, strictly accepted vertices and explicitly certified adjacent trace records. Vertex
+certificates preserve the raw residual threshold, A--D payload, domain result, signed event margins,
+source schema, and the continuity state `[Sigma;K0;m]`. An adjacency becomes an edge only when its
+registered state-distance, predictor-tube, signed-event-bracket, and any required tangent-line gates
+all pass. Tangent evidence is unconditionally required for equal-`h` adjacencies. The assembler
+sorts IDs, exposes directed evidence and undirected connected components, marks nonmonotone fold
+segments without splitting them, and retains failed adjacency/termination evidence as blockers.
+Termination can be resolved only when its status belongs to the preregistered successful-status
+set; `budget_exhausted`, events, rank loss, derivative drift, and unresolved `q=0` therefore remain
+nonconnections. `status='ok'` means only that the supplied evidence assembled without blockers and
+may still contain multiple disconnected components;
+`complete_candidate_claim` is always false. The function never solves, clusters, merges nearby
+roots, matches endpoints across traces, bridges a gap, constructs a Jensen section, or invokes the
+selector.
+
 `invzp_ordered_squared_field_problem` is a positive-field endpoint adapter with
 `q=(h/h_reference)^2`. For `q>0` it is an exact reparameterization of the original node equations;
 it never averages positive and negative fields. Every positive point uses a centred
@@ -147,18 +163,25 @@ Input order and path IDs never break a tie.
 
 ## Deliberate omissions
 
-The cold-seed root enumerator and a one-direction fixed-`h` handoff primitive now exist. Complete
-bidirectional branch reconstruction, signed event-crossing audit, branch graph, single-valued
-Jensen-section builder, endpoint reconstruction, QCP field sequence, physical-`h` diagnostic
-metrics, mesh-refinement drift, and cross-normalization winner audit still have to be built and
-frozen before the global 1.5 T path-selection pilot. In particular, a unique result from the selector
-means only unique under the supplied dimensionless spec. It does not authorize production use unless
-the omitted physical-`h`, normalization, and refinement audits agree under the registered grid and
-Matsubara refinements.
+The cold-seed root enumerator, a one-direction fixed-`h` handoff primitive, and a manual
+evidence-only graph assembler now exist. Complete bidirectional branch reconstruction, continuous
+signed event-crossing production by the trace adapters, automatic trace-to-graph conversion,
+cross-trace endpoint matching, fold splitting, single-valued Jensen-section construction, endpoint
+reconstruction, QCP field sequence, physical-`h` diagnostic metrics, mesh-refinement drift, and
+cross-normalization winner audit still have to be built and frozen before the global 1.5 T
+path-selection pilot. In particular, a unique result from the selector means only unique under the
+supplied dimensionless spec. It does not authorize production use unless the omitted physical-`h`,
+normalization, and refinement audits agree under the registered grid and Matsubara refinements.
 
 Fresh in-memory MATLAB fixtures cover a known linear winner, lexicographic dominance, curvature and
 each tie-break stage, finite-jump rejection, no accepted candidate, an exact unresolved tie, missing
 tie data, and invalid-input cases. No persistent test script is kept in the worktree.
+
+A separate fresh graph fixture covers deterministic input ordering, a connected chain, an isolated
+accepted root, a missing signed-event bracket, unresolved termination, a nonmonotone fold, a missing
+required endpoint, equal-`h` tangent enforcement, strict residual equality rejection, and negative
+`h` rejection. It also rejects a termination whose `resolved` flag contradicts the registered
+successful-status set. No persistent graph test script is kept.
 
 ## Verification record
 
