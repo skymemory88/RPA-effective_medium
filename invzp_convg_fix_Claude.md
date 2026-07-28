@@ -79,7 +79,9 @@ diagonal-plus-low-rank bordered solve an obvious candidate until profiling showe
 742-variable fold the dense solve plus `rcond` costs only `0.0141 s`, versus `1.771 s` for one
 Richardson equation/Jacobian evaluation. The exact factor solve agrees to `1.66e-15` but saves only
 milliseconds. Exact last-point caching is therefore adopted; redundant node/field-derivative
-evaluation is the next performance target.
+evaluation is the next performance target. A deterministic retry envelope now limits attempts per
+accepted step and equation evaluations per corrector attempt. Exhaustion is retained as an explicit
+failure and cannot be mistaken for a physical endpoint.
 
 **Root-census and low-endpoint update, 2026-07-28.** A retained explicit-seed enumerator now records
 all fixed-`h` attempts and clusters the complete independent coordinates `[Sigma;K0]` through an

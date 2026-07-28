@@ -231,7 +231,9 @@ stages cheap regular segments around local arclength traces. The returning low-f
 single-valued path-construction fixture is still incomplete. The dense high-fold trace cost
 1292.9 s. Profiling showed that local node and Richardson field-derivative evaluation, not the dense
 bordered solve, dominates this cost; exact last-point caching is now active, while an exact low-rank
-solve is retained only as an oracle.
+solve is retained only as an oracle. The tracer now also caps attempts per accepted step and equation
+evaluations per corrector attempt; hitting either envelope is a retained `budget_exhausted` failure,
+not a branch endpoint or an accepted extrapolation.
 
 ## 6. Failure conditions
 
