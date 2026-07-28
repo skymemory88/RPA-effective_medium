@@ -21,6 +21,30 @@ to the closure that defines it, and points the continuation experiment at the ex
 square residual in `invzp_convg_fix_Claude.md`. Withdrawn historical claims are identified rather than
 silently reused. Passages marked as belonging to §1–§8 were written before any of that reading.
 
+**Current-status update, 2026-07-28.** The historical 0.31 K diagnosis
+below remains valid for the field cut on which it was measured, but it is
+not the current global availability statement. Three later results now
+govern:
+
+1. The response evaluator is still healthy once an accepted state exists.
+   On the research-priority 0.10 K, `q=[0 0 0]`, 4.60--4.90 T window, the
+   unchanged production equations returned 61/61 finite susceptibility
+   columns, including both sides of the 1/z transition.
+2. The low-field ordered failure is substantially numerical but not a
+   one-tolerance problem. A branch-free simultaneous audit removed one
+   false rejection, while continuation exposed reproducible folds and
+   multiple real roots. Equation closure and physical/Jensen branch
+   selection are therefore separate problems.
+3. A smooth QCP-connected auxiliary-`h` branch at 4.05 T can be followed
+   accurately but has no nonzero Jensen endpoint of its own on the complete
+   allowed interval. Its state cannot borrow the legacy branch's free-energy
+   crossing. This is the cheapest decisive gate on the proposed smooth-`r`
+   backup and prevents an off-shell diagnostic from becoming a production
+   spectrum.
+
+Section 11 records the measurements and revised net diagnosis. Sections
+1--10 preserve the causal derivation and historical decision trail.
+
 All runs: `ion = invz_ion()`, `T = 0.31 K`, transverse field along `a`, 16×16×16 BZ grid (16384 (q,ν)
 modes, Γ dropped), `dpRng = 30`, `transverse_mf = 'legacy_x'`, `J(0) = J0eff = 6.42444 μeV`,
 `max_q J_ν(q) = 5.98514 μeV`.
@@ -91,13 +115,18 @@ upstream of the response.
 §9.5; the table is my independent re-measurement and reproduces its Σ(0) values at both anchors to every
 digit.)
 
-Two facts that frame everything below:
+Two facts that frame the historical 0.31 K cut below:
 
 1. The ordered leg works **only in a ~0.2 T sliver just below B_c**, and fails everywhere deeper in the
    ordered phase. It is not "slow to converge deep in the FM phase" — it is the opposite of the usual
    expectation, in which the deeply ordered state is the easy one.
 2. **The paramagnetic solver fails in the same region.** This is not an ordered-branch bug. It is a
    property of the effective-medium closure that both branches share.
+
+Neither statement means the present production solver fails throughout the
+ordered phase at every temperature. Section 11.4 gives the later 0.10 K
+QCP-window result, where all sampled ordered and paramagnetic columns are
+available.
 
 ---
 
@@ -438,12 +467,13 @@ It is *not* an argument for relaxing the gate, and an earlier draft of R3 wrongl
 in it — or interpolating `r(h)` across them — fabricates the Jensen integral rather than evaluating it.
 The all-node acceptance rule is severe and, as things stand, scientifically correct.
 
-**D3 — the failure path discards its own evidence.** `invz_solve_point_ordered`'s jensen early return
-(`:202-220`) exports `pt.hmf_status` but **not** `pt.hmf_prof`. The per-node profile, `medium_status`
-tally, `Dq_min` history and `ref_denom` range exist and are then thrown away — on exactly the columns
-that need debugging. Confirmed: at 1 T under strict, `hmf_status = 'medium_out_of_domain'` while
-`pt.medium_status = 'not_applicable'` and `pt.medium_denom = NaN`, so the reported cause cannot be
-attributed to a node.
+**D3 — failure evidence was discarded; RESOLVED as instrumentation.**
+The original jensen early return exported `pt.hmf_status` but not
+`pt.hmf_prof`, losing the per-node evidence on exactly the masked columns.
+Commit `261b12b` now preserves the complete profile and copies the
+deterministic binding node's `medium_status`, reference denominator, and
+margin to the point-level result. This changes reporting, not acceptance,
+and does not make an incomplete path admissible.
 
 **D4 — `mix_outer` does not damp the whole outer state** (documentation, *not* a defect). The outer state
 is (Σ, λ, K0s), but only Σ is damped (`invz_ordered_node_solve.m:239`). `lam` is refreshed undamped every
@@ -458,13 +488,12 @@ because it is a live surprise for anyone tuning `mix_outer` expecting it to damp
 because it is the reason a *coupled* full-residual solve (§10.2) is the informative experiment rather
 than a mixing sweep.
 
-**D5 — NaN-ignoring convergence test.** `dS = max(abs(sg.Sigma - Sigma))`
-appears at **four** projected-path sites: `invz_ordered_node_solve.m:234`,
-`invz_solve_point.m:282`, its Tier-2 helper at `invz_solve_point.m:389`, and
-`invz_solve_point_ordered.m:328`. MATLAB's bare `max` skips NaN entries, unlike the checker's
-deliberately NaN-propagating `robust_max_abs`. In the ordered leg the four-block residual checker catches
-the resulting state; the PM leg has no such checker, so a partially non-finite Σ could in principle be
-declared converged. Promote the finite helper and use it at all four sites.
+**D5 — NaN-ignoring convergence test; RESOLVED.** MATLAB's bare `max`
+skips NaN entries, so the former `dS=max(abs(Sigma_new-Sigma))` at four
+projected-path sites could in principle accept a partially non-finite
+self-energy. Commit `c6a5fc4` replaced all four with the shared
+NaN-propagating `invz_finite_max_abs`. This fail-closed hardening did not
+alter the measured branch topology.
 
 **D6 — candidate-only arithmetic note: `stable_form` is enabled only under a strict scheme.**
 `invz_gstat_ordered`'s default branch computes
@@ -991,17 +1020,14 @@ Consolidated regression requirements for any claimed fix:
 The **diagnosis** is unchanged and now **triply** sourced: the attempt record's `|G0|` ladder (§9.1),
 the independent pole-crossing run preserved in §9.5, and §2 here, each reached without the others.
 
-The **recommendations** change. R1 and R7 are withdrawn as proposals (§9.2); D1 and D6 are corrected
-(§9.3). What remains actionable, and touches neither the frozen preregistration, nor the production
-default, nor the theory:
-
-* **R6 / D3** — attach `hmf_prof` to the ordered solver's early return so masked columns carry their
-  own diagnosis.
-* **D2** — report *which* nodes failed and where they sat relative to the bracket. **Reporting only:**
-  R3's proposal to relax the gate or interpolate across failed nodes is withdrawn (§6, §9.5, §10.2), and
-  the all-node acceptance rule stays.
-* **R5 / D5** — NaN-propagating residuals. (D4's coupled solve moves to the diagnostic experiment in
-  §10.2; it is not a maintenance fix.)
+The **recommendations** change. R1 and R7 are withdrawn as proposals (§9.2);
+D1 and D6 are corrected (§9.3). The small implementation hardening is now
+delivered: R6/D3 preserves `hmf_prof` and binding-node provenance, D2 reports
+the failed-node census without relaxing the gate, and R5/D5 makes all four
+self-energy convergence norms NaN-propagating. These changes touch neither
+the frozen preregistration, the production default, nor the theory. D4's
+coupled solve has also been executed as a diagnostic; its result is in
+§11.2 and is not a maintenance fallback.
 
 R2 is no longer on this list. The current grid may be inefficient, but a coarse root bracket still
 requires the low-`h` integral. Grid redesign is deferred until a branch prescription permits
@@ -1164,11 +1190,11 @@ truncation has a window where both domain and error are acceptable remains open.
 
 ### 10.2 What I recommend, in order
 
-**Step 0 — make the failure diagnosable (small instrumentation phase; no theory/default/prereg change).**
-D3/R6 (attach `hmf_prof` to the early return), D2 **as reporting only** (a run with 33/34 good nodes
-must not be indistinguishable at the caller from one with 1/34 — *report* which nodes failed and where,
-but leave the acceptance gate alone), and D5 (NaN-propagating residuals at all four sites). None of this
-fixes the physics; all of it converts "masked column, no information" into "this node, this reason".
+**Step 0 — diagnostic hardening: COMPLETE.** D3/R6 now attaches
+`hmf_prof` and binding-node provenance to the early return; D2 reports the
+failed-node census without changing acceptance; and D5 is NaN-propagating
+at all four sites. This converts "masked column, no information" into
+"this node, this reason". It does not fix or reinterpret the physics.
 
 **What Step 0 no longer contains, and why.** My earlier R3 proposed relaxing the all-node gate — accept
 a bounded number of failed *interior* nodes, interpolate `r(h)` across them, propagate a quadrature
@@ -1192,20 +1218,23 @@ shows that damping `λ` or `K0s` separately would help. It stays in §5 as docum
 does not damp the whole state, which is a live surprise for anyone tuning it — and the coupled solve
 belongs in the diagnostic experiment below, not in a maintenance list.
 
-Two additions from the independent analysis in §9.5 remain central. First, its failure-classification
-list is the specification for D3/R6: export the failed `h` nodes with residual blocks A–D, per-iteration
-`min|Dq|` and negative-mode count, static branch identity, continuation seed/direction, and — the
-discriminator that matters — **whether the inner static closure closed while the outer map failed**.
-Second, run a safeguarded coupled solve *as a diagnostic*, continuing downward in `h` from a
-well-conditioned large-`h` node and requiring forward/reverse plus cold/warm agreement.
+Two additions from the independent analysis in §9.5 remain central. First,
+the delivered failure classification exports the failed `h` nodes and
+their binding cause. Second, the safeguarded coupled solve has now been run
+as a diagnostic, continuing from certified states and retaining
+forward/reverse/cold evidence where available.
 
 The implementation must use the explicit defactored square residual, not
-`invz_ordered_residual` (which returns scalar audit blocks and re-enters the nested static iteration).
-The current plan uses `RΣ = Σmap-Σ` and the defactored original K closure
-`RK = (K0-P/Q)/Jscale`; A–D remain an independent post-corrector audit. Its analytic
-diagonal-plus-low-rank Jacobian makes a production-size experiment practical. This is not a production
-patch: a Newton corrector can identify algebraic branches, but it cannot supply the missing physical
-off-shell prescription.
+`invz_ordered_residual`, as the vector equation for Newton:
+`invz_ordered_residual` returns scalar audit blocks. Its newer
+`formulation='coupled'` does, however, audit the simultaneous Sigma and
+defactored-static equations without re-entering the nested static solver.
+The vector solve uses `RΣ=Σmap-Σ` and the defactored K closure, with the
+coupled A--D formulation as an independent post-corrector audit. Section
+11.2 records the false nested-audit veto this removed and the multiple roots
+the corrected experiment exposed. This is not a production patch: a Newton
+corrector can identify algebraic branches, but it cannot supply the missing
+physical off-shell prescription.
 
 **Step 1 — adopt `S(x)` as the reporting diagnostic now; treat the density continuation as a
 preregistered research candidate, not as a numerical fix.** My earlier draft made this the primary
@@ -1301,3 +1330,149 @@ merely because each formula contains powers of a propagator.
 * **Do not regularise the pole** (broadening, an `ε` in the denominator, a floor on `Dq`). The pole is
   evidence of an unresolved off-shell continuation, not a numerical nuisance. Smoothing it manufactures
   a number under an undeclared theory change rather than computing the existing equations.
+
+---
+
+## 11. Post-diagnosis numerical findings and current interpretation
+
+### 11.1 Simple numerical remedies: useful discriminators, not a global fix
+
+The later work deliberately tested inexpensive remedies before extending the
+theory:
+
+- Raising the iteration budget and using heavier mixing did not produce a
+  complete usable ordered path. It either left failed nodes or converged to
+  an unstable continued-paramagnetic root.
+- Reusing a nearby field's self-energy/profile did not remove the
+  nonuniformity. A complete 4.05 T profile still left 4.04 and 4.00 T
+  incomplete when used as their warm seed; in one measured sequence,
+  field-to-field seeding reduced the accepted-node count.
+- A defactored fixed-node Newton corrector repaired the three missing 3.6 T
+  nodes in 4/4/8 iterations and completed that profile, but at 1.5 T it
+  repaired only the predictor and two nodes. This establishes a local
+  Picard-stability defect without establishing a global branch.
+
+These results explain why the failure looks stochastic even though no
+random-number path is involved. Small changes in field, seed, ordering, or
+roundoff change which basin a noncontractive pole-sensitive iteration
+reaches. A larger iteration cap cannot remove folds or decide between
+multiple algebraic roots.
+
+### 11.2 The simultaneous audit removed a false veto and exposed real branches
+
+The simultaneous unknown is `[Sigma(:);K0]`. The earlier Block-A audit
+replayed the nested static Picard solver; in a multi-root region that replay
+could select a different `K0` branch and report the difference as failure of
+the supplied root. The optional coupled formulation now independently
+repeats the simultaneous Sigma and defactored-static equations, rebuilds and
+checks `K`/`lambda`, and invokes no nested static solve unless an explicitly
+report-only legacy diagnostic is requested.
+
+At seven representative roots, coupled A/C/D were between zero and
+`7.3e-15`, and defactored B was below `7.72e-10`; the old nested replay on
+the same states falsely reported `3.40e-3` to `3.12e-2`. With the corrected
+audit, a 4.05 T continuation retained 126 consecutive accepted states from
+`h=0.0041142866` to `0.0117280521 meV`, with maximum coupled residual
+`9.76e-10`.
+
+This correction did not restore uniqueness. At the identical
+`h=0.01171732294388717 meV`, two A--D-accepted roots have
+`r=0.768127507` and `r=0.822169537`, despite a scaled full-state separation
+of only `0.00103702`. Continuation and natural-`h` Newton selected different
+ones. The audit now answers “does this state solve the declared equations?”;
+it does not answer “which solution supplies the Jensen path?”
+
+The retained adaptive fixed-`h` handoff follows the same distinction. It
+uses two certified states for its predictor, shrinks and retries after a
+state- or `r`-tube rejection, retains every attempt, and has bounded point
+and attempt budgets. It is a guarded numerical primitive, not a bridge
+across a fold or a physical selector.
+
+### 11.3 Low-field topology and endpoint evidence
+
+At 1.5 T, a 25-seed zero-field census returned 16 accepted attempts grouped
+into seven distinct `[Sigma;K0]` roots. Pseudo-arclength traces established
+multiple regular folds, including root 4 near `5.56814e-6 meV` and root 6
+near `9.54114e-6 meV`; the quoted turn coordinates are diagnostics, not
+certified enclosures.
+
+Root 6 provides genuine endpoint evidence. Its returning leg crossed zero
+and matched the zero-field census root within `1.42e-14` in the frozen
+cluster metric after a predictor correction of `7.43e-12`. The opposite leg
+was replayed on 33 decreasing fixed-`h` nodes: all passed A--D with no event
+failure, the largest predictor distance was `0.0247702`, and its endpoint
+matched root 6 within `7.92e-14` with residual `7.52e-14`.
+
+This closes the zero-field endpoint identity for the two observed root-6
+legs. It does not construct the Jensen path: finite accepted samples do not
+prove continuous existence, uniqueness, nonsingularity, or event clearance
+between nodes. Other legs remain untraced, the root-7 boundary layer remains
+unresolved, no complete single-valued section covers a candidate's full
+Jensen interval, and no production continuation dispatch is authorized.
+
+### 11.4 The QCP-connected smooth branch fails its own Jensen-endpoint gate
+
+The smooth low-`r` component at 4.05 T was continued from zero field in the
+auxiliary `h` coordinate to the common HMF ceiling
+`h=0.02313633386565907 meV` (1369 retained states). At that ceiling it had
+
+```text
+F_path = -0.00293612268
+r      = 0.429100409
+m      = 3.27662221
+```
+
+and no nonzero increasing `F_path=0` crossing anywhere on its complete
+interval. By contrast, the legacy high-`r` component has
+`F=+0.00342692213` and `r=0.996459592` at the same ceiling and crosses at
+its own `hstar=0.01473374100101341 meV`.
+
+The latter crossing cannot be borrowed: the Jensen integral and therefore
+`F_path` are branch-specific. Continuity of the physical state across a
+continuous transition as physical field `B` passes the QCP does not imply
+that every smooth auxiliary-`h` component is thermodynamically admissible.
+The smooth component is an accurate simultaneous-equation branch, but it
+returns `no_admissible_endpoint` and remains off-shell for spectra.
+
+### 11.5 The research-priority QCP susceptibility is already available
+
+A separate direct production run used the accepted default equations at
+`T=0.10 K`, `q=[0 0 0]`, `B=4.60--4.90 T`, and `0--6 GHz`, with 61 field
+points, `0.01 GHz` frequency spacing, and `5e-5 meV` real-axis HWHM. It
+returned:
+
+- 19 Jensen-ordered and 42 stable-paramagnetic columns;
+- zero masked, suspect, or non-finite-peak columns;
+- `Bc_1z=4.6925 T`, bracketed by `[4.690,4.695] T`;
+- a continuous V-shaped mode: about `1.00 GHz` at 4.60 T,
+  `0.174 GHz` at 4.690 T, `0.110 GHz` at 4.695 T, and about
+  `1.02 GHz` at 4.90 T.
+
+The finite sampled minimum is set by the field/frequency mesh and
+broadening and is not evidence for a finite critical gap. A closer
+asymptotic comparison requires local field/frequency and HWHM refinement,
+not a new low-field state solver.
+
+This is a deliberately narrow availability claim. The verified interval is
+4.60--4.90 T; a user-broadened 3--6 T driver range has not thereby acquired
+the same all-column verification.
+
+### 11.6 Revised net diagnosis
+
+The apparent ordered-state “susceptibility nonconvergence” consists of two
+separable issues:
+
+1. **Observable availability near the QCP:** solved for the verified window.
+   The response code is not the failing component, and accepted ordered/PM
+   states produce a continuous mode suitable for visual comparison.
+2. **Complete low-field Jensen coverage:** open and secondary. The nested
+   Picard map is noncontractive and badly conditioned in parts of the
+   auxiliary path; simultaneous equations have multiple roots and folds;
+   coordinate changes improve numerical reach but do not select the
+   thermodynamic branch; and a smooth root component may fail its own
+   branch-specific Jensen endpoint.
+
+Thus the failure is nonuniform, deterministic numerical sensitivity
+combined with an unresolved off-shell branch prescription—not universal
+critical slowing, not a failure of real-axis susceptibility evaluation, and
+not something an iteration limit alone can cure.
