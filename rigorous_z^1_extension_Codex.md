@@ -2,7 +2,7 @@
 
 **Status:** active isolated scalar prototype; not connected to production
 **Recorded:** 2026-07-22  
-**Motivation:** the Task 6b closed-model J 2.34 comparison leaves a stable 13.65% route mismatch. The independent assessment (adjudicated against the published Jensen paper) is folded into §7b of the Stage-2 plan ([docs/superpowers/plans/2026-07-22-invzp-stage2-ordered-thermodynamics.md](docs/superpowers/plans/2026-07-22-invzp-stage2-ordered-thermodynamics.md)) and preserved in the consolidated [ordered-leg diagnosis](invzp_convg_diagnosis_Claude.md); the standalone review and QCP diagnosis notes were retired after consolidation.
+**Motivation:** the Task 6b closed-model J 2.34 comparison leaves a stable 13.65% route mismatch. The independent assessment (adjudicated against the published Jensen paper) is folded into §7b of the Stage-2 plan ([docs/superpowers/plans/2026-07-22-invzp-stage2-ordered-thermodynamics.md](docs/superpowers/plans/2026-07-22-invzp-stage2-ordered-thermodynamics.md)) and preserved in the consolidated [ordered-leg diagnosis](invzp_convg_diagnosis.md); the standalone review and QCP diagnosis notes were retired after consolidation.
 
 **Feasibility audit, 2026-07-28:** `invzp_functional_derivation_audit.md` tested whether the current
 resummed/Jensen implementation already contains the needed functional. It found a

@@ -1,7 +1,7 @@
 # invzp ordered-leg non-convergence — implementation plan
 
 **Written 2026-07-27.** Derived from the consolidated diagnosis in
-`invzp_convg_diagnosis_Claude.md` (source-first, then reconciled against `docs/`, an independent QCP
+`invzp_convg_diagnosis.md` (source-first, then reconciled against `docs/`, an independent QCP
 analysis now preserved in its §9.5, and external review).
 
 **Independently audited 2026-07-27 against the current MATLAB source.** The upstream diagnosis is
@@ -44,16 +44,18 @@ a continuous soft mode through `Bc_1z=4.6925 T`, bracketed by
 configuration and enabled both the susceptibility map and extracted peak
 curve. The current working tree has since been broadened by the user to
 3--6 T; that larger range must not be described as 101/101 verified merely
-because its 4.60--4.90 T subset is. This does not authorize the off-shell
-smooth branch or relax any Route-A/Route-B gate; it only removes full
-low-field coverage from the critical path to the QCP observable.
+because its 4.60--4.90 T subset is. A later grid ladder established that the
+accepted ordered width is a finite-grid sliver and that `Bc_1z` moves by
+`0.02067 T` from `12^3` to `24^3`. The `16^3` result is therefore a useful
+visual preview and regression anchor, not a grid-converged research result.
 
 ## Current decision baseline
 
 There are now two separate deliverables:
 
 - **QCP susceptibility/modes:** ready for visual inspection on the verified
-  4.60--4.90 T window using the unchanged accepted production equations.
+  finite-`16^3`, 4.60--4.90 T window using the unchanged accepted production
+  equations. Quantitative comparison must carry the grid qualifier.
 - **Complete low-field ordered coverage:** still open and secondary. No
   continuation branch, smooth-`r` candidate, strict closure, or functional
   prototype is authorized as the production default.
@@ -72,38 +74,66 @@ There are now two separate deliverables:
 | QCP-connected smooth low-`r` branch at 4.05 T | Continued accurately to the common ceiling, but its own `F_path` stayed negative (`-0.00293612268` at `h=0.02313633386565907 meV`). | It has no nonzero admissible Jensen endpoint. The legacy branch's crossing cannot be borrowed. Return `no_admissible_endpoint`; do not use its off-shell spectrum. |
 | Strict static medium and Ewald backend | Removing the resummed pole establishes mechanism; Ewald fixes a separate lattice-sum defect. | The strict candidate failed its frozen Gate 0, and both dipolar backends exhibit the ordered failure. Neither supplies branch selection. |
 | Common-functional route | The ring functional, exact cluster/cumulant oracles, electronuclear local reference, and exact-local bilocal curvature produced valuable checks. The simplest varied-covariance skeleton failed its immutable mixed-chain oracle. | A correct electronuclear local-bilocal/2PI functional still needs same-order `C3-C3`, nonlinear Legendre, tail, thermodynamic, and discretization work. It is the preferred scientific route but exceeds the declared near-term delivery window. |
-| Unchanged production QCP sweep | 61/61 finite columns, no masks, and a continuous soft mode through `Bc_1z=4.6925 T`. | This is a narrow verified observable, not evidence that 3--6 T or the full 0--9 T ordered map is complete. |
+| Unchanged production QCP sweep | 61/61 finite columns, no masks, and a continuous soft mode through `Bc_1z=4.6925 T`. | This is a narrow finite-`16^3` visual regression, not evidence that its boundary is grid-converged or that 3--6 T / 0--9 T is complete. |
+| Coupling-only plus state-only grid ladder | The Γ-exclusion gap scales about `N^-1.103`; the contiguous accepted width scales about `N^-1.076`. `Bc_1z` moves from 4.68228 T (`12^3`) to 4.70296 T (`24^3`). | Confirms a finite-grid computability sliver and falsifies the expected `<=0.01 T` boundary shift. The `16^3` QCP spectrum is not grid-converged. |
+| Fixed-G rightmost-root proposal | Source inspection shows `Gstat(K0)` is recomputed inside the static K0 loop; at the 4.400 T failure the inner static residual is already about `5e-11` while the outer Σ residual fails. | `S_N(y)=constant` is not the implemented coupled scalar equation and targets the wrong block. Do not implement without a derived coupled reduction and monotonicity proof. |
+| Jensen area-rule oracle | `F=h0-J0*m` and `integral(crit dh)` converge toward each other at second-order trapezoidal rate; direct subtraction is ill-conditioned near the crossing. | Useful cancellation/quadrature meter only. A finer 65-node grid sampled a new failed state, so it cannot bypass missing path nodes. |
 
 ### Planned next steps, in priority order
 
-1. **Preserve and inspect the QCP observable first.** Do not change the
-   state solver before assessing the verified susceptibility map and mode
-   curve. If quantitative experimental comparison requires it, refine only
-   the local field mesh around `[4.690,4.695] T`, the low-frequency mesh,
-   and the real-axis broadening; cross-check peak tracking against the pole
-   equation using the same already accepted states.
-2. **Do not let low-field incompleteness block QCP work.** Keep incomplete
-   low-field Jensen columns masked and their diagnostics explicit.
-3. **If low-field completion is resumed, test endpoint admissibility before
-   global graph completion.** For one scientifically useful field, use the
-   certified two-state fixed-`h` handoff on regular segments and
-   pseudo-arclength only at a measured fold. Reconstruct that component's
-   own `F_path`; stop immediately with `no_admissible_endpoint` if it has no
-   unique increasing zero.
-4. **Only after an endpoint exists**, build continuous signed-event
-   enclosures, forward/reverse and independent-cold agreement, the complete
-   single-valued section, and grid/Matsubara refinement. Then—and only
-   then—apply the scale-free smooth-`r` selector behind an experimental
-   option. No default flip is implied.
-5. Keep the exact local-bilocal/2PI common-functional route as the
-   long-term rigorous programme. Do not restart it merely to improve the
-   already available QCP preview.
+1. **Preserve the finite-`16^3` QCP visual preview**, including its exact
+   61-field regression, but label its `Bc` and ordered coverage as
+   grid-specific.
+2. **Before quantitative experiment comparison, converge the coupling
+   measure.** Extend the coupling/state ladder only as far as needed to
+   stabilize `S_N(J0)`, `Bc_1z`, and the pole/peak curve. The existing
+   four-grid fits are placement guides, not error bars.
+3. **Do not implement the proposed fixed-G inner bisection.** If a scalar
+   static replacement is reconsidered, first derive the actual coupled
+   `Gstat(K0)` residual, prove the declared interval is monotone, and show
+   that replacing the already-converged inner block improves the outer
+   Σ residual.
+4. **The next numerical production candidate must address the outer
+   pole-conditioned Σ map while preserving branch identity.** Use the
+   existing simultaneous residual/Newton machinery as a diagnostic oracle;
+   preregister its branch and grid gates before any production dispatch.
+5. **Keep low-field incompleteness fail-closed and secondary.** For a named
+   useful field, test endpoint admissibility before global graph completion;
+   stop with `no_admissible_endpoint` when appropriate.
+6. Keep the exact local-bilocal/2PI common-functional route as the
+   long-term rigorous programme. A smooth density/edge prescription is also
+   a theory change, not a numerical patch, and needs its own derivation and
+   error diagnostic.
 
-The endpoint-first ordering is the principal simplification: a branch that
-cannot satisfy its own Jensen free-energy equation is rejected before
-spending time on a global topology proof or production wiring.
+For low-field continuation, endpoint-first remains the principal
+simplification: reject a branch that cannot satisfy its own Jensen
+free-energy equation before paying for global topology or production
+wiring. For the QCP observable, grid convergence now precedes any
+quantitative physics claim.
 
 ## Dated execution record
+
+**QCP grid/conditioning gate, 2026-07-28.** Coupling-only calculations were
+run before the state gate. For `N=12,16,20,24`, the excluded-Γ gaps are
+`0.60124,0.43930,0.33866,0.28143 μeV`, approximately `N^-1.103`, while
+`S_N(J0)` moves from `-196.7302` to `-199.3844 meV^-1`. The state-only gate
+used the same common `4.000:0.025:4.700 T` mesh and solver-grade PM mass
+roots. `Bc_1z` is `4.6822845,4.6927582,4.6990936,4.7029572 T`; the
+contiguous accepted ordered width below it is
+`0.38228,0.26776,0.22409,0.17796 T`, approximately `N^-1.076`. The width
+prediction is supported; the expected `<=0.01 T` boundary shift is
+falsified.
+
+At the `16^3` acceptance edge, 4.400 T and 4.425 T both stay in the
+rightmost `y>Jmax` interval. The failed 4.400 T predictor has a converged
+inner static residual but an outer-map contraction ratio near `0.916`;
+4.425 T converges in 13 iterations. Raising `max_outer` to 1000 accepts
+4.400 T but still fails 4.300 T. The proposed fixed-G monotone inner solve
+is therefore not implemented: source inspection confirms that
+`Gstat(K0)` is recomputed inside the K0 loop, and the failing block is the
+outer Σ closure. The area-rule comparison is retained as a diagnostic
+only. Full results and reproduction are in
+`docs/diagnostics/invzp_qcp_grid_2026-07-28/README.md`.
 
 **Execution update, 2026-07-27.** First-hand inspection of the current `invz_run_spectra` output added
 an important constraint: convergence is non-uniform across the ordered field range; usable columns
@@ -826,8 +856,10 @@ where the present one does not.
 
 * Treat the verified `T = 0.10 K`, `q = [0 0 0]`,
   `B = 4.60--4.90 T` Jensen window as the current observable regression
-  anchor. Accepted columns in that window may be plotted and compared with
-  experiment without waiting for complete low-field coverage.
+  anchor. Accepted columns may be plotted for visual inspection without
+  waiting for complete low-field coverage, but any quantitative comparison
+  must state `16^3` and must not quote its ordered width or `Bc` as
+  grid-converged.
 * Keep `jensen` columns masked where the path is incomplete. Do not relax (I3).
 * Keep `ordered_mode = 'bare'` available as an **explicitly labelled** bare-H_MF moment-form 1/z
   response — never substituted into a column requested as `jensen`. It converged across the measured
@@ -844,6 +876,7 @@ where the present one does not.
 | excluded | why |
 |---|---|
 | raising `max_outer`, softening `mix_outer`, widening tolerances as the production fix | the pole-sensitive map has O(10²–10³) sign-indefinite gain; the tested `mix_outer = 0.02` reaches a deeply unstable PM root (`crit = −3.669`) and still returns `node_failed` on the ordered path after 10,354 iterations |
+| replacing the static inner loop by `S_N(y)=constant` rightmost-root bisection | `Gstat` is a K0-dependent part of the implemented inner residual and is recomputed inside that loop; at the measured QCP edge the inner residual is already closed while the outer Σ residual fails |
 | skipping failed H_MF nodes or interpolating `r(h)` across them | the failures sit at pole/branch events — interpolation manufactures the integral (withdrawn R3) |
 | making the `h = 0` predictor non-fatal via `r(0) = 1 + Σ(0)` | needs the `Σ(0)` that failed to converge |
 | regularising the pole | I4 |
@@ -867,7 +900,7 @@ where the present one does not.
    non-finite peak columns, and a local boundary bracket
    `[4.690,4.695] T`. If the interactive driver is configured for a broader
    range, run this subset directly rather than treating the broader range as
-   already certified.
+   already certified. This is a finite-`16^3` regression only.
 4. **Mechanism anchors**, not only the 24-point synthetic fixture: a deep ordered point (1 T), the failure edge
    (3.6 T), a near-boundary accepted point (3.8 T), and a PM point (4.6 T), all at `T = 0.31 K`.
 5. **Defactored square vector residual plus the four-block A–D audit, finite-`r` gate,
@@ -877,7 +910,11 @@ where the present one does not.
    compare the analytic dense Jacobian and Newton step against that oracle. If Woodbury is implemented,
    compare its bordered step with the same dense solve before using it.
 7. **Forward/reverse and cold/warm agreement** for anything involving continuation.
-8. **At least three coupling grids and one `Ecut` refinement** for any continuation-domain claim.
+8. **At least three coupling grids and one `Ecut` refinement** for any
+   continuation-domain claim. For a quantitative QCP claim, also require
+   convergence of `S_N(J0)`, solver-grade `Bc_1z`, the accepted-state
+   support, and the pole/peak curve; the completed `12^3--24^3` gate
+   falsifies grid independence but does not yet establish the limit.
 9. **`(T, B)` reporting**, never a single cut, for any domain claim.
 
 ## Practical notes
@@ -894,30 +931,34 @@ where the present one does not.
 
 | work item | present state | remaining effort / gate |
 |---|---|---|
-| Visual QCP susceptibility and mode | Ready now on the verified 4.60--4.90 T window | No solver work. Inspect first; refine only the local field/frequency mesh or broadening if the observable calls for it. |
+| Visual QCP susceptibility and mode | Ready now as a finite-`16^3` preview on 4.60--4.90 T | No solver work for inspection. Quantitative comparison still needs coupling-grid convergence before only local field/frequency/broadening refinement. |
+| QCP coupling/grid convergence | Four-grid diagnostic complete; finite-grid sliver and `Bc` shift established | Extend/refine only until `S_N(J0)`, `Bc`, accepted support, and peak curve have a defensible continuum limit. |
 | Retained diagnostics and coupled audit | Implemented | Maintenance only. They are evidence tools, not a new production branch. |
 | One additional low-field component | Optional, secondary | Bounded endpoint-first experiment at one scientifically useful field. Stop if the component has no unique increasing Jensen zero. |
 | Complete low-field branch prescription | Not authorized | Substantial only after an admissible endpoint exists: continuous event enclosures, independent-direction/seed agreement, full section construction, and discretization refinement. |
-| Common functional / exact local-bilocal route | Paused long-term programme | Resume only as a rigor-driven theory project; it is not required for the already available QCP spectrum. |
+| Common functional / exact local-bilocal route | Paused long-term programme | Resume only as a rigor-driven theory project; it is not required for the finite-grid visual preview, but a derived continuum theory may be required for a quantitative QCP result. |
 
 ## Recommended execution order
 
-1. Run and inspect the verified QCP spectrum before altering the state
+1. Run and inspect the finite-`16^3` QCP spectrum before altering the state
    solver. Preserve the 4.60--4.90 T subset as the regression anchor even
-   when the interactive driver is broadened.
-2. If the QCP comparison needs improvement, change only observable
-   resolution first: local field spacing, low-frequency spacing, and
-   broadening. Verify that the peak curve agrees with the real-axis pole
-   equation on the same accepted states.
-3. Resume low-field work only for a named scientific target. Follow one
+   when the interactive driver is broadened, and display its grid qualifier.
+2. Before quantitative comparison, extend the coupling/state grid ladder
+   and compare the pole/peak curve on accepted states. Only after the
+   coupling limit is stable should local field spacing, low-frequency
+   spacing, and broadening be refined.
+3. Do not implement fixed-G inner bisection or a larger iteration cap as
+   the production fix. The next numerical candidate must close the outer
+   simultaneous residual and retain branch/grid provenance.
+4. Resume low-field work only for a named scientific target. Follow one
    QCP-connected component with fixed-`h` coupled correction on regular
    pieces and arclength at measured folds, and reconstruct that component's
    own `F_path`.
-4. If there is no unique increasing Jensen zero, return
+5. If there is no unique increasing Jensen zero, return
    `no_admissible_endpoint` and leave the column masked. If there is one,
    then pay for the continuous-edge, reverse/cold-seed, complete-section,
    and grid/cutoff gates required by the backup prescription.
-5. Do not wire an experimental continuation state into spectrum output
+6. Do not wire an experimental continuation state into spectrum output
    merely because its residual is small. Production integration remains
    conditional on the branch-selection and thermodynamic gates above.
 

@@ -420,7 +420,7 @@ production-stop gate above remains binding.
 
 Relevant current records:
 
-- `invzp_convg_fix_Claude.md`
-- `invzp_convg_diagnosis_Claude.md`
+- `invzp_convg_fix.md`
+- `invzp_convg_diagnosis.md`
 - `docs/diagnostics/invzp_solver_stability_2026-07-27/README.md`
 - `rigorous_z^1_extension_Codex.md`

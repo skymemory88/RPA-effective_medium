@@ -7,7 +7,7 @@ function [state, info] = invz_ordered_node_newton(node, seed, opts)
 %   IMPORTANT: acceptance proves only a fixed-h algebraic root. This helper does not establish
 %   branch identity, direction independence, or a valid Jensen integration path. Never insert
 %   its state into production HMF quadrature without a separate branch-tracked continuation
-%   driver and the reproducibility gates in invzp_convg_fix_Claude.md.
+%   driver and the reproducibility gates in invzp_convg_fix.md.
 %
 %   Unknowns are u = [Sigma(:); K0]. Dynamic K(2:end) and lambda are derived directly.
 %   The static equation is the defactored closure K0 = sum(Jq*Gq)/sum(Gq), evaluated in

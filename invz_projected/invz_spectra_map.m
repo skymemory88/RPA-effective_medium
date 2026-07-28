@@ -19,7 +19,7 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %   Per-field diagnostics: S.phase (1 = moment-form (spontaneous FM below Bc, or field-induced
 %   under a longitudinal tilt -- a rounded crossover, no sharp Bc), 2 = strict paramagnet,
 %   0 = masked). RPA and 1/z are DIFFERENT theories with different critical fields
-%   (invzp_convg_diagnosis_Claude.md, especially SS9.5). S.phase stays the AUTO dispatch
+%   (invzp_convg_diagnosis.md, especially SS9.5). S.phase stays the AUTO dispatch
 %   (ordered-first bare-MF); the
 %   Sigma = 0 overlay built from it approximates the RPA state only where the ordered 1/z
 %   EMT converged to the bare boundary -- an RPA-independent dispatcher is a scheduled
