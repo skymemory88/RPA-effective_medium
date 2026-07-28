@@ -254,8 +254,24 @@ nonzero-source `C3-C3` core is absent by scope, and the Matsubara sequence is no
 (`Sigma(0)` at `4.8 T` moves from `0.0003251` at cutoff 1 to `0.0005924 meV` at cutoff 14).
 The latest increments decrease approximately as a summable `N^-2.29` sequence, with the local
 exponent still drifting toward its asymptote; an analytic or independently graded tail completion
-is still required.
+is still required.  Cutoff 14 corresponds to only `0.758 meV` at `0.1 K` and is not yet in the
+uniform high-frequency regime of the full electronuclear spectrum.  Moreover, omitted modes enter
+the low-frequency curvature through a Schur complement, so fitting the apparent fractional power
+or adding a correction only to `Sigma(0)` would break the variational stationarity.  The contained
+next test is therefore a preregistered nested-cutoff root continuation with a hold-out cutoff and
+agreement of admissible integer-power extrapolants, not a fitted tail patch.
 Production and spectral dispatch remain prohibited.
+
+**Effort-window decision, 2026-07-28.** The exact local-bilocal result remains useful theory
+evidence, but its ordered completion is no longer the active spectra-delivery path.  The
+prospectively stated 6--12 focused-hour / 1--2 day window cannot contain a whole-functional
+electronuclear tail, the same-order signed-frequency and momentum-resolved `C3-C3` core, its
+`C5/C6` source derivatives, the nonlinear partial Legendre transform, and all thermodynamic and
+discretization gates.  Omitting any of those terms would lose the requested order consistency.
+`biased_convergence_solution.md` records the dated evidence and now activates its fail-closed
+smooth-`r(h)` prescription for implementation.  This does not authorize a default flip or a
+spectrum: branch reconstruction, endpoint/QCP continuity, thermodynamic, grid/cutoff, and
+forward/reverse/cold-seed gates remain binding.
 
 Line numbers below are as of the 2026-07-27 working tree; confirm each before editing.
 
