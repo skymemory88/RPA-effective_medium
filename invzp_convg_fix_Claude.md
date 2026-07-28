@@ -138,6 +138,13 @@ remain graph evidence rather than Jensen sections, and unresolved terminations r
 This closes graph normalization only; it does not supply the missing low endpoint or authorize path
 selection.
 
+The fixed-`h` trace now has a strict graph-input adapter. Future Newton records carry their complete
+normalized gate configuration, and a passing edge certificate must be tied to a preregistered
+method, exact source/pair, signed-margin list, positive full-edge lower bounds, and proof payload.
+The adapter never promotes pointwise-positive margins. The retained root-6 reverse trace therefore
+produces 33 vertex inputs but all 32 adjacencies remain explicit signed-event blockers; this removes
+manual schema translation without overstating connectivity.
+
 **Simple-first multi-root update, 2026-07-28.** The seven zero-field roots do not share one uniform
 convergence failure. A cheap upward screen followed by local continuation found two additional
 regular folds. Root 4 turns near `5.56814e-6 meV`; root 6 turns at

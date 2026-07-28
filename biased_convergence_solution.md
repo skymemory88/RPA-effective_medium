@@ -244,6 +244,14 @@ matches roots by proximity, infers an endpoint, splits a fold, or claims a compl
 candidate. Consequently it can expose the currently demonstrated components without changing the
 unresolved endpoint verdict.
 
+The fixed-`h` trace now has a fail-closed adapter into that graph schema. New Newton records embed
+their normalized thresholds; legacy records are labelled as caller-declared unless strict embedded
+provenance is required. The adapter accepts no bare event Boolean: a passing certificate must name a
+preregistered certifier, bind itself to the exact trace and record pair, and provide positive
+full-edge lower bounds for every registered signed margin. Applied without such certificates to the
+33-node root-6 opposite-leg trace, it emits 33 vertices but deliberately leaves all 32 adjacencies
+blocked. Continuous event certification, not schema translation, is now the next missing edge gate.
+
 The unresolved low endpoint has a diagnostic positive-side coordinate
 `q=(h/h_reference)^2`. It preserves the original equations pointwise for every `q>0` and has advanced
 the returning leg from `q=1` to `q=0.775` with A--D acceptance, whereas the h-coordinate corrector
