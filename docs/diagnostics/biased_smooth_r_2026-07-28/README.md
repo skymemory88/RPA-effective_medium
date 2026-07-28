@@ -1,4 +1,4 @@
-# Smooth-`r` selector implementation oracle
+# Biased smooth-`r` diagnostic oracles
 
 **Recorded:** 2026-07-28
 
@@ -15,6 +15,29 @@ accepts only already-enumerated candidate paths. It validates their certificates
 registered dimensionless smoothness metrics, and applies the registered lexicographic selector. It
 does **not** find roots, connect branches, choose endpoints, differentiate data, interpolate,
 resample, smooth, or repair missing nodes.
+
+`invzp_trace_pseudo_arclength` is the separate, generic branch-tracing primitive. It follows one
+regular scaled residual curve with a bordered pseudo-arclength corrector and retains every full
+coordinate vector. It has no knowledge of the invZ equations and deliberately does not find initial
+roots, join disconnected components, convert a folded curve into a Jensen path, or invoke the
+selector. Its coordinate contract is `y=[scaled_state; scaled_parameter]`, with the continuation
+parameter last. Every rejected adaptive attempt is retained. Persistent hard-event failures terminate
+with `status='event'`; pointwise event callbacks alone cannot prove that a narrow boundary was not
+crossed and re-entered between evaluations, so an invZ adapter must additionally report continuous
+signed margins and bracket their changes.
+
+`invzp_ordered_arclength_problem` is the first invZ-specific adapter. It uses the audited resummed
+node equations and a Richardson-refined centred derivative in the fixed longitudinal field, with
+explicit scales
+
+```matlab
+y = [Sigma(:)./sigma_scale; K0/K0_scale; h/h_scale].
+```
+
+Its accepted payload retains the full state, A--D audit, reciprocal-chart diagnostics, signed event
+margins, and the field-Jacobian refinement drift normalized by
+`max(1,norm(dR/dh,Inf))`. It still adapts one supplied initial root; it is not a root enumerator or
+Jensen-path constructor.
 
 ## Input boundary
 
@@ -63,13 +86,50 @@ Input order and path IDs never break a tie.
 
 ## Deliberate omissions
 
-The path enumerator, pseudo-arclength continuation, endpoint reconstruction, QCP field sequence,
-physical-`h` diagnostic metrics, mesh-refinement drift, and cross-normalization winner audit still
-have to be built and frozen before the 1.5 T pilot. In particular, a unique result from this function
-means only unique under the supplied dimensionless spec. It does not authorize production use unless
-the omitted physical-`h`, normalization, and refinement audits agree under the registered grid and
+The generic pseudo-arclength primitive now exists, but the invZ-specific root enumerator,
+bidirectional/cold-seed reconstruction, signed event-crossing audit, single-valued Jensen-section
+builder, endpoint reconstruction, QCP field sequence, physical-`h` diagnostic metrics,
+mesh-refinement drift, and cross-normalization winner audit still have to be built and frozen before
+the global 1.5 T path-selection pilot. In particular, a unique result from this function means only
+unique under the supplied dimensionless spec. It does not authorize production use unless the
+omitted physical-`h`, normalization, and refinement audits agree under the registered grid and
 Matsubara refinements.
 
 Fresh in-memory MATLAB fixtures cover a known linear winner, lexicographic dominance, curvature and
 each tie-break stage, finite-jump rejection, no accepted candidate, an exact unresolved tie, missing
 tie data, and invalid-input cases. No persistent test script is kept in the worktree.
+
+## Verification record
+
+The generic tracer crossed both folds of
+
+```matlab
+R(u,h) = u^3-u+h
+```
+
+and recovered the exact fold fields `h=+/-2/(3*sqrt(3))` within the declared arc discretization.
+Fresh guards also verified reverse orientation, retry retention, invalid-tangent rejection, and
+distinct terminal statuses for callback and nonfinite-residual events.
+
+On the frozen legacy 16³ LiHoF4 coupling at `T=0.10 K`, `Bx=1.5 T`, the invZ adapter reproduced the
+previously observed high-branch fold with a retained full-state trace:
+
+```text
+initial h                         0.042371329941803114 meV
+accepted unique roots            149
+adaptive attempts                156
+maximum residual_inf             4.535304520825179e-09
+minimum bordered rcond           5.073311652228108e-06
+minimum oriented tangent overlap 0.9501876552804539
+minimum pole margin              0.006213739195997094
+minimum mean margin              0.03106320582704512
+maximum h-Jacobian scaled drift  7.825112291199848e-05
+Hermite fold field               0.0052435482911986821 meV
+```
+
+Every corrected root passed the independent A--D audit. The fold value differs by
+`1.44e-10 meV` from the earlier one-off quarter-step result
+`0.005243548147122800 meV`. The dense/Richardson oracle took 1292.9 s over six bounded segments;
+this makes the already-derived diagonal-plus-low-rank bordered solve a measured prerequisite for
+global enumeration, not a change to the residual or acceptance rules. Temporary `.mat` traces stayed
+under `/tmp` and are not retained.

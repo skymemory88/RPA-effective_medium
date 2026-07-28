@@ -2,8 +2,8 @@
 
 **Recorded:** 2026-07-28
 
-**Status:** decision-only implementation oracle added after the first common-functional skeleton
-candidate failed its immutable weak-coupling gate; non-default and not production-integrated
+**Status:** decision and full-state continuation oracles added after the first common-functional
+skeleton candidate failed its immutable weak-coupling gate; non-default and not production-integrated
 
 **Trigger:** use only if the common-functional route proves impractical on the required timescale and
 the prescription below is separately preregistered before spectra are inspected
@@ -218,8 +218,13 @@ The pure decision layer of step 1 is frozen in
 `docs/diagnostics/biased_smooth_r_2026-07-28/invzp_select_smooth_r_oracle.m`. It accepts only
 pre-enumerated complete paths on an identical dimensionless mesh and never differentiates,
 interpolates, or repairs them. Synthetic in-memory fixtures pin the ranking and ambiguity semantics.
-The deliberately separate continuation/path-construction fixture with folds remains to be built
-before step 1 as a whole is complete.
+The separate generic pseudo-arclength primitive crosses both folds of the analytic cubic oracle, and
+its invZ adapter retains complete frequency-resolved states. On the frozen 0.10 K, 1.5 T, legacy 16³
+fixture it traced 149 accepted roots from the clean high-field endpoint through the known regular
+fold and reproduced its field to `1.44e-10 meV`; every A--D audit passed. The global cold-seed root
+enumerator and single-valued path-construction fixture remain to be built before step 1 as a whole is
+complete. The dense low-temperature trace cost 1292.9 s, so the existing diagonal-plus-low-rank
+Jacobian structure must be used before global enumeration.
 
 ## 6. Failure conditions
 
