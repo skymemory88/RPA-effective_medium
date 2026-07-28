@@ -231,7 +231,8 @@ Block B is revised IN PLACE; there is no fifth block. Under
 - load-bearing residual: `|K0s - Kstrict(Gref)|`, with `Kstrict` independently recomputed from
   the exported `Sigma(1)`/`lam(1:2)` via `invz_static_medium_reference` +
   `invz_medium_moment_closure`. Gate `K_atol + K_rtol*max(|K0s|,|Kstrict|,Jscale)`
-  (`1e-14`/`1e-12`, frozen in docs/invzp_strict_medium_prereg.md §2). Identically zero for a
+  (`1e-14`/`1e-12`, frozen in the archived preregistration
+  `2a8d5b7^:docs/invzp_strict_medium_prereg.md` §2). Identically zero for a
   correct one-shot call: it exists to catch mis-wiring.
 - `blockB.pass` additionally requires `blockB.status == 'ok'`, the reference-denominator domain
   verdict. An out-of-domain node is not accepted, but the CALLER must distinguish that from

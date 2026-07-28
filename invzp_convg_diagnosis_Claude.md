@@ -569,12 +569,15 @@ the failure mode at its source rather than making the unstable region merely eva
 
 ---
 
-## 8. Reproduction
+## 8. Historical reproduction record
 
-Scripts and logs written for this diagnosis are preserved in
-`docs/diagnostics/claude_convg_2026-07-27/`. Each script hard-codes its own absolute log path (the
-scratchpad it was written in); edit `SD`/`LOG` at the top before re-running. Invoke as
-`matlab -batch "addpath('<dir>'); diagN"`:
+The original scripts and logs were removed from the working tree on
+2026-07-28 after their results were consolidated here. They hard-code the
+author's workstation path and several depend on scratch `.mat` inputs that
+were never committed, so they are provenance rather than a current
+reproduction suite. They remain recoverable under
+`31a7fd0:docs/diagnostics/claude_convg_2026-07-27/`. If restored, edit
+`SD`/`LOG` before invoking `matlab -batch "addpath('<dir>'); diagN"`:
 
 | script | log | what it establishes |
 |---|---|---|
@@ -607,9 +610,12 @@ pt = invz_solve_point_ordered(ion, 0.31, [3 0 0], Jnu(:), o);      % -> ok, m0 =
 
 §1–§8 above were written without reading any prior analysis, deliberately. They were then compared
 against the since-retired convergence-fix attempt record (rev. 2, 2026-07-27),
-`docs/invzp_strict_medium_gate0_report.md` (the Gate-0 verdict), `docs/invzp_ordered_1z_state.md`
-(project state), `docs/INVZ-DEVELOPMENT-RECORD.md`, a since-retired external review, and an
-independently written QCP analysis (the last read in full, now consolidated into §9.5).
+`docs/invzp_strict_medium_gate0_report.md` (the Gate-0 verdict), the
+since-retired ordered-state map
+(`31a7fd0:docs/invzp_ordered_1z_state.md`),
+`docs/INVZ-DEVELOPMENT-RECORD.md`, a since-retired external review, and an
+independently written QCP analysis (the last read in full, now consolidated
+into §9.5).
 This section records what survives that comparison, what is new, and — most importantly — **what in
 §5–§7 above had to be withdrawn.**
 
@@ -634,7 +640,9 @@ sum. Their analysis and mine are the same statement in two coordinate systems. T
 
 Three further items in my §2 are also already on record:
 
-* `docs/invzp_ordered_1z_state.md`, "Durable gotchas": *"Since `Gstat = −chi < 0` and
+* The retired ordered-state map
+  (`31a7fd0:docs/invzp_ordered_1z_state.md`), "Durable gotchas":
+  *"Since `Gstat = −chi < 0` and
   `max(Jnu) < J0eff`, `Dq = D_uni + (J0eff−J(q))·chi ≥ D_uni`, so any `Dq ≤ 0` ⇒ `D_uni ≤ 0`… A
   Picard/EMT loop reporting `converged` proves nothing physical without checking `D_uni`/`min(Dq)`."*
   That is my §2.6 and the inequality I used in §5/D1, already stated.
@@ -801,10 +809,13 @@ field regime — but "grid-independent" should be qualified to "grid-independent
 phase".
 
 **(v) Per-column driver evidence, and a wording discrepancy inside the prior record.**
-`docs/invzp_ordered_1z_state.md`'s TL;DR says the panel masks *"at every field"*; the retired attempt
-record's §0 says *"masks below `Bc_1z ≈ 3.025 T`"*. At T = 0.31 K the second is right and the first is
-too strong: the resummed leg returns complete ordered spectra at 3.8 and 4.0 T (35/35 finite ω points,
-`phase_1z = 1`, `phase_1z_reason = 'ordered'`; §1 and §3.1 tables).
+The retired ordered-state map's TL;DR said the panel masks *"at every
+field"*; the retired attempt record's §0 said *"masks below `Bc_1z ≈ 3.025
+T`"*. At T = 0.31 K the second is right and the first is too strong: the
+resummed leg returns complete ordered spectra at 3.8 and 4.0 T (35/35 finite
+ω points, `phase_1z = 1`, `phase_1z_reason = 'ordered'`; §1 and §3.1
+tables). This stale contradiction is one reason the ordered-state map was
+removed from the current documentation set.
 
 **(vii) `Bc_1z ≈ 3.025 T` is not the boundary at the temperature Gate 0 registered.** Measured 1/z PM
 mass zero-crossing (`invz_solve_point`, resummed, 16³, 0.5 T sampling, linear interpolation):

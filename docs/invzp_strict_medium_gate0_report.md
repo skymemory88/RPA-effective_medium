@@ -1,8 +1,9 @@
 # Gate 0 verdict: strict-order static medium (`strict_1z_dyson_ref`)
 
 Task 18. Branch `invzp-stage2c-diagnostic`. Frozen preregistration:
-`docs/invzp_strict_medium_prereg.md` (frozen 2026-07-25). This document records the measured
-Gate-0/G5/G17/G7 output on the real production coupling multiset and states the verdict. It
+`2a8d5b7^:docs/invzp_strict_medium_prereg.md` (frozen 2026-07-25 and
+archived in Git). This document records the measured Gate-0/G5/G17/G7
+output on the real production coupling multiset and states the verdict. It
 does not amend the preregistration.
 
 **Evaluated field set (full coverage, unlike Task 17's G11 which covered 1 of 8 ordered fields
