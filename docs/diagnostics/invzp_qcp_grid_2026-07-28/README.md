@@ -83,6 +83,51 @@ The final dot is the field above the grid-specific `Bc` where no ordered
 root is expected.  The islands demonstrate that the failure is not a
 uniform iteration threshold.
 
+## Phase-aligned susceptibility/peak grid gate
+
+The user-priority observable was then evaluated at matched physical offsets
+from each grid's solver-grade mass root:
+
+```text
+B-Bc = [-0.080,-0.040,-0.020,-0.010,-0.005,
+         0.005, 0.010, 0.020, 0.040, 0.080] T.
+```
+
+The real-axis grid was `0:0.002:2.0 GHz` with the production
+`eta=5e-5 meV`. All 40 susceptibility columns were finite. Every negative
+offset was Jensen ordered and every positive offset was paramagnetic.
+
+![Absolute-field shift and phase-aligned peak collapse](peak_grid_gate.png)
+
+| N | −0.080 T | −0.020 T | −0.005 T | +0.005 T | +0.020 T | +0.080 T |
+|---:|---:|---:|---:|---:|---:|---:|
+| 12 | 0.938734 | 0.470125 | 0.235203 | 0.165653 | 0.330028 | 0.650630 |
+| 16 | 0.936204 | 0.469271 | 0.234970 | 0.165070 | 0.329221 | 0.649491 |
+| 20 | 0.935292 | 0.468637 | 0.234286 | 0.165112 | 0.328962 | 0.649001 |
+| 24 | 0.934363 | 0.467917 | 0.234053 | 0.164782 | 0.328372 | 0.648158 |
+
+Entries are the parabolically refined peak of the retained
+`chi''_cc(omega)` column in GHz. Across all ten offsets the four-grid
+relative spread is `0.38--0.53%`; the largest absolute spread is
+`0.00437 GHz` at `-0.080 T`.
+
+A `0.001 GHz` refinement at `N=12,24` and offsets
+`[-0.020,-0.005,+0.005,+0.020] T` reproduces the coarse-grid extreme-grid
+spreads as `[0.002212,0.001140,0.000855,0.001650] GHz`; individual peak
+locations change by at most about `1e-5 GHz`. The peak-position comparison
+is therefore not limited by the original `0.002 GHz` sampling.
+
+This gives a useful separation:
+
+- the phase-aligned soft-mode shape is already stable at the sub-percent
+  level over `12^3--24^3`;
+- the dominant grid effect is the horizontal `Bc(N)` shift, which is not
+  yet converged.
+
+`peak_grid_gate.mat` retains the full susceptibility columns for inspection.
+Only peak position and phase provenance were graded here; spectral weight,
+linewidth, and an independently solved analytic pole were not.
+
 ## Edge-pair trace and the monotone-inner-solve proposal
 
 The representative `16^3` pair is 4.400 T (rejected) and 4.425 T
@@ -147,8 +192,10 @@ only and are not accepted Jensen endpoints.
 
 ## Decision
 
-1. Keep the current accepted QCP spectrum as a finite-`16^3` preview, but do
-   not call its ordered width or `Bc` grid-converged.
+1. Keep the current accepted QCP spectrum as a finite-`16^3` preview. Its
+   phase-aligned peak shape is sub-percent stable across the tested grids,
+   but its absolute field alignment, ordered width, and `Bc` are not
+   grid-converged.
 2. Do not implement fixed-G rightmost-root bisection as P2: it does not match
    the current coupled static equation and the measured failing block is the
    outer Σ closure.
@@ -163,6 +210,8 @@ only and are not accepted Jensen endpoints.
 - `invzp_qcp_coupling_scan.m` regenerates `coupling_scan.mat`.
 - `invzp_qcp_state_grid_gate.m` regenerates `state_grid_gate.mat`; it performs
   no real-axis response calculation.
+- `invzp_qcp_peak_grid_gate.m` regenerates `peak_grid_gate.mat` from the
+  retained solver-grade `Bc(N)` values and stores the full response columns.
 - `edge_pair_trace.mat` retains compact nodes/iterations with large lattice
   arrays removed.
 - `area_rule_grid.mat` retains the two profiles and scalar `J0eff`;
