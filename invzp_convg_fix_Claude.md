@@ -154,6 +154,16 @@ The adapter never promotes pointwise-positive margins. The retained root-6 rever
 produces 33 vertex inputs but all 32 adjacencies remain explicit signed-event blockers; this removes
 manual schema translation without overstating connectivity.
 
+A subsequent discrete reparameterization by `w=z-K0` strengthens the numerical diagnosis without
+changing that graph verdict. On the same root-6 opposite leg, all 32 positive targets corrected in at
+most four Newton iterations, with maximum residual `9.4914e-11`, minimum bordered
+`rcond=1.6065e-9`, and maximum fixed-`h` state mismatch `5.8624e-11`. The separate zero-field anchor
+retained residual `7.5218e-14`. These are well-conditioned sampled roots, not continuous edges.
+The fail-closed evidence adapter now labels all 32 scalar intervals conditional, supplies no
+unproved normalized `z` bound, and unlocks zero graph edges. Fresh guards reject NaN
+residual/condition/anchor data, failed nested audits, provenance mismatch, and a residual-passing
+point below the bordered-rank floor.
+
 **Simple-first multi-root update, 2026-07-28.** The seven zero-field roots do not share one uniform
 convergence failure. A cheap upward screen followed by local continuation found two additional
 regular folds. Root 4 turns near `5.56814e-6 meV`; root 6 turns near
@@ -544,6 +554,13 @@ Run that protocol at production size before making a continuation-domain claim. 
 Cartesian product of every exploratory field, direction, grid, and cutoff: refine the representative
 branch plus each distinct fold/pole/cancellation end point, and expand only if different pilot fields
 show different branch topology.
+
+The numerical, mathematical, and algorithmic mechanism behind this nonuniform, apparently stochastic
+pattern is consolidated in `non-convg_mechanism_diagnosis_Codex.md`. The retained solvers contain no
+random-number path and no frequency-order continuation: the sensitivity comes from a noncontractive
+pole-dependent Picard map, multiple seed basins, fixed-`h` folds, row/coordinate conditioning, and
+finite acceptance budgets. Critical slowing of the physical response is therefore not the relevant
+predictor of nonlinear-solver difficulty.
 
 ### 1.4 Field funnel
 

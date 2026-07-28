@@ -58,7 +58,26 @@ y = [Sigma(:)./sigma_scale; K0/K0_scale; h/h_scale].
 Its accepted payload retains the full state, A--D audit, reciprocal-chart diagnostics, signed event
 margins, and the field-Jacobian refinement drift normalized by
 `max(1,norm(dR/dh,Inf))`. It still adapts one supplied initial root; it is not a root enumerator or
-Jensen-path constructor.
+Jensen-path constructor. The adapter now also exports the exact state gradient of
+`w=z-K0`, a Richardson field derivative, and its refinement drift. These are used only by the
+fixed-`w` conditioning probe.
+
+`invzp_trace_fixed_w_sequence` is a deterministic diagnostic corrector at a caller-frozen monotone
+sequence of `w=z-K0` targets. The augmented residual contains the unchanged ordered equations and
+one scaled fixed-`w` row. Residual acceptance is subordinate to finite-system, bordered-rank, event,
+and independent A--D gates; in particular, a small-residual point cannot bypass a failed rank gate.
+The first Newton update may use one bounded full launch when its scaled RMS correction is already
+inside the registered launch tube, after which the ordinary decreasing-residual line search applies.
+This is a numerical reparameterization probe, not a continuous branch enclosure.
+
+`invzp_scalar_event_interval_oracle` evaluates outward-rounded absolute pole and reciprocal-mean
+bounds on a caller-supplied `w` interval. It can emit a passing graph event only when two independent
+inputs are validated: a complete branch enclosure over the interval and a residual-derived
+normalization enclosure bounding `|z|`. A bare caller number is not accepted as the latter.
+`invzp_fixed_w_event_evidence` deliberately supplies neither proof: it matches the sampled fixed-`w`
+and fixed-`h` records, exports conditional scalar bounds, and sets every
+`event_bracket_ok=false`. Discrete targets cannot prove existence, uniqueness, nonsingularity, or
+event exclusion between samples.
 
 `invzp_enumerate_ordered_roots` is the retained fixed-`h` cold-seed driver. The caller supplies every
 seed explicitly. The driver solves in lexical seed-ID order, retains submitted order and every
@@ -223,6 +242,14 @@ mismatch, missing embedded threshold provenance under strict mode, and an embedd
 mismatch all fail closed. The normalized Newton configuration is also checked on a fresh zero-field
 correction. No persistent adapter test script is kept.
 
+A fresh fixed-`w` fail-closed guard matches the same 33 fixed-`h` nodes to 32 positive fixed-`w`
+targets and the separate zero-field anchor. All 32 scalar intervals have conditional absolute
+clearance, but all 32 event records remain unvalidated and the graph unlocks exactly zero edges.
+NaN corrector residual, NaN bordered `rcond`, NaN anchor data, a failed nested A--D audit, and an
+initial-point provenance mismatch all reject the input. A real one-target replay with residual
+already below tolerance and an intentionally raised rank floor stops at `rank_gate`, confirming that
+small residual cannot bypass local regularity. `checkcode` is clean and no test script is retained.
+
 ## Verification record
 
 The generic tracer crossed both folds of
@@ -365,6 +392,26 @@ root 6 at cluster distance `7.92e-14` (residual `7.52e-14`). Both observed root-
 have the same zero-field endpoint evidence. This fixed-`h` sequence is not by itself a continuous
 signed-edge certificate, and it does not resolve the previously traced root-7 boundary layer or a
 complete single-valued Jensen section.
+
+The same opposite-leg data were replayed in the scalar coordinate `w=z-K0`. All 32 positive targets
+were accepted in at most four Newton iterations:
+
+```text
+maximum residual_inf              9.4914e-11
+minimum bordered rcond            1.6065e-9
+maximum predictor correction RMS  3.4e-3
+maximum fixed-h state mismatch    5.8624e-11
+maximum h mismatch                1.6466e-14 meV
+maximum w mismatch                2.7439e-15 meV
+zero-field anchor residual        7.5218e-14
+```
+
+This is strong evidence that fixed `w` is a better-conditioned local solver coordinate on this leg.
+It is not “32 certified edges.” The samples do not enclose the intervening root manifold, and the
+normalized pole margin additionally needs a full-edge bound on the closure residual/`z`
+normalization. The retained report therefore contains 32 conditional scalar clearances, zero
+passing graph-event certificates, and zero unlocked adjacencies. A genuine proof would need a
+validated interval-Newton/Krawczyk (or equivalent) cover over each target slab.
 
 An h-adapter copy of the existing ULP-bounded q-coordinate `K0` polish was tested as an even simpler
 remedy at the root-4 and root-5 frontiers. Both proposals correctly rejected themselves as outside

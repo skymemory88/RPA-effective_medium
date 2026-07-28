@@ -319,6 +319,16 @@ distance `7.92e-14`. This is endpoint and predictor-tube evidence, not a substit
 continuous signed-event edge certificate. The root-7 boundary layer, other untraced root legs, and
 the complete single-valued selector therefore remain open.
 
+A fixed-`w`, `w=z-K0`, replay of the 32 positive root-6 targets confirms that the opposite leg is
+numerically much better conditioned in this coordinate: every target passed the coupled residual,
+bordered-rank, event, and independent A--D point gates. This does not satisfy the graph's edge gate.
+Finite accepted samples do not prove existence, uniqueness, nonsingularity, or event clearance over
+the intervening continuum. The scalar interval calculation is therefore retained only as
+conditional clearance: it emits `event_bracket_ok=false` for every adjacency and supplies no
+arbitrary caller-chosen bound for the normalized `|z|` pole margin. Production authorization still
+requires a validated continuation enclosure (or the separately declared candidate prescription);
+the current fixed-`w` result is a solver-coordinate diagnostic.
+
 The implementation policy is consequently staged and simple-first: use fixed-`h` solves on regular
 segments, invoke arclength only near a measured rank/tangent turn, use the defactored closure only as
 the registered diagnostic continuation coordinate, retain both its provenance and the amplified raw
