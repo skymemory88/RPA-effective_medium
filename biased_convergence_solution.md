@@ -2,8 +2,8 @@
 
 **Recorded:** 2026-07-28
 
-**Status:** activated backup plan after the first common-functional skeleton candidate failed its
-immutable weak-coupling gate; non-default and not yet production-integrated
+**Status:** decision-only implementation oracle added after the first common-functional skeleton
+candidate failed its immutable weak-coupling gate; non-default and not production-integrated
 
 **Trigger:** use only if the common-functional route proves impractical on the required timescale and
 the prescription below is separately preregistered before spectra are inspected
@@ -213,6 +213,13 @@ Run the funnel in this order:
    paramagnetic anchors above it.
 6. **External validation:** only after selection is frozen, compare spectra and thermodynamic
    observables with experiment.
+
+The pure decision layer of step 1 is frozen in
+`docs/diagnostics/biased_smooth_r_2026-07-28/invzp_select_smooth_r_oracle.m`. It accepts only
+pre-enumerated complete paths on an identical dimensionless mesh and never differentiates,
+interpolates, or repairs them. Synthetic in-memory fixtures pin the ranking and ambiguity semantics.
+The deliberately separate continuation/path-construction fixture with folds remains to be built
+before step 1 as a whole is complete.
 
 ## 6. Failure conditions
 
