@@ -532,3 +532,14 @@ freezing the return during variation, or adding a denominator floor is prohibite
 functional route must derive the exact local bilocal/2PI irreducible kernel (including its coupling to
 the one-point variable) or use a formally strict, nonstationary cumulant expansion.  The latter
 cannot remove the Gaussian pole and hence is not a convergence fix.
+
+A subsequent exact local response-block oracle resolves the first coordinate choice for that future
+route.  If `m`, `h`, and `D` remain independent off shell and
+`R=D_ii-C2(h)`, the local quadratic correction must use the partial-Legendre, fixed-source curvature
+`K^-1/beta`, where `K` is the connected bilinear covariance.  The Schur curvature
+`(K-B*B'/C2(0))^-1/beta` applies only after the one-point source has been eliminated at fixed moment.
+At the nonzero-source static fixture, using the Schur curvature alone adds
+`C2*C3^2/(4*beta^2)=0.118329000835305` to the centred-chain coefficient, whose graph inventory permits
+only the ring and connected `C4`.  The fixed-source curvature reproduces that restricted coefficient
+exactly.  This closes a local normalization/coordinate gate only; the matching lattice trace,
+double counting, Matsubara tail, and full stationary functional remain unconstructed.
