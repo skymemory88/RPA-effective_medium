@@ -2,15 +2,37 @@
 
 **Recorded:** 2026-07-28
 
-**Status:** backup authorized for diagnostic/oracle development after the first common-functional
-skeleton candidate failed its immutable weak-coupling gate; non-default and not production-integrated
+**Status:** backup implementation authorized after the dated impracticality finding below;
+non-default and not production-integrated
 
-**Production trigger:** not yet satisfied. Production use requires both a separately preregistered
-branch prescription and a dated, reviewable finding that the preferred common-functional route is
-impractical within a prospectively declared scope, effort budget, and deadline. That finding must
-record the attempted exact-local-bilocal/2PI deliverables, the blocking evidence, and why no retained
-alternative can meet the declared accuracy and domain gates. Rejecting one skeleton candidate
-authorizes oracle work only; it does not exhaust that route.
+**Production trigger:** satisfied for implementing and grading this explicit backup, but not for
+making it the default. Production dispatch still requires every branch, thermodynamic,
+discretization, and visual-acceptance gate in this document.
+
+**Dated impracticality finding, 2026-07-28.** The prospectively stated delivery window was
+6--12 focused development/testing hours, with 1--2 days as the safer estimate, for a spectra-ready
+ordered-state calculation on the frozen `T=0.10 K`, `B=0--9 T`, `q=[0 0 0]` use case. Work within
+that window completed the exact fixed-source local bilocal curvature, its finite-mode chain
+normalization oracle, a rank-graded multilevel `C2/C3/C4` engine, and a positive-domain symmetric
+quadratic medium that removes the old `4.6--4.9 T` Gaussian no-state gap without a denominator
+floor. The remaining exact-local-bilocal/2PI deliverables are:
+
+1. complete the full electronuclear Matsubara tail inside the whole stationary functional;
+2. add the nonzero-source, signed-frequency and momentum-resolved `C3-C3` core;
+3. include the matching source derivatives through `C5/C6`;
+4. derive the nonlinear local partial-Legendre functional rather than its quadratic Taylor model;
+5. pass the ordered Maxwell, thermodynamic, rank, cutoff, grid, and branch gates.
+
+The cutoff test shows why these are not mechanical finishing steps. At `0.1 K`, cutoff 14 reaches
+only `0.758 meV`, remains pre-asymptotic in the crystal-field spectrum, and changes the complete
+low-mode inverse through a Schur complement; plausible extrapolants still span
+`Sigma(0)=0.000626--0.000644 meV`. Away from symmetry, the same retained order requires the
+nonlocal `C3-C3` convolution and its source derivatives, not a local correction to the existing
+pilot. Completing those items inside the stated window would require omitting same-order diagrams,
+fitting an uncontrolled tail, or dropping thermodynamic gates. Each would sacrifice the accuracy
+or rigor the user explicitly required. The preferred route remains scientifically open, but it is
+impractical for the declared spectra-delivery window. This finding therefore activates the
+separately preregistered smooth-`r(h)` backup for implementation and testing.
 
 ## 1. Purpose and declared bias
 
@@ -389,11 +411,12 @@ to the current equations. Stage 3 produced a strict scalar common functional and
 pre-registered nonlocal-return skeleton candidate. The strict ring theory passed its gates but
 retained a Gaussian no-state interval; the stationary skeleton failed its exact mixed-chain
 coefficient because it lacked the exact local bilocal Legendre kernel. That candidate was rejected
-rather than tuned, but the exact local bilocal/2PI route remains open. The rejected skeleton
-authorizes no production fallback and does not establish impracticality of the preferred route. The
-backup remains authorized at oracle level; production activation awaits the separately recorded
-prospective impracticality finding and every existing preregistration, branch-identity, refinement,
-and production-stop gate above.
+rather than tuned, and the exact local bilocal/2PI route remains scientifically open. The subsequent
+exact-local work and cutoff audit are recorded in the dated impracticality finding at the top of
+this document. They establish that completing the route without omitted same-order terms or an
+uncontrolled tail cannot meet the declared spectra-delivery window. The backup is consequently
+authorized for implementation, while every preregistration, branch-identity, refinement, and
+production-stop gate above remains binding.
 
 Relevant current records:
 

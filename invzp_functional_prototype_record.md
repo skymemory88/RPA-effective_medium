@@ -174,7 +174,16 @@ The checks cover:
     `0.000325112736` at cutoff 1 to `0.000592354483` at cutoff 14.  The cutoff-14 increment is
     `3.49e-6 meV`; increments over cutoffs 8--14 fit approximately as `N^-2.29` and their local
     exponent rises from `2.34` to `2.67`.  This establishes a summable observed tail, but not yet
-    its asymptotic coefficient or a certified infinite-cutoff value.
+    its asymptotic coefficient or a certified infinite-cutoff value.  In fact cutoff 14 reaches
+    only `omega_14=0.758 meV` at `0.1 K`, so it is still inside the full crystal-field transition
+    range.  The finite-level Lehmann expansion permits integer inverse-power tails but does not fix
+    the stationary `Sigma(0)` coefficient: eliminating omitted modes changes the complete low-mode
+    inverse through a Schur complement.  Fits that force the observed fractional exponent, a free
+    exponent, or the generic regular `1/N` correction give limits spanning approximately
+    `0.000626--0.000644 meV`.  No zero-mode-only analytic patch is therefore admitted.  The next
+    audit must use a preregistered nested cutoff ladder, continue the same positive-domain root,
+    reserve a hold-out cutoff, and require integer-power extrapolants to agree within the declared
+    self-energy tolerance.
 
 MATLAB `checkcode` returned no findings for all twenty-three isolated implementation files and the two
 extended coupling APIs.
@@ -292,11 +301,13 @@ transition on the expected field scale but does not remove the strict Gaussian p
 This prototype does not yet justify a LiHoF4 production calculation. The next contained steps are:
 
 1. do not revive the rejected Gaussian-local-trace plus 1PI-vertex skeleton;
-2. derive and grade the quadratic candidate's Matsubara tail; if it remains viable, add the
-   nonzero-source `C3-C3` core and only then decide whether the nonlinear fixed-source local
-   partial-Legendre functional is required; or activate the separately documented biased
-   smooth-`r(h)` backup as an explicit experimental prescription;
-3. do not wire a spectral backend until whichever route is chosen passes its thermodynamic, domain,
+2. retain the quadratic candidate as evidence that the exact local curvature removes the symmetric
+   no-state gap, but do not fit its pre-asymptotic tail or omit the same-order nonzero-source
+   `C3-C3` core;
+3. the dated effort-window finding in `biased_convergence_solution.md` now activates the separately
+   preregistered smooth-`r(h)` backup as the active experimental implementation route; the exact
+   local bilocal/2PI construction remains a longer-term theory route;
+4. do not wire a spectral backend until whichever route is chosen passes its thermodynamic, domain,
    discretization, and branch-identity gates.
 
 The deferred `O(1/z^2)` non-Gaussian vacuum and the production ordered `tanh/xi` machinery remain out
