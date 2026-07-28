@@ -156,7 +156,11 @@ The checks cover:
     `1.5 T`, `1.64e-4` at `4.6 T`, and `1.09e-4` at the symmetric `4.9 T` fixture.  These are
     empirical ladder errors, not certified discarded-state bounds.  The API rejects a rank cut
     through a roundoff-degenerate multiplet, records every dense/action contribution and similarity
-    amplification, and leaves `functional_use_authorized=false`.
+    amplification, and leaves `functional_use_authorized=false`.  It also treats the exact
+    Hermitian-pair reality relation as a graded numerical condition: for the most difficult
+    rank-64 cutoff-14 pair in the `4.8 T` fixture the raw relative imaginary residual is
+    `5.47e-12`, below the frozen `1e-10` projection tolerance; tightening that tolerance to
+    `1e-14` fails closed instead of silently discarding the imaginary part.
 26. the first quadratic-bilocal medium discriminator.  A Gaussian local kernel returns
     `Sigma=0` on its regular domain and returns no root, rather than using a floor, when the Gaussian
     pole makes that point inadmissible.  With the electronuclear rank-64 interior `C4`, full-rank
@@ -167,8 +171,10 @@ The checks cover:
     `0.000327931079 meV`, and an independent difference of the declared trial energy has gradient
     below `2e-9`.  The rank-48 to rank-64 Hessian drift is `1.1e-7` relatively there.
     Matsubara convergence is open: at `4.8 T`, `Sigma(0)` changes from
-    `0.000325112736` at cutoff 1 to `0.000572797201` at cutoff 10, with the final increment still
-    `8.3e-6 meV`.
+    `0.000325112736` at cutoff 1 to `0.000592354483` at cutoff 14.  The cutoff-14 increment is
+    `3.49e-6 meV`; increments over cutoffs 8--14 fit approximately as `N^-2.29` and their local
+    exponent rises from `2.34` to `2.67`.  This establishes a summable observed tail, but not yet
+    its asymptotic coefficient or a certified infinite-cutoff value.
 
 MATLAB `checkcode` returned no findings for all twenty-three isolated implementation files and the two
 extended coupling APIs.

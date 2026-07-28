@@ -251,7 +251,10 @@ exact-local-curvature pilot has one positive-domain stationary medium at every s
 removes the strict Gaussian pole gap without a floor in this finite trial functional.  This is not
 yet an ordered state or a spectrum: roots are only those found from the declared starts, the
 nonzero-source `C3-C3` core is absent by scope, and the Matsubara sequence is not converged
-(`Sigma(0)` at `4.8 T` moves from `0.0003251` at cutoff 1 to `0.0005728 meV` at cutoff 10).
+(`Sigma(0)` at `4.8 T` moves from `0.0003251` at cutoff 1 to `0.0005924 meV` at cutoff 14).
+The latest increments decrease approximately as a summable `N^-2.29` sequence, with the local
+exponent still drifting toward its asymptote; an analytic or independently graded tail completion
+is still required.
 Production and spectral dispatch remain prohibited.
 
 Line numbers below are as of the 2026-07-27 working tree; confirm each before editing.

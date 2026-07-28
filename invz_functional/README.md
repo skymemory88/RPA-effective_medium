@@ -66,10 +66,12 @@ pass those gates rather than patching the failed ansatz.
 connected `C2/C3/C4` for an arbitrary retained finite-level Hamiltonian by block matrix exponentials,
 not an explicit `d^rank` state-path enumeration, and switches to a dense-generator exponential
 action when a wide retained spectrum makes the full dense exponential nonfinite.  Per-contribution
-backend and similarity-scaling provenance are exported.  A local-rank truncation is exact only for
-the retained Hilbert space: discarded thermal weight does not bound virtual intermediate states,
-near-degenerate rank cuts are rejected, and truncated results require an external rank ladder.
-`functional_use_authorized` therefore remains false.
+backend and similarity-scaling provenance are exported.  Frequency multisets invariant under
+`n -> -n` are exactly real for a Hermitian local operator; the oracle records the raw imaginary
+residual and projects only after it passes a declared relative tolerance.  A local-rank truncation
+is exact only for the retained Hilbert space: discarded thermal weight does not bound virtual
+intermediate states, near-degenerate rank cuts are rejected, and truncated results require an
+external rank ladder.  `functional_use_authorized` therefore remains false.
 
 `invzf_bilocal_quadratic_medium` is the first stationary discriminator using that local curvature.
 At exactly zero supplied `C3`, it replaces the Gaussian local covariance curvature by the exact
