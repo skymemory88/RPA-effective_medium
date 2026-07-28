@@ -83,6 +83,13 @@ evaluation is the next performance target. A deterministic retry envelope now li
 accepted step and equation evaluations per corrector attempt. Exhaustion is retained as an explicit
 failure and cannot be mistaken for a physical endpoint.
 
+At the low positive endpoint, a bounded h-coordinate corrector now fails reproducibly rather than
+running away: the best tested field column has `1.30e-3` Richardson drift against bordered
+`rcond≈1.76e-11`, and the corrector stagnates at residual `1.91e-5`. A separate diagnostic
+`q=(h/h_reference)^2` adapter preserves every original positive-h equation and advances three
+A--D-audited points to `q=0.775`. It deliberately labels `q=0` unresolved; without a proof of
+even-in-h smoothness, a finite q stencil cannot rule out a `sqrt(q)` term or identify an h=0 root.
+
 **Root-census and low-endpoint update, 2026-07-28.** A retained explicit-seed enumerator now records
 all fixed-`h` attempts and clusters the complete independent coordinates `[Sigma;K0]` through an
 order-independent uncertainty band; `K` and `lambda` remain derived. At 1.5 T and `h=0`, a 25-seed
