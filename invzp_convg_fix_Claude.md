@@ -144,7 +144,11 @@ regular folds. Root 4 turns near `5.56814e-6 meV`; root 6 turns at
 `9.541141092330816e-6 meV`. The root-6 returning leg crosses zero and, after a small local refinement,
 matches the root-6 census medoid within `1.42e-14` in the frozen cluster metric. Its interpolated
 predictor correction is `7.43e-12`, below the `1e-9` same-root threshold. This is the first certified
-zero-field endpoint connection for one of the newly enumerated components.
+zero-field endpoint connection for one of the newly enumerated components. A cheap 33-node
+fixed-`h` reverse trace then reached zero along the opposite root-6 leg with every A--D gate
+accepted, no event failure, and endpoint distance `7.92e-14` from root 6. This closes the endpoint
+identity question for both observed root-6 legs, but the sampled fixed-`h` sequence does not supply
+the continuous signed-edge certificate required by the backup graph.
 
 The same campaign isolates two avoidable numerical costs. First, a corrector tolerance of `8e-9`
 was too close to the independent `1e-8` A/C gates and could accept a predictor before it was accurate
@@ -155,9 +159,9 @@ defactored `|K0-Jloc|/Jscale` diagnostic coordinate removes that veto without ch
 equation; it does not replace frozen production/raw certification. A proposed h-coordinate copy of
 the q-path ULP polish was removed after both root-4/root-5 proposals fell outside its registered
 envelope. These findings strengthen the numerical-stability diagnosis but do not authorize
-production: root 7's endpoint, several opposite legs, signed event-edge certificates, and a complete
-single-valued Jensen candidate remain unresolved. Further diagnostics must be one root per process
-and checkpoint before summaries.
+production: root 7's endpoint, untraced legs of other roots, signed event-edge certificates, and a
+complete single-valued Jensen candidate remain unresolved. Further diagnostics must be one root per
+process and checkpoint before summaries.
 
 **First production-input functional pilot, 2026-07-28.** The isolated strict functional now has a
 read-only adapter to the actual scalar BZ coupling multiset and transverse electronic doublet. At

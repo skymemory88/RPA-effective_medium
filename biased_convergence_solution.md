@@ -272,8 +272,15 @@ fixed-field correction identify census root 6 with cluster distance `1.42e-14`, 
 correction of `7.43e-12`. Both pass the registered `1e-9` same-root threshold. Root 4 also crosses a
 separate fold near `5.56814e-6 meV` under the exact defactored audit coordinate. These results add
 certified vertices and local fold evidence, but they do not complete the candidate graph: the
-root-7 boundary layer remains unresolved, the opposite legs and roots 1--5 are not all traced, and
-continuous signed-event edge certificates are still missing.
+root-7 boundary layer remains unresolved, roots 1--5 still have untraced legs, and continuous
+signed-event edge certificates are still missing.
+
+A derivative-free reverse check has since removed the root-6 opposite-leg endpoint ambiguity. All
+33 decreasing fixed-`h` nodes from the common handoff to zero pass A--D without an event failure;
+the largest frozen predictor distance is `0.0247702`, and the endpoint matches census root 6 at
+distance `7.92e-14`. This is endpoint and predictor-tube evidence, not a substitute for the
+continuous signed-event edge certificate. The root-7 boundary layer, other untraced root legs, and
+the complete single-valued selector therefore remain open.
 
 The implementation policy is consequently staged and simple-first: use fixed-`h` solves on regular
 segments, invoke arclength only near a measured rank/tangent turn, use the defactored closure only as

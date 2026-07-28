@@ -321,8 +321,13 @@ and its returning leg crossed zero field with no audit failure and minimum borde
 `+5.270703260674207e-10` and `-1.492816168710522e-10 meV`. The interpolated seed needed a correction
 of only `7.43e-12` in the frozen clustering metric, and the accepted zero-field solve matched census
 root 6 within `1.42e-14`; both are inside the registered `1e-9` same-root threshold. Thus this
-returning leg has a certified endpoint. It does not resolve the previously traced root-7 boundary
-layer, the opposite root-6 leg, or a complete single-valued Jensen section.
+returning leg has a certified endpoint. A subsequent derivative-free check followed the opposite
+leg on 33 decreasing fixed-`h` nodes from the common handoff to zero. All 33 nodes passed A--D with
+no event failure, the largest frozen predictor distance was `0.0247702`, and the endpoint matched
+root 6 at cluster distance `7.92e-14` (residual `7.52e-14`). Both observed root-6 legs therefore
+have the same zero-field endpoint evidence. This fixed-`h` sequence is not by itself a continuous
+signed-edge certificate, and it does not resolve the previously traced root-7 boundary layer or a
+complete single-valued Jensen section.
 
 An h-adapter copy of the existing ULP-bounded q-coordinate `K0` polish was tested as an even simpler
 remedy at the root-4 and root-5 frontiers. Both proposals correctly rejected themselves as outside
