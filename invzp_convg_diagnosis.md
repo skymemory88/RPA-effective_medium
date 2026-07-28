@@ -1362,21 +1362,29 @@ theory. Two different meanings of “warm start” must be kept separate:
   0.70/200 setting recovered 4.400 T from 4.425 T but not 4.375 T;
   0.50/1000 accepted 4.425, 4.400, and 4.375 T consecutively with unchanged
   residual and all-node gates.
+- A subsequent direct cold/warm susceptibility comparison by the user
+  showed visibly more converged field slivers in the warm-seeded map. All
+  recovered modes evolved continuously with field and made empirical sense,
+  including the critical mode. This is a qualitative observable-level
+  validation; it is not yet a bidirectional full-state comparison.
 - A defactored fixed-node Newton corrector repaired the three missing 3.6 T
   nodes in 4/4/8 iterations and completed that profile, but at 1.5 T it
   repaired only the predictor and two nodes. This establishes a local
   Picard-stability defect without establishing a global branch.
 
-The new three-column result proves that at least some QCP-side masks are
-pure numerical false negatives of the chosen fixed-point iteration and that
-minimal physical-field continuation is a viable local remedy. It does not
-reverse the low-field evidence: a full-profile seed can worsen coverage,
-and several residual-valid roots and folds exist. Together these results
-explain why the failure looks stochastic even though no random-number path
-is involved. Small changes in field, seed, ordering, damping, or roundoff
-change which basin a noncontractive pole-sensitive iteration reaches. More
-iterations can help one basin, but cannot remove folds or decide between
-multiple algebraic roots.
+The three-column residual test proves that at least some QCP-side masks are
+pure numerical false negatives of the chosen fixed-point iteration. The
+visual comparison adds complementary observable-level evidence that the
+recovered states are not obviously spurious: they extend the same
+continuous mode evolution. Minimal physical-field continuation is therefore
+the leading local remedy near the QCP, rather than merely a diagnostic
+possibility. It does not reverse the low-field evidence: a full-profile seed
+can worsen coverage, and several residual-valid roots and folds exist.
+Together these results explain why the failure looks stochastic even though
+no random-number path is involved. Small changes in field, seed, ordering,
+damping, or roundoff change which basin a noncontractive pole-sensitive
+iteration reaches. More iterations can help one basin, but cannot remove
+folds or decide between multiple algebraic roots.
 
 ### 11.2 The simultaneous audit removed a false veto and exposed real branches
 
@@ -1557,8 +1565,11 @@ separable issues:
    tested grids. The absolute field alignment, ordered coverage, and `Bc`
    are not yet grid-converged. Minimal accepted-column warm continuation has
    additionally recovered adjacent formerly masked columns, confirming a
-   locally viable algorithmic remedy that still needs direction, field-step,
-   state-continuity, and grid gates.
+   locally viable algorithmic remedy. The user's cold/warm visual comparison
+   further shows that the recovered susceptibility modes continue smoothly
+   and remain empirically sensible, including the critical mode. This makes
+   warm continuation the leading near-QCP candidate, still subject to
+   direction, field-step, full-state-continuity, and grid gates.
 2. **Complete low-field Jensen coverage:** open and secondary. The nested
    Picard map is noncontractive and badly conditioned in parts of the
    auxiliary path; simultaneous equations have multiple roots and folds;
