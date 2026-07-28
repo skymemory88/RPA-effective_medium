@@ -8,9 +8,12 @@ function invz_check_solve_opts(sxtra)
 % resolves the scheme ONCE with invz_check_static_medium and stamps it into every
 % per-field solve, so a value smuggled in through solve_opts could leave the sweep's
 % columns on two different truncation orders while S.static_medium still advertised one.
-if any(isfield(sxtra, {'J0eff', 'Jxx0', 'hyp', 'ordered_mode', 'static_medium', 'ref_margin'}))
+% hmf_seed is also driver-owned: invz_spectra_map's optional physical-field continuation
+% updates it between columns; a caller-supplied fixed seed would have false provenance.
+if any(isfield(sxtra, ...
+        {'J0eff', 'Jxx0', 'hyp', 'ordered_mode', 'static_medium', 'ref_margin', 'hmf_seed'}))
     error('invz:solveOpts', ...
-          ['solve_opts fields J0eff/Jxx0/hyp/ordered_mode/static_medium/ref_margin ' ...
+          ['solve_opts fields J0eff/Jxx0/hyp/ordered_mode/static_medium/ref_margin/hmf_seed ' ...
            'are reserved (driver-owned).']);
 end
 end
