@@ -71,5 +71,13 @@ the retained Hilbert space: discarded thermal weight does not bound virtual inte
 near-degenerate rank cuts are rejected, and truncated results require an external rank ladder.
 `functional_use_authorized` therefore remains false.
 
+`invzf_bilocal_quadratic_medium` is the first stationary discriminator using that local curvature.
+At exactly zero supplied `C3`, it replaces the Gaussian local covariance curvature by the exact
+fixed-source finite-mode Hessian and stationarizes the same Gaussian lattice trace without a
+denominator floor.  It retains all declared starts, compares only discovered roots by the trial
+energy, and exports the exponential positive-domain coordinate.  This is a quadratic Taylor
+skeleton, not the nonlinear local partial Legendre functional; it has no complete root enumeration
+or Matsubara-tail completion, and it refuses nonzero `C3`.
+
 It does not contain EMT, a dressed self-energy, the ordered `tanh/xi` replacement, spectral
 continuation, or any production branch solver.
