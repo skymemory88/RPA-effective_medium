@@ -1342,24 +1342,40 @@ merely because each formula contains powers of a propagator.
 ### 11.1 Simple numerical remedies: useful discriminators, not a global fix
 
 The later work deliberately tested inexpensive remedies before extending the
-theory:
+theory. Two different meanings of “warm start” must be kept separate:
 
 - Raising the iteration budget and using heavier mixing did not produce a
   complete usable ordered path. It either left failed nodes or converged to
-  an unstable continued-paramagnetic root.
-- Reusing a nearby field's self-energy/profile did not remove the
-  nonuniformity. A complete 4.05 T profile still left 4.04 and 4.00 T
-  incomplete when used as their warm seed; in one measured sequence,
-  field-to-field seeding reduced the accepted-node count.
+  an unstable continued-paramagnetic root. Near the QCP, damping was
+  nonmonotone: `mix_outer=0.30`, cap 1000 lost a warm 4.400 T solution that
+  a less damped run found.
+- A strong handoff that matched and transferred the complete auxiliary-`h`
+  profile did not remove the nonuniformity. A complete 4.05 T profile still
+  left 4.04 and 4.00 T incomplete; in one measured sequence it reduced the
+  accepted-node count.
+- Source inspection then found that the ordinary spectra map did **not**
+  warm-start one physical-field column from another. A smaller opt-in
+  experiment now transfers only the last fully accepted column's finite
+  zero-`h` predictor `(Sigma,K0s)` state, proceeds downward from the QCP,
+  retains the existing cold retry, and refuses to advance a failed seed.
+  On the frozen `16^3`, 0.10 K edge fixture, the former default-like
+  0.70/200 setting recovered 4.400 T from 4.425 T but not 4.375 T;
+  0.50/1000 accepted 4.425, 4.400, and 4.375 T consecutively with unchanged
+  residual and all-node gates.
 - A defactored fixed-node Newton corrector repaired the three missing 3.6 T
   nodes in 4/4/8 iterations and completed that profile, but at 1.5 T it
   repaired only the predictor and two nodes. This establishes a local
   Picard-stability defect without establishing a global branch.
 
-These results explain why the failure looks stochastic even though no
-random-number path is involved. Small changes in field, seed, ordering, or
-roundoff change which basin a noncontractive pole-sensitive iteration
-reaches. A larger iteration cap cannot remove folds or decide between
+The new three-column result proves that at least some QCP-side masks are
+pure numerical false negatives of the chosen fixed-point iteration and that
+minimal physical-field continuation is a viable local remedy. It does not
+reverse the low-field evidence: a full-profile seed can worsen coverage,
+and several residual-valid roots and folds exist. Together these results
+explain why the failure looks stochastic even though no random-number path
+is involved. Small changes in field, seed, ordering, damping, or roundoff
+change which basin a noncontractive pole-sensitive iteration reaches. More
+iterations can help one basin, but cannot remove folds or decide between
 multiple algebraic roots.
 
 ### 11.2 The simultaneous audit removed a false veto and exposed real branches
@@ -1539,7 +1555,10 @@ separable issues:
    on the verified finite-`16^3` window. The response code is not the failing
    component, and the phase-aligned peak curve is sub-percent stable over the
    tested grids. The absolute field alignment, ordered coverage, and `Bc`
-   are not yet grid-converged.
+   are not yet grid-converged. Minimal accepted-column warm continuation has
+   additionally recovered adjacent formerly masked columns, confirming a
+   locally viable algorithmic remedy that still needs direction, field-step,
+   state-continuity, and grid gates.
 2. **Complete low-field Jensen coverage:** open and secondary. The nested
    Picard map is noncontractive and badly conditioned in parts of the
    auxiliary path; simultaneous equations have multiple roots and folds;
@@ -1550,5 +1569,8 @@ separable issues:
 Thus the failure is nonuniform, deterministic numerical sensitivity of the
 outer Σ closure, amplified by a finite-grid pole edge and combined with an
 unresolved off-shell branch prescription—not universal critical slowing,
-not a failure of real-axis susceptibility evaluation, and not something an
-iteration limit or a fixed-G inner bisection alone can cure.
+not a failure of real-axis susceptibility evaluation. Predictor-only
+physical-field continuation plus a bounded iteration/mixing choice can
+remove some local masks; no single global iteration limit, damping choice,
+or fixed-G inner bisection has been shown to cure the low-field problem or
+select its thermodynamic root.

@@ -55,17 +55,23 @@ There are now two separate deliverables:
 
 - **QCP susceptibility/modes:** ready for visual inspection on the verified
   finite-`16^3`, 4.60--4.90 T window using the unchanged accepted production
-  equations. Quantitative comparison must carry the grid qualifier.
+  equations. Quantitative comparison must carry the grid qualifier. An
+  opt-in downward-field warm continuation is now available for exploratory
+  visual maps; it changes initialization only and has already recovered
+  accepted columns just below the former QCP-side edge.
 - **Complete low-field ordered coverage:** still open and secondary. No
   continuation branch, smooth-`r` candidate, strict closure, or functional
-  prototype is authorized as the production default.
+  prototype is authorized as the production default. In particular, warm
+  convergence proves that a numerical false negative was removed; it does
+  not by itself decide which of several accepted roots is thermodynamic.
 
 ### Strategies tried and what each established
 
 | strategy | measured result | deficiency / decision |
 |---|---|---|
-| More Picard iterations and heavier damping | A 1 T PM fixed point can be reached after 879 iterations with `mix_outer=0.02`, but it is unstable (`crit=-3.669`); the ordered profile still failed after 10,354 outer iterations in the stronger test. | This is not critical slowing. More iterations can converge the wrong continued branch and do not remove folds or select a Jensen path. Do not pursue as the fix. |
-| Warm-starting from a neighbouring field | A complete 4.05 T profile did not complete 4.04 or 4.00 T; one matched-seed sequence reduced the accepted count. | Neighbouring states may lie in different basins. Seeding is useful acceleration only after branch identity is known. |
+| More Picard iterations and heavier damping | A 1 T PM fixed point can be reached after 879 iterations with `mix_outer=0.02`, but it is unstable (`crit=-3.669`); the ordered profile still failed after 10,354 outer iterations in the stronger test. Near the QCP, changing `mix_outer` from 0.7 to 0.3 while raising the cap to 1000 lost a warm-seeded 4.400 T solution that a less damped solve found. | This is not critical slowing, and damping is not monotone improvement. Iteration/mixing changes can be useful inside a residual-gated continuation experiment but are not a global fix or a branch selector. |
+| Full-profile warm handoff between fields | A complete 4.05 T auxiliary-`h` profile did not complete 4.04 or 4.00 T; one matched-seed sequence reduced the accepted-node count. | Transferring every off-shell node can put later nodes in different basins. Do not use this stronger handoff as the production rule. |
+| Minimal QCP-down predictor warm continuation | The new opt-in `field_continuation='qcp_down'` transfers only the last fully accepted column's finite zero-`h` predictor state and retains the existing cold retry. With `mix_outer=0.50`, `max_outer=1000`, 4.425, 4.400, and 4.375 T all accepted consecutively; at the former default 0.70/200, 4.400 T was recovered but 4.375 T was not. | This establishes a viable local numerical route and proves some masks are initialization/iteration false negatives. It remains direction-, spacing-, grid-, and basin-dependent until the gates below are run; it cannot formally rank multiple residual-valid roots. |
 | Defactored fixed-node Newton | Repaired all three failed 3.6 T nodes and produced a 33/33 stable profile; at 1.5 T it repaired only the predictor and two nodes. | Confirms a local numerical Picard defect, but a fixed-`h` root is not automatically the continuous thermodynamic branch. Retain as a corrector/oracle only. |
 | Natural-parameter and pseudo-arclength continuation | Crossed regular fixed-`h` folds and showed that the clean 1.5 T high- and low-`h` segments turn away from the intervening interval. | Establishes non-single-valued root geometry and invalidates an unconditional Newton fallback. It does not select a path. |
 | Root census and coordinate stabilization (`q`, equilibrated `h`, `w=z-K0`) | Found seven zero-field roots; row equilibration and `w` greatly improved conditioning; root 6 has two observed legs tied to the same zero-field root. | Other legs and root 7 remain incomplete; finite samples are not continuous signed-edge certificates. Coordinate changes improve solving, not physics selection. |
@@ -73,7 +79,7 @@ There are now two separate deliverables:
 | Smooth-`r(h)` backup and evidence graph | Scale-free shape selector, fail-closed graph schemas, root enumerator, guarded fixed-`h`/arclength primitives, and adaptive two-state handoff are implemented diagnostically. | No complete candidate graph, continuous event enclosure, direction/cold-seed/refinement proof, or production dispatch exists. |
 | QCP-connected smooth low-`r` branch at 4.05 T | Continued accurately to the common ceiling, but its own `F_path` stayed negative (`-0.00293612268` at `h=0.02313633386565907 meV`). | It has no nonzero admissible Jensen endpoint. The legacy branch's crossing cannot be borrowed. Return `no_admissible_endpoint`; do not use its off-shell spectrum. |
 | Strict static medium and Ewald backend | Removing the resummed pole establishes mechanism; Ewald fixes a separate lattice-sum defect. | The strict candidate failed its frozen Gate 0, and both dipolar backends exhibit the ordered failure. Neither supplies branch selection. |
-| Common-functional route | The ring functional, exact cluster/cumulant oracles, electronuclear local reference, and exact-local bilocal curvature produced valuable checks. The simplest varied-covariance skeleton failed its immutable mixed-chain oracle. | A correct electronuclear local-bilocal/2PI functional still needs same-order `C3-C3`, nonlinear Legendre, tail, thermodynamic, and discretization work. It is the preferred scientific route but exceeds the declared near-term delivery window. |
+| Common-functional route | The ring functional, exact cluster/cumulant oracles, electronuclear local reference, and exact-local bilocal curvature produced valuable checks. The simplest varied-covariance skeleton failed its immutable mixed-chain oracle. McKenzie and Stamp's Hubbard--Stratonovich construction gives an exact local-cumulant action and source-generator identities for a related quantum-Ising/spin-bath model, and therefore supplies a useful normalization/sign oracle. | The paper does not give a 2PI functional for the present dressed `Sigma/K0` equations or rank their roots. A correct electronuclear local-bilocal/2PI functional still needs same-order `C3-C3`, nonlinear Legendre, tail, thermodynamic, and discretization work. It remains the preferred formal selection route, but not a quick spectra patch. |
 | Unchanged production QCP sweep | 61/61 finite columns, no masks, and a continuous soft mode through `Bc_1z=4.6925 T`. | This is a narrow finite-`16^3` visual regression, not evidence that its boundary is grid-converged or that 3--6 T / 0--9 T is complete. |
 | Coupling-only plus state-only grid ladder | The Γ-exclusion gap scales about `N^-1.103`; the contiguous accepted width scales about `N^-1.076`. `Bc_1z` moves from 4.68228 T (`12^3`) to 4.70296 T (`24^3`). | Confirms a finite-grid computability sliver and falsifies the expected `<=0.01 T` boundary shift. The `16^3` QCP spectrum is not grid-converged. |
 | Phase-aligned QCP susceptibility gate | At ten matched `B-Bc(N)` offsets, all 40 columns are finite/correctly phased and the `12^3--24^3` peak curves differ by only `0.38--0.53%`; a halved frequency step reproduces the extreme-grid spreads. | The mode shape is robust once aligned, but this does not remove the grid-dependent horizontal `Bc` shift or grade spectral weight/analytic poles. |
@@ -82,38 +88,90 @@ There are now two separate deliverables:
 
 ### Planned next steps, in priority order
 
-1. **Preserve the finite-`16^3` QCP visual preview**, including its exact
-   61-field regression, but label its `Bc` and ordered coverage as
-   grid-specific.
-2. **Before quantitative experiment comparison, converge the coupling
-   measure.** The phase-aligned peak curve is already sub-percent stable;
-   extend the coupling/state ladder only as far as needed to stabilize
-   `S_N(J0)`, absolute `Bc_1z`, and accepted support. The existing four-grid
-   fits are placement guides, not error bars.
-3. **Do not implement the proposed fixed-G inner bisection.** If a scalar
-   static replacement is reconsidered, first derive the actual coupled
-   `Gstat(K0)` residual, prove the declared interval is monotone, and show
-   that replacing the already-converged inner block improves the outer
-   Σ residual.
-4. **The next numerical production candidate must address the outer
-   pole-conditioned Σ map while preserving branch identity.** Use the
-   existing simultaneous residual/Newton machinery as a diagnostic oracle;
-   preregister its branch and grid gates before any production dispatch.
-5. **Keep low-field incompleteness fail-closed and secondary.** For a named
-   useful field, test endpoint admissibility before global graph completion;
-   stop with `no_admissible_endpoint` when appropriate.
-6. Keep the exact local-bilocal/2PI common-functional route as the
-   long-term rigorous programme. A smooth density/edge prescription is also
-   a theory change, not a numerical patch, and needs its own derivation and
-   error diagnostic.
+1. **Inspect the opt-in QCP-down warm-seeded spectrum now.** Keep the
+   verified cold 4.60--4.90 T result as the regression control, and label
+   newly recovered columns as experimental warm-continuation output.
+2. **Grade that numerical route before broadening it.** Freeze one setting
+   (the demonstrated `mix_outer=0.50`, `max_outer=1000` is the current
+   reference), refine the physical-field step, and record accepted-column
+   count plus seed provenance, `hstar`, `rstar`, `Sigma(0)`, moment, pole,
+   and full residual. Compare downward, upward, and independent cold solves
+   wherever they overlap. A root jump or direction-dependent state is
+   `branch_ambiguous`, not a successful fill.
+3. **Repeat the accepted-support and QCP-alignment checks on the coupling
+   grid ladder.** The phase-aligned peak shape is already sub-percent stable,
+   but absolute `Bc_1z` and the finite-grid ordered sliver are not. Warm
+   continuation must not hide that horizontal uncertainty.
+4. **Use spectral weight as a rejection and empirical-discrimination gate,
+   not the formal selector.** Compare analytic pole residues or integrated
+   peak areas (not broadened peak height), positivity/causality, and relevant
+   sum rules for competing residual-valid states. If more than one state
+   passes, the thermodynamic ambiguity remains.
+5. **Develop the common functional in bounded oracle-first steps.** First
+   map the McKenzie--Stamp source/action convention to the existing exact
+   `C2/C3/C4` cluster oracles. Then derive the source-dependent local
+   bilocal/2PI Legendre functional whose stationarity reproduces the same
+   one- and two-point equations and whose Hessian gives the response. Only
+   after the same-order `C3-C3`, electronuclear tail, Maxwell/energy, and
+   grid/cutoff gates pass may stationary values be used to rank roots.
+6. **Keep complete low-field coverage fail-closed and secondary.** For a
+   named useful field, first test that the followed component has its own
+   admissible Jensen endpoint. Preserve the documented scale-free smooth-
+   `r(h)` prescription only as an explicit backup if the common-functional
+   route remains impractical; it is a declared bias, not derived
+   thermodynamics.
 
 For low-field continuation, endpoint-first remains the principal
 simplification: reject a branch that cannot satisfy its own Jensen
 free-energy equation before paying for global topology or production
-wiring. For the QCP observable, grid convergence now precedes any
-quantitative physics claim.
+wiring. Warm seeding is intentionally the simpler first experiment because
+it can remove local Picard false negatives without changing the equations.
+For the QCP observable, grid convergence still precedes any quantitative
+physics claim.
 
 ## Dated execution record
+
+**Minimal QCP-down warm-continuation result, 2026-07-28.** Source inspection
+showed that the ordinary spectra map solved physical-field columns
+independently; its warm starts were only along the auxiliary Jensen
+`h`-grid inside one field. Commit `ee00752` added an opt-in sequential
+`field_continuation='qcp_down'`. It solves in descending physical field,
+passes only the last fully accepted column's finite `(Sigma,K0s)` state to
+the next column's zero-`h` predictor, retains the existing cold retry, and
+never advances the seed after a failed/incomplete column. The equations,
+all-node Jensen gate, residual tolerances, stability labels, and default
+map mode are unchanged; result fields expose whether and from which field a
+seed was supplied.
+
+On the frozen `16^3`, `T=0.10 K` edge fixture, default-like
+`mix_outer=0.70`, `max_outer=200` accepted 4.425 T cold and recovered
+4.400 T warm, but not 4.375 T. Stronger damping
+(`mix_outer=0.30`, cap 1000) lost the warm 4.400 T result. Intermediate
+damping (`mix_outer=0.50`, cap 1000) accepted 4.425, 4.400, and 4.375 T
+consecutively with the unchanged residual gates. A continuation-off cold
+regression still accepted 4.425 T without a seed. This is direct evidence
+for a local algorithmic component and a useful visual-preview route, not
+evidence of global uniqueness. The committed measured reference is
+0.50/1000; any later interactive-driver setting, including the current
+user-edited 0.40/5000 configuration, is exploratory until its output is
+separately graded.
+
+**Thermodynamic-functional literature assessment, 2026-07-28.** McKenzie
+and Stamp, *Phys. Rev. B* **97**, 214430 (2018), derive an exact
+Hubbard--Stratonovich partition-integral action for their stated
+quantum-Ising/spin-bath Hamiltonian in Eqs. 19--36. Its vertices are exact
+single-site connected cumulants, and source derivatives generate
+magnetization and correlations; the quadratic truncation recovers RPA and
+Eq. 37 displays the local cubic/quartic vertices. This is a useful external
+check on the signs, beta factors, source normalization, and
+`C2/C3/C4` organization already required by WP0. It does **not** provide
+the nonlinear local-bilocal/2PI Legendre functional for the present
+resummed `(Sigma,K0)` stationary equations, nor a value that can simply be
+evaluated on the seven current roots. The proposed use is therefore a
+small normalization cross-audit first, followed only on success by the
+same-order 2PI derivation; it is not a literature-authorized retrofit of a
+free-energy score to the existing residual. Full equation-level assessment
+is in `invzp_functional_derivation_audit.md` §4.1 (commit `fab74cc`).
 
 **QCP grid/conditioning gate, 2026-07-28.** Coupling-only calculations were
 run before the state gate. For `N=12,16,20,24`, the excluded-Γ gaps are
@@ -253,7 +311,7 @@ component farther, but still establishes no connection to any enumerated `h=0` r
 topology, Jensen-section construction, and production wiring remain unresolved.
 
 **Theory-route update, 2026-07-28.** The explicit-prescription backup is now specified in
-`biased_convergence_solution.md`, with global smoothness of `r(h)` as its primary declared bias and
+`backup_plan_biased_convergence_solution.md`, with global smoothness of `r(h)` as its primary declared bias and
 state/QCP continuity as binding gates. The preferred-route audit is recorded in
 `invzp_functional_derivation_audit.md`: Jensen's field equation supplies a one-dimensional potential
 only after an internal branch has been selected, and the scalar EMT closure has an isolated log
@@ -360,7 +418,9 @@ solver was removed before commit.  A corrected functional would need the exact l
 Legendre kernel, not another symmetry-factor or pole patch.  The preferred route has therefore
 reached a genuine new-derivation boundary; production dispatch of this
 functional candidate remains blocked and the documented smooth-`r(h)`
-prescription is now the only implementation-ready low-field backup route.
+prescription is the only implementation-ready **explicit low-field branch
+prescription**. The later predictor-only warm route is a separate numerical
+preview method and does not supply that prescription.
 The separately accepted production QCP spectra are unaffected.
 
 **Exact local-curvature follow-up, 2026-07-28.** The rejected 1PI local mass has now been replaced
@@ -390,12 +450,13 @@ agreement of admissible integer-power extrapolants, not a fitted tail patch.
 Production and spectral dispatch of this trial functional remain prohibited.
 
 **Effort-window decision, 2026-07-28.** The exact local-bilocal result remains useful theory
-evidence, but its ordered completion is no longer the active spectra-delivery path.  The
+evidence, but at this decision point its ordered completion was removed from the immediate
+spectra-delivery path. The
 prospectively stated 6--12 focused-hour / 1--2 day window cannot contain a whole-functional
 electronuclear tail, the same-order signed-frequency and momentum-resolved `C3-C3` core, its
 `C5/C6` source derivatives, the nonlinear partial Legendre transform, and all thermodynamic and
 discretization gates.  Omitting any of those terms would lose the requested order consistency.
-`biased_convergence_solution.md` records the dated evidence and now activates its fail-closed
+`backup_plan_biased_convergence_solution.md` records the dated evidence and activates its fail-closed
 smooth-`r(h)` prescription for implementation.  This does not authorize a default flip or a
 low-field backup spectrum: branch reconstruction, endpoint/QCP continuity,
 thermodynamic, grid/cutoff, and forward/reverse/cold-seed gates remain
@@ -849,7 +910,23 @@ functional or thermodynamic branch rule in the current hybrid. It did identify t
 `Phi_path` and an isolated scalar-EMT log potential; both are useful checks for WP0, but neither
 authorizes selecting the present multiple roots.
 
-Their checklist, adopted unchanged: strict retained-order vacuum / one-point / two-point diagrams;
+The McKenzie--Stamp spin-bath paper added after that audit supplies a useful
+starting convention but not the missing answer. Its Hubbard--Stratonovich
+action and source-generator identities fix a related model's normalization
+and organize exact local connected cumulants; they should first be
+cross-checked against the existing finite-cluster `C2/C3/C4` oracles. The
+paper does not vary a dressed local covariance, does not derive the present
+EMT closure, and does not compare the current stationary roots. It therefore
+cannot be used as an off-shell free-energy score. The remaining target is a
+source-dependent partial Legendre/bilocal 2PI functional
+`Gamma[m,h,D]`: its first derivatives must reproduce the retained one- and
+two-point equations, its stationary Hessian must generate susceptibility,
+and its value may rank roots only after the thermodynamic gates pass. At
+fixed external controls, the intended selector is the lowest admissible
+stationary value among locally stable states, with coexistence retained when
+values agree within controlled numerical/theoretical uncertainty.
+
+The checklist remains: strict retained-order vacuum / one-point / two-point diagrams;
 validation against a small exact finite-cluster oracle; analytic handling of the elastic zero-frequency
 sector; resummation only where it follows from stationarity of the same functional; PM/FM boundary
 closure on the real coupling density. Entry point: `rigorous_z^1_extension_Codex.md`.
@@ -871,6 +948,10 @@ where the present one does not.
   waiting for complete low-field coverage, but any quantitative comparison
   must state `16^3` and must not quote its ordered width or `Bc` as
   grid-converged.
+* The opt-in `field_continuation='qcp_down'` may be used for exploratory
+  visual maps. Mark its newly recovered columns as warm-seeded, retain the
+  cold control, and do not interpret acceptance alone as thermodynamic
+  selection.
 * Keep `jensen` columns masked where the path is incomplete. Do not relax (I3).
 * Keep `ordered_mode = 'bare'` available as an **explicitly labelled** bare-H_MF moment-form 1/z
   response — never substituted into a column requested as `jensen`. It converged across the measured
@@ -886,7 +967,7 @@ where the present one does not.
 
 | excluded | why |
 |---|---|
-| raising `max_outer`, softening `mix_outer`, widening tolerances as the production fix | the pole-sensitive map has O(10²–10³) sign-indefinite gain; the tested `mix_outer = 0.02` reaches a deeply unstable PM root (`crit = −3.669`) and still returns `node_failed` on the ordered path after 10,354 iterations |
+| raising `max_outer`, softening `mix_outer`, or widening tolerances as an unconditional production fix | the pole-sensitive map has O(10²–10³) sign-indefinite gain; the tested `mix_outer = 0.02` reaches a deeply unstable PM root (`crit = −3.669`) and still returns `node_failed` on the ordered path after 10,354 iterations. A fixed, residual-gated seed/mixing experiment is allowed because it changes initialization rather than acceptance. |
 | replacing the static inner loop by `S_N(y)=constant` rightmost-root bisection | `Gstat` is a K0-dependent part of the implemented inner residual and is recomputed inside that loop; at the measured QCP edge the inner residual is already closed while the outer Σ residual fails |
 | skipping failed H_MF nodes or interpolating `r(h)` across them | the failures sit at pole/branch events — interpolation manufactures the integral (withdrawn R3) |
 | making the `h = 0` predictor non-fatal via `r(0) = 1 + Σ(0)` | needs the `Σ(0)` that failed to converge |
@@ -920,7 +1001,10 @@ where the present one does not.
 6. **Jacobian oracle:** first reproduce the positive control with centred finite differences; then
    compare the analytic dense Jacobian and Newton step against that oracle. If Woodbury is implemented,
    compare its bordered step with the same dense solve before using it.
-7. **Forward/reverse and cold/warm agreement** for anything involving continuation.
+7. **Forward/reverse and cold/warm agreement** for anything involving
+   continuation. For physical-field warm seeding, also retain the source
+   field, compare the full stationary state wherever both directions
+   converge, and fail ambiguous rather than selecting by convergence speed.
 8. **At least three coupling grids and one `Ecut` refinement** for any
    continuation-domain claim. For a quantitative QCP claim, also require
    convergence of `S_N(J0)`, solver-grade `Bc_1z`, the accepted-state
@@ -945,9 +1029,10 @@ where the present one does not.
 | Visual QCP susceptibility and mode | Ready now as a finite-`16^3` preview on 4.60--4.90 T | No solver work for inspection. Quantitative comparison still needs coupling-grid convergence before only local field/frequency/broadening refinement. |
 | QCP coupling/grid convergence | Four-grid sliver/`Bc` shift established; phase-aligned peak curve is sub-percent stable | Extend/refine only until `S_N(J0)`, absolute `Bc`, and accepted support have a defensible continuum limit; retain the peak gate as the observable regression. |
 | Retained diagnostics and coupled audit | Implemented | Maintenance only. They are evidence tools, not a new production branch. |
+| QCP-down warm continuation | Opt-in preview implemented; three-column edge sequence demonstrated at 0.50/1000 | Grade field-step refinement, downward/upward/cold state agreement, spectral pole/residue continuity, and coupling-grid dependence before any default promotion. |
 | One additional low-field component | Optional, secondary | Bounded endpoint-first experiment at one scientifically useful field. Stop if the component has no unique increasing Jensen zero. |
 | Complete low-field branch prescription | Not authorized | Substantial only after an admissible endpoint exists: continuous event enclosures, independent-direction/seed agreement, full section construction, and discretization refinement. |
-| Common functional / exact local-bilocal route | Paused long-term programme | Resume only as a rigor-driven theory project; it is not required for the finite-grid visual preview, but a derived continuum theory may be required for a quantitative QCP result. |
+| Common functional / exact local-bilocal route | Literature normalization clue identified; full derivation still paused | First cross-audit the paper's HS/source convention against exact local cumulants. Resume the nonlinear electronuclear 2PI work only as a rigor-driven theory project; it is the formal multi-root selector, not required for the immediate visual preview. |
 
 ## Recommended execution order
 
@@ -958,20 +1043,25 @@ where the present one does not.
    until absolute `Bc` and accepted support stabilize. The phase-aligned
    peak curve has already passed the four-grid/refined-frequency check;
    retain it while refining the field-axis limit.
-3. Do not implement fixed-G inner bisection or a larger iteration cap as
-   the production fix. The next numerical candidate must close the outer
-   simultaneous residual and retain branch/grid provenance.
-4. Resume low-field work only for a named scientific target. Follow one
+3. Grade the opt-in QCP-down predictor continuation at the demonstrated
+   0.50/1000 reference: field-step refinement, reverse/cold overlap, full
+   state continuity, pole/residue continuity, and grid provenance. Do not
+   replace those tests with a still larger iteration cap.
+4. Use the paper only for the bounded local-cumulant normalization audit,
+   then retain the exact local-bilocal/2PI programme as the formal root-
+   selection route. Spectral weight may reject or empirically distinguish
+   roots, but does not replace a common thermodynamic functional.
+5. Resume deeper low-field work only for a named scientific target. Follow one
    QCP-connected component with fixed-`h` coupled correction on regular
    pieces and arclength at measured folds, and reconstruct that component's
    own `F_path`.
-5. If there is no unique increasing Jensen zero, return
+6. If there is no unique increasing Jensen zero, return
    `no_admissible_endpoint` and leave the column masked. If there is one,
    then pay for the continuous-edge, reverse/cold-seed, complete-section,
    and grid/cutoff gates required by the backup prescription.
-6. Do not wire an experimental continuation state into spectrum output
-   merely because its residual is small. Production integration remains
-   conditional on the branch-selection and thermodynamic gates above.
+7. Do not promote an experimental continuation state merely because its
+   residual is small. Default production integration remains conditional on
+   the direction/state-continuity and thermodynamic gates above.
 
 The strict-medium Gate-0 FAIL remains in force unless a separately dated
 theoretical amendment changes its frozen candidate or oracle. Likewise, the
