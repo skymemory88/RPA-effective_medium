@@ -45,6 +45,10 @@ if ~isnumeric(hDomain) || ~isreal(hDomain) || ~isequal(size(hDomain),[1 2]) || .
 end
 
 stateScale = [sigmaScale;K0Scale];
+cachedY = [];
+cachedR = [];
+cachedJ = [];
+cachedRecord = [];
 cfg = struct('schema','invzp_ordered_arclength_problem/v1', ...
     'sigma_scale',sigmaScale,'K0_scale',K0Scale,'h_scale',hScale, ...
     'h_fd_relative',hFdRelative,'h_fd_absolute',hFdAbsolute, ...
@@ -59,12 +63,20 @@ problem = struct( ...
     'config',cfg);
 
     function [R,Jscaled,record] = equations(y)
+        y = y(:);
+        if ~isempty(cachedY) && isequal(y,cachedY)
+            R = cachedR;
+            Jscaled = cachedJ;
+            record = cachedRecord;
+            return
+        end
         [u,h] = unpack(y);
         [node,local] = invz_ordered_make_node(ctx,h);
         if isempty(node)
             R = nan(nw+1,1);
             Jscaled = nan(nw+1,nw+2);
             record = invalidRecord(h,u,local,'center_local_domain');
+            updateCache(y,R,Jscaled,record);
             return
         end
         [R,physics,state,Ju] = invz_ordered_node_equations(node,u);
@@ -87,6 +99,7 @@ problem = struct( ...
             'local',local,'physics',physics,'event_margins',margins, ...
             'h_fd_step',dh,'h_jacobian_scaled_drift',derivativeDrift, ...
             'h_derivative_status',derivativeStatus);
+        updateCache(y,R,Jscaled,record);
     end
 
     function [Rh,status] = hDerivative(u,h,dh)
@@ -177,6 +190,13 @@ problem = struct( ...
         y = y(:);
         u = [y(1:nw).*sigmaScale;y(nw+1)*K0Scale];
         h = y(end)*hScale;
+    end
+
+    function updateCache(y,R,Jscaled,record)
+        cachedY = y;
+        cachedR = R;
+        cachedJ = Jscaled;
+        cachedRecord = record;
     end
 end
 

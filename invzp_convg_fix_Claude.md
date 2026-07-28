@@ -75,7 +75,11 @@ Hermite tangent reconstruction gives
 This validates the retained continuation primitive, not a Jensen path: disconnected root discovery,
 single-valued section construction, endpoints, reverse/cold-seed agreement, and refinement gates
 remain outstanding. The dense oracle cost 1292.9 s, making the already derived
-diagonal-plus-low-rank bordered solve the next measured implementation requirement.
+diagonal-plus-low-rank bordered solve an obvious candidate until profiling showed otherwise: at the
+742-variable fold the dense solve plus `rcond` costs only `0.0141 s`, versus `1.771 s` for one
+Richardson equation/Jacobian evaluation. The exact factor solve agrees to `1.66e-15` but saves only
+milliseconds. Exact last-point caching is therefore adopted; redundant node/field-derivative
+evaluation is the next performance target.
 
 **Theory-route update, 2026-07-28.** The explicit-prescription backup is now specified in
 `biased_convergence_solution.md`, with global smoothness of `r(h)` as its primary declared bias and
