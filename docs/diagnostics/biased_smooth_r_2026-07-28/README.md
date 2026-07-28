@@ -41,6 +41,12 @@ itself lands on an accepted root, it is retained rather than discarded for lack 
 confirmation iteration; the analytic
 `R(u,h)=u+h^2` one-update oracle freezes that boundary semantics.
 
+For the ordered adapter, the corrector tolerance is an accuracy control and must sit safely inside
+the independent A--D gates. A retained `8e-9` setting was too close to the `1e-8` A/C Sigma gates:
+predictors could satisfy the vector test before Newton corrected them enough for the independent
+audit. The subsequent regular-coordinate pilot uses `1e-9`, while the stricter raw-coordinate
+cross-check uses `1e-10`. These are tighter solve requirements, not changed A--D tolerances.
+
 `invzp_ordered_arclength_problem` is the first invZ-specific adapter. It uses the audited resummed
 node equations and a Richardson-refined centred derivative in the fixed longitudinal field, with
 explicit scales
@@ -291,3 +297,36 @@ fixed-`h` sequence accepts 52 scheduled points down to
 solve from the last accepted state fails at `5.077e-2`, and the last state remains at frozen scaled
 distance at least `0.312` from all seven enumerated `h=0` roots. Thus row equilibration removes a
 false rank alarm but does not establish the missing endpoint connection.
+
+A simple-first follow-up then screened every enumerated zero-field root upward before attempting
+another global construction. The raw closure again proved to be the wrong numerical coordinate:
+at a retained root-4 point, the accepted defactored vector residual was `2.78e-10`, while the raw
+closure residual `2.39e-8` exceeded its `1.14e-8` gate. Switching the audit to the already-derived
+exact defactored diagnostic coordinate removed every audit failure in the retained root-4 and
+root-5 traces. This does not replace the frozen production/raw certification. Root 4 crossed a fold
+between
+`h=5.5677706301911396e-6` and `5.568143040810256e-6 meV`, with tangent-parameter sign change and
+minimum bordered `rcond=4.35e-10`; it later stopped at a static-component line-search floor, not a
+domain event. Root 5 accepted 100 local steps without an event or audit failure but advanced only to
+`h=3.305411778307727e-6 meV`; that bounded trace does not locate its fold.
+
+Root 6 gives the more decisive topology check. A strict raw-coordinate trace crossed a fold at
+
+```text
+h_fold = 9.541141092330816e-6 meV
+```
+
+and its returning leg crossed zero field with no audit failure and minimum bordered
+`rcond=4.36e-7`. A local constant-step refinement bracketed zero by
+`+5.270703260674207e-10` and `-1.492816168710522e-10 meV`. The interpolated seed needed a correction
+of only `7.43e-12` in the frozen clustering metric, and the accepted zero-field solve matched census
+root 6 within `1.42e-14`; both are inside the registered `1e-9` same-root threshold. Thus this
+returning leg has a certified endpoint. It does not resolve the previously traced root-7 boundary
+layer, the opposite root-6 leg, or a complete single-valued Jensen section.
+
+An h-adapter copy of the existing ULP-bounded q-coordinate `K0` polish was tested as an even simpler
+remedy at the root-4 and root-5 frontiers. Both proposals correctly rejected themselves as outside
+the 4096-ULP envelope; ordinary step shrink, not the polish, accepted the next points. The
+unnecessary h-adapter extension was therefore removed. Future long diagnostics are one root per
+process and save the trace before summaries; a two-root atomic batch consumed about 95 minutes and
+nearly discarded both results without adding an acceptance guarantee.

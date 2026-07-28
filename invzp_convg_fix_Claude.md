@@ -138,6 +138,27 @@ remain graph evidence rather than Jensen sections, and unresolved terminations r
 This closes graph normalization only; it does not supply the missing low endpoint or authorize path
 selection.
 
+**Simple-first multi-root update, 2026-07-28.** The seven zero-field roots do not share one uniform
+convergence failure. A cheap upward screen followed by local continuation found two additional
+regular folds. Root 4 turns near `5.56814e-6 meV`; root 6 turns at
+`9.541141092330816e-6 meV`. The root-6 returning leg crosses zero and, after a small local refinement,
+matches the root-6 census medoid within `1.42e-14` in the frozen cluster metric. Its interpolated
+predictor correction is `7.43e-12`, below the `1e-9` same-root threshold. This is the first certified
+zero-field endpoint connection for one of the newly enumerated components.
+
+The same campaign isolates two avoidable numerical costs. First, a corrector tolerance of `8e-9`
+was too close to the independent `1e-8` A/C gates and could accept a predictor before it was accurate
+enough for the A--D audit; the defactored continuation uses `1e-9` instead. Second, the raw closure
+can reject an accepted defactored root through susceptibility amplification: one root-4 point has
+vector residual `2.78e-10`, but raw closure residual `2.39e-8` against a `1.14e-8` gate. The exact
+defactored `|K0-Jloc|/Jscale` diagnostic coordinate removes that veto without changing the algebraic
+equation; it does not replace frozen production/raw certification. A proposed h-coordinate copy of
+the q-path ULP polish was removed after both root-4/root-5 proposals fell outside its registered
+envelope. These findings strengthen the numerical-stability diagnosis but do not authorize
+production: root 7's endpoint, several opposite legs, signed event-edge certificates, and a complete
+single-valued Jensen candidate remain unresolved. Further diagnostics must be one root per process
+and checkpoint before summaries.
+
 **First production-input functional pilot, 2026-07-28.** The isolated strict functional now has a
 read-only adapter to the actual scalar BZ coupling multiset and transverse electronic doublet. At
 `T=0.1 K, Bx=1.5 T` it finds two stable, degenerate ordered minima on the legacy `16^3` couplings;

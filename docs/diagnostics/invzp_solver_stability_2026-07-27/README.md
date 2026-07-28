@@ -46,6 +46,9 @@ be inserted into Jensen quadrature without branch-tracked continuation.
 | 0.10 | 1.5 | pseudo-arclength across the low-branch event | crosses in 11 accepted steps; `deta/ds` changes from `+2.677e-7` to `-5.243e-7`, directly resolving `max(h)=1.130402502867847e-5`; minimum oriented-tangent overlap is `0.9999999997`, `min rcond(augmented)=1.091e-6`, and all A–D audits pass |
 | 0.10 | 1.5 | retained 25-seed `h=0` root census | 16 A--D-accepted attempts cluster into seven distinct roots in the complete independent coordinates `[Sigma;K0]` (`K` and `lambda` are derived); nine attempts fail. Representative `r` ranges from `0.60295` to `1.20283`, so the earlier three-seed agreement sampled one basin rather than proving uniqueness |
 | 0.10 | 1.5 | staged reconstruction of the low fold and returning leg | 21 fixed-`h` nodes plus 20 local pseudo-arclength steps recover `h_fold=1.1303917626651595e-5`; the returning leg exposes raw-closure amplification by `G*Gbar`, while the defactored equation remains accurate to about `2e-11`. The trace reaches `h=6.890625e-9` but does not establish a connection to any `h=0` root |
+| 0.10 | 1.5 | all-root simple-first upward screen | the other zero-field roots fail fixed-`h` continuation nonuniformly rather than at a common physical event. A retained `8e-9` arclength tolerance was too close to the independent `1e-8` A/C Sigma gates; using `1e-9` in the defactored diagnostic coordinate removes the observed root-4/root-5 audit veto without changing a tolerance |
+| 0.10 | 1.5 | root-4 defactored local trace | 97 accepted steps cross a fold between `5.5677706301911396e-6` and `5.568143040810256e-6 meV`; `min rcond(border)=4.35e-10`, with no audit or domain-event failure before the trace stops at a static-component line-search floor |
+| 0.10 | 1.5 | root-6 strict trace and refined zero-field return | a fold occurs at `9.541141092330816e-6 meV`; the returning leg crosses `h=0` without audit failure. Refinement brackets zero within `6.76e-10 meV`, and the corrected endpoint matches census root 6 at frozen cluster distance `1.42e-14` after a `7.43e-12` predictor correction |
 | 0.10 | 1.5 | default-off physical-`K0` last-bit polish | at the positive-q `q=0.7625` stall, all Sigma equations pass and the static residual is `1.33548e-8`; one 656-physical-ULP proposal reduces the complete raw residual to `1.13e-11` and passes A–D |
 | 0.10 | 1.5 | row-equilibrated, derivative-free final fixed-`h` descent | the static Jacobian row is `3.53e6` times larger than every Sigma row: raw/equilibrated `rcond` at the handoff are `8.27e-13`/`6.10e-9`. The retained fixed-`h` helper accepts 52 scheduled points down to `h=3.4852605192481022e-10`; a refined schedule reaches `3.4035747258282251e-10`, then fails line search at raw residual `3.83e-6`. A direct `h=0` solve from the last accepted state fails at `5.077e-2`; that state is at least `0.312` from every root in the seven-root census |
 | 0.31 | 3.6 | adaptive natural-`h` reciprocal continuation from a clean high-`h` node | reaches `h=0` in 12 accepted nodes; minimum pole margin `1.4827e-3` |
@@ -89,6 +92,16 @@ it to zero. Refinement stops reproducibly near `3.4e-10 meV`, a direct zero solv
 the last positive state is not within the frozen census tolerance of any zero-field root. This
 strengthens the endpoint non-connection result; it does not authorize extrapolation across the
 unresolved interval.
+
+That unresolved boundary layer belongs to the previously staged root-7 component; it is not a
+universal zero-field obstruction. A later strict trace of a different component (root 6) crossed a
+regular fold, returned through `h=0`, and was locally refined to the root-6 census medoid within the
+frozen same-root tolerance. Root 4 supplies another distinct regular fold. This is consistent with
+the user's visual observation that ordered-state nonconvergence is nonuniform and numerical in part,
+while also
+showing why a single fallback solve cannot define the Jensen path: several accepted branches coexist.
+The simple numerical corrections are therefore retained only as branch diagnostics until a complete
+single-valued candidate and its selection gates exist.
 
 One-off drivers and `.mat` files stayed under `/tmp`. The audited numerical kernel now consists of
 `invz_ordered_node_context.m`, `invz_ordered_make_node.m`,

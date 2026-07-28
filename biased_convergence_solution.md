@@ -265,6 +265,24 @@ without changing an equation or raw acceptance gate, and carries the component t
 seven-root `h=0` census. The backup selector must therefore treat this endpoint as unresolved. It
 must not extrapolate the positive component to zero or substitute the closest census root.
 
+This is component-specific, not a universal failure of all ordered roots. A later simple-first
+screen found another strict component (root 6) with a regular fold at
+`h=9.541141092330816e-6 meV`. Its returning leg crosses `h=0`; a local refined bracket and one frozen
+fixed-field correction identify census root 6 with cluster distance `1.42e-14`, after a predictor
+correction of `7.43e-12`. Both pass the registered `1e-9` same-root threshold. Root 4 also crosses a
+separate fold near `5.56814e-6 meV` under the exact defactored audit coordinate. These results add
+certified vertices and local fold evidence, but they do not complete the candidate graph: the
+root-7 boundary layer remains unresolved, the opposite legs and roots 1--5 are not all traced, and
+continuous signed-event edge certificates are still missing.
+
+The implementation policy is consequently staged and simple-first: use fixed-`h` solves on regular
+segments, invoke arclength only near a measured rank/tangent turn, use the defactored closure only as
+the registered diagnostic continuation coordinate, retain both its provenance and the amplified raw
+closure, and checkpoint each root before any summary work. This does not authorize replacing the
+frozen production/raw A--D certification. Do not add a general h-coordinate `K0` polish: the existing
+4096-ULP proposal was tested at the root-4/root-5 frontiers and correctly declined both as outside
+its envelope, while ordinary step shrink accepted the next points.
+
 ## 6. Failure conditions
 
 Keep the column masked if any of the following occurs:
