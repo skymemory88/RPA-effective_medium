@@ -96,6 +96,14 @@ trace stops. It deliberately labels `q=0` unresolved; without a proof of even-in
 finite q stencil cannot rule out a `sqrt(q)` term or identify an h=0 root. This is a numerical
 stability result, not production-path authorization.
 
+The subsequent derivative-free fixed-`h` audit shows that the apparent endpoint rank loss is largely
+row scaling: the physical-coordinate raw/equilibrated Jacobian `rcond` values are
+`8.27e-13/6.10e-9`. Default-off row equilibration, applied only to the Newton solve/rank gate, extends
+the same A--D-accepted component to `h=3.4035747258282251e-10 meV`. It then fails under refinement;
+a direct `h=0` solve has residual `5.077e-2`, and the last accepted positive state is at least `0.312`
+from all seven enumerated zero-field roots. The endpoint identity is therefore unresolved rather
+than numerically selected, and production/Jensen wiring remains prohibited.
+
 **Root-census and low-endpoint update, 2026-07-28.** A retained explicit-seed enumerator now records
 all fixed-`h` attempts and clusters the complete independent coordinates `[Sigma;K0]` through an
 order-independent uncertainty band; `K` and `lambda` remain derived. At 1.5 T and `h=0`, a 25-seed
@@ -105,9 +113,10 @@ A staged trace used cheap fixed-`h` nodes away from the low fold and pseudo-arcl
 recovering `h_fold=1.1303917626651595e-5 meV`. On its returning leg the raw q-average closure is
 amplified by `G*Gbar`; the optional diagnostic `audit_coordinate='defactored'` instead checks the
 equivalent regular-domain equation `|K0-Jloc|/Jscale`. It carried the branch to
-`h=6.890625e-9 meV`, where fixed-`h` rank loss intervened. No connection to any enumerated `h=0`
-root has been established, so branch topology, Jensen-section construction, and production wiring
-remain unresolved.
+`h=6.890625e-9 meV`, where the original raw fixed-`h` rank gate intervened. The later
+row-equilibrated audit above shows that this gate was dominated by row imbalance and extends the
+component farther, but still establishes no connection to any enumerated `h=0` root. Branch
+topology, Jensen-section construction, and production wiring remain unresolved.
 
 **Theory-route update, 2026-07-28.** The explicit-prescription backup is now specified in
 `biased_convergence_solution.md`, with global smoothness of `r(h)` as its primary declared bias and
@@ -670,10 +679,11 @@ where the present one does not.
    and pseudo-arclength has confirmed that the high-`h` branch turns toward increasing `h`. The
    independent low-`h` trace also terminates in a regular fold, far below the high-branch fold, and
    turns toward decreasing `h`. A broader 25-seed endpoint census finds seven `h=0` roots, while the
-   returning low-fold leg becomes rank-deficient before any endpoint connection is established.
-   This enters the second row of the Phase-1 fork. Do not run the expensive reproducibility funnel,
-   wire a fallback into production, or consider Phase 2′ until the preregistered smooth-`r`
-   prescription has a complete, audited candidate graph.
+   returning low-fold leg enters a severely row-imbalanced boundary layer. Row equilibration removes
+   the false rank alarm but refinement still stops near `3.4e-10 meV`; a direct zero solve fails and
+   no endpoint connection is established. This enters the second row of the Phase-1 fork. Do not run
+   the expensive reproducibility funnel, wire a fallback into production, or consider Phase 2′ until
+   the preregistered smooth-`r` prescription has a complete, audited candidate graph.
 
 Two scientific decisions remain external to this implementation sequence: Candidate A still needs a
 derived formula before it can be compared with Candidate B, and any amendment of the frozen Gate-0

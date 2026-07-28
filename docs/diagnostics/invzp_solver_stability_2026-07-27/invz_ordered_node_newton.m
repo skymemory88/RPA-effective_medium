@@ -18,6 +18,16 @@ function [state, info] = invz_ordered_node_newton(node, seed, opts)
 %   The dense analytic Jacobian is intended for the current diagnostic/experimental
 %   temperature range. A structured solve can be added later if profiling at low T shows
 %   it is necessary.
+%
+%   opts.row_equilibrate (default false) scales each residual row by its
+%   Jacobian infinity norm only for the Newton solve and rcond gate. Raw
+%   residuals and the independent A--D audit remain unchanged.
+%   opts.static_polish (default false) permits one physical-K0 Newton
+%   proposal at each eligible Newton iterate after every Sigma residual has
+%   passed. The rounded proposal is capped by
+%   opts.static_polish_max_ulps (default 4096) and is retained only if the
+%   complete raw residual passes without changing a tolerance. Acceptance
+%   returns immediately, so at most one proposal can be retained.
 if nargin < 2, seed = []; end
 if nargin < 3 || isempty(opts), opts = struct(); end
 
@@ -37,6 +47,13 @@ residual_trigger = getf(opts, 'residual_trigger', tol_outer);
 pole_margin_min = getf(opts, 'pole_margin_min', 1e-10);
 mean_margin_min = getf(opts, 'mean_margin_min', 1e-10);
 rcond_min = getf(opts, 'rcond_min', 1e-12);
+row_equilibrate = logical_scalar( ...
+    getf(opts, 'row_equilibrate', false), 'row_equilibrate');
+static_polish = logical_scalar( ...
+    getf(opts, 'static_polish', false), 'static_polish');
+static_polish_max_ulps = positive_integer( ...
+    getf(opts, 'static_polish_max_ulps', 4096), ...
+    'static_polish_max_ulps');
 if ~(isscalar(maxit) && isfinite(maxit) && maxit >= 1 && maxit == floor(maxit))
     error('invz:orderedNewtonOpts', 'opts.maxit must be a positive integer.');
 end
@@ -65,13 +82,14 @@ end
 reason = 'max_newton';
 audit = [];
 history = repmat(blank_history(), 1, 0);
+polish_count = 0;
 for iter = 1:maxit
     [R, diag, state] = invz_ordered_node_equations(node,u);
     resid_inf = norm(R, Inf);
     currentEvent = event_reason(R, diag, pole_margin_min, mean_margin_min);
     if ~isempty(currentEvent)
         reason = currentEvent;
-        hrec = history_record(iter, resid_inf, diag, NaN, NaN);
+        hrec = history_record(iter,resid_inf,diag,NaN,NaN,NaN,NaN);
         hrec.reason = reason;
         history(end+1) = hrec; %#ok<AGROW>
         break;
@@ -81,9 +99,16 @@ for iter = 1:maxit
         audit = invz_ordered_residual(node, state, struct('tol_outer', tol_outer));
         if audit.accepted
             [~,~,~,J] = invz_ordered_node_equations(node,u);
-            jac_rcond = rcond(J);
+            [~,~,jac_rcond,raw_rcond,equilibrated_rcond,scale_valid] = ...
+                linear_system(J,R,row_equilibrate);
             history(end+1) = history_record( ...
-                iter, resid_inf, diag, jac_rcond, NaN); %#ok<AGROW>
+                iter,resid_inf,diag,jac_rcond,raw_rcond, ...
+                equilibrated_rcond,NaN); %#ok<AGROW>
+            if ~scale_valid
+                reason = 'invalid_row_scale';
+                history(end).reason = reason;
+                break;
+            end
             if ~(isfinite(jac_rcond) && jac_rcond > rcond_min)
                 reason = 'rank_loss';
                 history(end).reason = reason;
@@ -91,7 +116,8 @@ for iter = 1:maxit
             end
             history(end).reason = 'accepted';
             info = accepted_info(node, state, audit, diag, iter, ...
-                resid_inf, jac_rcond, history);
+                resid_inf,jac_rcond,raw_rcond,equilibrated_rcond, ...
+                row_equilibrate,polish_count,history);
             return;
         end
         % The defactored residual and the independent factored A-D audit have different
@@ -100,15 +126,58 @@ for iter = 1:maxit
     end
 
     [~,~,~,J] = invz_ordered_node_equations(node,u);
-    jac_rcond = rcond(J);
-    hrec = history_record(iter, resid_inf, diag, jac_rcond, NaN);
+    [Jsolve,Rsolve,jac_rcond,raw_rcond,equilibrated_rcond,scale_valid] = ...
+        linear_system(J,R,row_equilibrate);
+    hrec = history_record(iter,resid_inf,diag,jac_rcond,raw_rcond, ...
+        equilibrated_rcond,NaN);
+    if ~scale_valid
+        hrec.reason = 'invalid_row_scale';
+        history(end+1) = hrec; %#ok<AGROW>
+        reason = 'invalid_row_scale';
+        break;
+    end
+    if static_polish && norm(R(1:end-1),Inf) <= residual_trigger && ...
+            abs(R(end)) > residual_trigger
+        K0 = u(end);
+        K1 = K0-R(end)/J(end,end);
+        physical_ulps = abs(K1-K0)/eps(abs(K0));
+        if isfinite(K1) && isfinite(physical_ulps) && ...
+                physical_ulps <= static_polish_max_ulps
+            trial = u;
+            trial(end) = K1;
+            [Rt,dt,trial_state,Jt] = invz_ordered_node_equations(node,trial);
+            if isempty(event_reason( ...
+                    Rt,dt,pole_margin_min,mean_margin_min)) && ...
+                    norm(Rt,Inf) < residual_trigger
+                trial_audit = invz_ordered_residual( ...
+                    node,trial_state,struct('tol_outer',tol_outer));
+                [~,~,trial_rcond,trial_raw_rcond,trial_eq_rcond, ...
+                    trial_scale_valid] = ...
+                    linear_system(Jt,Rt,row_equilibrate);
+                if trial_audit.accepted && trial_scale_valid && ...
+                        isfinite(trial_rcond) && trial_rcond > rcond_min
+                    polish_count = polish_count+1;
+                    history(end+1) = history_record( ...
+                        iter,norm(Rt,Inf),dt,trial_rcond, ...
+                        trial_raw_rcond,trial_eq_rcond,1); %#ok<AGROW>
+                    history(end).reason = 'accepted_static_K0_polish';
+                    state = trial_state;
+                    info = accepted_info(node,state,trial_audit,dt,iter, ...
+                        norm(Rt,Inf),trial_rcond,trial_raw_rcond, ...
+                        trial_eq_rcond,row_equilibrate, ...
+                        polish_count,history);
+                    return
+                end
+            end
+        end
+    end
     if ~(isfinite(jac_rcond) && jac_rcond > rcond_min)
         hrec.reason = 'rank_loss';
         history(end+1) = hrec; %#ok<AGROW>
         reason = 'rank_loss';
         break;
     end
-    step = -(J\R);
+    step = -(Jsolve\Rsolve);
     if ~all(isfinite(step))
         hrec.reason = 'nonfinite_step';
         history(end+1) = hrec; %#ok<AGROW>
@@ -145,10 +214,20 @@ end
 [R,diag,state] = invz_ordered_node_equations(node,u);
 resid_inf = norm(R, Inf);
 final_rcond = NaN;
-if ~isempty(history), final_rcond = history(end).rcond; end
+final_raw_rcond = NaN;
+final_equilibrated_rcond = NaN;
+if ~isempty(history)
+    final_rcond = history(end).rcond;
+    final_raw_rcond = history(end).raw_rcond;
+    final_equilibrated_rcond = history(end).equilibrated_rcond;
+end
 info = struct('accepted', false, 'reason', reason, 'iterations', iter, ...
     'residual_inf', resid_inf, 'pole_margin', diag.pole_margin, ...
     'mean_margin', diag.mean_margin, 'rcond', final_rcond, ...
+    'raw_rcond',final_raw_rcond, ...
+    'equilibrated_rcond',final_equilibrated_rcond, ...
+    'row_equilibrate',row_equilibrate, ...
+    'static_polish_count',polish_count, ...
     'q_cancel', diag.q_cancel, 'Q', diag.Q, 'z', diag.z, ...
     'r', diag.r, 'Gtil0', diag.Gtil0, 'audit', audit, ...
     'history', history);
@@ -170,7 +249,8 @@ end
 end
 
 function info = accepted_info(node, state, audit, diag, iterations, resid_inf, ...
-        jac_rcond, history)
+        jac_rcond,raw_rcond,equilibrated_rcond,row_equilibrate, ...
+        polish_count,history)
 med = invz_emt_scalar(node.G0, state.Sigma, node.Jnu_flat, node.eopts);
 Jf = node.Jnu_flat(:);
 Dq = 1+(Jf-state.K0s)*diag.Gstat;
@@ -192,12 +272,17 @@ info = struct('res', audit, 'loop_converged', false, 'so', so, ...
     'reason', 'accepted', 'iterations', iterations, ...
     'residual_inf', resid_inf, 'pole_margin', diag.pole_margin, ...
     'mean_margin', diag.mean_margin, 'rcond', jac_rcond, ...
+    'raw_rcond',raw_rcond, ...
+    'equilibrated_rcond',equilibrated_rcond, ...
+    'row_equilibrate',row_equilibrate, ...
+    'static_polish_count',polish_count, ...
     'q_cancel', diag.q_cancel, 'Q', diag.Q, 'z', diag.z, ...
     'r', diag.r, 'Gtil0', diag.Gtil0, 'audit', audit, ...
     'history', history);
 end
 
-function rec = history_record(iter, resid_inf, diag, jac_rcond, alpha)
+function rec = history_record(iter,resid_inf,diag,jac_rcond,raw_rcond, ...
+        equilibrated_rcond,alpha)
 rec = blank_history();
 rec.iter = iter;
 rec.residual_inf = resid_inf;
@@ -210,6 +295,8 @@ rec.r = diag.r;
 rec.Gtil0 = diag.Gtil0;
 rec.gstat_local_denom = diag.gstat_local_denom;
 rec.rcond = jac_rcond;
+rec.raw_rcond = raw_rcond;
+rec.equilibrated_rcond = equilibrated_rcond;
 rec.alpha = alpha;
 end
 
@@ -217,13 +304,54 @@ function rec = blank_history()
 rec = struct('iter', 0, 'residual_inf', NaN, 'pole_margin', NaN, ...
     'mean_margin', NaN, 'q_cancel', NaN, 'Q', NaN, 'z', NaN, ...
     'r', NaN, 'Gtil0', NaN, 'gstat_local_denom', NaN, ...
-    'rcond', NaN, 'alpha', NaN, 'reason', '');
+    'rcond', NaN, 'raw_rcond',NaN,'equilibrated_rcond',NaN, ...
+    'alpha', NaN, 'reason', '');
+end
+
+function [Jsolve,Rsolve,gate_rcond,raw_rcond,equilibrated_rcond,valid] = ...
+        linear_system(J,R,row_equilibrate)
+raw_rcond = rcond(J);
+equilibrated_rcond = NaN;
+valid = true;
+if ~row_equilibrate
+    Jsolve = J;
+    Rsolve = R;
+    gate_rcond = raw_rcond;
+    return
+end
+row_norm = max(abs(J),[],2);
+valid = all(isfinite(row_norm),'all') && all(row_norm > 0);
+if ~valid
+    Jsolve = nan(size(J));
+    Rsolve = nan(size(R));
+    gate_rcond = NaN;
+    return
+end
+Jsolve = J./row_norm;
+Rsolve = R./row_norm;
+equilibrated_rcond = rcond(Jsolve);
+gate_rcond = equilibrated_rcond;
 end
 
 function validate_positive_finite(value, name)
 if ~(isscalar(value) && isfinite(value) && value > 0)
     error('invz:orderedNewtonOpts', ...
         'opts.%s must be a positive finite scalar.', name);
+end
+end
+
+function value = positive_integer(value,name)
+validate_positive_finite(value,name);
+if value ~= floor(value)
+    error('invz:orderedNewtonOpts', ...
+        'opts.%s must be a positive integer.',name);
+end
+end
+
+function value = logical_scalar(value,name)
+if ~islogical(value) || ~isscalar(value)
+    error('invz:orderedNewtonOpts', ...
+        'opts.%s must be a scalar logical.',name);
 end
 end
 

@@ -257,3 +257,14 @@ smaller caps drifted by up to 4.5%. This is a recorded double-precision derivati
 endpoint or a connection to any enumerated h=0 root. At one enumerated h=0 root the forward stencil
 is finite and has drift `1.13e-9`, but the independent `q_zero_endpoint_unresolved` event still
 rejects it; small stencil drift is numerical evidence, not the missing smoothness proof.
+
+A derivative-free fixed-`h` follow-up separates the remaining raw condition estimate from true rank.
+At the positive-q handoff the static Jacobian row is `3.53e6` times larger than every Sigma row:
+physical-coordinate raw `rcond=8.27e-13`, but row-equilibrated `rcond=6.10e-9`. With equilibration
+used only for the linear solve/rank gate and the same raw residual/A--D acceptance, the retained
+fixed-`h` sequence accepts 52 scheduled points down to
+`h=3.4852605192481022e-10 meV`. Refining that final interval reaches
+`h=3.4035747258282251e-10 meV` and then fails line search at raw residual `3.83e-6`. A direct `h=0`
+solve from the last accepted state fails at `5.077e-2`, and the last state remains at frozen scaled
+distance at least `0.312` from all seven enumerated `h=0` roots. Thus row equilibration removes a
+false rank alarm but does not establish the missing endpoint connection.
