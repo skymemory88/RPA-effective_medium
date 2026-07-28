@@ -290,8 +290,108 @@ theory failure of this candidate. The backup smooth-`r(h)` prescription remains 
   `gamma4=2/beta` to `5.6e-17`.
 - The ring-reduction implementation already exists, but has not yet been embedded in a varied-`D`
   skeleton object.
-- The zero-source three-site `C4` oracle exists. The required nonzero-source cluster isolating the
-  `C3-C3` core and the q-resolved coupling-matrix input are still missing.
+- The zero-source three-site `C4` oracle and the leading centred-pair nonzero-source `C3-C3` oracle
+  exist.  The q-resolved coupling-matrix input is now exposed for both dipolar backends.  The
+  higher-power combined `Phi4+Phi33` oracle is still missing.
 
-Therefore WP4 implementation remains blocked at gates 1 and 4 beyond their static/zero-source
-subsets.
+Therefore WP4 implementation remains blocked at gate 1 beyond its static subset and at the combined
+part of gate 4.
+
+## 10. Immutable centred-pair `C3-C3` oracle
+
+The leading nonzero-source cubic core now has a contamination-free exact-cluster fixture.  Define
+
+\[
+\mathcal H_c(j)=
+\sum_{i=1}^2[\Delta n_i-hX_i]
+-j(X_1-m_0)(X_2-m_0),\qquad
+m_0=\langle X\rangle_{j=0,h},
+\]
+
+and hold `m0` fixed throughout the signed `j` scan.  Since every interaction leg is the centred
+operator `delta X=X-m0`, the linear coefficient vanishes.  The cubic coefficient is
+
+\[
+[j^3]F_c
+=-\frac{1}{6\beta}
+\int_0^\beta d\tau_1d\tau_2d\tau_3\,
+C_3(\tau_1,\tau_2,\tau_3)^2 .
+\]
+
+It contains only the two-site, three-parallel-bond `C3-C3` core: a `C2` ring has even degree, a
+`C4` vertex requires four legs, and all `C1` attachments vanish by centring.  In code the exact same
+Hamiltonian is evaluated without adding a second diagonalizer:
+
+```matlab
+pair = invzf_two_site_exact(Delta,M,h-j*m0,j,beta,wn);
+Fc = pair.F-j*m0^2;
+```
+
+For the frozen fixture
+
+```text
+Delta = 1.3, M = 1, beta = 1.7, h = 0.37,
+m0 = 0.42257074773559524799819924078642109379,
+C2(0) = 0.97505788500918161089657627947292331138,
+C3(0,0,0) = dC2(0)/dh
+           = -1.18442977486108158592225349632114137689,
+```
+
+120-digit matrix-exponential diagonalization and two levels of even-power Richardson cancellation
+give
+
+\[
+[j^2]F_c=-0.2892028519514694014\ldots ,
+\]
+
+\[
+\boxed{[j^3]F_c=-0.082768355766288255\ldots } .
+\]
+
+The cubic extraction uses
+
+\[
+d_3(s)=
+\frac{F_c(2s)-2F_c(s)+2F_c(-s)-F_c(-2s)}{12s^3}
+=[j^3]F_c+O(s^2),
+\]
+
+followed by Richardson factors `4/3` and `16/15`.  Results from
+`s={1/20,1/40,1/80,1/160}` agree in the displayed digits.  This number grades the sign, routing, and
+`1/12` two-cubic symmetry factor of the leading `Phi33` re-expansion.
+
+This oracle does not grade the dressed same-order bicyclic continuations or the later
+`C3*C2*C3` contribution carried by `gamma4`; the combined nonzero-source gate in section 8 remains
+open until a higher-power cluster coefficient tests those terms together.
+
+## 11. Frozen q-resolved coupling contract
+
+The existing scalar production input flattened four sorted eigenvalues per q point and discarded
+the matrices, which is insufficient for `Phi33`.  The fourth output of `invz_jq_modes` now captures
+the exact Hermitian `Jcc(:,:,iq)` page immediately before that unchanged eigenvalue call.  It is
+strictly `nargout`-gated:
+
+- one- through three-output calls retain the existing cache lookup and allocate no matrix pages;
+- a fourth-output request recomputes, because the frozen cache contains eigenvalues but no matrices;
+- the brute-force and Ewald backends use their existing Lorentz/Gamma conventions unchanged;
+- the opt-in ODD path fails explicitly for a matrix-page request rather than returning incomplete
+  data.
+
+The fourth output of `invz_bz_couplings` packages
+
+```text
+qvec, normalized q-row weights, Jcc pages,
+Jnu_unflat [nq x 4], Jnu_flat, Juni, and info.
+```
+
+The flattening contract remains
+`flat=(branch-1)*nq+q`.  Legacy endpoint-inclusive rows, including periodic duplicates, retain equal
+literal-row weight after the historical coordinate-zero Gamma removal.  The phase-grid route uses
+the weights and `invz_is_gamma_equiv` policy returned by `invz_phase1_qgrid`.  No eigenvectors are
+stored: downstream diagonalization must record arbitrary phase and degenerate-subspace gauge, while
+matrix-basis convolutions should avoid that gauge entirely when possible.
+
+Fresh two-q gates found zero Hermiticity residual and reproduced the existing sorted eigenvalues
+below `1e-14` for both brute-force and Ewald backends.  Repeated ordinary versus detailed calls gave
+bitwise-identical `Jnu`, `info`, `Juni/Jaa0` outputs.  This closes the input-availability part of the
+WP4 entry gate without enabling a skeleton or changing a production default.
