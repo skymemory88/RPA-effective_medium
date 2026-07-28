@@ -16,10 +16,18 @@ The retained objects are:
   warm-started branch;
 - dense exact finite-cluster and two-site oracles (currently capped at eight scalar sites).
 
+`invzf_centered_pair_exact` is the immutable nonzero-source entry gate for the leading
+`C3-C3` skeleton topology.  It holds the uncoupled local moment fixed while scanning the centred
+bond `-j*(X1-m0)*(X2-m0)`, so the cubic free-energy coefficient has no tadpole, ring, or `C4`
+contamination.  It is an exact-cluster diagnostic, not a physical source prescription.
+
 `invzf_projected_inputs` and `invzf_mode_grid_audit` form a read-only diagnostic bridge to the
 production transverse doublet and BZ coupling spectrum.  They do not install a production dispatch:
 the bridge uses a fixed electronic doublet, treats `Bz` only as its projected longitudinal source,
 and explicitly excludes hyperfine, ODD/retarded modes, and the ordered `tanh/xi` replacement.
+For the future nonlocal skeleton, the optional detailed output of `invz_bz_couplings` supplies
+q-resolved Hermitian `Jcc` pages and normalized row weights; ordinary production callers retain their
+existing scalar-output path.
 
 `invzf_electronuclear_local` is the next isolated local oracle.  It uses the full source-biased
 electronuclear Hamiltonian and a stable Lehmann correlator, with nested source/beta stencils for the

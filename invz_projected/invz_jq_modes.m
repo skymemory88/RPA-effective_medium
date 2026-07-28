@@ -1,4 +1,4 @@
-function [Jnu, info, Juni] = invz_jq_modes(ion, qvec, opts)
+function [Jnu, info, Juni, Jcc_pages] = invz_jq_modes(ion, qvec, opts)
 %INVZ_JQ_MODES Eigenvalue branches of the 4x4 cc sublattice coupling matrix (meV).
 % J_cc(q)_{rs} = -gfac*dip_cc_{rs}(q) [+ Lorentz at q≡0] + sign(J12)*|J12|*ex_cc_{rs}(q).
 % Convention: ferromagnetic-positive; criticality when J(0)*chi0 = 1+Sigma(0).
@@ -10,6 +10,13 @@ function [Jnu, info, Juni] = invz_jq_modes(ion, qvec, opts)
 % dispersion along a q-path: away from Gamma the uniform mode stops being an
 % eigenvector, so sorted branches cross and max(eig) picks the wrong branch
 % (mirrors the (1,0,0)->(2,0,0) dispersion about h=1.5). See invz_jq_path.
+%
+% Optional fourth output Jcc_pages [4 x 4 x nq] returns the exact Hermitian
+% longitudinal matrices immediately before the existing eigenvalue call.
+% It is nargout-gated: ordinary one- through three-output calls retain the
+% existing cache/control path and do not allocate the pages.  A fourth-output
+% request intentionally recomputes rather than accepting an eigenvalue-only
+% cache hit.  The opt-in ODD path does not yet expose this output.
 %
 % The demagnetizing/shape term is excluded from Jnu/info.Jcc0 (cancels in the
 % critical condition per Ronnow, PRB 75, 054426 (2007)); exported separately
@@ -72,6 +79,8 @@ function [Jnu, info, Juni] = invz_jq_modes(ion, qvec, opts)
 if nargin < 3, opts = struct(); end
 dpRng = 30;  if isfield(opts,'dpRng'), dpRng = opts.dpRng; end
 useCache = ~isfield(opts,'cache') || opts.cache;
+wantJccPages = nargout >= 4;
+Jcc_pages = [];
 
 % --- Backend dispatch (Step-5 Task 2): resolved/validated BEFORE the ODD
 % diversion below, by design. ---
@@ -88,6 +97,10 @@ end
 % block is the pre-ODD code path, byte-untouched (regression test
 % test_jq_modes_odd_off_bitwise gates isequaln on all three outputs).
 if activeOdd
+    if wantJccPages
+        error('invz:jqModesOddMatrices', ...
+            'The optional q-resolved Jcc_pages output is not implemented for opts.odd.');
+    end
     [Jnu, info, Juni] = jq_modes_odd(ion, qvec, opts, dpRng, useCache);
     return
 end
@@ -119,7 +132,7 @@ pkeyNum = local_pkey_numeric(backend, eopts, dpRng, ion, C, demag, alpha);
 dpTag = 'NaN';  if strcmp(backend,'bruteforce'), dpTag = sprintf('%d', dpRng); end
 key = sprintf('jq5_%s_%s_%s_%s.mat', backend, dpTag, hash_vec(qvec(:)), hash_vec(pkeyNum));
 cacheFile = fullfile(cacheDir, key);
-if useCache && exist(cacheFile, 'file')
+if ~wantJccPages && useCache && exist(cacheFile, 'file')
     S = load(cacheFile);
     if local_cache_hit_valid(S, cacheMeta, reqInfoFields)
         Jnu = S.Jnu;  info = S.info;  Juni = S.Juni;  return;
@@ -130,6 +143,9 @@ v = ones(4,1)/2;                 % uniform (all-sublattices-in-phase) ferromagne
 nq = size(qvec,1);
 Jnu  = zeros(nq, 4);
 Juni = zeros(nq, 1);
+if wantJccPages
+    Jcc_pages = complex(zeros(4,4,nq));
+end
 lorz = 4*pi/(3*ion.Vc)*C.gfac;   % scalar; broadcasts to ones(4,4)-type Lorentz block (see header)
 
 if strcmp(backend, 'bruteforce')
@@ -149,6 +165,7 @@ if strcmp(backend, 'bruteforce')
             Jcc = Jcc + lorz;                            % uniform-mode Lorentz cavity (demag-invariant)
         end
         Jcc = (Jcc + Jcc')/2;
+        if wantJccPages, Jcc_pages(:,:,iq) = Jcc; end %#ok<AGROW>
         Jnu(iq,:) = sort(real(eig(Jcc))).';
         Juni(iq)  = real(v.'*Jcc*v);                     % uniform FM-mode coupling (physical dispersion)
     end
@@ -192,6 +209,7 @@ else
         ex  = exchange(q, abs(ion.J12), ion.a, ion.tau, geomX);
         Jcc = -squeeze(C.gfac*dip(3,3,:,:)) + sign(ion.J12)*squeeze(ex(3,3,:,:));
         Jcc = (Jcc + Jcc')/2;
+        if wantJccPages, Jcc_pages(:,:,iq) = Jcc; end %#ok<AGROW>
         Jnu(iq,:) = sort(real(eig(Jcc))).';
         Juni(iq)  = real(v.'*Jcc*v);
     end

@@ -23,6 +23,8 @@
 - `invzf_cluster_exact`: dense exact one- through eight-site scalar clusters with arbitrary symmetric
   zero-diagonal coupling matrices, thermodynamics, and stable KMS/Hermite Lehmann response;
 - `invzf_two_site_exact`: the pair-specialized wrapper used by the Jensen dynamic gate;
+- `invzf_centered_pair_exact`: the fixed-reference centred-bond pair whose cubic coefficient isolates
+  the leading nonzero-source `C3-C3` topology;
 - `invzf_projected_inputs`: a read-only bridge from the production transverse doublet, derived
   `Jcc0/Jaa0`, and scalar BZ spectrum into the isolated pilot;
 - `invzf_stationary_convergence`: complete root re-enumeration across Matsubara cutoffs;
@@ -36,7 +38,9 @@
   precomputed multilevel local data;
 - `invzf_local_1pi_static`: the first static connected-to-1PI amputation gate for WP4.
 
-Every function is disconnected from `invz_projected/`, `invz_common/`, and `invz_tensor/`.
+No production spectrum or phase solver dispatches into this directory.  The local exact/ring
+fixtures are self-contained; the explicitly named production-input adapters call existing
+`invz_common`/`invz_projected` services read-only.
 
 ## 2. Fresh verification
 
@@ -92,8 +96,15 @@ The checks cover:
     halving, `Z2` source symmetry, and generic-functional parity with the analytic two-level route.
 18. the exact-symmetry/near-degenerate static 1PI limit; this gate exposed and repaired a cancellation
     in the original two-level `d2C2/dh2` evaluation, after which `gamma4 -> 2/beta` to `5.6e-17`.
+19. the centred nonzero-source pair coefficient
+    `[j^3]F=-0.082768355766288255...`; a fresh double-precision signed-scan/Richardson extraction
+    agrees within `1.6e-10`.
+20. q-resolved `Jcc` pages reproduce the pre-existing sorted eigenvalues below `1e-14` for both
+    brute-force and Ewald backends, are exactly Hermitian in the fixtures, and leave ordinary
+    one- through three-output calls bitwise unchanged.
 
-MATLAB `checkcode` returned no findings for all fourteen implementation files.
+MATLAB `checkcode` returned no findings for all fifteen isolated implementation files and the two
+extended coupling APIs.
 
 ## 3. Demonstrated state selection
 
@@ -207,12 +218,11 @@ transition on the expected field scale but does not remove the strict Gaussian p
 
 This prototype does not yet justify a LiHoF4 production calculation. The next contained steps are:
 
-1. specify a stationary skeleton/2PI extension based on nonlocal return lines, so it reduces exactly
-   to the local solution at `J=0` and to the ring functional when its skeleton part is disabled;
-2. require that extension to contain the same-order one-`C4` and all `C3-C3` 2PI cores, rather than a
-   static-only mass patch;
-3. add more coupling topologies only as a closed retained-order package, and do not wire a spectral
-   backend until the thermodynamic and local-frequency gates both pass.
+1. build exact frequency-labelled local `C3/C4` vertices with analytic KMS/Hermite limits;
+2. complete the higher-power nonzero-source cluster oracle that grades the combined
+   `Phi4+Phi33` re-expansion;
+3. only then implement the already specified stationary nonlocal-return skeleton, and do not wire a
+   spectral backend until the thermodynamic and local-frequency gates pass.
 
 The deferred `O(1/z^2)` non-Gaussian vacuum and the production ordered `tanh/xi` machinery remain out
 of scope.

@@ -1,4 +1,4 @@
-function [Jnu, info, Jaa0] = invz_bz_couplings(ion, opts)
+function [Jnu, info, Jaa0, detail] = invz_bz_couplings(ion, opts)
 %INVZ_BZ_COUPLINGS Shared BZ-grid coupling branches + demag-aware transverse J(0).
 % Builds the standard BZ q-grid (Gamma dropped), evaluates invz_jq_modes with the
 % production dpRng/cache defaults, and hoists Jaa0 = info.Jaa0 (falling back to
@@ -7,6 +7,12 @@ function [Jnu, info, Jaa0] = invz_bz_couplings(ion, opts)
 %   opts.grid  ([16 16 16])  BZ q-grid
 %   opts.dpRng (30)          real-space dipole cutoff
 %   opts.cache (true)        invz_jq_modes file cache
+%
+% Optional fourth output DETAIL exposes the q-resolved data required by
+% nonlocal skeleton diagnostics: qvec, normalized row weights, Hermitian
+% Jcc pages, unflattened/flattened sorted eigenvalues, uniform projections,
+% and the returned info provenance.  It is nargout-gated; existing one-
+% through three-output callers retain the previous invz_jq_modes call.
 %
 % Ewald Step-5 Task 4 (summarised in docs/INVZ-DEVELOPMENT-RECORD.md, 2026-07-24):
 %   opts.dipole/opts.ewald   forwarded into invz_jq_modes BY PRESENCE only (absent here means
@@ -38,6 +44,8 @@ function [Jnu, info, Jaa0] = invz_bz_couplings(ion, opts)
 % which gets invz_jq_modes' own canonical 'direct_call' sentinel -- cache-identity-distinct
 % even when they happen to submit byte-identical qvec/physical-parameter payloads.
 if nargin < 2, opts = struct(); end
+wantDetail = nargout >= 4;
+detail = [];
 grid  = getf(opts, 'grid', [16 16 16]);
 dpRng = getf(opts, 'dpRng', 30);
 cache = getf(opts, 'cache', true);
@@ -47,6 +55,7 @@ gridInfo = [];
 if ~useNewGrid
     [qc, ~, ~] = qVec_generator(ion.a, 'mode', 'grid', 'grid', grid, 'range', [-0.5 0.5], 'verbose', false);
     qc = qc(any(abs(qc) > 1e-12, 2), :);
+    if wantDetail, qweights = ones(size(qc,1),1)/size(qc,1); end
     cacheContext = struct('kind', 'legacy_bz', 'grid', grid(:).', 'qhash', local_qhash(qc), ...
         'gridConvention', '<absent>', 'gridOffset', [], 'gammaPolicy', '<absent>');
 else
@@ -60,6 +69,7 @@ else
     gammaPolicy = getf(opts, 'gammaPolicy',    'P_drop');
     g  = invz_phase1_qgrid(ion, grid(1), gridOffset, convention, gammaPolicy);
     qc = g.qvec;
+    if wantDetail, qweights = g.w; end
     gridInfo = struct('schema', 'invz_bz_couplings.grid/v1', 'convention', g.convention, ...
         'offset', g.offsetFlags, 'gammaPolicy', g.gammaPolicy, 'requested', [g.N g.N g.N], ...
         'nominal', g.nominal, 'retained', size(qc, 1), 'n_gamma', g.n_gamma, 'qhash', local_qhash(qc));
@@ -70,10 +80,23 @@ end
 jqOpts = struct('dpRng', dpRng, 'cache', cache, 'cacheContext', cacheContext);
 if isfield(opts, 'dipole'), jqOpts.dipole = opts.dipole; end
 if isfield(opts, 'ewald'),  jqOpts.ewald  = opts.ewald;  end
-[Jnu, info] = invz_jq_modes(ion, qc, jqOpts);
+if wantDetail
+    [Jnu, info, Juni, Jcc] = invz_jq_modes(ion, qc, jqOpts);
+    Jnu_unflat = Jnu;
+else
+    [Jnu, info] = invz_jq_modes(ion, qc, jqOpts);
+end
 if ~isempty(gridInfo), info.grid = gridInfo; end
 Jnu = Jnu(:);
 Jaa0 = ion.Jxx0;  if isfield(info, 'Jaa0'), Jaa0 = info.Jaa0; end
+if wantDetail
+    detail = struct('schema','invz_bz_couplings.detail/v1', ...
+        'qvec',qc,'weights',qweights,'Jcc',Jcc, ...
+        'Jnu_unflat',Jnu_unflat,'Jnu_flat',Jnu, ...
+        'Juni',Juni,'info',info, ...
+        'flattening','column-major: flat=(branch-1)*nq+q', ...
+        'eigenvectors_included',false);
+end
 end
 
 function h = local_qhash(q)
