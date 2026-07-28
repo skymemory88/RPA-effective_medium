@@ -20,6 +20,11 @@ be inserted into Jensen quadrature without branch-tracked continuation.
 - diagnostic Newton events: `pole_margin > 1e-10`, `mean_margin > 1e-10`,
   selected Jacobian `rcond > 1e-12`; raw Jacobian by default, or the explicitly enabled
   row-equilibrated Jacobian; A–D audit remains binding
+- ordered pseudo-arclength corrector residual tolerance: `1e-9` for the recorded regular/defactored
+  root-4/root-5 pilot and `1e-10` for the stricter raw-coordinate root-6 cross-check. The earlier
+  `8e-9` setting is superseded. These solve tolerances do not change the independent production A–D
+  `tol_outer=1e-8` acceptance. Because the temporary drivers did not retain a complete option
+  snapshot, no unstated historical constraint tolerance is claimed.
 - `row_equilibrate=false` and `static_polish=false` by default. When explicitly enabled,
   equilibration affects only the linear solve/rank estimate. The physical-`K0` polish permits one
   capped proposal per eligible Newton iterate and returns immediately on acceptance; raw residual
@@ -39,30 +44,42 @@ be inserted into Jensen quadrature without branch-tracked continuation.
 | 0.10 | 1.5 | first adaptive natural-`h`/secant experiment from the clean high-`h` branch | 300-node budget reached at `h=0.003414300661` without a pole/mean event; maximum residual `5.35e-12`. A later branch-controlled trace shows this experiment did not preserve branch identity through the fold |
 | 0.10 | 1.5 | scaled tangent predictor with fixed-`h` correctors | stops at `h=0.005243548157786061` after 34 accepted nodes: `rcond(J)=1.027e-11` and scaled `abs(deta/ds)=1.771e-6`, with pole margin `6.640e-3`, mean margin `1.735`, and every A–D audit accepted |
 | 0.10 | 1.5 | fold rank audit | `sigma_min(J)=9.672e-6` while `sigma_min([J R_eta])=0.4581` (`cond(J)=1.336e8`): the fixed-`h` Jacobian loses rank while the augmented tangent remains regular |
-| 0.10 | 1.5 | scaled pseudo-arclength across that event | crosses in 24 accepted steps; tangent `deta/ds` changes from `-1.771e-6` to `+8.358e-4`, `min rcond(augmented)=1.953e-5`, maximum branch-correction ratio `2.663e-4`, and all A–D audits pass. A repeat at one-quarter the initial arc step brackets `deta/ds=0`, resolves `min(h)=0.005243548147122800`, and keeps successive oriented-tangent overlap above `0.9999999999` |
-| 0.10 | 1.5 | retained full-state pseudo-arclength oracle | 149 accepted roots from the clean high-`h` endpoint through the fold; every A--D audit passes, `max residual=4.5353e-9`, `min bordered rcond=5.0733e-6`, and local Hermite interpolation gives `h_fold=0.0052435482911986821`, within `1.44e-10 meV` of the earlier one-off quarter-step result |
+| 0.10 | 1.5 | scaled pseudo-arclength across that event | crosses in 24 accepted steps; tangent `deta/ds` changes from `-1.771e-6` to `+8.358e-4`, `min rcond(augmented)=1.953e-5`, maximum branch-correction ratio `2.663e-4`, and all A–D audits pass. A repeat at one-quarter the initial arc step brackets `deta/ds=0`, returns the unbounded interpolation output `0.005243548147122800`, and keeps successive oriented-tangent overlap above `0.9999999999` |
+| 0.10 | 1.5 | retained full-state pseudo-arclength oracle | 149 accepted roots from the clean high-`h` endpoint through a regular fold near `5.243548e-3 meV`; every A--D audit passes, `max residual=4.5353e-9`, and `min bordered rcond=5.0733e-6`. The raw Hermite coordinate is rejected below as inconsistent with the accepted nodes |
 | 0.10 | 1.5 | independent low-`h` branch, three cold deterministic seeds | all three seeds converge to the same `h=0` root within scaled-state diameter `4.278e-12`; upward tangent continuation stops after 22 accepted nodes at `h=1.130400753628218e-5`, with `rcond(J)=2.041e-11` and healthy event margins |
 | 0.10 | 1.5 | low-branch rank audit | `sigma_min(J)=1.558e-5` while `sigma_min([J R_eta])=0.5629` (`cond(J)=1.222e8`): this is a second regular fold, about 464 times below the high-branch fold |
-| 0.10 | 1.5 | pseudo-arclength across the low-branch event | crosses in 11 accepted steps; `deta/ds` changes from `+2.677e-7` to `-5.243e-7`, directly resolving `max(h)=1.130402502867847e-5`; minimum oriented-tangent overlap is `0.9999999997`, `min rcond(augmented)=1.091e-6`, and all A–D audits pass |
+| 0.10 | 1.5 | pseudo-arclength across the low-branch event | crosses a regular fold near `1.1304e-5 meV` in 11 accepted steps; `deta/ds` changes from `+2.677e-7` to `-5.243e-7`, minimum oriented-tangent overlap is `0.9999999997`, `min rcond(augmented)=1.091e-6`, and all A–D audits pass. The local interpolation output is not a certified maximum |
 | 0.10 | 1.5 | retained 25-seed `h=0` root census | 16 A--D-accepted attempts cluster into seven distinct roots in the complete independent coordinates `[Sigma;K0]` (`K` and `lambda` are derived); nine attempts fail. Representative `r` ranges from `0.60295` to `1.20283`, so the earlier three-seed agreement sampled one basin rather than proving uniqueness |
-| 0.10 | 1.5 | staged reconstruction of the low fold and returning leg | 21 fixed-`h` nodes plus 20 local pseudo-arclength steps recover `h_fold=1.1303917626651595e-5`; the returning leg exposes raw-closure amplification by `G*Gbar`, while the defactored equation remains accurate to about `2e-11`. The trace reaches `h=6.890625e-9` but does not establish a connection to any `h=0` root |
-| 0.10 | 1.5 | all-root simple-first upward screen | the other zero-field roots fail fixed-`h` continuation nonuniformly rather than at a common physical event. A retained `8e-9` arclength tolerance was too close to the independent `1e-8` A/C Sigma gates; using `1e-9` in the defactored diagnostic coordinate removes the observed root-4/root-5 audit veto without changing a tolerance |
+| 0.10 | 1.5 | staged reconstruction of the low fold and returning leg | 21 fixed-`h` nodes plus 20 local pseudo-arclength steps cross the same low fold; the short-trace interpolation is rejected below as inconsistent with an accepted node. The returning leg exposes raw-closure amplification by `G*Gbar`, while the defactored equation remains accurate to about `2e-11`. The trace reaches `h=6.890625e-9` but does not establish a connection to any `h=0` root |
+| 0.10 | 1.5 | all-root simple-first upward screen | the other zero-field roots fail fixed-`h` continuation nonuniformly rather than at a common physical event. A retained `8e-9` arclength tolerance was too close to the independent `1e-8` A/C Sigma gates; using `1e-9` in the defactored diagnostic coordinate removes the observed root-4/root-5 audit veto without changing any independent A–D acceptance tolerance |
 | 0.10 | 1.5 | root-4 defactored local trace | 97 accepted steps cross a fold between `5.5677706301911396e-6` and `5.568143040810256e-6 meV`; `min rcond(border)=4.35e-10`, with no audit or domain-event failure before the trace stops at a static-component line-search floor |
-| 0.10 | 1.5 | root-6 strict trace and refined zero-field return | a fold occurs at `9.541141092330816e-6 meV`; the returning leg crosses `h=0` without audit failure. Refinement brackets zero within `6.76e-10 meV`, and the corrected endpoint matches census root 6 at frozen cluster distance `1.42e-14` after a `7.43e-12` predictor correction |
+| 0.10 | 1.5 | root-6 strict trace and refined zero-field return | a fold occurs near `9.54114e-6 meV`; the raw turn estimate has no certified enclosure. The returning leg crosses `h=0` without audit failure. Refinement brackets zero within `6.76e-10 meV`, and the corrected endpoint matches census root 6 at frozen cluster distance `1.42e-14` after a `7.43e-12` predictor correction |
 | 0.10 | 1.5 | root-6 opposite-leg fixed-`h` check | all 33 decreasing fixed-`h` nodes from the common handoff to zero pass A--D without an event failure; maximum frozen predictor distance is `0.0247702`, and the endpoint matches census root 6 at cluster distance `7.92e-14` |
-| 0.10 | 1.5 | default-off physical-`K0` last-bit polish | at the positive-q `q=0.7625` stall, all Sigma equations pass and the static residual is `1.33548e-8`; one 656-physical-ULP proposal reduces the complete raw residual to `1.13e-11` and passes A–D |
+| 0.10 | 1.5 | default-off physical-`K0` last-bit polish | with `q=(h/h_reference)^2` and frozen `h_reference=6.890625e-9 meV`, the positive-q `q=0.7625` stall has all Sigma equations passing and static residual `1.33548e-8`; one 656-physical-ULP proposal reduces the complete raw residual to `1.13e-11` and passes A–D |
 | 0.10 | 1.5 | row-equilibrated, derivative-free final fixed-`h` descent | the static Jacobian row is `3.53e6` times larger than every Sigma row: raw/equilibrated `rcond` at the handoff are `8.27e-13`/`6.10e-9`. The retained fixed-`h` helper accepts 52 scheduled points down to `h=3.4852605192481022e-10`; a refined schedule reaches `3.4035747258282251e-10`, then fails line search at raw residual `3.83e-6`. A direct `h=0` solve from the last accepted state fails at `5.077e-2`; that state is at least `0.312` from every root in the seven-root census |
 | 0.31 | 3.6 | adaptive natural-`h` reciprocal continuation from a clean high-`h` node | reaches `h=0` in 12 accepted nodes; minimum pole margin `1.4827e-3` |
 | 0.31 | 1.0 | same continuation | step collapse near `h=0.00793448728`; 258 accepted nodes, condition number rising to `9.84e7`, no pole/mean event |
+
+The tangent sign changes and regular bordered correctors establish both folds, but the archived
+records do not certify either coordinate. At the high fold, a raw Hermite interpolation returned
+`0.0052435482911986821 meV`, above the accepted node at `0.005243548157786061 meV` and hence
+incompatible with a certified minimum. At the low fold, the staged interpolation returned
+`1.1303917626651595e-5 meV`, below the accepted node at `1.130400753628218e-5 meV` and hence
+incompatible with a certified maximum. The alternative local outputs
+`0.005243548147122800 meV` and `1.130402502867847e-5 meV` have no retained enclosures or
+uncertainties. All four are method-dependent diagnostics, not bounds or 17-digit fold claims. A
+future coordinate oracle must retain adjacent tangent-sign records and a bracket consistent with
+all accepted nodes.
 
 The temporary HMF wiring used to obtain the end-to-end 3.6 T result was removed after review: a
 fixed-`h` residual root is not automatically the same continuous branch required by the Jensen
 integral. The result is evidence that Picard non-contraction is a numerical defect at that field, not
 yet authorization to publish a corrected spectrum. At 1.5 T, the branch-controlled traces found two
 regular folds rather than a pole or mean-cancellation event. The clean high-`h` component has a
-minimum at `h=0.0052435481471` and turns toward increasing `h`; the independently cold-seeded low-`h`
-component has a maximum at `h=1.1304025029e-5` and turns toward decreasing `h`. They therefore do not
-overlap in the traced neighborhoods, and neither supplies a direct single-valued fixed-`h` path over
+minimum near `h≈5.243548e-3 meV` and turns toward increasing `h`; the independently cold-seeded
+low-`h` component has a maximum near `h≈1.1304e-5 meV` and turns toward decreasing `h`. Their
+coordinates are not certified, but the traced neighborhoods do not overlap, and neither supplies a
+direct single-valued fixed-`h` path over
 the Jensen interval. The earlier unconstrained secant experiment's roots between these folds are
 necessarily on at least one other branch segment and cannot be counted as continuation of the clean
 high-`h` branch. Whether still more folds join these segments globally is immaterial to the immediate

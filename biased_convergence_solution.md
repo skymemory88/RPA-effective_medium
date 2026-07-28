@@ -2,11 +2,15 @@
 
 **Recorded:** 2026-07-28
 
-**Status:** decision and full-state continuation oracles added after the first common-functional
+**Status:** backup authorized for diagnostic/oracle development after the first common-functional
 skeleton candidate failed its immutable weak-coupling gate; non-default and not production-integrated
 
-**Trigger:** use only if the common-functional route proves impractical on the required timescale and
-the prescription below is separately preregistered before spectra are inspected
+**Production trigger:** not yet satisfied. Production use requires both a separately preregistered
+branch prescription and a dated, reviewable finding that the preferred common-functional route is
+impractical within a prospectively declared scope, effort budget, and deadline. That finding must
+record the attempted exact-local-bilocal/2PI deliverables, the blocking evidence, and why no retained
+alternative can meet the declared accuracy and domain gates. Rejecting one skeleton candidate
+authorizes oracle work only; it does not exhaust that route.
 
 ## 1. Purpose and declared bias
 
@@ -105,37 +109,54 @@ admissible single-valued section, solve that section's own `hstar_path`, and the
 Selection is global rather than greedy: choosing the nearest or smoothest root at one node must not
 pre-empt a smoother complete path.
 
-Use the lexicographic smoothness criterion:
-
-1. reject every path with a finite jump in `r`;
-2. among the remaining paths, minimize the maximum resolved slope change;
-3. then minimize the integrated curvature
+Raw derivatives on `x` cannot be compared directly. In particular,
 
 \[
-\mathcal C_r =
-\int_0^1
-\left(\frac{d^2r}{dx^2}\right)^2 dx .
+\int_0^1 r_{xx}^2\,dx
+=(h^\star_{\rm path})^3
+\int_0^{h^\star_{\rm path}} r_{hh}^2\,dh ,
 \]
+
+so the unnormalised dimensionless curvature systematically favours a shorter candidate; both it and
+the raw slope-change metric also scale with the amplitude of `r`. Instead define
+
+\[
+D_r=\int_0^1 r_x^2\,dx,\qquad
+S_r=\frac{\max_i|\Delta r_x|}{\sqrt{D_r}},\qquad
+Q_r=\frac{\int_0^1 r_{xx}^2\,dx}{D_r}.
+\]
+
+For nonconstant paths these shape scores are invariant under `r -> a*r+b`, `a != 0`, and do not
+prefer one `hstar_path` over another when the candidates have the same normalized shape. This is a
+deliberate comparison of shapes on their complete Jensen intervals, not an assertion that `Q_r`
+equals the physical-`h` bending energy. The binding lexicographic criterion is:
+
+1. reject every path with a finite jump in `r`;
+2. among the remaining paths, minimize `S_r`;
+3. then minimize `Q_r`.
+
+The preregistration must freeze numerical floors for `D_r` and the raw curvature integral. If both
+are below their compatible constant-path floors, assign `S_r=Q_r=0`. If `D_r` is below its floor but
+the curvature test is not, the derivative representation is unresolved and the path cannot be
+selected.
 
 For discrete evaluation, use derivatives of the branch-tracked representation, not a smoothing spline
 that invents values between unresolved roots. The finite-difference stencil, endpoint treatment,
 adaptive refinement rule, and numerical tie tolerance must be preregistered. Report both the
-continuum-scaled value and its mesh-refinement drift.
-
-Because different candidates can have different `hstar_path`, also report the same diagnostics in
-physical `h` units. The dimensionless `x` criterion remains the preregistered selector, but if its
-winner changes under an admissible normalization or within the refinement uncertainty, return
-`branch_ambiguous` rather than exploiting the candidate-dependent interval length.
+normalized scores, the raw `x` and physical-`h` diagnostics, and their mesh-refinement drift. Raw
+metrics are report-only and cannot break a normalized-score tie. If the normalized winner changes
+within the refinement uncertainty, return `branch_ambiguous`.
 
 ### 3.4 Tie breakers
 
-If two complete paths are indistinguishable in `r` smoothness within the frozen numerical uncertainty,
-apply, in order:
+These tie breakers apply only after every candidate has passed the mandatory reconstruction failures
+in section 6; they cannot rescue missing or disagreeing forward/reverse/cold-seed evidence. If two
+complete paths are indistinguishable in normalized `r` smoothness within the frozen numerical
+uncertainty, apply, in order:
 
 1. smaller maximum scaled state curvature;
 2. closer continuous approach to the paramagnetic endpoint over the registered near-QCP field set;
-3. agreement of forward, reverse, and independently cold-seeded traces;
-4. otherwise return `branch_ambiguous`.
+3. otherwise return `branch_ambiguous`.
 
 Do not break a tie using agreement with the desired spectrum.
 
@@ -222,7 +243,9 @@ interpolates, or repairs them. Synthetic in-memory fixtures pin the ranking and 
 The separate generic pseudo-arclength primitive crosses both folds of the analytic cubic oracle, and
 its invZ adapter retains complete frequency-resolved states. On the frozen 0.10 K, 1.5 T, legacy 16³
 fixture it traced 149 accepted roots from the clean high-field endpoint through the known regular
-fold and reproduced its field to `1.44e-10 meV`; every A--D audit passed. A retained explicit-seed
+fold; every A--D audit passed. Its fold-coordinate interpolations were later rejected as precision
+claims because one is inconsistent with an accepted extremal node; only the tangent sign change and
+regular bordered topology remain evidence. A retained explicit-seed
 enumerator now records every fixed-`h` solve and clusters the complete independent coordinates
 `[Sigma;K0]` with an uncertainty band; 25 seeds at `h=0` produced seven distinct A--D-accepted roots.
 A retained fixed-`h` helper also
@@ -244,16 +267,21 @@ matches roots by proximity, infers an endpoint, splits a fold, or claims a compl
 candidate. Consequently it can expose the currently demonstrated components without changing the
 unresolved endpoint verdict.
 
-The fixed-`h` trace now has a fail-closed adapter into that graph schema. New Newton records embed
-their normalized thresholds; legacy records are labelled as caller-declared unless strict embedded
-provenance is required. The adapter accepts no bare event Boolean: a passing certificate must name a
-preregistered certifier, bind itself to the exact trace and record pair, and provide positive
-full-edge lower bounds for every registered signed margin. Applied without such certificates to the
-33-node root-6 opposite-leg trace, it emits 33 vertices but deliberately leaves all 32 adjacencies
-blocked. Continuous event certification, not schema translation, is now the next missing edge gate.
+The fixed-`h` trace now has a fail-closed adapter into that graph schema:
+`docs/diagnostics/biased_smooth_r_2026-07-28/invzp_fixed_h_trace_graph_inputs.m`. New Newton records
+embed their normalized thresholds; legacy records are labelled as caller-declared unless strict
+embedded provenance is required. The adapter accepts no bare event Boolean: a passing certificate
+must name a preregistered certifier, bind itself to the exact trace and record pair, and provide
+positive full-edge lower bounds for every registered signed margin. Applied without such certificates
+to the 33-node root-6 opposite-leg trace, it emits 33 vertices but deliberately leaves all 32
+adjacencies blocked. Continuous event certification, not schema translation, is now the next missing
+edge gate.
 
 The unresolved low endpoint has a diagnostic positive-side coordinate
-`q=(h/h_reference)^2`. It preserves the original equations pointwise for every `q>0` and has advanced
+`q=(h/h_reference)^2`, with
+`h_reference=6.890625e-9 meV`, the last accepted h-coordinate handoff, so that handoff is exactly
+`q=1`. This reference is only a coordinate scale. The adapter preserves the original equations
+pointwise for every `q>0` and has advanced
 the returning leg from `q=1` to `q=0.775` with A--D acceptance, whereas the h-coordinate corrector
 stagnates because its field-Jacobian error is large relative to the bordered condition. The attempted
 `q=0.7625` point exposed a machine-resolution floor solely in the static closure; row scaling did
@@ -274,8 +302,9 @@ seven-root `h=0` census. The backup selector must therefore treat this endpoint 
 must not extrapolate the positive component to zero or substitute the closest census root.
 
 This is component-specific, not a universal failure of all ordered roots. A later simple-first
-screen found another strict component (root 6) with a regular fold at
-`h=9.541141092330816e-6 meV`. Its returning leg crosses `h=0`; a local refined bracket and one frozen
+screen found another strict component (root 6) with a regular fold near
+`h≈9.54114e-6 meV`; its raw turn estimate has no certified coordinate enclosure. Its returning leg
+crosses `h=0`; a local refined bracket and one frozen
 fixed-field correction identify census root 6 with cluster distance `1.42e-14`, after a predictor
 correction of `7.43e-12`. Both pass the registered `1e-9` same-root threshold. Root 4 also crosses a
 separate fold near `5.56814e-6 meV` under the exact defactored audit coordinate. These results add
@@ -308,7 +337,7 @@ Keep the column masked if any of the following occurs:
 - the smoothness winner is tied within uncertainty;
 - the selected state is discontinuous as `B -> Bc^-`;
 - the Jensen integral is not quadrature-converged;
-- the rule selects different paths under forward and reverse reconstruction;
+- forward/reverse/cold-seed reconstruction is unavailable or selects different paths;
 - an event is crossed by interpolation or regularisation rather than by an accepted continuation;
 - the selected path violates a thermodynamic identity required by the current approximation.
 
@@ -325,7 +354,8 @@ with `picard` remaining the default. Export:
 
 - all branch records and connectivity;
 - the selected branch identifiers;
-- `C_r`, state-continuity metrics, tie margins, and refinement drift;
+- `D_r`, `S_r`, `Q_r`, raw physical/dimensionless diagnostics, state-continuity metrics, tie
+  margins, and refinement drift;
 - a machine-readable selection status and failure reason;
 - the exact prescription/version digest.
 
@@ -346,12 +376,14 @@ The preferred staged recommendation remains:
 Stage 1 is complete: the focused audit found useful branch-conditioned and fixed-variable
 potentials, but no common functional or binding physical selector. Stage 2 is therefore inapplicable
 to the current equations. Stage 3 produced a strict scalar common functional and then a
-pre-registered nonlocal-return skeleton candidate.  The strict ring theory passed its gates but
+pre-registered nonlocal-return skeleton candidate. The strict ring theory passed its gates but
 retained a Gaussian no-state interval; the stationary skeleton failed its exact mixed-chain
-coefficient because it lacked the exact local bilocal Legendre kernel.  That candidate was rejected
-rather than tuned.  The trigger for this backup is therefore satisfied at the implementation-oracle
-level, while all non-default, branch-identity, refinement, and production-stop rules above remain
-binding.
+coefficient because it lacked the exact local bilocal Legendre kernel. That candidate was rejected
+rather than tuned, but the exact local bilocal/2PI route remains open. The rejected skeleton
+authorizes no production fallback and does not establish impracticality of the preferred route. The
+backup remains authorized at oracle level; production activation awaits the separately recorded
+prospective impracticality finding and every existing preregistration, branch-identity, refinement,
+and production-stop gate above.
 
 Relevant current records:
 

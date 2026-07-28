@@ -98,8 +98,10 @@ There is also a separate reduced one-dimensional primitive after the Dyson subst
 \left\langle\frac{G0}{D+JG0}\right\rangle_J .
 \]
 
-Then `partial_K V_red = G0/(D+KG0)-Gbar(D)`. Wolfram Language independently verified this derivative
-and equality of the reduced primitive's mixed `D,K` derivatives.
+Then `partial_K V_red = G0/(D+KG0)-Gbar(D)`. Wolfram Language independently verified this
+nontrivial first-derivative identity. Equality of the mixed `D,K` derivatives is only Clairaut
+regularity of the displayed smooth scalar function away from its denominator zeros; it is not an
+independent physics or functional-consistency check.
 
 `V_red` is not obtained by simply substituting the `K`-dependent `G` into `V_EMT`; that substitution
 also differentiates the implicit `G(K)`. Relating the fixed-`G` and reduced primitives requires the
