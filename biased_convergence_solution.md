@@ -235,6 +235,14 @@ solve is retained only as an oracle. The tracer now also caps attempts per accep
 evaluations per corrector attempt; hitting either envelope is a retained `budget_exhausted` failure,
 not a branch endpoint or an accepted extrapolation.
 
+The unresolved low endpoint has a diagnostic positive-side coordinate
+`q=(h/h_reference)^2`. It preserves the original equations pointwise for every `q>0` and has advanced
+the returning leg from `q=1` to `q=0.775` with A--D acceptance, whereas the h-coordinate corrector
+stagnates because its field-Jacobian error is large relative to the bordered condition. This is only
+a conditioning device for the positive approach: `q=0` is an explicit unresolved event, because no
+finite one-sided stencil proves the absence of a `sqrt(q)` term. It cannot supply or select an h=0
+endpoint.
+
 ## 6. Failure conditions
 
 Keep the column masked if any of the following occurs:

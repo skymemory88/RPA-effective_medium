@@ -68,6 +68,17 @@ full-state predictor tube. It retains every scheduled point, including the first
 trailing `not_run_after_stop` records. This is useful for cheap regular segments on either side of a
 fold; it neither retries nor crosses a fixed-`h` rank loss.
 
+`invzp_ordered_squared_field_problem` is a positive-field endpoint adapter with
+`q=(h/h_reference)^2`. For `q>0` it is an exact reparameterization of the original node equations;
+it never averages positive and negative fields. It uses centred Richardson q derivatives away from
+zero and a fourth-order forward derivative when a negative-q stencil would be invalid, with a
+mandatory derivative-drift margin. `q=0` is always reported as
+`q_zero_endpoint_unresolved`: a finite forward stencil cannot prove that the residual contains no
+`sqrt(q)` term. Thus the adapter can condition and trace a positive-q approach, but cannot certify
+the endpoint. Its `q_domain` bounds central continuation points, like the h adapter's `h_domain`;
+nonnegative derivative-stencil nodes may lie outside a finite reporting bound and remain explicit
+pointwise evaluations of the same equations.
+
 `invz_ordered_node_jacobian_factors` and `invzp_solve_bordered_factors` expose and solve the exact
 frequency-block form
 
@@ -213,3 +224,13 @@ endpoint extrapolation failed the residual. The low endpoint topology therefore 
 No production solver or Jensen path is authorized by this pilot. The bounded retry envelope is
 intended to make any future endpoint trace fail promptly and reproducibly instead of consuming an
 open-ended nested retry cost; it does not regularize the endpoint or change an acceptance gate.
+
+At the last accepted positive-h point, the ordinary h-coordinate border has `rcond≈1.76e-11` while
+its best tested Richardson column still drifts by `1.30e-3`; a bounded corrector stagnates at
+residual `1.91e-5` and fails line search. Reparameterizing only the positive side by q advances three
+A--D-audited states from `q=1` to `q=0.775` (`h=6.06609862186847e-9 meV`). The retained q-Jacobian
+drifts are `7.03e-5`, `7.69e-5`, and `1.33e-4`; the third step required bounded shrinkage. This
+demonstrates a more stable positive-endpoint coordinate, not a connection to q=0 or to any
+enumerated h=0 root. At one enumerated h=0 root the forward stencil is finite and has drift
+`1.13e-9`, but the independent `q_zero_endpoint_unresolved` event still rejects it; small stencil
+drift is numerical evidence, not the missing smoothness proof.
