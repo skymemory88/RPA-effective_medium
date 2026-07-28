@@ -105,7 +105,10 @@ roots, matches endpoints across traces, bridges a gap, constructs a Jensen secti
 selector.
 
 `invzp_ordered_squared_field_problem` is a positive-field endpoint adapter with
-`q=(h/h_reference)^2`. For `q>0` it is an exact reparameterization of the original node equations;
+`q=(h/h_reference)^2`. In the retained endpoint experiment,
+`h_reference=6.890625e-9 meV`, the last accepted h-coordinate handoff, so the handoff is exactly
+`q=1`. The reference is a coordinate scale only. For `q>0` the adapter is an exact
+reparameterization of the original node equations;
 it never averages positive and negative fields. Every positive point uses a centred
 Richardson derivative with actual half-width `min(q_fd_step,q/2)`, a mandatory derivative-drift
 margin, and a representability check on all stencil nodes. A fourth-order forward value is retained
@@ -153,30 +156,41 @@ Every path must contain:
 | `trace_agreement_available` | the forward/reverse/cold comparison was actually completed |
 | `trace_agreement_ok` | completed forward/reverse/cold traces agree; must be false when unavailable |
 
-The scalar `spec.version`, exact dimensionless `spec.x`, and absolute/relative tolerances
-`spec.tie.{slope,curvature,state,qcp}_{abs,rel}` are mandatory. A mismatched mesh, duplicate ID,
-nonfinite primary datum, nonlogical certificate, or invalid endpoint raises
+The exact `spec.schema='invzp_smooth_r_selector/v2'`, scalar `spec.version`, exact dimensionless
+`spec.x`, absolute/relative tolerances `spec.tie.{slope,curvature,state,qcp}_{abs,rel}`, and
+nonnegative constant-path floors
+`spec.degenerate.{derivative_energy_max,curvature_energy_max}` are mandatory. A mismatched mesh,
+duplicate ID, nonfinite primary datum, nonlogical certificate, or invalid endpoint raises
 `invzp:SmoothSelector:InvalidInput`; it is not converted into a physical branch status.
 
 The primary metrics are exactly
 
 ```matlab
-max_slope_change = max(abs(diff(path.drdx)));
-integrated_r_curvature = trapz(spec.x,abs(path.d2rdx2).^2);
+derivative_energy = trapz(spec.x,abs(path.drdx).^2);
+normalized_max_slope_change = ...
+    max(abs(diff(path.drdx)))/sqrt(derivative_energy);
+normalized_r_curvature = ...
+    trapz(spec.x,abs(path.d2rdx2).^2)/derivative_energy;
 ```
 
-and lower values are retained within
+for a resolved nonconstant path. If derivative energy and raw curvature both lie below their
+preregistered compatible floors, the path is treated as constant and both normalized scores are
+zero. Low derivative energy with curvature above its floor is unresolved and cannot be selected.
+The raw numerator metrics are exported for audit but never rank a path. The normalized scores are
+invariant under `r -> a*r+b`, `a != 0`, and remove the candidate-endpoint/amplitude bias of the v1
+raw metrics. Lower values are retained within
 
 ```matlab
 abs(a-b) <= abs_tol + rel_tol*max(abs(a),abs(b)).
 ```
 
-The order is binding: admissibility and jump rejection, maximum resolved slope change, integrated
-curvature, maximum state curvature, QCP distance, then trace agreement. The function returns
+The order is binding: admissibility, jump rejection, and mandatory forward/reverse/cold-seed
+agreement; normalized maximum slope change; normalized curvature; maximum state curvature; then QCP
+distance. The function returns
 `selected`, `branch_ambiguous`, or `branch_unresolved`, together with all metrics, rejected reasons,
-and the survivors after every stage. Missing tie information, including an unavailable trace audit,
-causes ambiguity; it is never encoded as a failed comparison or assigned an artificial bad score.
-Input order and path IDs never break a tie.
+and the survivors after every stage. Missing state/QCP tie information causes ambiguity; missing or
+disagreeing trace reconstruction fails the mandatory reproducibility gate and cannot be rescued by
+a tie breaker. Input order and path IDs never break a tie.
 
 ## Deliberate omissions
 
@@ -185,14 +199,16 @@ trace-input adapter, and an evidence-only graph assembler now exist. Complete bi
 reconstruction, continuous signed event-crossing production, arclength trace-to-graph conversion,
 cross-trace endpoint matching, fold splitting, single-valued Jensen-section construction, endpoint
 reconstruction, QCP field sequence, physical-`h` diagnostic metrics, mesh-refinement drift, and
-cross-normalization winner audit still have to be built and frozen before the global 1.5 T
+cross-representation winner audit still have to be built and frozen before the global 1.5 T
 path-selection pilot. In particular, a unique result from the selector means only unique under the
-supplied dimensionless spec. It does not authorize production use unless the omitted physical-`h`,
-normalization, and refinement audits agree under the registered grid and Matsubara refinements.
+supplied normalized-shape spec. It does not authorize production use unless the omitted
+physical-`h`, representation, and refinement audits agree under the registered grid and Matsubara
+refinements.
 
-Fresh in-memory MATLAB fixtures cover a known linear winner, lexicographic dominance, curvature and
-each tie-break stage, finite-jump rejection, no accepted candidate, an exact unresolved tie, missing
-tie data, and invalid-input cases. No persistent test script is kept in the worktree.
+Fresh in-memory MATLAB fixtures cover endpoint/amplitude invariance for identical normalized shapes,
+a linear-over-curved winner, constant-path handling, unresolved low-energy/nonzero-curvature data,
+mandatory missing/disagreeing trace rejection, the state-curvature tie break, exact ambiguity, and
+v1/invalid-input rejection. `checkcode` is clean. No persistent test script is kept in the worktree.
 
 A separate fresh graph fixture covers deterministic input ordering, a connected chain, an isolated
 accepted root, a missing signed-event bracket, unresolved termination, a nonmonotone fold, a missing
@@ -238,12 +254,19 @@ minimum oriented tangent overlap 0.9501876552804539
 minimum pole margin              0.006213739195997094
 minimum mean margin              0.03106320582704512
 maximum h-Jacobian scaled drift  7.825112291199848e-05
-Hermite fold field               0.0052435482911986821 meV
+fold-coordinate status           not certified
 ```
 
-Every corrected root passed the independent A--D audit. The fold value differs by
-`1.44e-10 meV` from the earlier one-off quarter-step result
-`0.005243548147122800 meV`. The dense/Richardson oracle took 1292.9 s over six bounded segments.
+Every corrected root passed the independent A--D audit, and the oriented field tangent changes sign
+with a regular bordered corrector, so the fold topology is established near
+`h≈5.243548e-3 meV`. The two local interpolations are not a fold-coordinate oracle: the dense
+Hermite calculation returned `0.0052435482911986821 meV`, which lies above an accepted state at
+`0.005243548157786061 meV` and therefore cannot be a certified minimum. The earlier quarter-step
+calculation returned `0.005243548147122800 meV`; neither estimate has a retained enclosure or
+uncertainty. They are preserved here as rejected, method-dependent outputs, not as 17-digit fold
+claims. A future coordinate result must retain the adjacent tangent-sign records, a fold bracket
+consistent with every accepted node, and a separately labelled interpolation estimate with error
+control. The dense/Richardson oracle took 1292.9 s over six bounded segments.
 Subsequent profiling corrected the initial bottleneck attribution: at the fold, dense solve and
 `rcond` take only `0.00745 s` and `0.00670 s`, while one Richardson equation/Jacobian evaluation takes
 `1.771 s`. The exact factor solve takes `0.00290 s`, too small a saving to justify replacing the
@@ -260,14 +283,13 @@ cold seeds was basin-local evidence, not a uniqueness result.
 
 The low-branch fold was then reconstructed with the staged policy intended for development economy:
 21 cheap fixed-`h` nodes reached the fold neighborhood, and 20 local pseudo-arclength steps crossed
-it. The reconstructed maximum,
-
-```text
-h_fold = 1.1303917626651595e-5 meV
-```
-
-agrees with the earlier refined one-off value `1.130402502867847e-5 meV` at the resolution expected
-from this shorter trace. On the returning leg, the raw closure audit became ill-conditioned while
+it with an oriented-tangent sign change and regular bordered corrector. This establishes a fold near
+`h≈1.1304e-5 meV`, but not a certified coordinate. The short-trace interpolation returned
+`1.1303917626651595e-5 meV`, below the accepted node at
+`1.130400753628218e-5 meV`, so it cannot be a certified maximum. The earlier one-off interpolation
+returned `1.130402502867847e-5 meV`; it too lacks a retained enclosure and uncertainty. Both raw
+outputs are therefore method-dependent diagnostics, not bounds or precision claims. On the returning
+leg, the raw closure audit became ill-conditioned while
 the defactored equation remained accurate. At `h=1.72265625e-7 meV`,
 `|Gbar-G|=1.14201498036e-7` narrowly failed its raw gate, whereas
 `|K0-Jloc|/Jscale=1.93307590536e-11` and the direct vector residual was
@@ -328,13 +350,10 @@ minimum bordered `rcond=4.35e-10`; it later stopped at a static-component line-s
 domain event. Root 5 accepted 100 local steps without an event or audit failure but advanced only to
 `h=3.305411778307727e-6 meV`; that bounded trace does not locate its fold.
 
-Root 6 gives the more decisive topology check. A strict raw-coordinate trace crossed a fold at
-
-```text
-h_fold = 9.541141092330816e-6 meV
-```
-
-and its returning leg crossed zero field with no audit failure and minimum bordered
+Root 6 gives the more decisive topology check. A strict raw-coordinate trace crossed a fold near
+`h≈9.54114e-6 meV`; its raw turn estimate was `9.541141092330816e-6 meV`, but no retained enclosure
+or uncertainty promotes that output to a certified coordinate. Its returning leg crossed zero field
+with no audit failure and minimum bordered
 `rcond=4.36e-7`. A local constant-step refinement bracketed zero by
 `+5.270703260674207e-10` and `-1.492816168710522e-10 meV`. The interpolated seed needed a correction
 of only `7.43e-12` in the frozen clustering metric, and the accepted zero-field solve matched census

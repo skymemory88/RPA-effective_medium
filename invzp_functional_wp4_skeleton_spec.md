@@ -514,9 +514,12 @@ exact static-cutoff coefficient     = -0.09448221305585625
 candidate stationary coefficient   = -0.36669420473128445
 ```
 
-At `h=0.37` the corresponding values are `-0.16948199709553233` and
-`-0.09854567887123727`.  Direct continued stationary solves reproduce the analytic candidate values
-within the finite-difference extraction error.
+At `h=0.37` the same **restricted static quartic** calculation gives `-0.16948199709553233` and
+`-0.09854567887123727`, and direct continued solves of that restricted truncation reproduce the
+analytic candidate value within finite-difference error. This pair is illustrative, not a gate:
+`C3` and `Phi33` are nonzero there, and the displayed restricted formula omits `Phi33` and the
+compensating trace/one-point contributions that the full nonzero-source gate grades together. Only
+the `h=0` pair above, where `C3=Phi33=0`, is decisive for rejecting this candidate.
 
 The cause is structural: `C` and `gamma3/gamma4` are already exact one-particle-irreducible local
 objects.  Combining them with a Gaussian local covariance trace and then re-varying local returns

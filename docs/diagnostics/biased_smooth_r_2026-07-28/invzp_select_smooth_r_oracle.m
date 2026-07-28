@@ -11,13 +11,17 @@ validateSpec(spec,invalidId);
 
 emptyIds = strings(0,1);
 emptyMetrics = table(emptyIds,zeros(0,1),zeros(0,1),zeros(0,1), ...
-    zeros(0,1),zeros(0,1),false(0,1),false(0,1),false(0,1), ...
-    'VariableNames',{'id','hstar','max_slope_change', ...
-    'integrated_r_curvature','max_state_curvature','qcp_distance', ...
-    'trace_agreement_available','trace_agreement_ok','gate_ok'});
+    zeros(0,1),zeros(0,1),zeros(0,1),zeros(0,1),zeros(0,1), ...
+    false(0,1),false(0,1),false(0,1),false(0,1), ...
+    'VariableNames',{'id','hstar','derivative_energy', ...
+    'normalized_max_slope_change','normalized_r_curvature', ...
+    'raw_max_slope_change','raw_integrated_r_curvature', ...
+    'max_state_curvature','qcp_distance','trace_agreement_available', ...
+    'trace_agreement_ok','shape_metric_defined','gate_ok'});
 emptyRejected = table(emptyIds,emptyIds, ...
     'VariableNames',{'id','reasons'});
 result = struct( ...
+    'schema','invzp_smooth_r_selector_result/v2', ...
     'status','branch_unresolved', ...
     'status_detail','no candidate paths were supplied', ...
     'selected_id',emptyIds, ...
@@ -50,12 +54,16 @@ end
 npath = numel(paths);
 ids = strings(npath,1);
 hstar = zeros(npath,1);
-maxSlopeChange = zeros(npath,1);
-integratedCurvature = zeros(npath,1);
+derivativeEnergy = zeros(npath,1);
+normalizedSlopeChange = nan(npath,1);
+normalizedCurvature = nan(npath,1);
+rawSlopeChange = zeros(npath,1);
+rawCurvature = zeros(npath,1);
 maxStateCurvature = nan(npath,1);
 qcpDistance = nan(npath,1);
 traceAgreement = false(npath,1);
 traceAvailable = false(npath,1);
+shapeMetricDefined = false(npath,1);
 gateOk = false(npath,1);
 reasons = strings(npath,1);
 nx = numel(spec.x);
@@ -91,9 +99,27 @@ for k = 1:npath
     qcpDistance(k) = optionalNonnegativeScalar( ...
         path.qcp_distance,'path.qcp_distance',invalidId);
 
-    maxSlopeChange(k) = max(abs(diff(path.drdx(:))));
-    integratedCurvature(k) = trapz(spec.x(:),abs(path.d2rdx2(:)).^2);
-    gateOk(k) = jumpFree && complete && admissible && endpointOk && qcpOk;
+    rawSlopeChange(k) = max(abs(diff(path.drdx(:))));
+    derivativeEnergy(k) = trapz(spec.x(:),abs(path.drdx(:)).^2);
+    rawCurvature(k) = trapz(spec.x(:),abs(path.d2rdx2(:)).^2);
+    if ~isfinite(rawSlopeChange(k)) || ~isfinite(derivativeEnergy(k)) || ...
+            ~isfinite(rawCurvature(k))
+        fail(invalidId,'Path "%s" overflows a smoothness metric.',ids(k));
+    end
+    if derivativeEnergy(k) <= spec.degenerate.derivative_energy_max
+        if rawCurvature(k) <= spec.degenerate.curvature_energy_max
+            normalizedSlopeChange(k) = 0;
+            normalizedCurvature(k) = 0;
+            shapeMetricDefined(k) = true;
+        end
+    else
+        normalizedSlopeChange(k) = rawSlopeChange(k)/sqrt(derivativeEnergy(k));
+        normalizedCurvature(k) = rawCurvature(k)/derivativeEnergy(k);
+        shapeMetricDefined(k) = isfinite(normalizedSlopeChange(k)) && ...
+            isfinite(normalizedCurvature(k));
+    end
+    gateOk(k) = jumpFree && complete && admissible && endpointOk && qcpOk && ...
+        traceAvailable(k) && traceAgreement(k) && shapeMetricDefined(k);
 
     failed = strings(0,1);
     if ~jumpFree, failed(end+1) = "r_jump_free=false"; end %#ok<AGROW>
@@ -101,6 +127,13 @@ for k = 1:npath
     if ~admissible, failed(end+1) = "admissible=false"; end %#ok<AGROW>
     if ~endpointOk, failed(end+1) = "endpoint_ok=false"; end %#ok<AGROW>
     if ~qcpOk, failed(end+1) = "qcp_ok=false"; end %#ok<AGROW>
+    if ~traceAvailable(k), failed(end+1) = "trace_agreement_available=false"; end %#ok<AGROW>
+    if traceAvailable(k) && ~traceAgreement(k)
+        failed(end+1) = "trace_agreement_ok=false"; %#ok<AGROW>
+    end
+    if ~shapeMetricDefined(k)
+        failed(end+1) = "shape_metric_unresolved"; %#ok<AGROW>
+    end
     reasons(k) = strjoin(failed,'; ');
 end
 
@@ -108,11 +141,14 @@ if numel(unique(ids)) ~= npath
     fail(invalidId,'path.id values must be unique.');
 end
 
-result.metrics = table(ids,hstar,maxSlopeChange,integratedCurvature, ...
-    maxStateCurvature,qcpDistance,traceAvailable,traceAgreement,gateOk, ...
-    'VariableNames',{'id','hstar','max_slope_change', ...
-    'integrated_r_curvature','max_state_curvature','qcp_distance', ...
-    'trace_agreement_available','trace_agreement_ok','gate_ok'});
+result.metrics = table(ids,hstar,derivativeEnergy,normalizedSlopeChange, ...
+    normalizedCurvature,rawSlopeChange,rawCurvature,maxStateCurvature, ...
+    qcpDistance,traceAvailable,traceAgreement,shapeMetricDefined,gateOk, ...
+    'VariableNames',{'id','hstar','derivative_energy', ...
+    'normalized_max_slope_change','normalized_r_curvature', ...
+    'raw_max_slope_change','raw_integrated_r_curvature', ...
+    'max_state_curvature','qcp_distance','trace_agreement_available', ...
+    'trace_agreement_ok','shape_metric_defined','gate_ok'});
 rejected = ~gateOk;
 result.rejected = table(ids(rejected),reasons(rejected), ...
     'VariableNames',{'id','reasons'});
@@ -122,7 +158,8 @@ result.candidate_ids = ids(survivors);
 result.survivors.after_admissibility = ids(survivors);
 if isempty(survivors)
     result.status_detail = ...
-        'no path passed all continuity, completeness, endpoint, and QCP gates';
+        ['no path passed all continuity, completeness, endpoint, QCP, ', ...
+        'reconstruction, and shape-definition gates'];
     return
 end
 if isscalar(survivors)
@@ -131,20 +168,20 @@ if isscalar(survivors)
     return
 end
 
-survivors = retainMinimum(survivors,maxSlopeChange, ...
+survivors = retainMinimum(survivors,normalizedSlopeChange, ...
     spec.tie.slope_abs,spec.tie.slope_rel);
-result.survivors.after_slope = ids(survivors);
+result.survivors.after_normalized_slope = ids(survivors);
 if isscalar(survivors)
-    result = select(result,survivors,'max_slope_change',ids);
+    result = select(result,survivors,'normalized_max_slope_change',ids);
     result.survivors = fillSurvivors(result.survivors,ids(survivors));
     return
 end
 
-survivors = retainMinimum(survivors,integratedCurvature, ...
+survivors = retainMinimum(survivors,normalizedCurvature, ...
     spec.tie.curvature_abs,spec.tie.curvature_rel);
-result.survivors.after_curvature = ids(survivors);
+result.survivors.after_normalized_curvature = ids(survivors);
 if isscalar(survivors)
-    result = select(result,survivors,'integrated_r_curvature',ids);
+    result = select(result,survivors,'normalized_r_curvature',ids);
     result.survivors = fillSurvivors(result.survivors,ids(survivors));
     return
 end
@@ -181,24 +218,6 @@ if isscalar(survivors)
     return
 end
 
-if any(~traceAvailable(survivors))
-    result.status = 'branch_ambiguous';
-    result.status_detail = ...
-        'trace-agreement tie breaker is unavailable for a tied path';
-    result.survivors = fillSurvivors(result.survivors,ids(survivors));
-    return
-end
-agree = traceAgreement(survivors);
-if any(agree)
-    survivors = survivors(agree);
-end
-result.survivors.after_trace_agreement = ids(survivors);
-if isscalar(survivors)
-    result = select(result,survivors,'trace_agreement',ids);
-    result.survivors = fillSurvivors(result.survivors,ids(survivors));
-    return
-end
-
 result.status = 'branch_ambiguous';
 result.status_detail = ...
     'multiple paths remain indistinguishable under every registered criterion';
@@ -209,8 +228,14 @@ function validateSpec(spec,invalidId)
 if ~isstruct(spec) || ~isscalar(spec)
     fail(invalidId,'spec must be a scalar struct.');
 end
-if ~isfield(spec,'version') || ~isfield(spec,'x') || ~isfield(spec,'tie')
-    fail(invalidId,'spec requires version, x, and tie fields.');
+if ~isfield(spec,'schema') || ~isfield(spec,'version') || ...
+        ~isfield(spec,'x') || ~isfield(spec,'tie') || ...
+        ~isfield(spec,'degenerate')
+    fail(invalidId,'spec requires schema, version, x, tie, and degenerate fields.');
+end
+schema = normalizeId(spec.schema,invalidId);
+if schema ~= "invzp_smooth_r_selector/v2"
+    fail(invalidId,'spec.schema must be "invzp_smooth_r_selector/v2".');
 end
 normalizeId(spec.version,invalidId);
 x = spec.x;
@@ -238,6 +263,22 @@ for k = 1:numel(names)
         fail(invalidId,'spec.tie.%s must be a finite nonnegative scalar.',name);
     end
 end
+if ~isstruct(spec.degenerate) || ~isscalar(spec.degenerate)
+    fail(invalidId,'spec.degenerate must be a scalar struct.');
+end
+names = {'derivative_energy_max','curvature_energy_max'};
+for k = 1:numel(names)
+    name = names{k};
+    if ~isfield(spec.degenerate,name)
+        fail(invalidId,'spec.degenerate.%s is required.',name);
+    end
+    value = spec.degenerate.(name);
+    if ~isnumeric(value) || ~isreal(value) || ~isscalar(value) || ...
+            ~isfinite(value) || value < 0
+        fail(invalidId, ...
+            'spec.degenerate.%s must be a finite nonnegative scalar.',name);
+    end
+end
 end
 
 function id = normalizeId(value,invalidId)
@@ -249,11 +290,12 @@ else
     ok = false;
 end
 if ~ok
-    fail(invalidId,'IDs and spec.version must be nonmissing character rows or string scalars.');
+    fail(invalidId, ...
+        'Text identifiers and spec schema/version must be character rows or string scalars.');
 end
 id = string(value);
 if strlength(id) == 0
-    fail(invalidId,'IDs and spec.version must be nonempty.');
+    fail(invalidId,'Text identifiers and spec schema/version must be nonempty.');
 end
 end
 
@@ -304,11 +346,10 @@ function survivors = emptySurvivors()
 empty = strings(0,1);
 survivors = struct( ...
     'after_admissibility',empty, ...
-    'after_slope',empty, ...
-    'after_curvature',empty, ...
+    'after_normalized_slope',empty, ...
+    'after_normalized_curvature',empty, ...
     'after_state_curvature',empty, ...
-    'after_qcp_distance',empty, ...
-    'after_trace_agreement',empty);
+    'after_qcp_distance',empty);
 end
 
 function survivors = fillSurvivors(survivors,ids)

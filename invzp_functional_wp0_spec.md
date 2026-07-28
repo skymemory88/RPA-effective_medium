@@ -70,6 +70,24 @@ moment and differs from `m_loc` by the one-point ring derivative. The exact rear
 the source and double-counting signs, while the centred local generator/Legendre construction defines
 the strict functional; an uncentred off-shell expansion in `X-m` must not be substituted for it.
 
+The re-centring remainder must nevertheless be kept visible in the order audit. With
+`d=m_loc-m`,
+
+\[
+-\frac12\sum_{i\ne j}J_{ij}\delta X_i^{(m)}\delta X_j^{(m)}
+=-\frac12\sum_{i\ne j}J_{ij}\delta X_i^{(0)}\delta X_j^{(0)}
+-J_0d\sum_i\delta X_i^{(0)}
+-\frac N2J_0d^2 .
+\]
+
+Source stationarity gives
+`d=N^(-1)*partial_h DeltaF_ring=O(1/z)`. Thus the one-leg operator has an
+`O(1/z)` coefficient, but its centred reference expectation vanishes; its first nonzero linked
+vacuum contribution, like the explicit `d^2` constant, is `O(1/z^2)`. The independent `(m,h)`
+Legendre/source variation carries the associated `O(1/z)` moment shift. The remainder therefore adds
+no missing strict-`O(1/z)` vacuum topology, but omitting it from the inventory without this power
+counting would be incomplete.
+
 For the closed paramagnetic oracle,
 
 \[
@@ -409,10 +427,22 @@ That coefficient-by-coefficient comparison is binding. Equality of the full resu
 the strict vacuum is neither required nor asserted.
 
 The primitive's double- and single-frequency sums make a sharper exact-vertex prediction. On a signed
-frequency grid, the scalar two-level connected vertex must be
+frequency grid, write the scalar two-level **connected cumulant** as
+`C_4^{conn}`; it is distinct from the one-particle-irreducible `gamma^(4)` used in
+`invzp_functional_wp4_skeleton_spec.md`. Its immutable normalization is
 
 \[
-\Gamma_4(n,-n,l,-l)
+\Phi_\Sigma^{\rm PM}[K]
+=-\frac{1}{4M^2\beta}
+\sum_{n,l\in\mathbb Z}
+C_4^{\rm conn}(n,-n,l,-l)K_nK_l,
+\qquad K_{-n}=K_n .
+\]
+
+The required connected cumulant is
+
+\[
+C_4^{\rm conn}(n,-n,l,-l)
 =-2M^2p\,g_n
 \left[g_l^2-Ag_l+g_ng_l\right]
 +\beta M^2pc\,g_n^2
@@ -427,10 +457,14 @@ The anomalous KMS/Hermite term proportional to
 c=1-n_{01}^2=\operatorname{sech}^2(\beta\Delta/2),
 \]
 
-collapses one frequency sum and generates the `sum_n K_n^2 g_n^2` part. At `n=l=0` the two Kronecker
-deltas coincide and correctly contribute twice. The dense exact `invzt_vertex4` path sum verifies
-this formula for `n,l=0,+/-1,+/-2` at `beta=1.7`, `Delta=1.3`, `M=1` to below `2e-13`. Failure of
-this identity at any KMS/degenerate fixture blocks a future EMT/2PI extension.
+collapses one frequency sum and generates the `sum_n K_n^2 g_n^2` part. Substitution in the displayed
+contraction gives exactly
+`p*beta*(lambda1*lambda2-A*lambda1^2/2)` and
+`-pc/2*sum_n w_n*K_n^2*g_n^2`; this relative normalization is part of the gate. At `n=l=0` the two
+Kronecker deltas coincide and correctly contribute twice. The dense exact `invzt_vertex4` path sum
+verifies this formula for `n,l=0,+/-1,+/-2` at `beta=1.7`, `Delta=1.3`, `M=1` to below `2e-13`.
+Failure of this identity or its contraction normalization at any KMS/degenerate fixture blocks a
+future EMT/2PI extension.
 
 ### 7.2 Scalar EMT leaf
 

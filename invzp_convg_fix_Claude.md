@@ -40,16 +40,19 @@ regular with `sigma_min([J R_eta]) = 0.4581`. Scaled pseudo-arclength crossed th
 audits accepted and changed `deta/ds` from `-1.771e-6` to `+8.358e-4`. Thus the clean high-`h`
 branch turns back toward increasing `h`; the earlier lower-`h` secant roots were reached by a branch
 jump and are not evidence of a continuous Jensen path. Repeating the local segment at one-quarter
-the initial arc step resolved `min(h) = 0.005243548147122800 meV`, bracketed the zero of `deta/ds`,
-and kept successive oriented-tangent overlap above `0.9999999999`.
+the initial arc step bracketed the zero of `deta/ds`, returned the unbounded interpolation estimate
+`h = 0.005243548147122800 meV`, and kept successive oriented-tangent overlap above
+`0.9999999999`. The fold topology is established near `5.243548e-3 meV`; the coordinate is not
+certified.
 
 An independent low-`h` test then used three declared deterministic cold seeds, none derived from the
 high-`h` trace. All converged to the same `h = 0` root within a scaled-state diameter of `4.278e-12`.
 Upward tangent continuation reached a second fixed-`h` rank loss at only
 `h = 1.130400753628218e-5 meV`: `sigma_min(J) = 1.558e-5` while
 `sigma_min([J R_eta]) = 0.5629`. Pseudo-arclength crossed it with all A–D audits accepted and changed
-`deta/ds` from `+2.677e-7` to `-5.243e-7`, resolving a local maximum
-`h = 1.130402502867847e-5 meV`. The directly traced low- and high-`h` neighborhoods are disjoint and
+`deta/ds` from `+2.677e-7` to `-5.243e-7`, establishing a local maximum near
+`h≈1.1304e-5 meV`. Its raw interpolation output, `1.130402502867847e-5 meV`, has no retained
+enclosure or uncertainty. The directly traced low- and high-`h` neighborhoods are disjoint and
 turn away from the intervening range. Roots returned by the earlier secant experiment between the two
 folds must lie on at least one additional branch segment. More remote folds could in principle join
 segments globally, but the two local folds already establish multiple real fixed-`h` roots and hence
@@ -70,9 +73,11 @@ prescription.
 fixed-`h` node construction are now exposed only under diagnostics, together with a scaled bordered
 pseudo-arclength tracer. On the frozen 0.10 K, 1.5 T legacy 16³ fixture, 149 full-state roots traced
 the clean high-`h` component through its regular fold; every independent A--D audit passed. A local
-Hermite tangent reconstruction gives
-`h_fold=0.0052435482911986821 meV`, only `1.44e-10 meV` from the earlier one-off quarter-step result.
-This validates the retained continuation primitive, not a Jensen path: disconnected root discovery,
+Hermite tangent reconstruction returned `0.0052435482911986821 meV`, but that value lies above the
+accepted node at `0.005243548157786061 meV` and therefore cannot be a certified minimum. Both it and
+the quarter-step output are rejected as precision claims; the tangent sign change and regular
+bordered corrector, not a fold coordinate, validate the retained continuation primitive. They do
+not validate a Jensen path: disconnected root discovery,
 single-valued section construction, endpoints, reverse/cold-seed agreement, and refinement gates
 remain outstanding. The dense oracle cost 1292.9 s, making the already derived
 diagonal-plus-low-rank bordered solve an obvious candidate until profiling showed otherwise: at the
@@ -86,7 +91,9 @@ failure and cannot be mistaken for a physical endpoint.
 At the low positive endpoint, a bounded h-coordinate corrector now fails reproducibly rather than
 running away: the best tested field column has `1.30e-3` Richardson drift against bordered
 `rcond≈1.76e-11`, and the corrector stagnates at residual `1.91e-5`. A separate diagnostic
-`q=(h/h_reference)^2` adapter preserves every original positive-h equation and advances three
+`q=(h/h_reference)^2` adapter, with
+`h_reference=6.890625e-9 meV` fixed to the last accepted h-coordinate handoff, preserves every
+original positive-h equation and advances three
 A--D-audited points to `q=0.775`. The next attempted point exposed a static-only
 `1.33548e-8` machine-resolution floor that row scaling did not remove. A default-off, one-shot
 scalar-`K0` proposal bounded by physical-`K0` ULPs and every unchanged full acceptance gate removes
@@ -110,7 +117,9 @@ order-independent uncertainty band; `K` and `lambda` remain derived. At 1.5 T an
 product census produced 16 accepted attempts and seven distinct roots; the earlier agreement of
 three cold seeds was therefore basin-local, not uniqueness evidence.
 A staged trace used cheap fixed-`h` nodes away from the low fold and pseudo-arclength only locally,
-recovering `h_fold=1.1303917626651595e-5 meV`. On its returning leg the raw q-average closure is
+crossing the same fold. Its short-trace interpolation returned `1.1303917626651595e-5 meV`, below an
+accepted node at `1.130400753628218e-5 meV`, so it is rejected as a certified maximum. On the
+returning leg the raw q-average closure is
 amplified by `G*Gbar`; the optional diagnostic `audit_coordinate='defactored'` instead checks the
 equivalent regular-domain equation `|K0-Jloc|/Jscale`. It carried the branch to
 `h=6.890625e-9 meV`, where the original raw fixed-`h` rank gate intervened. The later
@@ -147,8 +156,9 @@ manual schema translation without overstating connectivity.
 
 **Simple-first multi-root update, 2026-07-28.** The seven zero-field roots do not share one uniform
 convergence failure. A cheap upward screen followed by local continuation found two additional
-regular folds. Root 4 turns near `5.56814e-6 meV`; root 6 turns at
-`9.541141092330816e-6 meV`. The root-6 returning leg crosses zero and, after a small local refinement,
+regular folds. Root 4 turns near `5.56814e-6 meV`; root 6 turns near
+`9.54114e-6 meV`, with no certified enclosure attached to its raw turn estimate. The root-6
+returning leg crosses zero and, after a small local refinement,
 matches the root-6 census medoid within `1.42e-14` in the frozen cluster metric. Its interpolated
 predictor correction is `7.43e-12`, below the `1e-9` same-root threshold. This is the first certified
 zero-field endpoint connection for one of the newly enumerated components. A cheap 33-node
