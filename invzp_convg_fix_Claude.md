@@ -21,6 +21,18 @@ physical `mean(Gq)` event, evaluates the diagnostic in the exact reciprocal char
 `stable_form = true`, and defers structured-linear-algebra optimization until a profile or a
 low-temperature run justifies it.
 
+**Simultaneous-audit correction, 2026-07-28.** A QCP-anchored 4.05 T trace showed that the old
+Block-A audit replayed the nested static Picard solve and could choose a second `K0` root while
+grading a valid simultaneous `[Sigma,K0]` state. Accepted coupled roots had A/C/D residuals at
+`0`--`7.3e-15` and defactored B below `7.72e-10`, while the nested replay falsely reported
+`3.40e-3`--`3.12e-2`. The optional coupled audit now exactly matches
+`invz_ordered_node_equations`, derives and checks `K`/`lambda`, and invokes no nested static solve
+by default. The legacy/default formulation remains unchanged. This carried 126 accepted states from
+`h=0.0041142866` to `0.0117280521 meV`. Branch selection is still necessary: at one identical field
+two roots only `0.00103702` apart in scaled state have `r=0.768127507` and `0.822169537`.
+The immediate path is therefore QCP-anchored coupled continuation, retaining fine arclength only
+where fixed-`h` Newton switches branches.
+
 **Execution update, 2026-07-27.** First-hand inspection of the current `invz_run_spectra` output added
 an important constraint: convergence is non-uniform across the ordered field range; usable columns
 can occur near the apparent QCP while moderate-field columns (for example 1.5 T) are masked. A direct

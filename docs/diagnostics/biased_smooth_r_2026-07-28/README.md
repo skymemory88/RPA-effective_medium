@@ -302,6 +302,27 @@ dense oracle now. Exact last-point caching instead reduces a repeated evaluation
 The next optimization target is redundant local node/field-derivative evaluation, not linear
 algebra. Temporary `.mat` traces stayed under `/tmp` and are not retained.
 
+### QCP-anchored simultaneous-audit pilot
+
+A 4.05 T trace exposed an audit defect inherited by earlier continuation experiments. The
+simultaneous unknowns are `[Sigma(:);K0]`, but nested Block A reran
+`invz_emt_static_ordered` and could select another static root. Optional
+`formulation='coupled'` now repeats the simultaneous Sigma and defactored-static equations
+independently, and runs no nested static solver unless `debug_legacy_nested=true`.
+
+At seven retained states, coupled Blocks A/B matched the corresponding components of
+`invz_ordered_node_equations` with zero reported difference. One-ULP corruptions of derived
+`lambda` and static `K(1)` were rejected. Profiling found no `invz_emt_static_ordered` call on the
+ordinary coupled path, while the opt-in legacy diagnostic did call it. Implicit and explicit nested
+audits were `isequaln`.
+
+The QCP-connected trace retained 126 consecutive accepted states from
+`h=0.00411428661370878` to `0.01172805209203838 meV`; its largest coupled residual was
+`9.758e-10`. At `h=0.01171732294388717 meV`, continuation and natural-`h` Newton both produced
+accepted roots, but with `r=0.768127507` and `0.822169537` despite scaled state distance
+`0.00103702`. This is a direct branch-switch oracle: iteration count or a loose proximity tube
+cannot decide the path. Full `.mat` traces remain temporary under `/tmp`.
+
 A broader cold census at the frozen `h=0` node used 25 explicit product seeds:
 five constant offsets of the seed `Sigma` crossed with five values of `K0/Jscale`. Sixteen attempts
 were A--D accepted and clustered into **seven** distinct `[Sigma;K0]` roots; nine attempts failed.

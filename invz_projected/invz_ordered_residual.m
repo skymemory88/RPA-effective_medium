@@ -6,8 +6,13 @@ function res = invz_ordered_residual(node, state, opts)
 % G = -chi (meV^-1), ferromagnetic positive J.
 %
 % Implements four independently-recomputed residual blocks:
-%   A -- outer Sigma map: one full independent pass of the map, seeded from the exported
-%        lam/K0s, starting from the exported Sigma; rA = max|F(Sigma)-Sigma|.
+%   A -- Sigma map. opts.formulation='nested' (default) replays one full legacy outer
+%        iteration, including the inner static Picard solve. 'coupled' instead holds the
+%        exported K0 fixed while independently rebuilding dynamic K, lambda, and Sigma;
+%        the static equation is then graded separately by defactored Block B. The latter
+%        is the simultaneous [Sigma,K0] formulation and does not ask an ambiguous inner
+%        solver to select a second static root while auditing the supplied one. No nested
+%        static solve is run on the coupled path unless opts.debug_legacy_nested is true.
 %   B -- static medium (REVISED IN PLACE for the strict scheme, task 9): under the default
 %        resummed audit coordinate, a fresh invz_emt_static_ordered call at the exported
 %        Sigma(1)/lam(1:2), rB = so.resid, the q-average closure residual. The diagnostic
@@ -19,13 +24,17 @@ function res = invz_ordered_residual(node, state, opts)
 %        preflight below and the contract's dated Block-B subsection.
 %   C -- Sigma self-consistency of the DERIVED lambda/Sigma chain: lam and sg recomputed
 %        FRESH from the exported K (never from state.lam -- lam is derived); this is
-%        production's existing final_resid, named and independently scaled here.
+%        production's existing final_resid, named and independently scaled here. In the
+%        coupled formulation it also verifies the exact derived-state wiring
+%        state.lam == invz_lambdas(state.K,...).
 %   D -- dynamic EMT identity (the block final_resid OMITS): a fresh invz_emt_scalar call
 %        at the exported Sigma; compares the exported K(2:end) against the fresh med.K(2:end)
 %        (K(1) excluded BY DESIGN -- it is the elastic-hybrid static value, a different
 %        physical quantity from invz_emt_scalar's own ordinary-Dyson K(1)). Gated on
 %        med.dynamic_converged (slots 2:end), never med.converged: ordered callers replace
 %        the discarded PM static slot before lambdas, so the whole-PM flag must not vote here.
+%        Coupled mode separately verifies the exact wiring identity state.K(1)==state.K0s;
+%        it still never compares state.K(1) with the ordinary-Dyson med.K(1).
 %
 % A strict scheme (node.eso.static_medium in {'strict_1z_dyson_ref','strict_1z_bare_ref'})
 % additionally runs an independent reference/closure domain preflight BEFORE Blocks A/C/D or
@@ -58,6 +67,12 @@ function res = invz_ordered_residual(node, state, opts)
 %       floor, not a physics tolerance: a correctly-wired one-shot call is exact.
 %   .crit_tol (default 1e-6): the dimensionless res.stability classifier's crit floor
 %       (prereg SS1).
+%   .formulation ('nested' default | 'coupled'): Block-A definition. 'coupled' is
+%       diagnostic-only, supported only for resummed static medium with
+%       node.eso.audit_coordinate='defactored'.
+%   .debug_legacy_nested (default false): with formulation='coupled', additionally run and
+%       report the legacy nested replay. This can be branch-ambiguous and expensive, and
+%       never votes on coupled acceptance.
 %   .debug_resummed (default false): under a strict scheme only, additionally runs the
 %       discarded resummed q-average closure as a nullable diagnostic
 %       (res.blockB.resid_resummed); never affects .finite/.accepted/.pass.
@@ -96,6 +111,24 @@ function res = invz_ordered_residual(node, state, opts)
 if nargin < 3 || isempty(opts), opts = struct(); end
 tol_outer = getf(opts, 'tol_outer', 1e-8);
 dS_in     = getf(opts, 'dS', NaN);
+formulation = getf(opts,'formulation','nested');
+debugLegacyNested = getf(opts,'debug_legacy_nested',false);
+if ~(islogical(debugLegacyNested) && isscalar(debugLegacyNested))
+    error('invz:residualNode', ...
+        'opts.debug_legacy_nested must be a logical scalar.');
+end
+if isstring(formulation)
+    if ~isscalar(formulation) || ismissing(formulation)
+        error('invz:residualNode', ...
+            'opts.formulation must be ''nested'' or ''coupled''.');
+    end
+    formulation = char(formulation);
+end
+if ~(ischar(formulation) && isrow(formulation) && ...
+        any(strcmp(formulation,{'nested','coupled'})))
+    error('invz:residualNode', ...
+        'opts.formulation must be ''nested'' or ''coupled''.');
+end
 
 req_node  = {'tl','G0','g','wts','wn','beta','J0eff','G0inel0','G0el0','G0bare0','eso','eopts','Jnu_flat'};
 for k = 1:numel(req_node)
@@ -137,6 +170,22 @@ if numel(lam) ~= 3
 end
 
 Jscale = max(abs(Jnu_flat(:)));                  % problem-native coupling scale (meV)
+auditCoordinate = getf(eso,'audit_coordinate','raw_closure');
+if ~strcmp(smid_node,'resummed') && strcmp(formulation,'coupled')
+    error('invz:residualNode', ...
+        'opts.formulation=''coupled'' currently supports static_medium=''resummed'' only.');
+end
+if strcmp(smid_node,'resummed') && ...
+        ~any(strcmp(auditCoordinate,{'raw_closure','defactored'}))
+    error('invz:residualNode', ...
+        'node.eso.audit_coordinate must be ''raw_closure'' or ''defactored''.');
+end
+if strcmp(formulation,'coupled') && ~strcmp(auditCoordinate,'defactored')
+    error('invz:residualNode', ...
+        ['opts.formulation=''coupled'' requires ', ...
+         'node.eso.audit_coordinate=''defactored''.']);
+end
+res = struct('formulation',formulation);
 
 % =========================================================================================
 % Strict-only domain preflight (independent reference/closure recomputation BEFORE Blocks
@@ -198,16 +247,36 @@ if ~strcmp(smid_node, 'resummed')
 end
 
 % =========================================================================================
-% Block A -- outer Sigma map (contract Sec. 4): one independent full pass of the map,
-% seeded from state.lam/state.K0s, starting from state.Sigma.
+% Block A -- Sigma map. The nested formulation replays the legacy outer map, including
+% its inner static solver. The coupled formulation independently rebuilds dynamic K,
+% replaces only its static slot by the supplied K0, and then rebuilds lambda/Sigma. In
+% the latter formulation Block B, not an inner iteration, grades the static equation.
 % =========================================================================================
-sgA_Sigma = local_F(tl, G0, Jnu_flat, eopts, g, wts, beta, J0eff, ...
-                     G0inel0, G0el0, eso, Sigma, lam, K0s);
+if strcmp(formulation,'coupled')
+    sgA_Sigma = local_F_coupled( ...
+        tl,G0,Jnu_flat,eopts,g,wts,beta,Sigma,K0s);
+else
+    sgA_Sigma = local_F(tl, G0, Jnu_flat, eopts, g, wts, beta, J0eff, ...
+                         G0inel0, G0el0, eso, Sigma, lam, K0s);
+end
 rA = invz_finite_max_abs(sgA_Sigma, Sigma);
 scaleA_abs = tol_outer;  scaleA_rel = tol_outer;   % Sigma dimensionless O(1): abs === rel
 passA = isfinite(rA) && (rA < scaleA_abs);
 res.blockA = struct('resid', rA, 'scale_abs', scaleA_abs, 'scale_rel', scaleA_rel, ...
                      'pass', passA, 'err', '');
+if strcmp(formulation,'coupled')
+    res.blockA.legacy_nested_computed = debugLegacyNested;
+    res.blockA.legacy_nested_resid = NaN;
+    res.blockA.legacy_nested_pass = false;
+    if debugLegacyNested
+        nestedSigma = local_F(tl,G0,Jnu_flat,eopts,g,wts,beta,J0eff, ...
+            G0inel0,G0el0,eso,Sigma,lam,K0s);
+        nestedResidual = invz_finite_max_abs(nestedSigma,Sigma);
+        res.blockA.legacy_nested_resid = nestedResidual;
+        res.blockA.legacy_nested_pass = ...
+            isfinite(nestedResidual) && nestedResidual < scaleA_abs;
+    end
+end
 
 % =========================================================================================
 % Block B -- static medium (contract Sec. 4, REVISED IN PLACE for the strict scheme).
@@ -222,15 +291,21 @@ res.blockA = struct('resid', rA, 'scale_abs', scaleA_abs, 'scale_rel', scaleA_re
 % opts.debug_resummed: doing so would restore the inner iteration and pole exposure this
 % design removes, and the analytic-continuation path deliberately crosses that pole.
 % =========================================================================================
-outB = local_blockB(tl, lam, Sigma, Jnu_flat, K0s, beta, J0eff, ...
-                    G0inel0, G0el0, eso);
 strictB = ~strcmp(smid_node, 'resummed');
-auditCoordinate = getf(eso,'audit_coordinate','raw_closure');
-if ~strictB && ~any(strcmp(auditCoordinate,{'raw_closure','defactored'}))
-    error('invz:residualNode', ...
-        'node.eso.audit_coordinate must be ''raw_closure'' or ''defactored''.');
-end
 defactoredB = ~strictB && strcmp(auditCoordinate,'defactored');
+if strcmp(formulation,'coupled')
+    % The coupled formulation requires this coordinate by preflight above. Build a
+    % schema-compatible local record without calling the branch-selecting nested solver.
+    directB = local_blockB_coupled(tl,G0,Sigma,K0s,Jnu_flat,eopts, ...
+        g,wts,beta,G0inel0,G0el0);
+    directDUni = 1+(J0eff-K0s)*directB.Gstat;
+    outB = struct('K0',NaN,'Gstat',directB.Gstat, ...
+        'so',struct('r',directB.r,'D_uni',directDUni, ...
+        'converged',false,'resid',directB.resid_raw));
+else
+    outB = local_blockB(tl,lam,Sigma,Jnu_flat,K0s,beta,J0eff, ...
+        G0inel0,G0el0,eso);
+end
 if strictB
     scaleB_abs = getf(opts, 'K_atol', 1e-14);
     scaleB_rel = getf(opts, 'K_rtol', 1e-12);
@@ -267,8 +342,10 @@ if strictB
         rB = NaN;  passB = false;  convB = false;    % domain status, not an exception
     end
 elseif defactoredB
-    directB = local_blockB_defactored(tl,lam,Sigma,K0s,beta, ...
-        G0inel0,G0el0,Jnu_flat);
+    if ~strcmp(formulation,'coupled')
+        directB = local_blockB_defactored(tl,lam,Sigma,K0s,beta, ...
+            G0inel0,G0el0,Jnu_flat);
+    end
     rB = directB.resid;
     passB = isfinite(rB) && (rB < scaleB_abs);
     statusB = 'not_applicable';
@@ -298,7 +375,11 @@ if defactoredB
         (1+abs(directB.Gstat));
     res.blockB.raw_pass = isfinite(res.blockB.resid_raw) && ...
         res.blockB.resid_raw < res.blockB.raw_gate;
-    res.blockB.K0_seed_drift = abs(outB.K0-K0s);
+    if strcmp(formulation,'coupled')
+        res.blockB.K0_seed_drift = NaN;
+    else
+        res.blockB.K0_seed_drift = abs(outB.K0-K0s);
+    end
 end
 if strictB && getf(opts, 'debug_resummed', false)
     esoR = eso;  esoR.static_medium = 'resummed';  esoR.warn = false;
@@ -316,6 +397,13 @@ scaleC_abs = tol_outer;  scaleC_rel = tol_outer;
 passC = isfinite(rC) && (rC < scaleC_abs);
 res.blockC = struct('resid', rC, 'scale_abs', scaleC_abs, 'scale_rel', scaleC_rel, ...
                      'pass', passC, 'err', '');
+if strcmp(formulation,'coupled')
+    lamCheck = invz_lambdas(K,g,wts,beta,[1 2 3]);
+    res.blockC.lambda_consistent = isequaln(lam,lamCheck);
+    res.blockC.lambda_abs_resid = abs(lam-lamCheck);
+    res.blockC.pass = res.blockC.pass && res.blockC.lambda_consistent;
+    passC = res.blockC.pass;
+end
 
 % =========================================================================================
 % Block D -- dynamic EMT identity (contract Sec. 4; the block final_resid OMITS): fresh
@@ -338,6 +426,12 @@ else                                          % degenerate-size guard (contract 
 end
 res.blockD = struct('resid', rD, 'scale_abs', scaleD_abs, 'scale_rel', scaleD_rel, ...
                      'pass', passD, 'err', '');
+if strcmp(formulation,'coupled')
+    res.blockD.static_slot_resid = abs(K(1)-K0s);
+    res.blockD.static_slot_consistent = isequaln(K(1),K0s);
+    res.blockD.pass = res.blockD.pass && res.blockD.static_slot_consistent;
+    passD = res.blockD.pass;
+end
 
 % ---- top-level diagnostics / finite / stall / aggregate (contract Sec. 6-7) -------------
 res.D_uni  = D_uni;
@@ -407,6 +501,34 @@ Kf(1) = K0s_new;
 lam_next = invz_lambdas(Kf, g, wts, beta, [1 2 3]);             % (3) derived lambdas
 sg = invz_sigma_ordered(tl, lam_next, Kf, g, beta);             % (4) ordered Sigma map
 sgSigma = sg.Sigma;
+end
+
+% =============================================================================================
+function sgSigma = local_F_coupled( ...
+        tl,G0,Jnu_flat,eopts,g,wts,beta,Sigma,K0)
+%LOCAL_F_COUPLED Independent simultaneous-map recomputation. K0 is an
+% independent coordinate whose closure is graded by Block B; no nested
+% static solver is called here.
+med = invz_emt_scalar(G0,Sigma,Jnu_flat,eopts);
+K = med.K;
+K(1) = K0;
+lam = invz_lambdas(K,g,wts,beta,[1 2 3]);
+sg = invz_sigma_ordered(tl,lam,K,g,beta);
+sgSigma = sg.Sigma;
+end
+
+% =============================================================================================
+function out = local_blockB_coupled( ...
+        tl,G0,Sigma,K0,Jnu_flat,eopts,g,wts,beta,G0inel0,G0el0)
+%LOCAL_BLOCKB_COUPLED Independently rebuild the canonical derived K/lambda tuple before
+% evaluating the simultaneous static equation. This makes Block B a function of the
+% independent [Sigma,K0] coordinates, exactly like INVZ_ORDERED_NODE_EQUATIONS, rather than
+% trusting the exported state's derived lambda.
+med = invz_emt_scalar(G0,Sigma,Jnu_flat,eopts);
+K = med.K;
+K(1) = K0;
+lam = invz_lambdas(K,g,wts,beta,[1 2 3]);
+out = local_blockB_defactored(tl,lam,Sigma,K0,beta,G0inel0,G0el0,Jnu_flat);
 end
 
 % =============================================================================================

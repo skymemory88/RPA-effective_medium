@@ -290,6 +290,41 @@ extension is a diagnostic convention, not an algebraic equivalence proof at the 
 callers must retain the pole/mean event gates. Strict schemes ignore `audit_coordinate` entirely and
 continue to use their preregistered algebraic Block B.
 
+### Coupled simultaneous audit formulation (added 2026-07-28)
+
+The default remains `opts.formulation='nested'`, with the arithmetic and verdict specified above.
+For a resummed diagnostic node whose audit coordinate is explicitly `defactored`, the optional
+`opts.formulation='coupled'` instead audits the simultaneous independent variables
+`u=[Sigma(:);K0]` used by `invz_ordered_node_equations`:
+
+```text
+Kdyn = invz_emt_scalar(G0,Sigma,...).K
+Kcan = [K0;Kdyn(2:end)]
+lamcan = invz_lambdas(Kcan,...)
+RA = invz_sigma_ordered(...,lamcan,Kcan,...).Sigma - Sigma
+RB = (K0-Jloc(Sigma,lamcan,K0))/Jscale
+```
+
+Blocks A and B repeat the `Kcan`/`lamcan` construction independently. Neither calls
+`invz_emt_static_ordered`; therefore no second, branch-selecting inner Picard solve is asked to
+choose a `K0` while auditing the supplied simultaneous root. Block A gates `max(abs(RA))` and the
+defactored Block B gates `abs(RB)`, both by `tol_outer`. Their zero set and arithmetic are exactly
+those of `invz_ordered_node_equations` (apart from Block B taking the absolute value for reporting).
+
+The exported `K` and `lam` remain derived data rather than new physical equations. Coupled mode
+nevertheless enforces two exact wiring invariants before accepting their container:
+`state.K(1)==state.K0s` is folded into Block D, and
+`state.lam==invz_lambdas(state.K,...)` is folded into Block C. These are deterministic
+same-function/same-input identities, not fitted tolerances or a fifth stationarity condition.
+Blocks C/D still grade the exported dynamic tuple independently against the canonical equations.
+
+`opts.debug_legacy_nested=true` may additionally report the old nested Block-A replay, but it never
+votes on coupled acceptance. It is false by default because the replay is both expensive and
+branch-ambiguous in precisely the multi-root regime this formulation is designed to audit. The
+directly evaluated raw-coordinate identity remains available as `blockB.resid_raw`; no inner solve
+is needed to compute it. `blockB.K0_seed_drift` is `NaN` in coupled mode because there is
+deliberately no nested seed evolution to measure.
+
 ### Block C — Sigma self-consistency of the derived lambda/Sigma chain
 
 ```
@@ -308,6 +343,10 @@ statement, not new behaviour.
 **Scale:** `scale_abs = scale_rel = tol_outer` (identical reasoning to Block A: this measures
 the same physical Sigma-space quantity via a different recomputation path).
 **Pass:** `isfinite(rC) && rC < scale_abs`.
+
+Under the coupled formulation only, this pass is additionally ANDed with the exact derived-state
+wiring identity `state.lam == lam_check`, and the componentwise absolute differences are exposed as
+`blockC.lambda_abs_resid`. This does not alter the nested/default result schema or verdict.
 
 ### Block D — dynamic EMT identity (the block `final_resid` omits)
 
@@ -357,7 +396,15 @@ clause and `med_D.dynamic_converged`).
 && med_D.dynamic_converged`. (Task 9: gated on `med_D.dynamic_converged` — slots `2:end` only
 — never whole-PM `med_D.converged`; see the dated Block-B subsection's closing bullet for why.)
 
+Under the coupled formulation only, this pass is additionally ANDed with
+`state.K(1)==state.K0s`. This checks which static value was exported; it does **not** compare
+`state.K(1)` with the physically different ordinary-Dyson `med_D.K(1)`.
+
 ## 5. Why lambda is not a fifth, independently-gated block
+
+The discussion below specifies the nested/default formulation. In the coupled formulation,
+`lambda` is still not a fifth equation, but its exact deterministic derivation from the exported
+`K` is a required container-wiring invariant as recorded in the dated subsection above.
 
 `state.lam` is read as an input by Block B (Sec. 4) and by Block A's internal step (2), but no
 block asserts `state.lam == invz_lambdas(state.K, ...)` directly. This is intentional, not an
