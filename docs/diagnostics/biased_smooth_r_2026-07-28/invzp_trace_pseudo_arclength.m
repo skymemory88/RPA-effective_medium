@@ -77,10 +77,15 @@ for istep = 1:cfg.max_steps
     acceptedStep = false;
     lastReason = 'step_retry_exhausted';
     iattempt = 0;
+    attemptBudgetHit = false;
     while ds >= cfg.step_min
+        if iattempt >= cfg.max_step_attempts
+            attemptBudgetHit = true;
+            break
+        end
         iattempt = iattempt+1;
         yPred = trace.y(:,end)+ds*trace.tangent(:,end);
-        [ok,yNew,diagNew,corr] = corrector( ...
+        [ok,yNew,Rnew,Jnew,diagNew,corr] = corrector( ...
             problem,yPred,trace.tangent(:,end),cfg,nres,nvar,invalidId);
         if ~ok
             lastReason = corr.reason;
@@ -108,7 +113,6 @@ for istep = 1:cfg.max_steps
             continue
         end
 
-        [Rnew,Jnew,diagNew] = evaluate(problem,yNew,nres,nvar,invalidId);
         B = [Jnew; trace.tangent(:,end).'];
         borderedRcond = rcond(B);
         if ~isfinite(borderedRcond) || borderedRcond <= cfg.rcond_min
@@ -152,12 +156,18 @@ for istep = 1:cfg.max_steps
     end
 
     if ~acceptedStep
-        if startsWith(lastReason,'event:')
+        attemptBudgetHit = attemptBudgetHit || ...
+            iattempt >= cfg.max_step_attempts;
+        if attemptBudgetHit
+            trace.status = 'budget_exhausted';
+            trace.status_detail = ['step_attempt_budget:',lastReason];
+        elseif startsWith(lastReason,'event:')
             trace.status = 'event';
+            trace.status_detail = lastReason;
         else
             trace.status = 'step_collapse';
+            trace.status_detail = lastReason;
         end
-        trace.status_detail = lastReason;
         return
     end
 end
@@ -166,13 +176,21 @@ trace.status = 'max_steps';
 trace.status_detail = 'the configured accepted-step budget was reached';
 end
 
-function [ok,y,diag,corr] = corrector( ...
+function [ok,y,R,J,diag,corr] = corrector( ...
         problem,yPred,tangent,cfg,nres,nvar,invalidId)
 y = yPred;
+R = nan(nres,1);
+J = nan(nres,nvar);
 diag = struct();
 corr = struct('reason','max_corrector','iterations',0, ...
-    'constraint_abs',NaN);
+    'constraint_abs',NaN,'equation_evaluations',0);
 for iter = 1:cfg.max_corrector
+    if corr.equation_evaluations >= cfg.max_evaluations_per_attempt
+        corr.reason = 'evaluation_budget';
+        ok = false;
+        return
+    end
+    corr.equation_evaluations = corr.equation_evaluations+1;
     [R,J,diag] = evaluate(problem,y,nres,nvar,invalidId);
     event = equationEvent(problem,R,J,diag);
     constraint = tangent.'*(y-yPred);
@@ -209,6 +227,12 @@ for iter = 1:cfg.max_corrector
     alpha = 1;
     acceptedLine = false;
     for ils = 1:cfg.max_linesearch
+        if corr.equation_evaluations >= cfg.max_evaluations_per_attempt
+            corr.reason = 'evaluation_budget';
+            ok = false;
+            return
+        end
+        corr.equation_evaluations = corr.equation_evaluations+1;
         trial = y+alpha*delta;
         [Rt,Jt,diagt] = evaluate(problem,trial,nres,nvar,invalidId);
         eventt = equationEvent(problem,Rt,Jt,diagt);
@@ -332,6 +356,7 @@ rec = struct( ...
     'corrected_parameter',NaN, ...
     'reason','', ...
     'corrector_iterations',0, ...
+    'equation_evaluations',0, ...
     'constraint_abs',NaN, ...
     'correction_ratio',NaN);
 end
@@ -346,6 +371,7 @@ rec.predicted_parameter = yPred(end);
 if ~isempty(yCorrected), rec.corrected_parameter = yCorrected(end); end
 rec.reason = reason;
 rec.corrector_iterations = corr.iterations;
+rec.equation_evaluations = corr.equation_evaluations;
 rec.constraint_abs = corr.constraint_abs;
 rec.correction_ratio = correctionRatio;
 end
@@ -363,6 +389,9 @@ cfg = struct( ...
     'max_steps',getf(opts,'max_steps',100), ...
     'max_corrector',getf(opts,'max_corrector',10), ...
     'max_linesearch',getf(opts,'max_linesearch',10), ...
+    'max_step_attempts',getf(opts,'max_step_attempts',8), ...
+    'max_evaluations_per_attempt', ...
+        getf(opts,'max_evaluations_per_attempt',16), ...
     'target_iterations',getf(opts,'target_iterations',4), ...
     'tol_residual',getf(opts,'tol_residual',1e-10), ...
     'tol_constraint',getf(opts,'tol_constraint',1e-10), ...
@@ -395,7 +424,8 @@ if cfg.grow_correction_ratio > cfg.correction_ratio_max
     fail(invalidId, ...
         'grow_correction_ratio cannot exceed correction_ratio_max.');
 end
-integers = {'max_steps','max_corrector','max_linesearch','target_iterations'};
+integers = {'max_steps','max_corrector','max_linesearch', ...
+    'max_step_attempts','max_evaluations_per_attempt','target_iterations'};
 for k = 1:numel(integers)
     name = integers{k};
     value = cfg.(name);

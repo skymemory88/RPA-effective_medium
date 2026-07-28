@@ -24,7 +24,13 @@ selector. Its coordinate contract is `y=[scaled_state; scaled_parameter]`, with 
 parameter last. Every rejected adaptive attempt is retained. Persistent hard-event failures terminate
 with `status='event'`; pointwise event callbacks alone cannot prove that a narrow boundary was not
 crossed and re-entered between evaluations, so an invZ adapter must additionally report continuous
-signed margins and bracket their changes.
+signed margins and bracket their changes. Each accepted-step search is also bounded deterministically
+by `max_step_attempts` (default 8, matching the largest accepted retry count in the retained low
+trace), and each corrector attempt by
+`max_evaluations_per_attempt` (default 16). Exhausting the former returns
+`status='budget_exhausted'` with the last numerical reason; it never promotes the last iterate. The
+accepted corrector's already-gated `R`, Jacobian, and diagnostic record are carried directly into
+the audit and tangent update, so there is no unmetered or unchecked post-audit equation call.
 
 `invzp_ordered_arclength_problem` is the first invZ-specific adapter. It uses the audited resummed
 node equations and a Richardson-refined centred derivative in the fixed longitudinal field, with
@@ -137,7 +143,13 @@ R(u,h) = u^3-u+h
 
 and recovered the exact fold fields `h=+/-2/(3*sqrt(3))` within the declared arc discretization.
 Fresh guards also verified reverse orientation, retry retention, invalid-tangent rejection, and
-distinct terminal statuses for callback and nonfinite-residual events.
+distinct terminal statuses for callback and nonfinite-residual events. A deliberately unsolvable
+post-initial curve additionally freezes the retry envelope: two permitted attempts of three equation
+evaluations each are both retained, then terminate as
+`budget_exhausted/step_attempt_budget:evaluation_budget`. The cubic fold oracle remains unchanged
+under the default envelope. Replaying the retained low-trace first step reproduced its state,
+tangent, and record exactly: the eighth attempt was accepted and no attempt used more than five of
+the permitted 16 equation evaluations.
 
 On the frozen legacy 16³ LiHoF4 coupling at `T=0.10 K`, `Bx=1.5 T`, the invZ adapter reproduced the
 previously observed high-branch fold with a retained full-state trace:
@@ -192,4 +204,6 @@ The optional `eso.audit_coordinate='defactored'` audit carried that returning se
 `h=6.890625e-9 meV`, where the fixed-`h` Jacobian had `rcond=1.33e-11`. It did **not** establish a
 connection to any of the seven `h=0` roots: fixed-`h` Newton then lost rank, and direct or polynomial
 endpoint extrapolation failed the residual. The low endpoint topology therefore remains unresolved.
-No production solver or Jensen path is authorized by this pilot.
+No production solver or Jensen path is authorized by this pilot. The bounded retry envelope is
+intended to make any future endpoint trace fail promptly and reproducibly instead of consuming an
+open-ended nested retry cost; it does not regularize the endpoint or change an acceptance gate.
