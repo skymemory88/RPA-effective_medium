@@ -77,6 +77,17 @@ full-state predictor tube. It retains every scheduled point, including the first
 trailing `not_run_after_stop` records. This is useful for cheap regular segments on either side of a
 fold; it neither retries nor crosses a fixed-`h` rank loss.
 
+`invzp_fixed_h_trace_graph_inputs` is the strict adapter from that retained trace schema to the
+audited graph's input schema. It rechecks each emitted vertex against declared residual, A--D,
+domain, pole, and mean gates and labels whether those thresholds came from the Newton record's
+embedded normalized configuration or from an explicitly allowed legacy declaration. A passing edge
+event certificate must be bound to a preregistered method, source trace, record pair, ordered margin
+list, positive full-edge lower bounds, and nonempty proof payload; each lower bound is also checked
+against both stored endpoint margins. Missing evidence sets `event_bracket_ok=false`. The adapter
+never derives a continuous certificate from pointwise-positive nodes. The diagnostic Newton helper
+now embeds its complete normalized option record so new traces can require
+`require_embedded_config=true`.
+
 `invzp_assemble_audited_graph` is the first evidence-only connectivity layer. It accepts only
 caller-supplied, strictly accepted vertices and explicitly certified adjacent trace records. Vertex
 certificates preserve the raw residual threshold, A--D payload, domain result, signed event margins,
@@ -169,9 +180,9 @@ Input order and path IDs never break a tie.
 
 ## Deliberate omissions
 
-The cold-seed root enumerator, a one-direction fixed-`h` handoff primitive, and a manual
-evidence-only graph assembler now exist. Complete bidirectional branch reconstruction, continuous
-signed event-crossing production by the trace adapters, automatic trace-to-graph conversion,
+The cold-seed root enumerator, a one-direction fixed-`h` handoff primitive, a strict fixed-`h`
+trace-input adapter, and an evidence-only graph assembler now exist. Complete bidirectional branch
+reconstruction, continuous signed event-crossing production, arclength trace-to-graph conversion,
 cross-trace endpoint matching, fold splitting, single-valued Jensen-section construction, endpoint
 reconstruction, QCP field sequence, physical-`h` diagnostic metrics, mesh-refinement drift, and
 cross-normalization winner audit still have to be built and frozen before the global 1.5 T
@@ -188,6 +199,13 @@ accepted root, a missing signed-event bracket, unresolved termination, a nonmono
 required endpoint, equal-`h` tangent enforcement, strict residual equality rejection, and negative
 `h` rejection. It also rejects a termination whose `resolved` flag contradicts the registered
 successful-status set. No persistent graph test script is kept.
+
+A fresh fixed-`h` adapter guard translates the retained 33-node root-6 trace into 33 vertices and,
+with no signed-event certificates supplied, exactly 32 blocked adjacencies. Synthetic interval
+certificate fixtures unlock exactly those 32 edges; an arbitrary nonempty payload, a source/pair
+mismatch, missing embedded threshold provenance under strict mode, and an embedded `tol_outer`
+mismatch all fail closed. The normalized Newton configuration is also checked on a fresh zero-field
+correction. No persistent adapter test script is kept.
 
 ## Verification record
 
