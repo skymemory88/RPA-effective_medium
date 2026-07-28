@@ -68,8 +68,9 @@ history = repmat(blank_history(), 1, 0);
 for iter = 1:maxit
     [R, diag, state] = invz_ordered_node_equations(node,u);
     resid_inf = norm(R, Inf);
-    reason = event_reason(R, diag, pole_margin_min, mean_margin_min);
-    if ~isempty(reason)
+    currentEvent = event_reason(R, diag, pole_margin_min, mean_margin_min);
+    if ~isempty(currentEvent)
+        reason = currentEvent;
         hrec = history_record(iter, resid_inf, diag, NaN, NaN);
         hrec.reason = reason;
         history(end+1) = hrec; %#ok<AGROW>
