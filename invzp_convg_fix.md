@@ -58,7 +58,11 @@ There are now two separate deliverables:
   equations. Quantitative comparison must carry the grid qualifier. An
   opt-in downward-field warm continuation is now available for exploratory
   visual maps; it changes initialization only and has already recovered
-  accepted columns just below the former QCP-side edge.
+  accepted columns just below the former QCP-side edge. A direct cold/warm
+  visual comparison by the user shows visibly more converged field slivers
+  in the warm map, and every newly visible mode follows the surrounding
+  field evolution smoothly, including the critical mode. This passes the
+  first empirical-coherence gate for the method.
 - **Complete low-field ordered coverage:** still open and secondary. No
   continuation branch, smooth-`r` candidate, strict closure, or functional
   prototype is authorized as the production default. In particular, warm
@@ -71,7 +75,7 @@ There are now two separate deliverables:
 |---|---|---|
 | More Picard iterations and heavier damping | A 1 T PM fixed point can be reached after 879 iterations with `mix_outer=0.02`, but it is unstable (`crit=-3.669`); the ordered profile still failed after 10,354 outer iterations in the stronger test. Near the QCP, changing `mix_outer` from 0.7 to 0.3 while raising the cap to 1000 lost a warm-seeded 4.400 T solution that a less damped solve found. | This is not critical slowing, and damping is not monotone improvement. Iteration/mixing changes can be useful inside a residual-gated continuation experiment but are not a global fix or a branch selector. |
 | Full-profile warm handoff between fields | A complete 4.05 T auxiliary-`h` profile did not complete 4.04 or 4.00 T; one matched-seed sequence reduced the accepted-node count. | Transferring every off-shell node can put later nodes in different basins. Do not use this stronger handoff as the production rule. |
-| Minimal QCP-down predictor warm continuation | The new opt-in `field_continuation='qcp_down'` transfers only the last fully accepted column's finite zero-`h` predictor state and retains the existing cold retry. With `mix_outer=0.50`, `max_outer=1000`, 4.425, 4.400, and 4.375 T all accepted consecutively; at the former default 0.70/200, 4.400 T was recovered but 4.375 T was not. | This establishes a viable local numerical route and proves some masks are initialization/iteration false negatives. It remains direction-, spacing-, grid-, and basin-dependent until the gates below are run; it cannot formally rank multiple residual-valid roots. |
+| Minimal QCP-down predictor warm continuation | The new opt-in `field_continuation='qcp_down'` transfers only the last fully accepted column's finite zero-`h` predictor state and retains the existing cold retry. With `mix_outer=0.50`, `max_outer=1000`, 4.425, 4.400, and 4.375 T all accepted consecutively; at the former default 0.70/200, 4.400 T was recovered but 4.375 T was not. The user's direct cold/warm susceptibility comparison then showed visibly more converged field slivers, all with empirically sensible, continuously evolving modes including the critical mode. | This establishes a viable local numerical route, proves some masks are initialization/iteration false negatives, and passes a first visual physics sanity check. It remains direction-, spacing-, grid-, and basin-dependent until the quantitative gates below are run; it cannot formally rank multiple residual-valid roots. |
 | Defactored fixed-node Newton | Repaired all three failed 3.6 T nodes and produced a 33/33 stable profile; at 1.5 T it repaired only the predictor and two nodes. | Confirms a local numerical Picard defect, but a fixed-`h` root is not automatically the continuous thermodynamic branch. Retain as a corrector/oracle only. |
 | Natural-parameter and pseudo-arclength continuation | Crossed regular fixed-`h` folds and showed that the clean 1.5 T high- and low-`h` segments turn away from the intervening interval. | Establishes non-single-valued root geometry and invalidates an unconditional Newton fallback. It does not select a path. |
 | Root census and coordinate stabilization (`q`, equilibrated `h`, `w=z-K0`) | Found seven zero-field roots; row equilibration and `w` greatly improved conditioning; root 6 has two observed legs tied to the same zero-field root. | Other legs and root 7 remain incomplete; finite samples are not continuous signed-edge certificates. Coordinate changes improve solving, not physics selection. |
@@ -88,10 +92,12 @@ There are now two separate deliverables:
 
 ### Planned next steps, in priority order
 
-1. **Inspect the opt-in QCP-down warm-seeded spectrum now.** Keep the
-   verified cold 4.60--4.90 T result as the regression control, and label
-   newly recovered columns as experimental warm-continuation output.
-2. **Grade that numerical route before broadening it.** Freeze one setting
+1. **Retain the cold/warm visual comparison as the first passed gate.**
+   Preserve the cold 4.60--4.90 T result as the regression control and the
+   saved cold/warm figures as qualitative evidence. Label newly recovered
+   columns as experimental warm-continuation output; visual smoothness is
+   supporting evidence, not a substitute for state comparison.
+2. **Grade that numerical route quantitatively before broadening it.** Freeze one setting
    (the demonstrated `mix_outer=0.50`, `max_outer=1000` is the current
    reference), refine the physical-field step, and record accepted-column
    count plus seed provenance, `hstar`, `rstar`, `Sigma(0)`, moment, pole,
@@ -155,6 +161,17 @@ evidence of global uniqueness. The committed measured reference is
 0.50/1000; any later interactive-driver setting, including the current
 user-edited 0.40/5000 configuration, is exploratory until its output is
 separately graded.
+
+The subsequent user-run cold/warm susceptibility comparison supplied the
+first observable-level check. The warm-seeded map contains visibly more
+converged slivers along the magnetic-field axis than the cold map. Every
+recovered sliver was judged empirically sensible: its modes evolve
+continuously with neighboring field columns, including the critical mode.
+The comparison is retained in `Data/cold_seeding_chi_1z.fig` and
+`Data/warm_seeding_chi_1z.fig`. This is first-hand qualitative evidence,
+not yet a counted field-by-field or bidirectional state audit. It promotes
+the method to the leading near-QCP numerical candidate, while leaving the
+direction/full-state/refinement gates binding.
 
 **Thermodynamic-functional literature assessment, 2026-07-28.** McKenzie
 and Stamp, *Phys. Rev. B* **97**, 214430 (2018), derive an exact
@@ -1026,27 +1043,27 @@ where the present one does not.
 
 | work item | present state | remaining effort / gate |
 |---|---|---|
-| Visual QCP susceptibility and mode | Ready now as a finite-`16^3` preview on 4.60--4.90 T | No solver work for inspection. Quantitative comparison still needs coupling-grid convergence before only local field/frequency/broadening refinement. |
+| Visual QCP susceptibility and mode | Cold QCP regression and cold/warm comparison inspected; recovered warm columns are empirically coherent | Preserve the figures and finite-`16^3` qualifier. Quantitative comparison still needs the continuation gates and coupling-grid convergence. |
 | QCP coupling/grid convergence | Four-grid sliver/`Bc` shift established; phase-aligned peak curve is sub-percent stable | Extend/refine only until `S_N(J0)`, absolute `Bc`, and accepted support have a defensible continuum limit; retain the peak gate as the observable regression. |
 | Retained diagnostics and coupled audit | Implemented | Maintenance only. They are evidence tools, not a new production branch. |
-| QCP-down warm continuation | Opt-in preview implemented; three-column edge sequence demonstrated at 0.50/1000 | Grade field-step refinement, downward/upward/cold state agreement, spectral pole/residue continuity, and coupling-grid dependence before any default promotion. |
+| QCP-down warm continuation | Opt-in preview implemented; three-column edge sequence demonstrated at 0.50/1000; visual cold/warm comparison passed | Grade field-step refinement, downward/upward/cold state agreement, spectral pole/residue continuity, and coupling-grid dependence before any default promotion. |
 | One additional low-field component | Optional, secondary | Bounded endpoint-first experiment at one scientifically useful field. Stop if the component has no unique increasing Jensen zero. |
 | Complete low-field branch prescription | Not authorized | Substantial only after an admissible endpoint exists: continuous event enclosures, independent-direction/seed agreement, full section construction, and discretization refinement. |
 | Common functional / exact local-bilocal route | Literature normalization clue identified; full derivation still paused | First cross-audit the paper's HS/source convention against exact local cumulants. Resume the nonlinear electronuclear 2PI work only as a rigor-driven theory project; it is the formal multi-root selector, not required for the immediate visual preview. |
 
 ## Recommended execution order
 
-1. Run and inspect the finite-`16^3` QCP spectrum before altering the state
-   solver. Preserve the 4.60--4.90 T subset as the regression anchor even
-   when the interactive driver is broadened, and display its grid qualifier.
-2. Before quantitative comparison, extend the coupling/state grid ladder
-   until absolute `Bc` and accepted support stabilize. The phase-aligned
-   peak curve has already passed the four-grid/refined-frequency check;
-   retain it while refining the field-axis limit.
-3. Grade the opt-in QCP-down predictor continuation at the demonstrated
+1. Preserve the completed finite-`16^3` cold/warm visual comparison and the
+   4.60--4.90 T cold subset as regression anchors. Display the grid qualifier
+   and mark warm-recovered columns as experimental.
+2. Grade the opt-in QCP-down predictor continuation at the demonstrated
    0.50/1000 reference: field-step refinement, reverse/cold overlap, full
    state continuity, pole/residue continuity, and grid provenance. Do not
    replace those tests with a still larger iteration cap.
+3. Before quantitative experiment comparison, extend the coupling/state
+   grid ladder until absolute `Bc` and accepted support stabilize. The
+   phase-aligned peak curve has already passed the four-grid/refined-
+   frequency check; retain it while refining the field-axis limit.
 4. Use the paper only for the bounded local-cumulant normalization audit,
    then retain the exact local-bilocal/2PI programme as the formal root-
    selection route. Spectral weight may reject or empirically distinguish
