@@ -21,10 +21,10 @@ to the closure that defines it, and points the continuation experiment at the ex
 square residual in `invzp_convg_fix.md`. Withdrawn historical claims are identified rather than
 silently reused. Passages marked as belonging to §1–§8 were written before any of that reading.
 
-**Current-status update, 2026-07-28.** The historical 0.31 K diagnosis
+**Current-status update, 2026-07-29.** The historical 0.31 K diagnosis
 below remains valid for the field cut on which it was measured, but it is
 not the current global availability statement. Four later results now
-govern:
+govern, together with a fifth solver-edge correction:
 
 1. The response evaluator is still healthy once an accepted state exists.
    On the research-priority 0.10 K, `q=[0 0 0]`, 4.60--4.90 T window, the
@@ -45,6 +45,14 @@ govern:
    sliver. Across `12^3--24^3` its contiguous width scales approximately
    as `N^-1.076`, and `Bc_1z` moves by `0.02067 T`. The `16^3` spectrum is
    a visual regression, not a grid-converged critical result.
+5. The 0.10 K, 4.400 T edge failure is not chaotic or pole-crossed. Every
+   iterate stays on the rightmost coupling interval, the inner static
+   residual is about `5e-11`, and late state increments have a signed ratio
+   near `-0.916`. This is a locally contractive, oscillatory, linearly
+   convergent outer mode that misses the 200-iteration budget. The ordered
+   problem therefore has at least two numerical regimes: budget-limited
+   contraction near part of the QCP edge, and pole-sensitive/noncontractive
+   or multiroot behaviour deeper in the ordered phase.
 
 Section 11 records the measurements and revised net diagnosis. Sections
 1--10 preserve the causal derivation and historical decision trail.
@@ -183,7 +191,7 @@ Comparing the last two columns gives the criterion directly: the medium is well 
 self-consistent Σ(0) exceeds the marginality threshold — true at 4.0 and 4.4 T, false at 3.6 T and
 below.
 
-### 2.3 Consequence: the outer map is meromorphic, pole-sensitive, and not a contraction
+### 2.3 Consequence in the pole-crossed regime: the outer map is meromorphic and can be noncontractive
 
 With sign-straddling denominators the BZ mean is a difference of large numbers and `A(0)`, hence `K(0)`,
 becomes a meromorphic function of Σ(0), with a dense set of finite-grid poles and steep sign-changing
@@ -200,9 +208,11 @@ intervals. One application of the outer map at B = 1 T, holding Σ(ω_n≠0) = 0
 | 1.00 | 4176 | −1.11e−3 | +4.171e−2 | **+32.66** |
 | 2.00 | 1456 | −4.29e−4 | −2.175e−3 | **−1.677** |
 
-There is no fixed point *in this scan* and no monotonic trend; the sign of `A(0)` flips between adjacent
-samples. Damping cannot repair this — a damped Picard iteration converges only on a map that is at least
-continuous and locally contracting.
+There is no fixed point *in this scan* and no monotonic trend; the sign of
+`A(0)` flips between adjacent samples. Damping cannot repair these
+discontinuous/pole-crossed intervals — a damped Picard iteration converges
+only on a map that is at least continuous and locally contracting in the
+basin being followed.
 
 Two limits on how far that last sentence may be pushed. First, the scan is one-dimensional (Σ(ω_n≠0)
 held at 0), so it bounds the behaviour of the ω = 0 slot, not the existence of a fixed point of the full
@@ -215,6 +225,13 @@ ordered path: with the same `mix_outer = 0.02`, `max_outer = 2000` and only nine
 1 T profile still returned `node_failed` (8/10 nodes accepted, 10,354 outer iterations). The claim that
 survives is the operational one — **no mixing constant makes this map usable** — not the stronger
 algebraic one.
+
+That conclusion is scoped to the measured low-field, pole-crossed regime.
+The later 0.10 K trace at 4.400 T (§11.6) remains on one rightmost interval
+and has a stable signed late-iterate factor near `-0.916`. It is locally
+contractive but too slow for the 200-iteration cap. Thus “masked” does not
+identify a unique mechanism: the trace must distinguish a budget-limited
+contraction from a noncontractive/pole-crossed failure.
 
 ### 2.4 The two-level self-energy multiplies the damage by ~10³
 
@@ -332,8 +349,10 @@ else changes. Same fields, same grid, same T:
 | 3.6 | 86 iters | converged, 13 iters, Σ(0) = 0.111 |
 | 4.0 | 13 iters | converged, 13 iters, Σ(0) = 0.0896 |
 
-Changing exactly one thing — whether the ω = 0 medium carries a q-denominator — turns a permanently
-non-convergent iteration into a 13–15 iteration solve at every field. That is the cause, isolated.
+Changing exactly one thing — whether the ω = 0 medium carries a q-denominator — turns an iteration
+that failed within the registered budget on this low-field cut into a 13–15 iteration solve at every
+field. That isolates the pole-conditioned mechanism on this fixture; it does not imply that every
+QCP-side mask has the same asymptotics.
 
 At the driver level the same switch restores the spectra outright (`invz_spectra_map`, same 35-point ω
 grid as §1):
@@ -417,15 +436,21 @@ better by converging the lattice sum.
 ## 4. Summary of the causal chain
 
 1. The effective-medium closure is defined as a resummed BZ average of `1/(RPA denominator)`.
-2. That denominator changes sign across the grid once the *worst grid mode* goes marginal — which lags
+2. In the deeper ordered regime that denominator changes sign across the
+   grid once the *worst grid mode* goes marginal — which lags
    the uniform instability by the Γ-exclusion gap `(J(0) − max_q J_ν)·|Gstat|` (§5/D1, §9.5), a
-   discretisation quantity that shrinks on refinement. So: throughout the ordered phase, bar a sliver
-   below B_c that is a grid artifact (§3.3).
+   discretisation quantity that shrinks on refinement. On the tested finite
+   grids this leaves a QCP-side rightmost-interval sliver plus disconnected
+   accepted islands; it is not a universal iteration boundary.
 3. The BZ average therefore becomes a sign-indefinite, pole-sensitive meromorphic function of Σ(0);
    the closure has multiple pole-separated roots and the code has no branch constraint.
 4. The two-level self-energy amplifies `K(0)` by ≈ 7.8 × 10² meV at (0.31 K, 1 T), so the outer damped
    Picard map has an O(10²–10³), sign-indefinite effective gain.
-5. The outer loop therefore never converges; it hits `max_outer = 200` with a chaotic residual.
+5. In the pole-crossed low-field regime the outer loop can be
+   noncontractive and hit `max_outer` with an irregular residual. Near the
+   0.10 K QCP edge, a different failure occurs: an oscillatory contraction
+   with signed factor about `-0.916` is still above tolerance after 200
+   iterations. Both are masked by the same downstream all-node gate.
 6. `invz_hmf_ordered` needs that medium at every h along a quadrature path whose lower end is precisely
    the unstable paramagnet, and whose grid deliberately clusters there.
 7. `invz_hmf_status` converts any single failed node into `node_failed`; `hmf_star = NaN`;
@@ -543,12 +568,17 @@ sat relative to the bracket, and why — without changing what is accepted.
 belong in the trace. A default-path `stable_form` change is excluded by the bit-identity invariant and
 would not select the physical branch.
 
-**R5 — NaN-propagating residuals (D5); and solve the coupled (Σ, K0) state as an *experiment* (D4).**
+**R5 — NaN-propagating residuals (D5); and use residual-gated solver experiments to separate regimes.**
 The NaN hardening is straightforward and worth doing, though it is not the cause of anything measured
-here. The coupled solve is a diagnostic, not a maintenance fix: as §5/D4 now records, damping Σ alone is
-a legitimate block-Picard scheme, and no evidence here says that damping λ or K0s separately would help.
-The converged nodes take 13–20 iterations, so a well-posed loop is cheap; the 200-iteration cap is only
-ever reached by genuinely non-convergent nodes, and raising it would not help.
+here. The coupled solve is a diagnostic, not a maintenance fix: as §5/D4
+now records, damping Σ alone is a legitimate block-Picard scheme, and no
+evidence here says that damping λ or K0s separately would help. A later
+trace (§11.6) falsified the historical inference that reaching the
+200-iteration cap always means noncontraction: the 4.400 T predictor is a
+slow contraction. The next bounded numerical experiment should therefore
+try safeguarded acceleration from the same cold start while retaining the
+unchanged A--D acceptance audit; it must not infer basin preservation merely
+from having started cold.
 
 **R6 — preserve the failure evidence (D3).** Attach `hmf_prof` (and the per-node `medium_status`,
 `Dq_min`, `ref_denom` arrays) to the ordered solver's early return, so a masked column carries its own
@@ -1177,6 +1207,28 @@ retained `mu2` term for the current one-shot closure and its chosen `Gref`
 (`invz_medium_moment_closure.m:56-58`). It is **not** a direct measurement or bound on
 `max_q |Dq−1|`.
 
+The coupling-only QCP measurement makes this distinction numerical. At the
+`16^3` mass root, `y=J0` and
+
+```text
+G = S_16(J0) = -198.006079765 meV^-1
+K0 = J0 + 1/G = 0.001374085681 meV
+u(Jmax) = -0.9130166       D(Jmax) = 0.0869834
+u(Jmin) = +1.6112123       D(Jmin) = 2.6112123
+|G|*(Jmax-Jmin) = 2.5242289
+```
+
+Thus the uniform geometric condition fails at criticality because the
+most-antiferromagnetic sampled coupling gives `|u|>1`, not because the
+near-ferromagnetic mode at `Jmax` has crossed its pole. The same conclusion
+holds on every tested grid (`max|u|=1.50--1.73` for `12^3--24^3`).
+This does not invalidate the exactly resummed closure on its rightmost
+branch. It does mean that no ratio of terms from the strict moment series
+can bound the difference between strict and resummed results there. The
+observed approximately `0.014 T` difference between their coarse PM-boundary
+estimates is consistent with that loss of control, but it is not a proof of
+its cause or an uncertainty bar.
+
 My first draft concluded from this that strict converges *iff* `x` is outside the support, hence "no
 truncation order can be controlled where the resummed scheme fails". **That is wrong, and my own §3.1
 refutes it**: at 3.6 T, `x` is inside the computed support and the resummed jensen path fails, yet the
@@ -1310,14 +1362,18 @@ merely because each formula contains powers of a propagator.
 
 ### 10.3 What I recommend against
 
-* **Do not raise `max_outer`, soften `mix_outer`, or widen a tolerance.** Measured (§2.3–2.4): the map
-  is meromorphic and pole-sensitive with an O(10²–10³) sign-indefinite gain, not slowly converging. The
-  strongest available test of the contrary is the independent run in §9.5: `mix_outer = 0.02` *does*
-  reach a fixed point of the isolated 1 T PM problem after 879 iterations — a deeply unstable one,
-  `crit = −3.669`. With `max_outer = 2000` and only nine nonzero H_MF nodes, the 1 T ordered profile
-  still returns `node_failed` after 10,354 outer iterations. So the defensible claim is the measured
-  one — **no tested mixing constant produced a usable ordered path** — and what heavy damping buys is
-  an unstable continued-PM root, not an ordered solution. It is not established that no constant could.
+* **Do not use a larger `max_outer`, softer `mix_outer`, or wider tolerance
+  as one unconditional production fix.** In the low-field pole-crossed
+  regime (§2.3--2.4), `mix_outer=0.02` reaches only a deeply unstable
+  continued-PM root after 879 iterations (`crit=-3.669`), while the ordered
+  profile remains `node_failed` after 10,354 aggregate outer iterations.
+  Near the 0.10 K QCP edge, however, 4.400 T is a genuine slow contraction
+  and a 1000-iteration cap accepts it. That later result falsifies the
+  former global phrase “not slowly converging.” A larger cap can remove
+  some budget false negatives, but it is a blunt and costly remedy and
+  supplies no root selection. Safeguarded cold-start acceleration with the
+  unchanged final audit is therefore allowed as a bounded numerical
+  experiment; tolerance relaxation is not.
 * **Do not promote `strict_1z_dyson_ref` on convergence evidence.** It failed a preregistered gate;
   §9.4 refines *why*, but refining a verdict is not overturning it.
 * **Do not use `ordered_mode = 'bare'` as the answer to this problem** — though it is fine as a labelled
@@ -1506,6 +1562,21 @@ the near-QCP ordered availability band is tied to the excluded-Γ finite-grid
 edge and shrinks toward the continuum. Accepted low-field islands remain,
 so this is not a single monotone iteration boundary.
 
+There is also an exact coupling-only control at each grid's critical point.
+Since `y=J0`, `G=S_N(J0)`, and `K0=J0+1/G`,
+
+```text
+D(Jmax; Bc) = |S_N(J0)| * (J0-Jmax).
+```
+
+For `N=12,16,20,24` this dimensionless edge distance is
+`0.118283,0.086983,0.067248,0.056113`. Dividing the measured contiguous
+widths by it gives `3.23,3.08,3.33,3.17 T`. Within the `0.025 T`
+edge quantization, `width ≈ 3.2 T * D(Jmax;Bc)` is therefore a successful
+empirical coupling-only predictor. It is not an exact solver theorem, but
+it supplies a cheap forecast and makes the zero-width continuum trend more
+specific.
+
 The preregistered expectation that `Bc` would move by at most `0.01 T`
 between `12^3` and `24^3` was falsified: it moves `0.02067 T`. Linear and
 quadratic four-grid `1/N` fits give `4.72386` and `4.72224 T`, but their
@@ -1519,6 +1590,20 @@ mass root the PM static propagator is `-198.0070 meV^-1`, matching
 still model-sensitive (`-201.81` linear versus `-202.84 meV^-1`
 quadratic).
 
+The efficient next convergence calculation is therefore not another
+solver ladder: extend the pure lattice sum `S_N(J0)` first (for example
+through `N=48--96`, subject to measured cost), then propagate its converged
+range through `K0=J0+1/S_N`. Using only the present four-grid fits, that
+propagation gives a rough `Bc_infinity≈4.721--4.728 T`, consistent with the
+direct `Bc(N)` fits (`4.72224--4.72386 T`). Agreement between these routes
+is a useful cross-check, not a rigorous error bar because both inherit the
+same grid sequence and extrapolation assumptions. A fine-grid/tabulated
+`S(x)` could subsequently decouple the coupling quadrature from the costly
+state solver, but that is a new numerical representation: it must reproduce
+the explicit-grid transform at grid nodes, declare interpolation/edge
+errors, and pass the unchanged residual and susceptibility gates before the
+solver may use it.
+
 A phase-aligned susceptibility gate then evaluated ten common offsets
 `B-Bc(N)` from `-0.080` to `+0.080 T`. All 40 response columns were finite
 and correctly phased. Across `12^3--24^3`, the parabolically refined
@@ -1527,6 +1612,22 @@ the extreme grids reproduced the peak spreads. Thus the mode shape after
 alignment is already sub-percent stable, while the dominant unresolved grid
 effect is the horizontal `Bc(N)` shift. Spectral weight and an independent
 analytic pole solve were not graded by this gate.
+
+The scale separation is large. The measured near-QCP mode slope is about
+`9 GHz/T`; the direct `16^3`-to-continuum-fit displacement of roughly
+`0.029--0.031 T` would move the curve by about `0.26--0.28 GHz`, whereas
+the largest graded vertical spread is `0.00437 GHz`. Horizontal placement
+is therefore more than fifty times the phase-aligned vertical spread on
+this comparison. An experimental shape comparison may fit `Bc` as an
+explicit nuisance parameter, but an absolute-field prediction must retain
+all three same-order qualifications: the measured `12^3--24^3` shift
+(`0.02067 T`), the estimated `16^3`-to-continuum shift
+(`~0.029--0.035 T`, fit dependent), and the approximate strict-versus-
+resummed PM-boundary difference (`0.014 T`). The last is a scheme
+comparator from a coarse boundary estimate, not an independent numerical
+error bar or authorization of the rejected strict ordered candidate. The
+first two share the same grid sequence and likewise must not be combined as
+independent uncertainties.
 
 A traced `16^3` edge pair also localizes the numerical failure. At both
 4.400 T (rejected) and 4.425 T (accepted), every iterate stays in the same
@@ -1538,13 +1639,37 @@ reaches `6.37e-9` in 13 iterations. A 1000-iteration cap accepts 4.400 T
 but still fails at 4.300 T with Block-A residual `0.00833`: it moves the
 edge rather than curing it.
 
-This also rejects a proposed simple inner replacement as currently stated.
+The retained iterate record sharpens “oscillates”: late increments in
+`K0`, `D_uni`, `x`, `y`, and `Gstat` have a signed ratio
+between `-0.9160` and `-0.9157`. The unsigned residual ratio alone therefore cannot be
+inserted into a positive-ratio extrapolation formula; doing so would step
+in the wrong direction. Nor is the nominal contour
+`rho≈10^(-8/max_outer)` exact, because the convergence transient and
+residual prefactor are not unity. It is only a useful budget-scale
+diagnostic.
+
+This makes a safeguarded, default-off cold-start acceleration the smallest
+next solver experiment. Estimate a signed dominant factor only after the
+rightmost interval, inner-static closure, and several full-state increment
+ratios are stable; use a restarted Anderson-1 or signed Aitken proposal;
+accept the proposal only if a fresh unmixed full residual decreases and the
+same interval is retained; then continue ordinary iteration and apply the
+unchanged A--D/all-node audit. First grade 4.400 T against the accepted
+1000-step cold root and the warm root, then trace 4.300 T to decide whether
+it is another budget-limited contraction or a different Block-A failure.
+Acceleration is not assumed basin-preserving: full-state equality on
+overlap is a required result, not a premise.
+
+This also rejects a *fixed-G* inner replacement at the QCP edge.
 `invz_emt_static_ordered` recomputes `Gstat(K0)` inside each K0 iteration;
 the implemented scalar equation is not `S_N(y)=constant`, and the measured
-failed block already has a converged inner closure. A rightmost fixed-G
-bisection would therefore solve a different equation and target the wrong
-block unless the coupled scalar reduction and monotonicity are first
-derived.
+failed block already has a converged inner closure. The distinct coupled
+chart
+`R(K0)=S_N(y(K0))-Gstat(K0)` is algebraically compatible with the current
+inner equation on a declared pole interval; on the rightmost interval
+`dK0/dy=1-S_N'(y)/S_N(y)^2<=0` by Cauchy--Schwarz. It remains a possible
+branch-indexed low-field diagnostic, but it targets the wrong block for
+this QCP failure and is demoted accordingly.
 
 Finally, the exact identity
 `F=h0-J0*m=integral(crit dh)` is useful as a cancellation/quadrature
@@ -1568,8 +1693,12 @@ separable issues:
    locally viable algorithmic remedy. The user's cold/warm visual comparison
    further shows that the recovered susceptibility modes continue smoothly
    and remain empirically sensible, including the critical mode. This makes
-   warm continuation the leading near-QCP candidate, still subject to
-   direction, field-step, full-state-continuity, and grid gates.
+   warm continuation the leading **demonstrated** near-QCP candidate, still
+   subject to direction, field-step, full-state-continuity, and grid gates.
+   The signed `-0.916` edge mode now makes safeguarded acceleration from a
+   cold start the simpler next experiment: if it reaches the same root,
+   warm-seed direction/basin dependence need not remain on the critical path
+   for those columns.
 2. **Complete low-field Jensen coverage:** open and secondary. The nested
    Picard map is noncontractive and badly conditioned in parts of the
    auxiliary path; simultaneous equations have multiple roots and folds;
@@ -1582,6 +1711,7 @@ outer Σ closure, amplified by a finite-grid pole edge and combined with an
 unresolved off-shell branch prescription—not universal critical slowing,
 not a failure of real-axis susceptibility evaluation. Predictor-only
 physical-field continuation plus a bounded iteration/mixing choice can
-remove some local masks; no single global iteration limit, damping choice,
-or fixed-G inner bisection has been shown to cure the low-field problem or
-select its thermodynamic root.
+remove some local masks, and locally contractive cold failures may be
+recoverable by safeguarded acceleration. No single global iteration limit,
+damping choice, accelerator, or inner scalar chart has been shown to cure
+the low-field problem or select its thermodynamic root.
