@@ -406,6 +406,32 @@ continuation theorem) proving existence, local uniqueness, nonsingularity,
 and event clearance over every slab. That proof is valuable for the final
 claim, but it need not block an honestly labelled visual preview.
 
+### 7.1 Exact audit-level failure mechanism found on 2026-07-28
+
+The QCP-anchored 4.05 T experiment isolated a simpler defect inside the diagnostic acceptance
+layer. The simultaneous equations use independent coordinates `[Sigma(:);K0]`, but the old
+Block-A audit replayed the production map, including a second nested static Picard solve. In the
+multi-root regime that inner solve could select a different `K0` branch and report the difference as
+if the supplied simultaneous root had failed its equations.
+
+At seven representative corrected roots between `h=0.0041142866` and `0.010569793 meV`, coupled
+Block A equalled the Sigma part of `invz_ordered_node_equations` exactly in reported floating
+arithmetic, and defactored Block B equalled the absolute static component exactly. Blocks A/C/D
+were at `0` to `7.3e-15` and Block B stayed below `7.72e-10`. The old nested replay on those same
+accepted states falsely reported `3.40e-3` to `3.12e-2`.
+
+The optional coupled audit now mirrors the simultaneous equations directly, independently rebuilds
+canonical `K`/`lambda`, and contains no nested static solve unless an explicitly report-only debug
+flag is enabled. Exact wiring checks reject stale `lambda` or `K(1)~=K0s`. The default nested
+production audit remains unchanged.
+
+With that correction, 126 consecutive QCP-anchored arclength states extended the smooth branch from
+`h=0.0041142866` to `0.0117280521 meV`, all below `9.76e-10` coupled residual. Equation convergence
+and branch selection nevertheless remain distinct: at the identical
+`h=0.01171732294388717 meV`, two A--D-accepted roots have `r=0.768127507` and `r=0.822169537`,
+separated by only `0.00103702` in the frozen scaled state metric. Natural-`h` Newton selected the
+latter; QCP-anchored arclength selected the former smoothly.
+
 ## 8. Current work estimate
 
 The earlier estimate of one implementation-and-test cycle to a preview is no
@@ -425,6 +451,13 @@ the explicit branch prescription in Route B, with ambiguous columns masked,
 or enough of the common-functional Route A to select states without the HMF
 path. Both are substantive work; quoting a short percentage or wall-clock
 estimate before choosing between them would be misleading.
+
+**Dated correction.** The audit-level mechanism in §7.1 supersedes the claim that no simple
+numerical improvement remained. A branch-free simultaneous audit is now verified. Remaining preview
+work is narrower: finish the fine arclength segment, reconstruct the Jensen integral/endpoint with
+refinement, then wire an opt-in ordered solver and run field/grid guards. Fine tracking remains
+necessary because nearby accepted roots can differ strongly in `r`; a larger iteration budget
+cannot replace it.
 
 ## 9. Bottom line
 
