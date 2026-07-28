@@ -481,6 +481,14 @@ finite-grid computability sliver. The `0.02067 T` movement of `Bc` across
 the ladder also falsifies the prior expectation that it would stay within
 `0.01 T`.
 
+A phase-aligned response gate gives a more favorable and complementary
+result. At ten matched offsets `B-Bc(N)` between `-0.080` and `+0.080 T`,
+all 40 susceptibility columns are finite and correctly phased. The
+`12^3--24^3` soft-mode peak curves differ by only `0.38--0.53%`, and a
+halved frequency step reproduces the extreme-grid spreads. The mode shape
+is therefore robust after alignment; the dominant unresolved grid effect
+is where the curve sits on the absolute field axis.
+
 The representative `16^3` rejected/accepted pair at 4.400/4.425 T does not
 change static pole interval: every iterate remains on the rightmost
 `y>Jmax` root. The rejected predictor already has a static closure residual
@@ -506,8 +514,10 @@ interactive driver currently spans 3--6 T, so masked lower-field columns are
 expected.
 
 For a quantitative QCP comparison, work remains: extend the coupling/state
-grid ladder until `S_N(J0)`, solver-grade `Bc`, accepted-state support, and
-the pole/peak curve have a defensible continuum limit.
+grid ladder until `S_N(J0)`, solver-grade `Bc`, and accepted-state support
+have a defensible continuum limit. The phase-aligned susceptibility peak
+curve is already a sub-percent four-grid regression; spectral weight and an
+independent analytic pole solve remain ungraded.
 
 The following results still govern any later attempt to make the full
 `0--9 T` ordered map complete:

@@ -76,6 +76,7 @@ There are now two separate deliverables:
 | Common-functional route | The ring functional, exact cluster/cumulant oracles, electronuclear local reference, and exact-local bilocal curvature produced valuable checks. The simplest varied-covariance skeleton failed its immutable mixed-chain oracle. | A correct electronuclear local-bilocal/2PI functional still needs same-order `C3-C3`, nonlinear Legendre, tail, thermodynamic, and discretization work. It is the preferred scientific route but exceeds the declared near-term delivery window. |
 | Unchanged production QCP sweep | 61/61 finite columns, no masks, and a continuous soft mode through `Bc_1z=4.6925 T`. | This is a narrow finite-`16^3` visual regression, not evidence that its boundary is grid-converged or that 3--6 T / 0--9 T is complete. |
 | Coupling-only plus state-only grid ladder | The Γ-exclusion gap scales about `N^-1.103`; the contiguous accepted width scales about `N^-1.076`. `Bc_1z` moves from 4.68228 T (`12^3`) to 4.70296 T (`24^3`). | Confirms a finite-grid computability sliver and falsifies the expected `<=0.01 T` boundary shift. The `16^3` QCP spectrum is not grid-converged. |
+| Phase-aligned QCP susceptibility gate | At ten matched `B-Bc(N)` offsets, all 40 columns are finite/correctly phased and the `12^3--24^3` peak curves differ by only `0.38--0.53%`; a halved frequency step reproduces the extreme-grid spreads. | The mode shape is robust once aligned, but this does not remove the grid-dependent horizontal `Bc` shift or grade spectral weight/analytic poles. |
 | Fixed-G rightmost-root proposal | Source inspection shows `Gstat(K0)` is recomputed inside the static K0 loop; at the 4.400 T failure the inner static residual is already about `5e-11` while the outer Σ residual fails. | `S_N(y)=constant` is not the implemented coupled scalar equation and targets the wrong block. Do not implement without a derived coupled reduction and monotonicity proof. |
 | Jensen area-rule oracle | `F=h0-J0*m` and `integral(crit dh)` converge toward each other at second-order trapezoidal rate; direct subtraction is ill-conditioned near the crossing. | Useful cancellation/quadrature meter only. A finer 65-node grid sampled a new failed state, so it cannot bypass missing path nodes. |
 
@@ -85,9 +86,10 @@ There are now two separate deliverables:
    61-field regression, but label its `Bc` and ordered coverage as
    grid-specific.
 2. **Before quantitative experiment comparison, converge the coupling
-   measure.** Extend the coupling/state ladder only as far as needed to
-   stabilize `S_N(J0)`, `Bc_1z`, and the pole/peak curve. The existing
-   four-grid fits are placement guides, not error bars.
+   measure.** The phase-aligned peak curve is already sub-percent stable;
+   extend the coupling/state ladder only as far as needed to stabilize
+   `S_N(J0)`, absolute `Bc_1z`, and accepted support. The existing four-grid
+   fits are placement guides, not error bars.
 3. **Do not implement the proposed fixed-G inner bisection.** If a scalar
    static replacement is reconsidered, first derive the actual coupled
    `Gstat(K0)` residual, prove the declared interval is monotone, and show
@@ -134,6 +136,15 @@ is therefore not implemented: source inspection confirms that
 outer Σ closure. The area-rule comparison is retained as a diagnostic
 only. Full results and reproduction are in
 `docs/diagnostics/invzp_qcp_grid_2026-07-28/README.md`.
+
+The companion response gate evaluated ten offsets from each grid-specific
+`Bc`, spanning `±0.005--0.080 T`, on a `0.002 GHz` real-frequency mesh. All
+40 susceptibility columns were finite and correctly phased. Peak curves
+across `12^3--24^3` have relative spreads of `0.38--0.53%`; repeating four
+offsets on `12^3/24^3` at `0.001 GHz` changes individual peaks by only about
+`1e-5 GHz`. The phase-aligned soft-mode shape is therefore stable; the
+remaining load-bearing grid uncertainty is chiefly absolute field
+alignment through `Bc(N)`.
 
 **Execution update, 2026-07-27.** First-hand inspection of the current `invz_run_spectra` output added
 an important constraint: convergence is non-uniform across the ordered field range; usable columns
@@ -932,7 +943,7 @@ where the present one does not.
 | work item | present state | remaining effort / gate |
 |---|---|---|
 | Visual QCP susceptibility and mode | Ready now as a finite-`16^3` preview on 4.60--4.90 T | No solver work for inspection. Quantitative comparison still needs coupling-grid convergence before only local field/frequency/broadening refinement. |
-| QCP coupling/grid convergence | Four-grid diagnostic complete; finite-grid sliver and `Bc` shift established | Extend/refine only until `S_N(J0)`, `Bc`, accepted support, and peak curve have a defensible continuum limit. |
+| QCP coupling/grid convergence | Four-grid sliver/`Bc` shift established; phase-aligned peak curve is sub-percent stable | Extend/refine only until `S_N(J0)`, absolute `Bc`, and accepted support have a defensible continuum limit; retain the peak gate as the observable regression. |
 | Retained diagnostics and coupled audit | Implemented | Maintenance only. They are evidence tools, not a new production branch. |
 | One additional low-field component | Optional, secondary | Bounded endpoint-first experiment at one scientifically useful field. Stop if the component has no unique increasing Jensen zero. |
 | Complete low-field branch prescription | Not authorized | Substantial only after an admissible endpoint exists: continuous event enclosures, independent-direction/seed agreement, full section construction, and discretization refinement. |
@@ -944,9 +955,9 @@ where the present one does not.
    solver. Preserve the 4.60--4.90 T subset as the regression anchor even
    when the interactive driver is broadened, and display its grid qualifier.
 2. Before quantitative comparison, extend the coupling/state grid ladder
-   and compare the pole/peak curve on accepted states. Only after the
-   coupling limit is stable should local field spacing, low-frequency
-   spacing, and broadening be refined.
+   until absolute `Bc` and accepted support stabilize. The phase-aligned
+   peak curve has already passed the four-grid/refined-frequency check;
+   retain it while refining the field-axis limit.
 3. Do not implement fixed-G inner bisection or a larger iteration cap as
    the production fix. The next numerical candidate must close the outer
    simultaneous residual and retain branch/grid provenance.

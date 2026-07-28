@@ -1476,10 +1476,11 @@ evaluated no real-axis response. On one common `4.000:0.025:4.700 T` mesh:
 | 24³ | 4.702957153 | 11 | 0.177957153 |
 
 The contiguous widths scale approximately as `N^-1.076`; `N*width` stays
-between `4.27` and `4.59 T`. This verifies that the near-QCP ordered
-availability band is tied to the excluded-Γ finite-grid edge and shrinks
-toward the continuum. Accepted low-field islands remain, so this is not a
-single monotone iteration boundary.
+between `4.27` and `4.59 T`. The lower edge is quantized on a `0.025 T`
+mesh, so the exponent is descriptive, but the trend strongly supports that
+the near-QCP ordered availability band is tied to the excluded-Γ finite-grid
+edge and shrinks toward the continuum. Accepted low-field islands remain,
+so this is not a single monotone iteration boundary.
 
 The preregistered expectation that `Bc` would move by at most `0.01 T`
 between `12^3` and `24^3` was falsified: it moves `0.02067 T`. Linear and
@@ -1493,6 +1494,15 @@ mass root the PM static propagator is `-198.0070 meV^-1`, matching
 `S_16(J0)=-198.0061 meV^-1`. The four-grid extrapolation of the latter is
 still model-sensitive (`-201.81` linear versus `-202.84 meV^-1`
 quadratic).
+
+A phase-aligned susceptibility gate then evaluated ten common offsets
+`B-Bc(N)` from `-0.080` to `+0.080 T`. All 40 response columns were finite
+and correctly phased. Across `12^3--24^3`, the parabolically refined
+soft-mode peaks differ by only `0.38--0.53%`; a `0.001 GHz` refinement on
+the extreme grids reproduced the peak spreads. Thus the mode shape after
+alignment is already sub-percent stable, while the dominant unresolved grid
+effect is the horizontal `Bc(N)` shift. Spectral weight and an independent
+analytic pole solve were not graded by this gate.
 
 A traced `16^3` edge pair also localizes the numerical failure. At both
 4.400 T (rejected) and 4.425 T (accepted), every iterate stays in the same
@@ -1527,8 +1537,9 @@ separable issues:
 
 1. **Observable availability near the QCP:** available for visual inspection
    on the verified finite-`16^3` window. The response code is not the failing
-   component, and accepted ordered/PM states produce a continuous mode, but
-   the ordered coverage and `Bc` are not yet grid-converged.
+   component, and the phase-aligned peak curve is sub-percent stable over the
+   tested grids. The absolute field alignment, ordered coverage, and `Bc`
+   are not yet grid-converged.
 2. **Complete low-field Jensen coverage:** open and secondary. The nested
    Picard map is noncontractive and badly conditioned in parts of the
    auxiliary path; simultaneous equations have multiple roots and folds;
