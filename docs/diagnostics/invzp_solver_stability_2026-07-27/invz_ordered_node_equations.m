@@ -1,4 +1,4 @@
-function [R, diagout, state, J] = invz_ordered_node_equations(node, u)
+function [R, diagout, state, J, factors] = invz_ordered_node_equations(node, u)
 %INVZ_ORDERED_NODE_EQUATIONS Defactored residual and analytic Jacobian.
 %
 %   [R,DIAG,STATE,J] = INVZ_ORDERED_NODE_EQUATIONS(NODE,U) exposes the
@@ -74,12 +74,10 @@ diagout = struct('z',z,'Gstat',Gstat,'Gtil0',Gtil0,'r',r, ...
     'Hz',Hz,'rho',1/z,'Jloc',Jloc,'Jscale',Jscale);
 
 if nargout >= 4
-    J = analyticJacobian(u,node);
+    factors = invz_ordered_node_jacobian_factors(node,u);
+    Jsigma = diag(factors.sigma_diagonal)+ ...
+        factors.sigma_left*factors.sigma_right.';
+    J = [Jsigma,factors.K0_column; ...
+        factors.static_sigma_row,factors.static_K0];
 end
-end
-
-function J = analyticJacobian(u,node)
-fac = invz_ordered_node_jacobian_factors(node,u);
-Jsigma = diag(fac.sigma_diagonal)+fac.sigma_left*fac.sigma_right.';
-J = [Jsigma,fac.K0_column;fac.static_sigma_row,fac.static_K0];
 end
