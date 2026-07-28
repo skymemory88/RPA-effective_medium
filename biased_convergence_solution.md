@@ -172,7 +172,8 @@ depend on a candidate endpoint:
    fixed interior checkpoints.
 2. Trace every distinct accepted root in both arclength directions. Stop only on a declared event,
    augmented rank loss, domain exit, or completed connection to an already identified segment.
-3. Cluster roots using the scaled full state, not `r` alone.
+3. Cluster roots using the scaled independent state `[Sigma;K0]`, not `r` alone. The exported `K`
+   and `lambda` are derived coordinates and do not receive a second vote.
 4. At common `h`, retain all distinct roots and their tangent lines.
 5. Build a graph whose vertices are accepted roots and whose edges are demonstrated local
    continuation segments. Split folds into distinct branch labels and enumerate only
@@ -221,11 +222,16 @@ interpolates, or repairs them. Synthetic in-memory fixtures pin the ranking and 
 The separate generic pseudo-arclength primitive crosses both folds of the analytic cubic oracle, and
 its invZ adapter retains complete frequency-resolved states. On the frozen 0.10 K, 1.5 T, legacy 16³
 fixture it traced 149 accepted roots from the clean high-field endpoint through the known regular
-fold and reproduced its field to `1.44e-10 meV`; every A--D audit passed. The global cold-seed root
-enumerator and single-valued path-construction fixture remain to be built before step 1 as a whole is
-complete. The dense low-temperature trace cost 1292.9 s. Profiling showed that local node and
-Richardson field-derivative evaluation, not the dense bordered solve, dominates this cost; exact
-last-point caching is now active, while an exact low-rank solve is retained only as an oracle.
+fold and reproduced its field to `1.44e-10 meV`; every A--D audit passed. A retained explicit-seed
+enumerator now records every fixed-`h` solve and clusters the complete independent coordinates
+`[Sigma;K0]` with an uncertainty band; 25 seeds at `h=0` produced seven distinct A--D-accepted roots.
+A retained fixed-`h` helper also
+stages cheap regular segments around local arclength traces. The returning low-fold leg has reached
+`h=6.890625e-9 meV`, but its connection to any enumerated `h=0` root remains unresolved, so the
+single-valued path-construction fixture is still incomplete. The dense high-fold trace cost
+1292.9 s. Profiling showed that local node and Richardson field-derivative evaluation, not the dense
+bordered solve, dominates this cost; exact last-point caching is now active, while an exact low-rank
+solve is retained only as an oracle.
 
 ## 6. Failure conditions
 

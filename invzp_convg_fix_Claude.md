@@ -81,6 +81,19 @@ Richardson equation/Jacobian evaluation. The exact factor solve agrees to `1.66e
 milliseconds. Exact last-point caching is therefore adopted; redundant node/field-derivative
 evaluation is the next performance target.
 
+**Root-census and low-endpoint update, 2026-07-28.** A retained explicit-seed enumerator now records
+all fixed-`h` attempts and clusters the complete independent coordinates `[Sigma;K0]` through an
+order-independent uncertainty band; `K` and `lambda` remain derived. At 1.5 T and `h=0`, a 25-seed
+product census produced 16 accepted attempts and seven distinct roots; the earlier agreement of
+three cold seeds was therefore basin-local, not uniqueness evidence.
+A staged trace used cheap fixed-`h` nodes away from the low fold and pseudo-arclength only locally,
+recovering `h_fold=1.1303917626651595e-5 meV`. On its returning leg the raw q-average closure is
+amplified by `G*Gbar`; the optional diagnostic `audit_coordinate='defactored'` instead checks the
+equivalent regular-domain equation `|K0-Jloc|/Jscale`. It carried the branch to
+`h=6.890625e-9 meV`, where fixed-`h` rank loss intervened. No connection to any enumerated `h=0`
+root has been established, so branch topology, Jensen-section construction, and production wiring
+remain unresolved.
+
 **Theory-route update, 2026-07-28.** The explicit-prescription backup is now specified in
 `biased_convergence_solution.md`, with global smoothness of `r(h)` as its primary declared bias and
 state/QCP continuity as binding gates. The preferred-route audit is recorded in
@@ -307,10 +320,10 @@ become part of the scientific record.
 
 The first guards did become part of the scientific record and are retained in
 `docs/diagnostics/invzp_solver_stability_2026-07-27/`. The implementation deliberately stops at a
-fixed-node corrector. One-off scaled-tangent and pseudo-arclength drivers remained under `/tmp`; they
-established the 1.5 T fold described above but are not a production solver. Temporary end-to-end
-wiring was used once to establish the 3.6 T numerical result above, then removed because it had no
-branch-identity gate.
+fixed-node corrector. Reusable root-enumeration, fixed-sequence, and pseudo-arclength primitives are
+retained separately under `docs/diagnostics/biased_smooth_r_2026-07-28/`; none is a production
+solver. Temporary end-to-end wiring was used once to establish the 3.6 T numerical result above,
+then removed because it had no branch-identity gate.
 
 ### 1.1 Expose a square vector residual
 
@@ -641,9 +654,11 @@ where the present one does not.
 4. The scaled tangent predictor has now confirmed the fixed-`h` rank/tangent trigger at 0.10 K/1.5 T,
    and pseudo-arclength has confirmed that the high-`h` branch turns toward increasing `h`. The
    independent low-`h` trace also terminates in a regular fold, far below the high-branch fold, and
-   turns toward decreasing `h`. This enters the second row of the Phase-1 fork. Do not run the
-   expensive reproducibility funnel, wire a fallback into production, or consider Phase 2′ until an
-   explicit branch prescription exists.
+   turns toward decreasing `h`. A broader 25-seed endpoint census finds seven `h=0` roots, while the
+   returning low-fold leg becomes rank-deficient before any endpoint connection is established.
+   This enters the second row of the Phase-1 fork. Do not run the expensive reproducibility funnel,
+   wire a fallback into production, or consider Phase 2′ until the preregistered smooth-`r`
+   prescription has a complete, audited candidate graph.
 
 Two scientific decisions remain external to this implementation sequence: Candidate A still needs a
 derived formula before it can be compared with Candidate B, and any amendment of the frozen Gate-0

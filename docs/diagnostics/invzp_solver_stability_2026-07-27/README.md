@@ -39,6 +39,8 @@ be inserted into Jensen quadrature without branch-tracked continuation.
 | 0.10 | 1.5 | independent low-`h` branch, three cold deterministic seeds | all three seeds converge to the same `h=0` root within scaled-state diameter `4.278e-12`; upward tangent continuation stops after 22 accepted nodes at `h=1.130400753628218e-5`, with `rcond(J)=2.041e-11` and healthy event margins |
 | 0.10 | 1.5 | low-branch rank audit | `sigma_min(J)=1.558e-5` while `sigma_min([J R_eta])=0.5629` (`cond(J)=1.222e8`): this is a second regular fold, about 464 times below the high-branch fold |
 | 0.10 | 1.5 | pseudo-arclength across the low-branch event | crosses in 11 accepted steps; `deta/ds` changes from `+2.677e-7` to `-5.243e-7`, directly resolving `max(h)=1.130402502867847e-5`; minimum oriented-tangent overlap is `0.9999999997`, `min rcond(augmented)=1.091e-6`, and all A–D audits pass |
+| 0.10 | 1.5 | retained 25-seed `h=0` root census | 16 A--D-accepted attempts cluster into seven distinct roots in the complete independent coordinates `[Sigma;K0]` (`K` and `lambda` are derived); nine attempts fail. Representative `r` ranges from `0.60295` to `1.20283`, so the earlier three-seed agreement sampled one basin rather than proving uniqueness |
+| 0.10 | 1.5 | staged reconstruction of the low fold and returning leg | 21 fixed-`h` nodes plus 20 local pseudo-arclength steps recover `h_fold=1.1303917626651595e-5`; the returning leg exposes raw-closure amplification by `G*Gbar`, while the defactored equation remains accurate to about `2e-11`. The trace reaches `h=6.890625e-9` but does not establish a connection to any `h=0` root |
 | 0.31 | 3.6 | adaptive natural-`h` reciprocal continuation from a clean high-`h` node | reaches `h=0` in 12 accepted nodes; minimum pole margin `1.4827e-3` |
 | 0.31 | 1.0 | same continuation | step collapse near `h=0.00793448728`; 258 accepted nodes, condition number rising to `9.84e7`, no pole/mean event |
 
@@ -58,11 +60,19 @@ multiple-branch outcome of the Phase-1 fork: an explicit physical or preregister
 prescription is required before production integration. The separate 0.31 K/1 T step collapse still
 shows why branch/rank diagnostics are necessary.
 
+The subsequent 25-seed census corrects one limited inference in that account: agreement among the
+three original cold seeds was only basin-local. Seven accepted `h=0` roots are now resolved under the
+frozen clustering tolerances. The short staged trace still verifies the low regular fold, but its
+returning leg becomes a sharp, nearly rank-deficient boundary layer near `h=0`; no accepted
+continuation from that leg to any enumerated endpoint has yet been demonstrated.
+
 One-off drivers and `.mat` files stayed under `/tmp`. The audited numerical kernel now consists of
 `invz_ordered_node_context.m`, `invz_ordered_make_node.m`,
 `invz_ordered_node_equations.m`, `invz_ordered_node_jacobian_factors.m`, and
 `invz_ordered_node_newton.m`. The extraction leaves the fixed-node equations unchanged while exposing
 the full residual/Jacobian, its exact diagonal-plus-rank-two frequency block, and exact HMF node
-construction to the separately isolated continuation oracle. A future retained enumerator must still
-add forward/reverse branch tracking, cold checkpoints, grid/cutoff checks, event-crossing control,
-and Jensen-integral error control before promotion.
+construction to the separately isolated continuation oracle. The retained cold-seed enumerator now
+records every attempt and clusters accepted `[Sigma;K0]` coordinates without order-dependent tie
+breaking. It still needs a complete seed-coverage argument, forward/reverse branch tracking, cold
+checkpoints, grid/cutoff checks, event-crossing control, and Jensen-integral error control before
+promotion.

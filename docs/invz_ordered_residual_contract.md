@@ -257,6 +257,39 @@ Block B is revised IN PLACE; there is no fifth block. Under
   identically under `'resummed'` and under a strict scheme (see the corrected Block D "Pass:"
   expression above, which now reads `med_D.dynamic_converged` on both paths).
 
+### Optional defactored Block-B audit coordinate (added 2026-07-28)
+
+For the resummed scheme only, a diagnostic node may set
+`node.eso.audit_coordinate='defactored'`. The production/default value is absent or
+`'raw_closure'`; that path is unchanged. The optional coordinate independently evaluates
+
+```text
+rB = |K0 - Jloc|/Jscale,   Jloc = <J/(z+J-K0)>/<1/(z+J-K0)>
+```
+
+from the exported state, using reciprocal scaling for the q average, and gates it by
+`tol_outer`. The inner static solve is still recomputed for Block A and for the retained raw
+diagnostic, but it does not define the load-bearing Block-B residual in this mode. The relation to
+the raw closure is, for finite nonzero `Gstat` and `Gbar`,
+
+```text
+Gbar - Gstat = Gstat*Gbar*(K0 - Jloc).
+```
+
+Thus the two zero sets are identical in their common regular domain, while the raw coordinate can
+amplify a small `K0-Jloc` defect by two large susceptibilities. The node Newton tolerance remains
+dimensionally `ctx.eso.tol = tol_outer*Jscale`; the optional audit uses the corresponding
+dimensionless `tol_outer` gate.
+
+In this mode `blockB.coordinate='defactored_K0'`; the mode-specific `resid_raw`, `raw_gate`,
+`raw_pass`, and `K0_seed_drift` diagnostics never replace `blockB.resid` or vote separately in
+`accepted`. At infinite `z`, the implementation selects the continuous large-`z` value
+`Jloc=<J>`; this includes the usual `Gstat=0` limit. A vanishing reciprocal mean, or a nonfinite
+`z` that is not infinite, instead makes the residual nonfinite and fails the gate. The large-`z`
+extension is a diagnostic convention, not an algebraic equivalence proof at the singular point, so
+callers must retain the pole/mean event gates. Strict schemes ignore `audit_coordinate` entirely and
+continue to use their preregistered algebraic Block B.
+
 ### Block C — Sigma self-consistency of the derived lambda/Sigma chain
 
 ```

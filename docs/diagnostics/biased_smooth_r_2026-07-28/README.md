@@ -39,6 +39,23 @@ margins, and the field-Jacobian refinement drift normalized by
 `max(1,norm(dR/dh,Inf))`. It still adapts one supplied initial root; it is not a root enumerator or
 Jensen-path constructor.
 
+`invzp_enumerate_ordered_roots` is the retained fixed-`h` cold-seed driver. The caller supplies every
+seed explicitly. The driver solves in lexical seed-ID order, retains submitted order and every
+attempt, accepts only Newton plus independent A--D acceptance, and passes the accepted independent
+state coordinates `[Sigma;K0]` to `invzp_cluster_ordered_full_states`. These are the complete
+independent unknowns; `K` and `lambda` are derived. The cluster oracle uses a scaled RMS state
+distance and an explicit three-way relation: same-root evidence, distinct-root evidence, or an
+unresolved tolerance band. It exports actual-root medoids only when every connected tolerance
+component is internally same-root evidence; an ambiguous component is reported, never split by input
+order.
+
+`invzp_trace_fixed_h_sequence` is a deliberately non-adaptive natural-parameter handoff primitive.
+It follows a caller-frozen strictly monotone field sequence with initial, copy, and then secant
+predictors. Every promoted state must pass Newton, the independent A--D audit, and a frozen
+full-state predictor tube. It retains every scheduled point, including the first failure and all
+trailing `not_run_after_stop` records. This is useful for cheap regular segments on either side of a
+fold; it neither retries nor crosses a fixed-`h` rank loss.
+
 `invz_ordered_node_jacobian_factors` and `invzp_solve_bordered_factors` expose and solve the exact
 frequency-block form
 
@@ -97,13 +114,13 @@ Input order and path IDs never break a tie.
 
 ## Deliberate omissions
 
-The generic pseudo-arclength primitive now exists, but the invZ-specific root enumerator,
-bidirectional/cold-seed reconstruction, signed event-crossing audit, single-valued Jensen-section
-builder, endpoint reconstruction, QCP field sequence, physical-`h` diagnostic metrics,
-mesh-refinement drift, and cross-normalization winner audit still have to be built and frozen before
-the global 1.5 T path-selection pilot. In particular, a unique result from this function means only
-unique under the supplied dimensionless spec. It does not authorize production use unless the
-omitted physical-`h`, normalization, and refinement audits agree under the registered grid and
+The cold-seed root enumerator and a one-direction fixed-`h` handoff primitive now exist. Complete
+bidirectional branch reconstruction, signed event-crossing audit, branch graph, single-valued
+Jensen-section builder, endpoint reconstruction, QCP field sequence, physical-`h` diagnostic
+metrics, mesh-refinement drift, and cross-normalization winner audit still have to be built and
+frozen before the global 1.5 T path-selection pilot. In particular, a unique result from the selector
+means only unique under the supplied dimensionless spec. It does not authorize production use unless
+the omitted physical-`h`, normalization, and refinement audits agree under the registered grid and
 Matsubara refinements.
 
 Fresh in-memory MATLAB fixtures cover a known linear winner, lexicographic dominance, curvature and
@@ -148,3 +165,31 @@ dense oracle now. Exact last-point caching instead reduces a repeated evaluation
 `6.2e-5 s` and shortened a fresh three-step fold trace to `5.67 s/step` without changing arithmetic.
 The next optimization target is redundant local node/field-derivative evaluation, not linear
 algebra. Temporary `.mat` traces stayed under `/tmp` and are not retained.
+
+A broader cold census at the frozen `h=0` node used 25 explicit product seeds:
+five constant offsets of the seed `Sigma` crossed with five values of `K0/Jscale`. Sixteen attempts
+were A--D accepted and clustered into **seven** distinct `[Sigma;K0]` roots; nine attempts failed.
+Their representative `r` values span `0.60295` to `1.20283`. Thus the earlier agreement of three
+cold seeds was basin-local evidence, not a uniqueness result.
+
+The low-branch fold was then reconstructed with the staged policy intended for development economy:
+21 cheap fixed-`h` nodes reached the fold neighborhood, and 20 local pseudo-arclength steps crossed
+it. The reconstructed maximum,
+
+```text
+h_fold = 1.1303917626651595e-5 meV
+```
+
+agrees with the earlier refined one-off value `1.130402502867847e-5 meV` at the resolution expected
+from this shorter trace. On the returning leg, the raw closure audit became ill-conditioned while
+the defactored equation remained accurate. At `h=1.72265625e-7 meV`,
+`|Gbar-G|=1.14201498036e-7` narrowly failed its raw gate, whereas
+`|K0-Jloc|/Jscale=1.93307590536e-11` and the direct vector residual was
+`1.93299895588e-11`. This is the exact finite, nonzero-`G` identity
+`Gbar-G = G*Gbar*(K0-Jloc)` exposing coordinate amplification by the large susceptibilities.
+
+The optional `eso.audit_coordinate='defactored'` audit carried that returning segment to
+`h=6.890625e-9 meV`, where the fixed-`h` Jacobian had `rcond=1.33e-11`. It did **not** establish a
+connection to any of the seven `h=0` roots: fixed-`h` Newton then lost rank, and direct or polynomial
+endpoint extrapolation failed the residual. The low endpoint topology therefore remains unresolved.
+No production solver or Jensen path is authorized by this pilot.

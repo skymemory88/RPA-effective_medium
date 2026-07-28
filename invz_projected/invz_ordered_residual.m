@@ -8,9 +8,12 @@ function res = invz_ordered_residual(node, state, opts)
 % Implements four independently-recomputed residual blocks:
 %   A -- outer Sigma map: one full independent pass of the map, seeded from the exported
 %        lam/K0s, starting from the exported Sigma; rA = max|F(Sigma)-Sigma|.
-%   B -- static medium (REVISED IN PLACE for the strict scheme, task 9): under 'resummed'
-%        (unchanged), a fresh invz_emt_static_ordered call at the exported Sigma(1)/lam(1:2),
-%        rB = so.resid, the q-average closure residual. Under a strict_1z_* scheme, the
+%   B -- static medium (REVISED IN PLACE for the strict scheme, task 9): under the default
+%        resummed audit coordinate, a fresh invz_emt_static_ordered call at the exported
+%        Sigma(1)/lam(1:2), rB = so.resid, the q-average closure residual. The diagnostic
+%        node option eso.audit_coordinate='defactored' instead independently measures the
+%        equivalent, well-conditioned |K0-Jloc|/Jscale equation while retaining the raw
+%        closure as blockB.resid_raw. Under a strict_1z_* scheme, the
 %        load-bearing residual instead becomes the ALGEBRAIC check |K0s - Kstrict(Gref)|,
 %        independently recomputed from the exported state -- see the strict-only domain
 %        preflight below and the contract's dated Block-B subsection.
@@ -222,15 +225,25 @@ res.blockA = struct('resid', rA, 'scale_abs', scaleA_abs, 'scale_rel', scaleA_re
 outB = local_blockB(tl, lam, Sigma, Jnu_flat, K0s, beta, J0eff, ...
                     G0inel0, G0el0, eso);
 strictB = ~strcmp(smid_node, 'resummed');
+auditCoordinate = getf(eso,'audit_coordinate','raw_closure');
+if ~strictB && ~any(strcmp(auditCoordinate,{'raw_closure','defactored'}))
+    error('invz:residualNode', ...
+        'node.eso.audit_coordinate must be ''raw_closure'' or ''defactored''.');
+end
+defactoredB = ~strictB && strcmp(auditCoordinate,'defactored');
 if strictB
     scaleB_abs = getf(opts, 'K_atol', 1e-14);
     scaleB_rel = getf(opts, 'K_rtol', 1e-12);
+elseif defactoredB
+    scaleB_abs = tol_outer;
+    scaleB_rel = tol_outer;
 else
     rtolB = getf(eso, 'resid_tol', 1e-10);
     scaleB_abs = rtolB;  scaleB_rel = rtolB;
 end
-statusB = 'nonfinite';  omit3 = NaN;  omit4 = NaN;  refdenB = NaN;
+omit3 = NaN;  omit4 = NaN;  refdenB = NaN;
 Gstat_b = outB.Gstat;
+rStatic = outB.so.r;
 D_uni   = outB.so.D_uni;
 Dq      = 1 + (Jnu_flat(:) - outB.K0) .* Gstat_b;
 Dq_min  = min(Dq);  Dq_max = max(Dq);
@@ -253,6 +266,18 @@ if strictB
     else
         rB = NaN;  passB = false;  convB = false;    % domain status, not an exception
     end
+elseif defactoredB
+    directB = local_blockB_defactored(tl,lam,Sigma,K0s,beta, ...
+        G0inel0,G0el0,Jnu_flat);
+    rB = directB.resid;
+    passB = isfinite(rB) && (rB < scaleB_abs);
+    statusB = 'not_applicable';
+    Gstat_b = directB.Gstat;
+    rStatic = directB.r;
+    D_uni = 1+(J0eff-K0s)*Gstat_b;
+    Dq = 1+(Jnu_flat(:)-K0s).*Gstat_b;
+    Dq_min = min(Dq);  Dq_max = max(Dq);
+    convB = passB;
 else
     statusB = 'not_applicable';
     rB = outB.so.resid;
@@ -266,6 +291,15 @@ res.blockB = struct('resid', rB, 'scale_abs', scaleB_abs, 'scale_rel', scaleB_re
                      'pass', passB, 'converged', convB, 'err', '', 'status', statusB, ...
                      'scheme', smid_node, 'ref_denom', refdenB, ...
                      'omit_mu3', omit3, 'omit_cubic', omit4);
+if defactoredB
+    res.blockB.coordinate = 'defactored_K0';
+    res.blockB.resid_raw = directB.resid_raw;
+    res.blockB.raw_gate = getf(eso,'resid_tol',1e-10)* ...
+        (1+abs(directB.Gstat));
+    res.blockB.raw_pass = isfinite(res.blockB.resid_raw) && ...
+        res.blockB.resid_raw < res.blockB.raw_gate;
+    res.blockB.K0_seed_drift = abs(outB.K0-K0s);
+end
 if strictB && getf(opts, 'debug_resummed', false)
     esoR = eso;  esoR.static_medium = 'resummed';  esoR.warn = false;
     outR = local_blockB(tl, lam, Sigma, Jnu_flat, K0s, beta, J0eff, ...
@@ -315,7 +349,7 @@ res.Dq_max = Dq_max;
 % ordered phase. Only an ENDPOINT root is held to this tier, by the caller.
 crit_tol = getf(opts, 'crit_tol', 1e-6);
 if all(isfinite([D_uni, Dq_min]))
-    critv = outB.so.r + J0eff*node.G0bare0;
+    critv = rStatic + J0eff*node.G0bare0;
     D_tol = 1e-6*max(1, abs(Gstat_b)*Jscale);        % prereg SS1: noise scales with |Gstat|
     Dq_tol = D_tol;
     if ~isfinite(critv)
@@ -382,6 +416,34 @@ function out = local_blockB(tl, lam, Sigma, Jnu_flat, K0s, beta, J0eff, G0inel0,
 [K0_b, Gstat_b, so] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, beta, ...
                                               J0eff, G0inel0, G0el0, eso);
 out = struct('K0', K0_b, 'Gstat', Gstat_b, 'so', so);
+end
+
+% =============================================================================================
+function out = local_blockB_defactored(tl,lam,Sigma,K0,beta,G0inel0,G0el0,Jnu_flat)
+%LOCAL_BLOCKB_DEFACTORED Independent reciprocal-coordinate static equation.
+[Gstat,go] = invz_gstat_ordered(tl,lam(1:2),K0,Sigma(1),beta, ...
+    G0inel0,G0el0,struct('stable_form',true));
+d0 = go.gstat_local_denom;
+Hz = G0inel0+go.xi*G0el0*d0;
+z = d0/Hz;
+Jf = Jnu_flat(:);
+Jscale = max(abs(Jf));
+if isinf(z)
+    Jloc = mean(Jf);
+    Gbar = 0;
+elseif isfinite(z)
+    scale = max(abs(z),Jscale);
+    weights = scale./(z+Jf-K0);
+    meanWeights = mean(weights);
+    Gbar = meanWeights/scale;
+    Jloc = mean(Jf.*weights)/meanWeights;
+else
+    Gbar = NaN;
+    Jloc = NaN;
+end
+out = struct('Gstat',Gstat,'Gbar',Gbar,'Jloc',Jloc,'r',go.r, ...
+    'resid',abs(K0-Jloc)/Jscale, ...
+    'resid_raw',abs(Gbar-Gstat));
 end
 
 % =============================================================================================
