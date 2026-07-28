@@ -21,19 +21,16 @@ design rationale (see `docs/INVZ-DESIGN-RATIONALE.md`).
 | Three-level extension | `three_level_1z_extension.html` | reference, do not edit |
 | Design decisions and rejected alternatives | `docs/INVZ-DESIGN-RATIONALE.md` | consolidated from the specs |
 | **What was built, when, and what it measured** | **this file** | consolidated from the ledger |
-| Ewald: derivation / design / preregistration / integration map | `docs/invzp_ewald_*.md` | frozen |
-| Strict static medium: preregistration | `docs/invzp_strict_medium_prereg.md` | **frozen — never edit in place** |
+| Ewald design and integration history | §§2–4 of this file and `docs/INVZ-DESIGN-RATIONALE.md` | consolidated; source documents archived in Git |
+| Strict static medium: preregistration | `2a8d5b7^:docs/invzp_strict_medium_prereg.md` | frozen historical source, archived in Git |
 | Strict static medium: Gate-0 verdict | `docs/invzp_strict_medium_gate0_report.md` | final |
 | Strict static medium: failure analysis | `invzp_convg_diagnosis_Claude.md` (§9.1–§9.4) | consolidated |
 | Ordered residual contract | `docs/invz_ordered_residual_contract.md` | binding |
-| Stage-2c discriminator matrix | `docs/invzp_task2_prereg.md`, `docs/invzp_task2_report.md` | frozen + final |
-| BZ-quadrature/Γ audit | `docs/invzp_phase1_quadrature_prereg.md`, `docs/invzp_phase1_report.md` | frozen + final |
-| ODD numerical log | `docs/ODD-LOG.md` | append-only |
-| Ordered 1/z consolidated state | `docs/invzp_ordered_1z_state.md` | superseded in part by this file |
-| Per-session narratives | `docs/SESSION-*.md` | historical |
-
-| Archived one-off diagnostic scripts | `docs/diagnostics/` (+ its README) | unmaintained, off-path |
-| Unexecuted Ewald Steps 5–7 plan | `docs/invzp_ewald_step5-7_plan.md` | **live forward work** |
+| Stage-2c discriminator matrix | `2a8d5b7^:docs/invzp_task2_{prereg,report}.md` | frozen historical sources, archived in Git |
+| BZ-quadrature/Γ audit | `2a8d5b7^:docs/invzp_phase1_{quadrature_prereg,report}.md` | frozen historical sources, archived in Git |
+| Current ordered-leg diagnosis and plan | `invzp_convg_diagnosis_Claude.md`, `invzp_convg_fix_Claude.md` | current |
+| Low-field backup prescription | `biased_convergence_solution.md` | current, fail-closed |
+| Retained numerical oracles | `docs/diagnostics/` | current diagnostic scope, off-path |
 
 ### Recovering the retired plans and specs
 
@@ -48,8 +45,10 @@ git show <commit>^:docs/superpowers/specs/<file>              # read one
 git checkout <commit>^ -- docs/superpowers                    # restore the tree
 ```
 
-The unexecuted Ewald Step-5/6/7 plan was **not** deleted — it describes forward work, so it was moved
-to `docs/invzp_ewald_step5-7_plan.md` and stays in the working tree.
+The Ewald Step-5/6/7 plan and the other frozen source documents named above
+were later removed from the working tree in `2a8d5b7`. Read or restore them
+from `2a8d5b7^`; this consolidated record and
+`docs/INVZ-DESIGN-RATIONALE.md` retain their durable conclusions.
 
 `.superpowers/` (git-ignored scratch, 146 MB) was deleted outright and is **not** in history. Its
 durable content is this file plus `docs/diagnostics/`; see that directory's README for what was
@@ -130,9 +129,11 @@ Two things to carry forward:
   (`a1f69f2`). **Check for user edits before staging.**
 
 ### 2026-07-23 — Stage 2c, the discriminator matrix
-The masking symptom below `Bc_1z` was now the blocker. A pre-registered 40-cell causal-discriminator
-matrix (`docs/invzp_task2_prereg.md` → `docs/invzp_task2_report.md`, 992 lines) tested lattice
-against solver.
+The masking symptom below `Bc_1z` was now the blocker. A pre-registered
+40-cell causal-discriminator matrix (archived at
+`2a8d5b7^:docs/invzp_task2_prereg.md` and
+`2a8d5b7^:docs/invzp_task2_report.md`, 992 lines) tested lattice against
+solver.
 
 **Raw counts (integrity check, not the verdict):** every swept cell `hmf_status = node_failed`,
 `n_nodes = 34` everywhere. Stable accepted nodes exist at all four fields (6–10 of 34).
@@ -146,8 +147,10 @@ independence. Downsampling ds2/ds4/ds8 ≈ unchanged.
   exactly** (2.85 T: 9/6/3 vs real 9/6/3; 1.1732 T: 10/10/0 vs real 10/10/0).
 
 So the failure tracks the *distribution shape* of the coupling multiset, not the mesh. Verdict:
-lattice/mesh-unresolved. A follow-on BZ-quadrature/Γ audit (`docs/invzp_phase1_*.md`) found the
-legacy BZ quadrature had duplicate faces — 15³ distinct of 16³, 17.6 % redundant — and pointed at
+lattice/mesh-unresolved. A follow-on BZ-quadrature/Γ audit (archived at
+`2a8d5b7^:docs/invzp_phase1_quadrature_prereg.md` and
+`2a8d5b7^:docs/invzp_phase1_report.md`) found the legacy BZ quadrature had
+duplicate faces — 15³ distinct of 16³, 17.6 % redundant — and pointed at
 the conditionally-convergent brute-force dipolar sum in `MF_dipole`.
 
 Also delivered: the pre-declared ordered residual/scaling contract with a non-mutating complete-
@@ -287,7 +290,12 @@ Accumulated across the project; all still in force.
 
 ---
 
-## 4. Open items
+## 4. Open items recorded on 2026-07-27 (historical)
+
+This list records the state at consolidation time. The current ordered-leg
+priorities and disposition are governed by `invzp_convg_fix_Claude.md` and
+`biased_convergence_solution.md`; this historical list is not a live task
+queue.
 
 1. **Sign or reject the strict-medium preregistration amendment.** Until then the branch cannot be
    green. Draft: `Task-17_prereg_amendment_DRAFT.md`.
@@ -303,8 +311,9 @@ Accumulated across the project; all still in force.
 5. **G5 tension:** the Task-18 brief says Gate 0 cannot pass with a missing finest integral, but
    `rep.pass` is specified as exactly `~(a||b||c||d||e)` with no sixth term. G5 is measured, fails on
    every field, and is not a Boolean. Recorded, not silently reconciled.
-6. **Ewald Steps 6–7** (physics anchors, default flip) are planned but unexecuted. The plan is
-   `docs/invzp_ewald_step5-7_plan.md`, kept in the working tree for exactly that reason.
+6. **Ewald Steps 6–7** (physics anchors, default flip) are planned but
+   unexecuted. The frozen plan is archived at
+   `2a8d5b7^:docs/invzp_ewald_step5-7_plan.md`.
 7. **Deferred Ewald minors** (M-t1/t2/t4/t5/t7abc/t9-1/t9-2) plus the preregistration §5
    exponential-factor erratum, which needs a dated §12 E2 re-registration.
 8. **The strict-medium failure leaves live physics questions.** The consolidated diagnosis §9.4 has

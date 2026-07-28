@@ -364,9 +364,11 @@ a partially non-finite residual in 0.3. Estimated ~1–2 days.
 * **Acceptance/I1:** at `T = 0.31 K`, `B = 1 T`, jensen, resummed, the point remains
   `'node_failed'`; `prof` has 33 profile-node records, while `status_detail` includes the separate
   `h = 0` predictor and reports 34 total records, 6 accepted, and `predictor_failed = true`. Its
-  failing-node list reproduces `docs/diagnostics/claude_convg_2026-07-27/diag2_B1.log`. Additive fields
-  do not change the verdict or gate. Confirm that successful untraced calls allocate no failure ledger,
-  and measure failed-call memory/time separately from G9 (which checks results, not performance).
+  failing-node list reproduces the archived 2026-07-27 `diag2_B1.log`
+  (`31a7fd0:docs/diagnostics/claude_convg_2026-07-27/diag2_B1.log`). Additive
+  fields do not change the verdict or gate. Confirm that successful untraced
+  calls allocate no failure ledger, and measure failed-call memory/time
+  separately from G9 (which checks results, not performance).
 * **Explicitly not in scope:** relaxing the gate, skipping nodes, or interpolating `r(h)` across them.
   That was R3 and it is withdrawn — the failed nodes sit exactly where the path crosses poles or may
   change branch, so interpolation manufactures the Jensen integral; and the `r(0) = 1 + Σ(0)`
