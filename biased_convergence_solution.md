@@ -238,10 +238,15 @@ not a branch endpoint or an accepted extrapolation.
 The unresolved low endpoint has a diagnostic positive-side coordinate
 `q=(h/h_reference)^2`. It preserves the original equations pointwise for every `q>0` and has advanced
 the returning leg from `q=1` to `q=0.775` with A--D acceptance, whereas the h-coordinate corrector
-stagnates because its field-Jacobian error is large relative to the bordered condition. This is only
-a conditioning device for the positive approach: `q=0` is an explicit unresolved event, because no
-finite one-sided stencil proves the absence of a `sqrt(q)` term. It cannot supply or select an h=0
-endpoint.
+stagnates because its field-Jacobian error is large relative to the bordered condition. The attempted
+`q=0.7625` point exposed a machine-resolution floor solely in the static closure; row scaling did
+not remove it. A default-off one-shot scalar `K0` polish, bounded to 4096 physical-`K0` ULPs and
+subject to every unchanged full gate, removed that floor and carried the same component to
+`q=0.062004970571964718`. The trace then stopped on q-Jacobian refinement disagreement (about 6%
+between two individually drift-accepted stencils) with bordered `rcond≈1.05e-12`. This remains only
+a conditioning experiment for the positive approach: `q=0` is an explicit unresolved event, because
+no finite one-sided stencil proves the absence of a `sqrt(q)` term. Neither the polish nor the
+positive trace can supply or select an h=0 endpoint.
 
 ## 6. Failure conditions
 

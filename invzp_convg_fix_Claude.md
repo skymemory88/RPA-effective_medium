@@ -87,8 +87,14 @@ At the low positive endpoint, a bounded h-coordinate corrector now fails reprodu
 running away: the best tested field column has `1.30e-3` Richardson drift against bordered
 `rcond≈1.76e-11`, and the corrector stagnates at residual `1.91e-5`. A separate diagnostic
 `q=(h/h_reference)^2` adapter preserves every original positive-h equation and advances three
-A--D-audited points to `q=0.775`. It deliberately labels `q=0` unresolved; without a proof of
-even-in-h smoothness, a finite q stencil cannot rule out a `sqrt(q)` term or identify an h=0 root.
+A--D-audited points to `q=0.775`. The next attempted point exposed a static-only
+`1.33548e-8` machine-resolution floor that row scaling did not remove. A default-off, one-shot
+scalar-`K0` proposal bounded by physical-`K0` ULPs and every unchanged full acceptance gate removes
+that floor; adaptive centred q stencils then carry the same component to
+`q=0.062004970571964718`, where independent q-Jacobian refinements disagree by about 6% and the
+trace stops. It deliberately labels `q=0` unresolved; without a proof of even-in-h smoothness, a
+finite q stencil cannot rule out a `sqrt(q)` term or identify an h=0 root. This is a numerical
+stability result, not production-path authorization.
 
 **Root-census and low-endpoint update, 2026-07-28.** A retained explicit-seed enumerator now records
 all fixed-`h` attempts and clusters the complete independent coordinates `[Sigma;K0]` through an

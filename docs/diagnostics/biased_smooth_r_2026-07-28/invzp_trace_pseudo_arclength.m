@@ -9,6 +9,11 @@ function trace = invzp_trace_pseudo_arclength(problem, y0, opts)
 %   PROBLEM.event(DIAG) optionally returns an empty reason for a traversable
 %   point or a nonempty reason for a hard event. PROBLEM.audit(Y,DIAG)
 %   optionally returns [ACCEPTED,REASON,PAYLOAD] at corrected roots.
+%   PROBLEM.polish(Y,R,J,DIAG,TOL,BUDGET) may optionally propose a
+%   problem-specific last-bit correction. It returns [YCANDIDATE,INFO],
+%   where INFO contains applied, reason, and equation_evaluations. Every
+%   applied proposal is independently re-evaluated and must pass the same
+%   residual, constraint, event, audit, and rank gates as an ordinary root.
 %
 %   This diagnostic primitive traces one connected curve. It does not find
 %   initial roots, enumerate disconnected components, split the curve into
@@ -184,8 +189,12 @@ J = nan(nres,nvar);
 diag = struct();
 corr = struct('reason','max_corrector','iterations',0, ...
     'constraint_abs',NaN,'residual_inf',NaN, ...
+    'residual_index',NaN,'residual_value',NaN, ...
     'bordered_rcond',NaN,'step_norm',NaN,'last_alpha',NaN, ...
-    'equation_evaluations',0);
+    'equation_evaluations',0, ...
+    'polish_applied',false,'polish_evaluations',0, ...
+    'polish_step',0,'polish_reason','not_attempted');
+polishConsumed = false;
 for iter = 1:cfg.max_corrector
     if corr.equation_evaluations >= cfg.max_evaluations_per_attempt
         corr.reason = 'evaluation_budget';
@@ -199,7 +208,8 @@ for iter = 1:cfg.max_corrector
     F = [R;constraint];
     corr.iterations = iter;
     corr.constraint_abs = abs(constraint);
-    corr.residual_inf = norm(R,Inf);
+    [corr.residual_inf,corr.residual_index] = max(abs(R));
+    corr.residual_value = R(corr.residual_index);
     if isempty(event) && norm(R,Inf) <= cfg.tol_residual && ...
             abs(constraint) <= cfg.tol_constraint
         corr.reason = 'accepted';
@@ -210,6 +220,54 @@ for iter = 1:cfg.max_corrector
         corr.reason = ['event:',event];
         ok = false;
         return
+    end
+
+    if ~polishConsumed
+        [candidate,polish] = polishPoint(problem,y,R,J,diag,cfg, ...
+            corr.equation_evaluations,nvar,invalidId);
+        corr.polish_reason = polish.reason;
+        corr.polish_evaluations = corr.polish_evaluations+ ...
+            polish.equation_evaluations;
+        corr.equation_evaluations = corr.equation_evaluations+ ...
+            polish.equation_evaluations;
+        polishConsumed = polish.equation_evaluations > 0;
+        if polish.applied
+            corr.equation_evaluations = corr.equation_evaluations+1;
+            [Rp,Jp,diagp] = evaluate( ...
+                problem,candidate,nres,nvar,invalidId);
+            eventp = equationEvent(problem,Rp,Jp,diagp);
+            constraintp = tangent.'*(candidate-yPred);
+            corr.constraint_abs = abs(constraintp);
+            [corr.residual_inf,corr.residual_index] = max(abs(Rp));
+            corr.residual_value = Rp(corr.residual_index);
+            corr.polish_step = norm(candidate-y);
+            if ~isempty(eventp)
+                corr.reason = ['event:',eventp];
+                ok = false;
+                return
+            elseif norm(Rp,Inf) > cfg.tol_residual
+                corr.reason = 'polish_validation_residual';
+                ok = false;
+                return
+            elseif abs(constraintp) > cfg.tol_constraint
+                corr.reason = 'polish_validation_constraint';
+                ok = false;
+                return
+            end
+            y = candidate;
+            R = Rp;
+            J = Jp;
+            diag = diagp;
+            corr.polish_applied = true;
+            corr.reason = 'accepted';
+            ok = true;
+            return
+        elseif polish.equation_evaluations > 0 && ...
+                corr.equation_evaluations >= cfg.max_evaluations_per_attempt
+            corr.reason = 'evaluation_budget';
+            ok = false;
+            return
+        end
     end
 
     B = [J;tangent.'];
@@ -253,7 +311,8 @@ for iter = 1:cfg.max_corrector
                 diag = diagt;
                 corr.iterations = min(iter+1,cfg.max_corrector);
                 corr.constraint_abs = abs(trialConstraint);
-                corr.residual_inf = norm(Rt,Inf);
+                [corr.residual_inf,corr.residual_index] = max(abs(Rt));
+                corr.residual_value = Rt(corr.residual_index);
                 corr.reason = 'accepted';
                 ok = true;
                 return
@@ -344,6 +403,69 @@ if ~(ischar(reason) && (isempty(reason) || isrow(reason)))
 end
 end
 
+function [candidate,info] = polishPoint( ...
+        problem,y,R,J,diag,cfg,evaluations,nvar,invalidId)
+candidate = y;
+info = struct('applied',false,'reason','not_available', ...
+    'equation_evaluations',0);
+if ~isfield(problem,'polish') || isempty(problem.polish)
+    return
+end
+budget = cfg.max_evaluations_per_attempt-evaluations-1;
+if budget < 1
+    info.reason = 'no_budget';
+    return
+end
+try
+    [candidate,info] = problem.polish( ...
+        y,R,J,diag,cfg.tol_residual,budget);
+catch exception
+    wrapped = MException('invzp:ArcLength:PolishFailure', ...
+        'problem.polish failed: %s',exception.message);
+    wrapped = addCause(wrapped,exception);
+    throw(wrapped);
+end
+if ~isstruct(info) || ~isscalar(info) || ...
+        ~all(isfield(info,{'applied','reason','equation_evaluations'}))
+    fail(invalidId, ...
+        ['problem.polish INFO must be a scalar struct with applied, ' ...
+        'reason, and equation_evaluations.']);
+end
+if ~islogical(info.applied) || ~isscalar(info.applied)
+    fail(invalidId,'problem.polish INFO.applied must be a scalar logical.');
+end
+if isstring(info.reason)
+    if ~isscalar(info.reason) || ismissing(info.reason)
+        fail(invalidId, ...
+            'problem.polish INFO.reason must be a nonmissing string scalar.');
+    end
+    info.reason = char(info.reason);
+end
+if ~(ischar(info.reason) && (isempty(info.reason) || isrow(info.reason)))
+    fail(invalidId, ...
+        'problem.polish INFO.reason must be a string scalar or character row.');
+end
+neval = info.equation_evaluations;
+if ~isnumeric(neval) || ~isreal(neval) || ~isscalar(neval) || ...
+        ~isfinite(neval) || neval < 0 || neval ~= floor(neval) || ...
+        neval > budget
+    fail(invalidId, ...
+        ['problem.polish INFO.equation_evaluations must be an integer ' ...
+        'between zero and the supplied budget.']);
+end
+if info.applied
+    if ~isnumeric(candidate) || ~isreal(candidate) || ...
+            ~isvector(candidate) || numel(candidate) ~= nvar || ...
+            any(~isfinite(candidate),'all')
+        fail(invalidId, ...
+            'An applied problem.polish candidate must be a finite nvar-vector.');
+    end
+    candidate = candidate(:);
+else
+    candidate = y;
+end
+end
+
 function rec = initialRecord(y,R,diag,payload,tangent)
 rec = makeRecord(0,y,R,diag,payload,0,0,0,0,NaN,NaN);
 rec.tangent_parameter = tangent(end);
@@ -378,6 +500,12 @@ rec = struct( ...
     'equation_evaluations',0, ...
     'constraint_abs',NaN, ...
     'residual_inf',NaN, ...
+    'residual_index',NaN, ...
+    'residual_value',NaN, ...
+    'polish_applied',false, ...
+    'polish_evaluations',0, ...
+    'polish_step',0, ...
+    'polish_reason','', ...
     'bordered_rcond',NaN, ...
     'step_norm',NaN, ...
     'last_alpha',NaN, ...
@@ -397,6 +525,12 @@ rec.corrector_iterations = corr.iterations;
 rec.equation_evaluations = corr.equation_evaluations;
 rec.constraint_abs = corr.constraint_abs;
 rec.residual_inf = corr.residual_inf;
+rec.residual_index = corr.residual_index;
+rec.residual_value = corr.residual_value;
+rec.polish_applied = corr.polish_applied;
+rec.polish_evaluations = corr.polish_evaluations;
+rec.polish_step = corr.polish_step;
+rec.polish_reason = corr.polish_reason;
 rec.bordered_rcond = corr.bordered_rcond;
 rec.step_norm = corr.step_norm;
 rec.last_alpha = corr.last_alpha;
@@ -486,7 +620,7 @@ if ~isstruct(problem) || ~isscalar(problem) || ...
         ~isfield(problem,'equations') || ~isa(problem.equations,'function_handle')
     fail(invalidId,'problem.equations must be a function handle in a scalar struct.');
 end
-for name = {'event','audit'}
+for name = {'event','audit','polish'}
     if isfield(problem,name{1}) && ~isempty(problem.(name{1})) && ...
             ~isa(problem.(name{1}),'function_handle')
         fail(invalidId,'problem.%s must be a function handle.',name{1});
