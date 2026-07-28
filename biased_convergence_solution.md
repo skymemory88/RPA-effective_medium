@@ -248,6 +248,14 @@ a conditioning experiment for the positive approach: `q=0` is an explicit unreso
 no finite one-sided stencil proves the absence of a `sqrt(q)` term. Neither the polish nor the
 positive trace can supply or select an h=0 endpoint.
 
+A derivative-free fixed-`h` check then removes the q-Jacobian from this conclusion. Row
+equilibration raises the handoff Jacobian condition estimate from raw `8.27e-13` to `6.10e-9`
+without changing an equation or raw acceptance gate, and carries the component to
+`h=3.4035747258282251e-10 meV`. Refinement stops there; a direct zero-field solve fails at residual
+`5.077e-2`, and the last positive state is at least `0.312` away from every root in the frozen
+seven-root `h=0` census. The backup selector must therefore treat this endpoint as unresolved. It
+must not extrapolate the positive component to zero or substitute the closest census root.
+
 ## 6. Failure conditions
 
 Keep the column masked if any of the following occurs:

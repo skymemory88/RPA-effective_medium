@@ -18,7 +18,12 @@ be inserted into Jensen quadrature without branch-tracked continuation.
 - `static_medium = 'resummed'`, `Ecut = 40`
 - Picard: `mix_outer = 0.7`, `max_outer = 200`, `tol_outer = 1e-8`
 - diagnostic Newton events: `pole_margin > 1e-10`, `mean_margin > 1e-10`,
-  Jacobian `rcond > 1e-12`; A–D audit remains binding
+  selected Jacobian `rcond > 1e-12`; raw Jacobian by default, or the explicitly enabled
+  row-equilibrated Jacobian; A–D audit remains binding
+- `row_equilibrate=false` and `static_polish=false` by default. When explicitly enabled,
+  equilibration affects only the linear solve/rank estimate. The physical-`K0` polish permits one
+  capped proposal per eligible Newton iterate and returns immediately on acceptance; raw residual
+  and A–D acceptance never change.
 
 ## Results
 
@@ -41,6 +46,8 @@ be inserted into Jensen quadrature without branch-tracked continuation.
 | 0.10 | 1.5 | pseudo-arclength across the low-branch event | crosses in 11 accepted steps; `deta/ds` changes from `+2.677e-7` to `-5.243e-7`, directly resolving `max(h)=1.130402502867847e-5`; minimum oriented-tangent overlap is `0.9999999997`, `min rcond(augmented)=1.091e-6`, and all A–D audits pass |
 | 0.10 | 1.5 | retained 25-seed `h=0` root census | 16 A--D-accepted attempts cluster into seven distinct roots in the complete independent coordinates `[Sigma;K0]` (`K` and `lambda` are derived); nine attempts fail. Representative `r` ranges from `0.60295` to `1.20283`, so the earlier three-seed agreement sampled one basin rather than proving uniqueness |
 | 0.10 | 1.5 | staged reconstruction of the low fold and returning leg | 21 fixed-`h` nodes plus 20 local pseudo-arclength steps recover `h_fold=1.1303917626651595e-5`; the returning leg exposes raw-closure amplification by `G*Gbar`, while the defactored equation remains accurate to about `2e-11`. The trace reaches `h=6.890625e-9` but does not establish a connection to any `h=0` root |
+| 0.10 | 1.5 | default-off physical-`K0` last-bit polish | at the positive-q `q=0.7625` stall, all Sigma equations pass and the static residual is `1.33548e-8`; one 656-physical-ULP proposal reduces the complete raw residual to `1.13e-11` and passes A–D |
+| 0.10 | 1.5 | row-equilibrated, derivative-free final fixed-`h` descent | the static Jacobian row is `3.53e6` times larger than every Sigma row: raw/equilibrated `rcond` at the handoff are `8.27e-13`/`6.10e-9`. The retained fixed-`h` helper accepts 52 scheduled points down to `h=3.4852605192481022e-10`; a refined schedule reaches `3.4035747258282251e-10`, then fails line search at raw residual `3.83e-6`. A direct `h=0` solve from the last accepted state fails at `5.077e-2`; that state is at least `0.312` from every root in the seven-root census |
 | 0.31 | 3.6 | adaptive natural-`h` reciprocal continuation from a clean high-`h` node | reaches `h=0` in 12 accepted nodes; minimum pole margin `1.4827e-3` |
 | 0.31 | 1.0 | same continuation | step collapse near `h=0.00793448728`; 258 accepted nodes, condition number rising to `9.84e7`, no pole/mean event |
 
@@ -63,8 +70,25 @@ shows why branch/rank diagnostics are necessary.
 The subsequent 25-seed census corrects one limited inference in that account: agreement among the
 three original cold seeds was only basin-local. Seven accepted `h=0` roots are now resolved under the
 frozen clustering tolerances. The short staged trace still verifies the low regular fold, but its
-returning leg becomes a sharp, nearly rank-deficient boundary layer near `h=0`; no accepted
+returning leg appears to become a sharp, nearly rank-deficient boundary layer near `h=0`; no accepted
 continuation from that leg to any enumerated endpoint has yet been demonstrated.
+
+A later scaling audit shows that the apparent raw rank loss in the final boundary layer is mostly
+row imbalance, not algebraic rank loss. The static row reaches millions of times the scale of the
+self-energy rows, while row equilibration leaves `rcond≈6.1e-9`. The new options in
+`invz_ordered_node_newton` are therefore default-off and deliberately narrow:
+`row_equilibrate=true` divides each residual row and right-hand side by the same Jacobian infinity
+norm only for the linear solve/rank test; `static_polish=true` proposes one rounded physical-`K0`
+Newton update at each eligible Newton iterate only after all Sigma residuals pass. A failed proposal
+does not prevent an ordinary full Newton step, while a successful proposal is fully gated and
+returned immediately. Every accepted state still uses the raw residual, the existing domain events,
+and the independent A–D audit.
+
+Those mechanisms extend the positive branch by roughly a factor of five in `h`, but do not connect
+it to zero. Refinement stops reproducibly near `3.4e-10 meV`, a direct zero solve is rejected, and
+the last positive state is not within the frozen census tolerance of any zero-field root. This
+strengthens the endpoint non-connection result; it does not authorize extrapolation across the
+unresolved interval.
 
 One-off drivers and `.mat` files stayed under `/tmp`. The audited numerical kernel now consists of
 `invz_ordered_node_context.m`, `invz_ordered_make_node.m`,
