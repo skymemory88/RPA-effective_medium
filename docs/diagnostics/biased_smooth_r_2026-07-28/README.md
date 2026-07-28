@@ -33,9 +33,12 @@ accepted corrector's already-gated `R`, Jacobian, and diagnostic record are carr
 the audit and tangent update, so there is no unmetered or unchecked post-audit equation call. A
 line-search trial that already satisfies the residual, constraint, and event gates is promoted
 directly with the same virtual iteration count used by the previous top-of-loop confirmation. Failed
-attempt records retain their last residual, constraint, bordered `rcond`, step norm, and damping
-factor. If the final permitted Newton update itself lands on an accepted root, it is retained rather
-than discarded for lack of a redundant confirmation iteration; the analytic
+attempt records retain their last residual, its MATLAB one-based component index and signed value,
+constraint, bordered `rcond`, step norm, damping factor, and optional polish provenance. For the
+ordered adapter, indices `1:nw` are the self-energy equations and `nw+1` is the defactored static
+closure. These fields are diagnostics, not acceptance criteria. If the final permitted Newton update
+itself lands on an accepted root, it is retained rather than discarded for lack of a redundant
+confirmation iteration; the analytic
 `R(u,h)=u+h^2` one-update oracle freezes that boundary semantics.
 
 `invzp_ordered_arclength_problem` is the first invZ-specific adapter. It uses the audited resummed
@@ -70,14 +73,21 @@ fold; it neither retries nor crosses a fixed-`h` rank loss.
 
 `invzp_ordered_squared_field_problem` is a positive-field endpoint adapter with
 `q=(h/h_reference)^2`. For `q>0` it is an exact reparameterization of the original node equations;
-it never averages positive and negative fields. It uses centred Richardson q derivatives away from
-zero and a fourth-order forward derivative when a negative-q stencil would be invalid, with a
-mandatory derivative-drift margin. `q=0` is always reported as
+it never averages positive and negative fields. Every positive point uses a centred
+Richardson derivative with actual half-width `min(q_fd_step,q/2)`, a mandatory derivative-drift
+margin, and a representability check on all stencil nodes. A fourth-order forward value is retained
+only for rejected `q=0` diagnostics. A `q=0` point that otherwise evaluates normally is rejected as
 `q_zero_endpoint_unresolved`: a finite forward stencil cannot prove that the residual contains no
 `sqrt(q)` term. Thus the adapter can condition and trace a positive-q approach, but cannot certify
 the endpoint. Its `q_domain` bounds central continuation points, like the h adapter's `h_domain`;
-nonnegative derivative-stencil nodes may lie outside a finite reporting bound and remain explicit
+positive derivative-stencil nodes may lie outside a finite reporting bound and remain explicit
 pointwise evaluations of the same equations.
+
+The adapter also exposes a default-off, one-shot static-closure polish. It is eligible only when all
+`Sigma` equations already pass, proposes only the analytic scalar Newton change in physical `K0`,
+and rejects changes above `static_polish_max_ulps` (default 4096 physical-`K0` ULPs). The proposal
+counts against the corrector budget and is then recomputed through the complete q adapter. It cannot
+bypass the unchanged residual, arclength, event, A--D, rank, tangent, or correction-size gates.
 
 `invz_ordered_node_jacobian_factors` and `invzp_solve_bordered_factors` expose and solve the exact
 frequency-block form
@@ -227,10 +237,23 @@ open-ended nested retry cost; it does not regularize the endpoint or change an a
 
 At the last accepted positive-h point, the ordinary h-coordinate border has `rcond≈1.76e-11` while
 its best tested Richardson column still drifts by `1.30e-3`; a bounded corrector stagnates at
-residual `1.91e-5` and fails line search. Reparameterizing only the positive side by q advances three
-A--D-audited states from `q=1` to `q=0.775` (`h=6.06609862186847e-9 meV`). The retained q-Jacobian
-drifts are `7.03e-5`, `7.69e-5`, and `1.33e-4`; the third step required bounded shrinkage. This
-demonstrates a more stable positive-endpoint coordinate, not a connection to q=0 or to any
-enumerated h=0 root. At one enumerated h=0 root the forward stencil is finite and has drift
-`1.13e-9`, but the independent `q_zero_endpoint_unresolved` event still rejects it; small stencil
-drift is numerical evidence, not the missing smoothness proof.
+residual `1.91e-5` and fails line search. Reparameterizing only the positive side by q first advanced
+three A--D-audited states from `q=1` to `q=0.775` (`h=6.06609862186847e-9 meV`). The attempted next
+point at `q=0.7625` then stalled at `1.3354847848219768e-8`, entirely in component 741, the final
+static closure. Static-row scaling improved the bordered `rcond` but reached the identical floor and
+was discarded. Direct, reversed, and compensated static sums agreed to about `1e-16`, excluding the
+final Brillouin-zone summation order as the cause.
+
+An ULP scan showed a quantized coupled-Newton direction: the static residual jumped from
+`+1.33548e-8` to about `-1.96e-8`. Holding the already-converged `Sigma` and q fixed, however, a
+656-physical-ULP `K0` proposal reduced the complete residual to `1.13e-11` and passed every A--D,
+constraint, event, derivative-drift, rank, tangent, and correction-size gate. The default-off
+one-shot polish freezes exactly this limited remedy. With it and the adaptive centred q stencil, the
+same returning component reached `q=0.062004970571964718`
+(`h=1.7158205633221428e-9 meV`) with residual `6.11e-10`, derivative drift `1.99e-3`, and bordered
+`rcond=1.05e-12`. The next segment stopped on the derivative-drift event. At the last accepted state,
+independently acceptable stencil caps `0.1` and `0.01` produced q columns differing by about 6%;
+smaller caps drifted by up to 4.5%. This is a recorded double-precision derivative frontier, not an
+endpoint or a connection to any enumerated h=0 root. At one enumerated h=0 root the forward stencil
+is finite and has drift `1.13e-9`, but the independent `q_zero_endpoint_unresolved` event still
+rejects it; small stencil drift is numerical evidence, not the missing smoothness proof.

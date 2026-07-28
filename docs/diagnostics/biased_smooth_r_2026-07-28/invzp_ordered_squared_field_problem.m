@@ -7,12 +7,21 @@ function problem = invzp_ordered_squared_field_problem(ctx,hReference,opts)
 %
 %   For q>0 this is an exact one-to-one reparameterization of the original
 %   fixed-h residual. It neither averages +h/-h nor alters an equation.
-%   A fourth-order one-sided q derivative is used near q=0, where a
-%   negative-q stencil would have no real-h meaning. q=0 is always an
+%   Every q>0 Jacobian uses centred Richardson differences with half-width
+%   min(opts.q_fd_step,q/2), so every stencil node remains strictly
+%   positive. A fourth-order forward derivative is retained only to report
+%   q=0 diagnostics. An otherwise valid q=0 point is rejected as an
 %   unresolved endpoint event: a finite stencil cannot prove that the
-%   residual has no sqrt(q) term. opts.q_domain bounds accepted central
-%   trace points only; derivative stencils may cross that reporting bound,
-%   but every stencil node remains q>=0 and must be node-valid.
+%   residual has no sqrt(q) term.
+%   opts.q_domain bounds accepted central trace points only; derivative
+%   stencils may cross that reporting bound and must remain node-valid.
+%   opts.static_polish (default false) exposes one optional one-shot K0
+%   Newton proposal for machine-resolution stalls. It is eligible only
+%   after all Sigma residuals pass, is capped by
+%   opts.static_polish_max_ulps in physical K0, and never changes an
+%   acceptance tolerance. The tracer independently recomputes the complete
+%   proposal and applies its ordinary constraint, event, A--D, rank, and
+%   tangent gates.
 
 if nargin < 3 || isempty(opts), opts = struct(); end
 invalidId = 'invzp:OrderedSquaredField:InvalidInput';
@@ -41,6 +50,11 @@ qFdStep = positive(getf(opts,'q_fd_step',0.1), ...
     'q_fd_step',invalidId);
 qDriftMax = positive(getf(opts,'q_jacobian_drift_max',1e-2), ...
     'q_jacobian_drift_max',invalidId);
+staticPolish = logicalScalar(getf(opts,'static_polish',false), ...
+    'static_polish',invalidId);
+staticPolishMaxUlps = positiveInteger( ...
+    getf(opts,'static_polish_max_ulps',4096), ...
+    'static_polish_max_ulps',invalidId);
 tolOuter = positive(getf(opts,'tol_outer',1e-8), ...
     'tol_outer',invalidId);
 poleMarginMin = positive(getf(opts,'pole_margin_min',1e-10), ...
@@ -67,14 +81,21 @@ cfg = struct( ...
     'sigma_scale',sigmaScale,'K0_scale',K0Scale, ...
     'q_fd_step',qFdStep, ...
     'q_jacobian_drift_max',qDriftMax, ...
+    'static_polish',staticPolish, ...
+    'static_polish_max_ulps',staticPolishMaxUlps, ...
     'tol_outer',tolOuter, ...
     'pole_margin_min',poleMarginMin, ...
     'mean_margin_min',meanMarginMin, ...
     'q_domain',qDomain);
+polishCallback = [];
+if staticPolish
+    polishCallback = @polishStaticClosure;
+end
 problem = struct( ...
     'equations',@equations, ...
     'event',@event, ...
     'audit',@audit, ...
+    'polish',polishCallback, ...
     'pack',@pack, ...
     'unpack',@unpack, ...
     'config',cfg);
@@ -95,7 +116,8 @@ problem = struct( ...
             updateCache(y,R,Jscaled,record);
             return
         end
-        [Jq,reference,derivativeStatus,scheme] = qDerivative(u,q,R);
+        [Jq,reference,derivativeStatus,scheme,usedStep] = ...
+            qDerivative(u,q,R);
         derivativeDrift = norm(Jq-reference,Inf)/max(1,norm(Jq,Inf));
         Jscaled = [Ju.*stateScale.',Jq];
         margins = struct( ...
@@ -108,20 +130,32 @@ problem = struct( ...
             'q',q,'h',hReference*sqrt(q),'u',u, ...
             'node',node,'state',state,'local',local, ...
             'physics',physics,'event_margins',margins, ...
-            'q_fd_step',qFdStep, ...
+            'q_fd_step',usedStep, ...
             'q_derivative_scheme',scheme, ...
             'q_jacobian_drift',derivativeDrift, ...
             'q_derivative_status',derivativeStatus);
         updateCache(y,R,Jscaled,record);
     end
 
-    function [column,reference,status,scheme] = qDerivative(u,q,Rcenter)
-        if q >= qFdStep
-            scheme = 'centered_richardson';
-            [Rplus,statusPlus] = residualAtQ(u,q+qFdStep);
-            [Rminus,statusMinus] = residualAtQ(u,q-qFdStep);
-            coarse = (Rplus-Rminus)/(2*qFdStep);
-            half = qFdStep/2;
+    function [column,reference,status,scheme,step] = ...
+            qDerivative(u,q,Rcenter)
+        if q > 0
+            step = min(qFdStep,q/2);
+            scheme = 'adaptive_centered_richardson';
+            half = step/2;
+            stencil = [q-step,q-half,q+half,q+step];
+            if ~(isfinite(step) && step > 0 && isfinite(half) && half > 0) || ...
+                    any(~isfinite(stencil),'all') || ...
+                    ~(stencil(1) < stencil(2) && stencil(2) < q && ...
+                    q < stencil(3) && stencil(3) < stencil(4))
+                column = nan(nw+1,1);
+                reference = column;
+                status = 'q_fd_resolution';
+                return
+            end
+            [Rplus,statusPlus] = residualAtQ(u,q+step);
+            [Rminus,statusMinus] = residualAtQ(u,q-step);
+            coarse = (Rplus-Rminus)/(2*step);
             [RplusHalf,statusPlusHalf] = residualAtQ(u,q+half);
             [RminusHalf,statusMinusHalf] = residualAtQ(u,q-half);
             fine = (RplusHalf-RminusHalf)/(2*half);
@@ -132,19 +166,20 @@ problem = struct( ...
             return
         end
 
+        step = qFdStep;
         scheme = 'forward_fourth_order';
         values = zeros(nw+1,5);
         values(:,1) = Rcenter;
         statuses = repmat({''},1,4);
         for offset = 1:4
             [values(:,offset+1),statuses{offset}] = ...
-                residualAtQ(u,q+offset*qFdStep);
+                residualAtQ(u,q+offset*step);
         end
         column = (-25*values(:,1)+48*values(:,2)- ...
             36*values(:,3)+16*values(:,4)-3*values(:,5))/ ...
-            (12*qFdStep);
+            (12*step);
         reference = (-3*values(:,1)+4*values(:,2)-values(:,3))/ ...
-            (2*qFdStep);
+            (2*step);
         status = firstFailure(statuses);
     end
 
@@ -259,6 +294,70 @@ problem = struct( ...
             state.K0s/K0Scale;q];
     end
 
+    function [candidate,info] = polishStaticClosure( ...
+            y,R,Jscaled,record,tolerance,budget)
+        candidate = y(:);
+        info = struct('applied',false,'reason','not_ready', ...
+            'equation_evaluations',0);
+        k0Index = nw+1;
+        if isempty(record.node) || numel(R) ~= nw+1 || ...
+                ~isequal(size(Jscaled),[nw+1,nw+2]) || ...
+                norm(R(1:nw),Inf) > tolerance || ...
+                abs(R(end)) <= tolerance
+            return
+        elseif budget < 1
+            info.reason = 'no_budget';
+            return
+        end
+        derivative = Jscaled(end,k0Index);
+        if ~(isfinite(derivative) && derivative ~= 0)
+            info.reason = 'invalid_static_derivative';
+            return
+        end
+        x0 = candidate(k0Index);
+        coordinateUlp = eps(abs(x0));
+        physicalUlp = eps(abs(record.u(end)));
+        step = -R(end)/derivative;
+        if ~(isfinite(step) && step ~= 0)
+            info.reason = 'outside_ulp_envelope';
+            return
+        end
+
+        x1 = x0+step;
+        if x1 == x0
+            x1 = x0+sign(step)*coordinateUlp;
+        end
+        K1 = x1*K0Scale;
+        if ~isfinite(K1) || ...
+                abs(K1-record.u(end))/physicalUlp > staticPolishMaxUlps
+            info.reason = 'outside_ulp_envelope';
+            return
+        end
+        [R1,valid] = atPhysicalK0(K1);
+        info.equation_evaluations = info.equation_evaluations+1;
+        if valid && norm(R1,Inf) <= tolerance
+            accept(x1);
+        elseif valid
+            info.reason = 'static_K0_candidate_rejected';
+        else
+            info.reason = 'invalid_static_trial';
+        end
+
+        function [Rt,valid] = atPhysicalK0(K0)
+            ut = record.u;
+            ut(end) = K0;
+            Rt = invz_ordered_node_equations(record.node,ut);
+            valid = isnumeric(Rt) && isreal(Rt) && ...
+                isequal(size(Rt),[nw+1,1]) && all(isfinite(Rt),'all');
+        end
+
+        function accept(x)
+            candidate(k0Index) = x;
+            info.applied = true;
+            info.reason = 'accepted_static_K0_polish';
+        end
+    end
+
     function [u,q] = unpack(y)
         if ~isnumeric(y) || ~isreal(y) || ~isvector(y) || ...
                 numel(y) ~= nw+2 || any(~isfinite(y),'all')
@@ -318,6 +417,19 @@ function value = positive(value,name,invalidId)
 if ~isnumeric(value) || ~isreal(value) || ~isscalar(value) || ...
         ~isfinite(value) || value <= 0
     error(invalidId,'%s must be a finite positive scalar.',name);
+end
+end
+
+function value = positiveInteger(value,name,invalidId)
+value = positive(value,name,invalidId);
+if value ~= floor(value)
+    error(invalidId,'%s must be a positive integer.',name);
+end
+end
+
+function value = logicalScalar(value,name,invalidId)
+if ~islogical(value) || ~isscalar(value)
+    error(invalidId,'%s must be a scalar logical.',name);
 end
 end
 
