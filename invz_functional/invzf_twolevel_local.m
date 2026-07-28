@@ -76,6 +76,45 @@ dC2dh = M^2*qp*E_h;
 d2C2dh2 = M^2*(qpp*E_h^2 + qp*E_hh);
 dC2dbeta = M^2*qbeta;
 
+% At the exact Z2 point, the general chain-rule form for d2C2/dh2 contains
+% separately divergent terms when beta*Delta is tiny.  Evaluate the same
+% Hermite limit in the dimensionless x=beta*Delta/2 variable.  For n=0,
+% q2=3*(x*sech(x)^2-tanh(x))/x^3 -> -2.  For n~=0 the leading term is
+% O(x^2); the series avoids subtracting two O(1) terms.
+if h == 0
+    x0 = beta*delta;
+    q2 = zeros(size(wn));
+    iz = (wn == 0);
+    if abs(x0) <= 0.1
+        x2 = x0^2;
+        q2(iz) = -2+x2*(8/5+x2*(-34/35+x2*(496/945 ...
+            +x2*(-2764/10395+x2*87376/675675))));
+    else
+        q2(iz) = 3*(x0*sech(x0)^2-tanh(x0))/x0^3;
+    end
+    inz = ~iz;
+    if any(inz)
+        k = 2*pi*wn(inz);
+        if abs(x0) <= 0.1
+            x2 = x0^2;
+            a2 = -8*(12+k.^2)./(3*k.^4);
+            a4 = 32*(120+10*k.^2+k.^4)./(15*k.^6);
+            a6 = -8*(20160+1680*k.^2+168*k.^4+17*k.^6)./(105*k.^8);
+            a8 = 64*(362880+30240*k.^2+3024*k.^4+306*k.^6 ...
+                +31*k.^8)./(2835*k.^10);
+            q2(inz) = x2.*(a2+x2.*(a4+x2.*(a6+x2.*a8)));
+        else
+            den0 = 4*x0^2+k.^2;
+            f0x = 4*x0*tanh(x0)./den0;
+            fp0x = 4*(tanh(x0)+x0*sech(x0)^2)./den0 ...
+                -32*x0^2*tanh(x0)./den0.^2;
+            q2(inz) = fp0x/x0-2*f0x/x0^2;
+        end
+    end
+    dC2dh(:) = 0;
+    d2C2dh2 = M^4*beta^3*q2;
+end
+
 loc = struct();
 loc.Delta = Delta;
 loc.M = M;

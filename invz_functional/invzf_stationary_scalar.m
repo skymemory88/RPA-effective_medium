@@ -15,6 +15,10 @@ function sol = invzf_stationary_scalar(model, lattice, H, wn, opts)
 %   selected contains every stable root tied for the lowest functional value
 %   within opts.energy_tol; symmetry-related degeneracy is not broken.
 %
+%   MODEL may instead contain model.local_function, a handle called as
+%   LOC=local_function(h,wn).  This keeps root enumeration and state
+%   selection identical for the isolated electronuclear local oracle.
+%
 %   Required option:
 %     h_bounds  finite increasing [hmin hmax]
 %
@@ -54,7 +58,7 @@ if lattice.J0 == 0
     ev = evaluate_h(H,model,lattice,H,wn);
     roots = repmat(empty_record(),0,1);
     if ev.valid
-        rec = make_record(ev,model,lattice,H,wn,stol,gtol);
+        rec = make_record(ev,lattice,H,stol,gtol);
         if rec.stationary, roots = rec; end
     end
     selected = select_roots(roots,etol);
@@ -106,7 +110,7 @@ records = repmat(empty_record(),0,1);
 for k = 1:numel(candidates)
     ev = evaluate_h(candidates(k),model,lattice,H,wn);
     if ev.valid && abs(ev.residual) <= rtol
-        rec = make_record(ev,model,lattice,H,wn,stol,gtol);
+        rec = make_record(ev,lattice,H,stol,gtol);
         if rec.stationary
             records(end+1,1) = rec; %#ok<AGROW>
         end
@@ -117,7 +121,11 @@ sol = package(bounds,hscan,rscan,valid,records,selected,rtol,xtol);
 end
 
 function ev = evaluate_h(h,model,lattice,H,wn)
-loc = invzf_twolevel_local(model.Delta,model.M,h,model.beta,wn);
+if isfield(model,'local_function') && isa(model.local_function,'function_handle')
+    loc = model.local_function(h,wn);
+else
+    loc = invzf_twolevel_local(model.Delta,model.M,h,model.beta,wn);
+end
 if isfield(lattice,'mode_weights'), qw = lattice.mode_weights; else, qw = []; end
 ring = invzf_ring_scalar(loc,lattice.Jmodes,qw);
 ev = struct('h',h,'loc',loc,'ring',ring,'valid',strcmp(ring.status,'ok'), ...
@@ -140,10 +148,10 @@ ev = evaluate_h(h,model,lattice,H,wn);
 if ev.valid, r = ev.residual; else, r = realmax('double')/4; end
 end
 
-function rec = make_record(ev,model,lattice,H,wn,stol,gtol)
+function rec = make_record(ev,lattice,H,stol,gtol)
 h = ev.h;
 m = ev.loc.m-ev.ring.dfdh;
-fun = invzf_scalar_functional(model,lattice,m,h,H,wn);
+fun = invzf_scalar_functional_local(ev.loc,lattice,m,h,H,ev.ring);
 fhh = fun.hessian(2,2);
 if isfinite(fhh) && abs(fhh) > eps(max(1,abs(fhh)))
     redcurv = fun.hessian(1,1)-fun.hessian(1,2)*fun.hessian(2,1)/fhh;

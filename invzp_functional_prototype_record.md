@@ -22,7 +22,19 @@
   functional-value comparison without breaking degenerate minima;
 - `invzf_cluster_exact`: dense exact one- through eight-site scalar clusters with arbitrary symmetric
   zero-diagonal coupling matrices, thermodynamics, and stable KMS/Hermite Lehmann response;
-- `invzf_two_site_exact`: the pair-specialized wrapper used by the Jensen dynamic gate.
+- `invzf_two_site_exact`: the pair-specialized wrapper used by the Jensen dynamic gate;
+- `invzf_projected_inputs`: a read-only bridge from the production transverse doublet, derived
+  `Jcc0/Jaa0`, and scalar BZ spectrum into the isolated pilot;
+- `invzf_stationary_convergence`: complete root re-enumeration across Matsubara cutoffs;
+- `invzf_mode_grid_audit`: complete root re-enumeration across production BZ grids, with coupling
+  provenance and a separate pole-domain gate;
+- `invzf_electronuclear_local`: full source-biased 136-state local free energy and stable connected
+  Lehmann response, with nested source/beta derivative stencils;
+- `invzf_electronuclear_inputs`: safe separation of applied `Bz` from the total variational local
+  source used by the full local oracle;
+- `invzf_scalar_functional_local`: common-functional assembly from either analytic two-level or
+  precomputed multilevel local data;
+- `invzf_local_1pi_static`: the first static connected-to-1PI amputation gate for WP4.
 
 Every function is disconnected from `invz_projected/`, `invz_common/`, and `invz_tensor/`.
 
@@ -76,8 +88,12 @@ The checks cover:
     omitted `C4` and `C3-C3` classes;
 16. the three-site mixed-bond `C4` oracle and the anomalous `beta*delta_nm` component of the exact
     two-level connected `C4`.
+17. the full electronuclear local `C2` against `invz_chi0z`, its local Maxwell identities, source-step
+    halving, `Z2` source symmetry, and generic-functional parity with the analytic two-level route.
+18. the exact-symmetry/near-degenerate static 1PI limit; this gate exposed and repaired a cancellation
+    in the original two-level `d2C2/dh2` evaluation, after which `gamma4 -> 2/beta` to `5.6e-17`.
 
-MATLAB `checkcode` returned no findings for all seven implementation files.
+MATLAB `checkcode` returned no findings for all fourteen implementation files.
 
 ## 3. Demonstrated state selection
 
@@ -103,14 +119,100 @@ unique lowest functional value.
 This is the capability missing from the present ordered Jensen fixed-point map: all stationary roots
 are compared by one declared functional.
 
-## 4. Limits and next gates
+## 4. First production-input pilot
+
+The read-only adapter was evaluated at `T=0.1 K`, pure transverse `B=1.5 T`, the actual legacy
+`16^3`/brute-force scalar coupling multiset (`16384` modes), and its derived uniform couplings:
+
+```text
+Jmin = -0.00676310032 meV
+Jmax = +0.00598513893 meV
+J0   = +0.00642443566 meV
+Jaa0 = +0.00351044621 meV
+Delta = 0.0985077276 meV
+M = 5.3330047
+```
+
+Complete root enumeration at `N_omega=128` finds two symmetry-related selected states. The positive
+one is
+
+```text
+h = 0.0329775225243865 meV
+m = 5.13313920359421
+f = -0.0487592744634591 meV/site
+reduced curvature = 0.0790074322453992 meV
+minimum ring denominator = 0.932214180130684
+analytic free-energy tail bound = 1.00049e-9 meV/site
+```
+
+The selected-root count remains two for `N_omega={32,64,128}`. Between `64` and `128`, the maximum
+changes in `[|h|,|m|,|f|,curvature,min_den]` are approximately
+`[2.7e-9,4.2e-7,6.7e-9,2.5e-7,1.5e-8]`. Thus the moderate-field state itself is easy to obtain from
+the strict common functional; this supports the observation that the current Jensen failure at
+`1.5 T` is not caused by absence of an ordered state.
+
+On legacy `Nq={8,12,16}` grids at `N_omega=64`, every grid retains the same two minima. The final
+`12 -> 16` changes in moment and reduced curvature are about `1e-4`. The extremal minimum
+denominator changes by about `1.8e-3`; it is reported and required to stay positive, but is not
+graded as a normalized BZ quadrature observable because the closest mesh point to an excluded Gamma
+point changes with `Nq`. This diagnostic does not supersede the repository's existing conclusion
+that the legacy endpoint-inclusive/brute-force coupling quadrature is not a rigorous production
+limit.
+
+The same strict pilot also gives a decisive limitation. On the actual `16^3` modes it has selected
+ordered minima through about `3.1 T`, no admissible stationary root for `3.2--3.5 T`, and a stable
+paramagnetic root from `3.6 T`; the intervening interval ends on the Gaussian ring pole
+`min_q(1-J_q C_2)=0`. A production transition cannot pass through a no-state interval. Moreover,
+at `1.5 T` the fixed electronic-doublet local and uniform-RPA energies are about `88.32 GHz` and
+`85.05 GHz`, respectively, far above the requested `0--6 GHz` window. The hyperfine manifold is
+therefore indispensable for the spectral problem.
+
+The first full electronuclear local oracle was therefore added before any production wiring. It
+deliberately uses `transverse_mf='none'`, because importing a self-consistent transverse molecular
+field without also varying its conjugate moment would break the one-generator construction. At
+`T=0.1 K`, `Bx=1.5 T`, and `h=0.033 meV`:
+
+```text
+max |C2 - invz_chi0z_cc| = 1.892e-13
+|m + d f0/dh|            = 1.450e-10
+|chi - d m/dh|           = 2.304e-10
+|chi + d2 f0/dh2|        = 5.474e-6
+```
+
+The maximum source-step-halving changes in `dC2/dh` and `d2C2/dh2` were `2.48e-7` and `6.11e-3`;
+the latter is about `2e-7` relative to the largest second derivative. Positive/negative source
+symmetry closes to `1.4e-12` for `C2` and below `8e-8` relative for its second source derivative.
+
+On the actual `16^3` coupling multiset, the positive electronuclear minimum at `1.5 T` is
+
+```text
+h = 0.0340929334913 meV
+m = 5.30675931175
+minimum ring denominator = 0.966617867
+```
+
+Narrow-bracket complete re-solves at `N_omega={128,256,512}` retain one positive minimum (the
+negative partner follows from the verified `Z2` symmetry). The `256 -> 512` changes in `h`, `m`,
+`f`, curvature, and minimum denominator are respectively about
+`[1.5e-9,2.34e-7,1.67e-7,1.97e-7,2.8e-9]`; the analytic free-energy tail bound at `512` is
+`5.39e-7 meV/site`.
+
+Hyperfine structure narrows and shifts the electronic no-state interval: stable ordered roots were
+found at `3.6,4.0,4.5,4.6 T`, with `h` decreasing continuously from `0.0233` to
+`0.00912 meV`; the `4.6 T` moment is `1.4201`. No admissible root was found at
+`4.7,4.8,4.85 T`, and the symmetric root is stable at `4.9 T`. Thus the full local spectrum puts the
+transition on the expected field scale but does not remove the strict Gaussian pole/no-state gap.
+
+## 5. Limits and next gates
 
 This prototype does not yet justify a LiHoF4 production calculation. The next contained steps are:
 
-1. add mode-grid comparison/error plumbing for lattice inputs;
-2. add more coupling topologies before generalizing the exact local source derivatives beyond the
-   scalar two-level model;
-3. only afterward investigate a stationary EMT/2PI extension.
+1. specify a stationary skeleton/2PI extension based on nonlocal return lines, so it reduces exactly
+   to the local solution at `J=0` and to the ring functional when its skeleton part is disabled;
+2. require that extension to contain the same-order one-`C4` and all `C3-C3` 2PI cores, rather than a
+   static-only mass patch;
+3. add more coupling topologies only as a closed retained-order package, and do not wire a spectral
+   backend until the thermodynamic and local-frequency gates both pass.
 
 The deferred `O(1/z^2)` non-Gaussian vacuum and the production ordered `tanh/xi` machinery remain out
 of scope.

@@ -21,6 +21,23 @@ dynamic coefficient pass independent checks. An explicit `C4` vacuum belongs to 
 The isolated `invz_functional/` prototype implements the closed scope without EMT or production
 dispatch.
 
+A first read-only production-input pilot now maps the actual scalar coupling multiset and transverse
+electronic doublet into that strict functional. At `T=0.1 K, Bx=1.5 T` it finds stable ordered minima
+with converged Matsubara and lattice-grid root enumeration, but its electronic mode is about `85 GHz`
+and cannot represent the observed `0--6 GHz` hyperfine spectrum. It also has a Gaussian-pole
+no-stationary-state interval around `3.2--3.5 T`. These are stop signals for production wiring, not
+failures to be hidden: WP1 must next supply a source-biased electronuclear local reference, after
+which survival of the pole interval would trigger WP4 rather than an ad hoc regularization.
+
+That WP1 local gate is now implemented for the full 136-state manifold with
+`transverse_mf='none'`, the only scalar choice that keeps the local free energy and response in one
+Hamiltonian without adding transverse conjugate variables. It matches the independent local
+susceptibility path to `1.9e-13`, gives a cutoff-stable `1.5 T` minimum on the production scalar
+couplings, and moves the ordered solutions to `3.6--4.6 T`. A narrower no-state interval remains at
+`4.7--4.85 T` before the stable symmetric `4.9 T` state. WP4 is therefore activated at the
+specification level in `invzp_functional_wp4_skeleton_spec.md`; no static-only pole patch is
+authorized.
+
 ## 1. Decision summary
 
 The present Jensen ordered machinery should remain available as an explicitly labelled, inexpensive approximation. It should not become the universal thermodynamic foundation of the code.
@@ -228,8 +245,10 @@ Generalize the existing tensor vertex engine into a stable local-vertex service.
 - rank-ladder convergence of both static susceptibility and connected variance.
 
 **2026-07-28 status:** scalar two-level subset implemented in `invz_functional/invzf_twolevel_local.m`
-with analytic `C2`, `dC2/dh=C3(...,0)`, `d2C2/dh2=C4(...,0,0)`, and the elastic zero mode. General
-component-labelled vertices and multilevel/rank gates remain open.
+with analytic `C2`, `dC2/dh=C3(...,0)`, `d2C2/dh2=C4(...,0,0)`, and the elastic zero mode. A full
+source-biased electronuclear `C2` oracle with verified nested-stencil source derivatives is also
+implemented in `invzf_electronuclear_local.m`. General component-labelled `C3/C4` vertices and
+multilevel rank gates remain open.
 
 ### WP2 — strict functional on a scalar closed model
 
@@ -246,8 +265,9 @@ Implement the vacuum diagrams and their derivatives without self-consistent resu
 finite-mode ring, analytic source derivatives, common `(m,h)` functional/Hessian, and a stationary
 root enumerator that compares stable roots by functional value. The stationary envelope identity
 `U=d(beta F)/d beta` and the independent field identities for `m` and `chi` pass. The scalar
-Matsubara free-energy tail has a rigorous bound plus a Richardson audit. Mode-grid error plumbing and
-broader lattice fixtures remain open.
+Matsubara free-energy tail has a rigorous bound plus a Richardson audit. Complete stationary-root
+re-enumeration across Matsubara cutoffs and production BZ grids is implemented; broader lattice
+fixtures and a mathematically consistent electronuclear local reference remain open.
 
 ### WP3 — exact finite-cluster oracle
 
@@ -271,6 +291,12 @@ first omitted `C4` and `C3-C3` classes.
 ### WP4 — Φ-derived self-consistent solver
 
 Introduce stationary dressed lines and compare strict-order versus self-consistent results.
+
+**2026-07-28 specification:** the first candidate varies the full covariance and builds its skeleton
+from the subtracted nonlocal return `R_ij=D_ij-delta_ij*C2`. The one-`C4` double-return and the
+same-order `C3-C3` three-line core are inseparable. The latter is momentum/sublattice dependent and
+cannot be reconstructed from `Jnu_flat`; q-resolved coupling matrices and eigenvectors are an entry
+requirement. See `invzp_functional_wp4_skeleton_spec.md`.
 
 **Exit gates:**
 

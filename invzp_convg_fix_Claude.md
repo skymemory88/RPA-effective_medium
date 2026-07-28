@@ -78,6 +78,34 @@ is now closed at the unicyclic `O(1/z)` scope in `invzp_functional_wp0_spec.md` 
 ring common functional and exact two-site oracle without modifying or dispatching from the production
 solver. This remains the preferred staged route.
 
+**First production-input functional pilot, 2026-07-28.** The isolated strict functional now has a
+read-only adapter to the actual scalar BZ coupling multiset and transverse electronic doublet. At
+`T=0.1 K, Bx=1.5 T` it finds two stable, degenerate ordered minima on the legacy `16^3` couplings;
+the positive state is `h=0.0329775225244 meV`, `m=5.13313920359`, with minimum ring denominator
+`0.9322`. Complete root re-enumeration is stable over Matsubara cutoffs `32,64,128` and BZ grids
+`8,12,16`. This is independent evidence that the moderate-field Jensen masking is not simply the
+absence of an ordered state. It is not yet a spectral fix: the fixed electronic-doublet mode is
+about `85 GHz` even after the uniform RPA shift, whereas the reported window is `0--6 GHz`, so the
+electronuclear manifold is essential. The strict electronic pilot also develops a Gaussian-pole
+no-state interval around `3.2--3.5 T`, between its ordered and paramagnetic solutions. Production
+integration is therefore still prohibited; the next isolated gate is a source-biased
+electronuclear local reference, followed—only if the no-state interval remains—by a newly specified
+stationary skeleton/2PI extension.
+
+**Electronuclear gate result, 2026-07-28.** A full 136-state source-biased local oracle now supplies
+`f0`, `m`, connected `C2(iwn)`, and nested-stencil source/beta derivatives from one Hamiltonian.
+It agrees with the independent `invz_chi0z` path to `1.9e-13` and closes the local Maxwell identities
+to roughly `1e-6` relative or better. To preserve a single generator, this first oracle uses
+`transverse_mf='none'`; the production transverse molecular field would require its own conjugate
+functional variables. On the actual `16^3` couplings it finds a cutoff-stable `1.5 T` minimum at
+`h=0.0340929334913 meV`, `m=5.30675931175`. Hyperfine structure restores ordered minima at
+`3.6,4.0,4.5,4.6 T` and a stable symmetric state at `4.9 T`, but no strict-ring stationary root at
+`4.7,4.8,4.85 T`. The pole/no-state interval is narrower and on the experimental field scale, but
+it survives. The next candidate must therefore be a stationary nonlocal-return skeleton containing
+the complete one-`C4` and `C3-C3` 2PI cores; a zero-frequency-only mass patch is disallowed.
+That candidate and its stop gates are now pre-registered in
+`invzp_functional_wp4_skeleton_spec.md`.
+
 Line numbers below are as of the 2026-07-27 working tree; confirm each before editing.
 
 ---

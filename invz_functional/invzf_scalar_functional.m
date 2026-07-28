@@ -33,19 +33,6 @@ else
 end
 
 loc = invzf_twolevel_local(model.Delta, model.M, h, model.beta, wn);
-ring = invzf_ring_scalar(loc, lattice.Jmodes, qweights);
-if ~strcmp(ring.status, 'ok')
-    out = struct('status', ring.status, 'f', NaN, 'u', NaN, ...
-        'grad', nan(2,1), 'hessian', nan(2), 'loc', loc, 'ring', ring);
-    return
-end
-
-J0 = lattice.J0;
-f = loc.f0 + (h-H)*m - 0.5*J0*m^2 + ring.f;
-u = loc.u0 + (h-H)*m - 0.5*J0*m^2 + ring.dBetaf_dBeta;
-grad = [h-H-J0*m; -loc.m+m+ring.dfdh];
-hessian = [-J0, 1; 1, -loc.chi+ring.d2fdh2];
-
-out = struct('status', 'ok', 'f', f, 'u', u, 'grad', grad, ...
-    'hessian', hessian, 'loc', loc, 'ring', ring);
+ring = invzf_ring_scalar(loc,lattice.Jmodes,qweights);
+out = invzf_scalar_functional_local(loc,lattice,m,h,H,ring);
 end
