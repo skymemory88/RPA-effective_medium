@@ -30,7 +30,15 @@ ion = invz_ion();
 %       instead of diverging); q-path spectra omit that transform (finite-q = intrinsic
 %       response) but still see demag through info.Jaa0.
 T = 0.1;                             % K
-useParallel = true;                  % true -> parfor over fields (Parallel Computing Toolbox)
+% Experimental ordered-field continuation requested for visual inspection. qcp_down executes
+% the increasing `fields` table from high to low, starts cold, and after the first accepted
+% Jensen-ordered column carries its residual-accepted predictor Sigma/K0 state downward.
+% Physical-field continuation is necessarily serial; set fieldContinuation='none' and
+% useParallel=true to restore independent parfor columns.
+fieldContinuation = 'qcp_down';      % 'qcp_down' (experimental) | 'none' (independent fields)
+useParallel = false;                 % qcp_down forces serial execution
+outerMix = 0.50;                     % smaller than 0.7 => stronger damping; 0.30 over-damped 4.400 T
+outerMax = 1000;                     % exploratory budget; acceptance tolerances are unchanged
 eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency INPUTS (w, wq) AND
                                      % the plotted axes. Computation always runs in meV; the driver
                                      % converts in/out (with 'meV' it is a no-op). eta is ALWAYS in
@@ -123,7 +131,8 @@ if theta_c ~= 0, tiltStr = sprintf(', \\theta_c = %.2g\\circ', theta_c); end
 if phi_ab  ~= 0, tiltStr = [tiltStr sprintf(', \\phi_{ab} = %.2g\\circ', phi_ab)]; end
 if ~strcmp(transverse_mf, 'legacy_x'), tiltStr = [tiltStr sprintf(', %s', transverse_mf)]; end
 
-solve_opts = struct('transverse_mf', transverse_mf);   % merged into every spectra call below
+solve_opts = struct('transverse_mf', transverse_mf, ...
+                    'mix_outer', outerMix, 'max_outer', outerMax); % merged into spectra calls
 
 % Coupling backend/grid options (Step-5 opt-in): always pass the explicit backend; add the Ewald
 % controls and each grid-policy field only when selected, so the defaults above reproduce the legacy
@@ -134,7 +143,9 @@ if ~isempty(gridConvention),        coupling_opts.gridConvention = gridConventio
 if ~isempty(gridOffset),            coupling_opts.gridOffset     = gridOffset;      end
 if ~isempty(gammaPolicy),           coupling_opts.gammaPolicy    = gammaPolicy;     end
 qpOpts  = coupling_opts;  qpOpts.eta = eta;  qpOpts.solve_opts = solve_opts;
-mapOpts = coupling_opts;  mapOpts.parallel = useParallel;  mapOpts.eta = eta;  mapOpts.field_dir = dhat;  mapOpts.solve_opts = solve_opts;
+mapOpts = coupling_opts;  mapOpts.parallel = useParallel;  mapOpts.eta = eta;
+mapOpts.field_dir = dhat;  mapOpts.solve_opts = solve_opts;
+mapOpts.field_continuation = fieldContinuation;
 
 % w and wq are given in eUnit; solves run in meV, so convert on the way in (eScale is the
 % meV->eUnit factor) and scale returned grids (S.w, Epeak) back up by eScale for plotting.

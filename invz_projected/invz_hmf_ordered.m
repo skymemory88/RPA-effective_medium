@@ -96,6 +96,11 @@ function [hmf_star, prof, trc] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
 % slot, opts.emt_static -> the ordered static sector). The scheme is never re-derived here.
 % opts.Jmom (optional): invz_coupling_moments of the coupling multiset, resolved once per call
 % and threaded into every node solve; a direct caller may omit it and it is derived here.
+% opts.hmf_seed (optional): struct('Sigma',full Matsubara vector,'K0s',scalar), used only as
+% the numerical initial guess for the h = 0 predictor. It changes neither the equations nor
+% any acceptance gate. A failed warm attempt retains invz_ordered_node_solve's existing
+% one-shot cold retry. prof.hmf_seed_out is populated only when the predictor passes the
+% complete residual checker, allowing a caller to continue between physical fields.
 if nargin < 5, opts = struct(); end
 J0eff = opts.J0eff;                                  % required, no default (caller-owned)
 Jxx0  = getf(opts, 'Jxx0', ion.Jxx0);
@@ -145,6 +150,7 @@ prof = struct('hgrid', [], 'r', [], 'h0', [], 'm', [], 'Sigma0', [], 'K0', [], .
               'omit_max', [], 'medium_status', {{}}, 'node_term_reason', {{}}, ...
               'slope0', NaN, 'r_pm0', NaN, 'G0bare_pm0', NaN, ...
               'Sigma0_pm0', NaN, 'K0_pm0', NaN, 'J0eff', J0eff, ...
+              'hmf_seed_out', [], ...
               'n_extend', 0, 'hmin_initial', NaN, 'status', 'no_bare_order', ...
               'status_detail', [], ...
               'redensified', false, 'int_Sigma0', NaN, 'int_r_minus_1', NaN, ...
@@ -212,10 +218,27 @@ Ecut  = getf(opts, 'Ecut', 40);
 % ONE node solve at hz_fixed = 0 gives THIS machinery's PM fixed point. Its mass
 %   slope_pred = r(0) + J0eff*G0bare(0) = 1 + Sigma0(0) - J0eff*chi_path(0)   (= crit, SS5)
 % predicts root existence INDEPENDENTLY of any sampled profile value.
-Sigma = [];  K0s = 0;                                % warm-start carriers across nodes
+hmf_seed = getf(opts, 'hmf_seed', []);
+if isempty(hmf_seed)
+    Sigma = [];  K0s = 0;
+elseif isstruct(hmf_seed) && isscalar(hmf_seed) && ...
+        isfield(hmf_seed, 'Sigma') && isfield(hmf_seed, 'K0s') && ...
+        isnumeric(hmf_seed.Sigma) && isreal(hmf_seed.Sigma) && ...
+        numel(hmf_seed.Sigma) == numel(wn) && all(isfinite(hmf_seed.Sigma(:))) && ...
+        isnumeric(hmf_seed.K0s) && isreal(hmf_seed.K0s) && isscalar(hmf_seed.K0s) && ...
+        isfinite(hmf_seed.K0s)
+    Sigma = hmf_seed.Sigma(:);  K0s = hmf_seed.K0s;
+else
+    error('invz:hmfOpts', ...
+        ['hmf_seed must be empty or a finite real struct with Sigma matching the ' ...
+         'Matsubara grid and scalar K0s.']);
+end
 if tracing, cur_phase = 'predictor'; end             % stage-2c task 0: node phase tag (bookkeeping only)
 [pred, Sigma, K0s] = eval_node(0, Sigma, K0s);
 pred.is_predictor = true;
+if pred.accepted
+    prof.hmf_seed_out = struct('Sigma', Sigma, 'K0s', K0s);
+end
 % pred is the predictor's own fixed-schema record (task 13): passed to invz_hmf_status
 % below/at every later early return, alongside whichever other records that site has in
 % hand, so a degenerate/domain reason on THIS node is never masked as a generic failure.

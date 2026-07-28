@@ -72,6 +72,13 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %     .dpRng     (30)          real-space dipole cutoff for invz_jq_modes
 %     .eta       (5e-3)        real-axis broadening (meV) passed to invz_chi_realaxis
 %     .parallel  (false)       distribute the field points over a parallel pool (parfor)
+%     .field_continuation ('none')  'none' preserves independent per-field solves.
+%                              'qcp_down' is an EXPERIMENTAL preview: solve the supplied
+%                              increasing field table in descending execution order and pass
+%                              the last accepted Jensen predictor's full Sigma/K0 state to the
+%                              next lower field. This forces serial execution, retains the
+%                              ordinary cold retry and every residual/stability gate, and does
+%                              not certify branch identity. S records seed provenance.
 %     .peak_wmin (0)           meV; excludes a known low-frequency line (e.g. hyperfine
 %                              pole) from the peak search; default is no exclusion
 %     .Jnu, .info              precomputed coupling branches / info struct (skips the
@@ -227,6 +234,7 @@ dpRng    = getf(opts, 'dpRng', 30);
 eta      = getf(opts, 'eta', 5e-3);
 verbose  = getf(opts, 'verbose', true);
 parallel = getf(opts, 'parallel', false);
+fcont    = getf(opts, 'field_continuation', 'none');
 wmin     = getf(opts, 'peak_wmin', 0);
 
 fdir  = getf(opts, 'field_dir', [1 0 0]);
@@ -242,6 +250,14 @@ sm = invz_check_static_medium(opts);
 o1z = getf(opts, 'ordered_1z', 'jensen');
 if ~any(strcmp(o1z, {'jensen', 'bare'}))
     error('invz:ordered1z', 'ordered_1z must be ''jensen'' or ''bare''.');
+end
+if ~(ischar(fcont) && isrow(fcont)) || ~any(strcmp(fcont, {'none', 'qcp_down'}))
+    error('invz:fieldContinuation', ...
+        'field_continuation must be ''none'' or ''qcp_down''.');
+end
+if strcmp(fcont, 'qcp_down') && ~strcmp(o1z, 'jensen')
+    error('invz:fieldContinuation', ...
+        'field_continuation ''qcp_down'' requires ordered_1z = ''jensen''.');
 end
 if ~isnumeric(fdir) || ~isreal(fdir) || numel(fdir) ~= 3 || ~all(isfinite(fdir)) || norm(fdir(:)) == 0
     error('invz:fieldDir', 'field_dir must be a nonzero finite real 3-vector.');
@@ -313,6 +329,8 @@ reasonC = cell(1, nB);   stab1z  = false(1, nB);
 % the sweep counters reporting falsehoods). resEid: the identifier absorbed by a response-call
 % boundary, so a NaN spectrum on a labelled column can never be causeless (review F3).
 ordDiag = cell(1, nB);   resEid  = cell(1, nB);
+seedOut = cell(1, nB);   seedSupplied = false(1, nB);
+seedSourceField = nan(1, nB);
 
 % nWorkers = 0 forces serial execution even inside a parfor, and works without the
 % Parallel Computing Toolbox; Inf lets parfor use (and auto-create) the pool.
@@ -326,21 +344,58 @@ sopts.hyp = hyp;  sopts.J0eff = Jcc0;  sopts.Jxx0 = Jaa0;  sopts.bz_tol = bztol;
 % on the protected path.
 sopts.static_medium = sm.scheme;  sopts.ref_margin = sm.ref_margin;
 
-parfor (k = 1:nB, nWorkers)
-    [chizM(:, k), chirpaM(:, k), Sig0(k), phaseC(k), ph1z(k), critPM(k), m1zM(k), DordM(k), ...
-     smUsed{k}, pmStat{k}, pmEid{k}, stab1z(k), reasonC{k}, ordDiag{k}, resEid{k}] = ...
-        one_field(ion, T, BvecM(k, :), Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol, ...
-                  o1z, sm);
-    if verbose
-        ph = {'masked', 'moment-form', 'paramagnet'};
-        fprintf('  |B| = %5.2f T : auto-state %-11s 1z-state %-11s Sigma0 = %s\n', ...
-                fields(k), ph{phaseC(k)+1}, ph{ph1z(k)+1}, num2str(Sig0(k)));
+if strcmp(fcont, 'qcp_down')
+    if parallel
+        warning('invz:fieldContinuationSerial', ...
+            'field_continuation ''qcp_down'' is sequential; opts.parallel is ignored.');
+    end
+    lastSeed = [];  lastSeedField = NaN;
+    for k = nB:-1:1
+        sk = sopts;
+        if ~isempty(lastSeed)
+            sk.hmf_seed = lastSeed;
+            seedSupplied(k) = true;
+            seedSourceField(k) = lastSeedField;
+        end
+        [chizM(:, k), chirpaM(:, k), Sig0(k), phaseC(k), ph1z(k), critPM(k), ...
+         m1zM(k), DordM(k), smUsed{k}, pmStat{k}, pmEid{k}, stab1z(k), ...
+         reasonC{k}, ordDiag{k}, resEid{k}, seedOut{k}] = ...
+            one_field(ion, T, BvecM(k, :), Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, ...
+                      sk, bztol, o1z, sm);
+        % Only a fully accepted ordered column advances physical-field branch history.
+        % A failed field cannot poison the next seed, even if its predictor happened to close.
+        if ph1z(k) == 1 && ~isempty(seedOut{k})
+            lastSeed = seedOut{k};
+            lastSeedField = fields(k);
+        end
+        if verbose
+            ph = {'masked', 'moment-form', 'paramagnet'};
+            fprintf('  |B| = %5.2f T : auto-state %-11s 1z-state %-11s Sigma0 = %s seed=%s\n', ...
+                    fields(k), ph{phaseC(k)+1}, ph{ph1z(k)+1}, num2str(Sig0(k)), ...
+                    local_seed_label(seedSupplied(k), seedSourceField(k)));
+        end
+    end
+else
+    parfor (k = 1:nB, nWorkers)
+        [chizM(:, k), chirpaM(:, k), Sig0(k), phaseC(k), ph1z(k), critPM(k), ...
+         m1zM(k), DordM(k), smUsed{k}, pmStat{k}, pmEid{k}, stab1z(k), ...
+         reasonC{k}, ordDiag{k}, resEid{k}, seedOut{k}] = ...
+            one_field(ion, T, BvecM(k, :), Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, ...
+                      sopts, bztol, o1z, sm);
+        if verbose
+            ph = {'masked', 'moment-form', 'paramagnet'};
+            fprintf('  |B| = %5.2f T : auto-state %-11s 1z-state %-11s Sigma0 = %s\n', ...
+                    fields(k), ph{phaseC(k)+1}, ph{ph1z(k)+1}, num2str(Sig0(k)));
+        end
     end
 end
 
 S = struct();
 S.fields = fields;  S.w = w;  S.T = T;  S.info = info;
 S.field_dir = fdir;  S.Bvec = BvecM;  S.transverse_mf = tmf;  S.ordered_1z = o1z;
+S.field_continuation = fcont;
+S.hmf_seed_supplied = seedSupplied;
+S.hmf_seed_source_field = seedSourceField;
 S.Sigma0 = Sig0;  S.phase = phaseC;   % auto (ordered-first bare-MF) dispatch -- see header
 S.phase_1z = ph1z;  S.crit_pm = critPM;  S.m_1z = m1zM;  S.D_ord = DordM;
 % Dispatch provenance (spec SS4.4): the REQUESTED scheme is scalar and mandatory; everything
@@ -461,7 +516,7 @@ end
 % -------------------------------------------------------------------------------------------
 function [chiz, chirpa, Sigma0, phase, phase_1z, crit_pm, m_1z, D_ord, static_medium_used, ...
           pm_probe_status, pm_probe_error_id, stability_1z, phase_1z_reason, ...
-          ordered_diag_reason, response_error_id] = ...
+          ordered_diag_reason, response_error_id, hmf_seed_out] = ...
     one_field(ion, T, B, Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol, o1z, sm)
 %ONE_FIELD chi''_cc(omega) at one field -- TWO independently phased legs (QCP Stage 1,
 % docs/superpowers/plans/2026-07-21-invzp-qcp-stage1-split-overlays.md; ordered 1/z leg
@@ -513,6 +568,7 @@ static_medium_used = sm.scheme;
 % response_error_id stays '' unless a response-function (invz_chi_realaxis) boundary absorbs a
 % recoverable identifier, which no reachable path does today.
 ordered_diag_reason = 'not_attempted';  response_error_id = '';
+hmf_seed_out = [];
 crit_tol = getf(sopts, 'crit_tol', 1e-6);   % the frozen band, shared with the ordered checker
 tmf = getf(sopts, 'transverse_mf', 'legacy_x');
 % transverse_mf here so any fallback single-ion rebuild inside invz_chi_realaxis (when a
@@ -615,6 +671,7 @@ if sm.is_strict
         so2 = sopts;  so2.ordered_mode = 'jensen';
         [ptj, j_completed, j_error_id] = invz_try_solver_call( ...
             @() invz_solve_point_ordered(ion, T, B, Jnu, so2));
+        hmf_seed_out = local_hmf_seed(ptj);
         consistent = j_completed && ~isempty(ptj) && ptj.is_ordered && ptj.converged && ...
                      isfinite(ptj.Sigma0);
         % stable_1z is jensen-only and ABSENT (not NaN) in bare mode: guard on isfield.
@@ -725,6 +782,7 @@ if phase == 1                                     % --- moment-form branch (FM o
             so2 = sopts;  so2.ordered_mode = 'jensen';
             [ptj, j_completed, j_error_id] = invz_try_solver_call( ...
                 @() invz_solve_point_ordered(ion, T, B, Jnu, so2));
+            hmf_seed_out = local_hmf_seed(ptj);
             if ~isempty(ptj) && ptj.is_ordered && ptj.converged && isfinite(ptj.Sigma0)
                 phase_1z = 1;  Sigma0 = ptj.Sigma0;  m_1z = ptj.m0;  D_ord = ptj.D_uni;
                 phase_1z_reason = 'ordered';
@@ -822,6 +880,33 @@ if phase == 2                                     % --- converged paramagnetic 1
     if ~isempty(chi0cc), copts1.chi0cc_w = chi0cc; end   % not is_ordered, so without si this
     o = invz_chi_realaxis(ion, T, B, pt, w, copts1);     % would silently rebuild at 'legacy_x'
     chiz = imag(o.chi_cc_q(1, :)).';
+end
+end
+
+% -------------------------------------------------------------------------------------------
+function seed = local_hmf_seed(ptj)
+%LOCAL_HMF_SEED Extract only a residual-accepted Jensen predictor continuation state.
+seed = [];
+if isempty(ptj) || ~isstruct(ptj) || ~isscalar(ptj), return; end
+hp = getf(ptj, 'hmf_prof', struct());
+candidate = getf(hp, 'hmf_seed_out', []);
+if isstruct(candidate) && isscalar(candidate) && ...
+        isfield(candidate, 'Sigma') && isfield(candidate, 'K0s') && ...
+        isnumeric(candidate.Sigma) && isreal(candidate.Sigma) && ...
+        ~isempty(candidate.Sigma) && all(isfinite(candidate.Sigma(:))) && ...
+        isnumeric(candidate.K0s) && isreal(candidate.K0s) && ...
+        isscalar(candidate.K0s) && isfinite(candidate.K0s)
+    seed = struct('Sigma', candidate.Sigma(:), 'K0s', candidate.K0s);
+end
+end
+
+% -------------------------------------------------------------------------------------------
+function label = local_seed_label(supplied, sourceField)
+%LOCAL_SEED_LABEL Compact progress-only physical-field seed provenance.
+if supplied && isfinite(sourceField)
+    label = sprintf('warm<-%0.3fT', sourceField);
+else
+    label = 'cold';
 end
 end
 
