@@ -47,7 +47,9 @@
 - `invzf_twolevel_vertex_table`: exact signed-grid freezing for future convolution or local-bilocal
   derivation gates;
 - `invzf_local_bilocal_hessian_static`: exact `Q=0` local double-Legendre Hessian from the connected
-  zero-mode `C2/C3/C4` response block, including its fixed-moment Schur complement.
+  zero-mode `C2/C3/C4` response block, including its fixed-moment Schur complement;
+- `invzf_local_bilocal_hessian_modes`: the corresponding finite nonnegative-frequency response and
+  fixed-moment bilocal Hessian, with explicit zero/nonzero-mode pairing multiplicities.
 
 No production spectrum or phase solver dispatches into this directory.  The local exact/ring
 fixtures are self-contained; the explicitly named production-input adapters call existing
@@ -127,8 +129,14 @@ The checks cover:
     At source `h=0.37`, the connected response block remains positive
     (`lambda_min=0.1775`) and its fixed-moment Schur denominator is
     `0.621968104727707`.
+24. the finite-mode local bilocal response for labels `0:3` at the same nonzero source.  Subtracting
+    the direct `A_n A_m` product from the exact full four-point function reproduces the assembled
+    bilinear covariance within `2.22e-16`, including two crossed pairings at `n=m=0`, one at
+    `n=m>0`, and none at unequal representatives.  An independent symmetric source difference
+    reproduces its `C3(0,n,-n)` row within `1.92e-10`; the block-inverse and Schur-inverse fixed-m
+    Hessians agree to `2.1e-17` relatively.
 
-MATLAB `checkcode` returned no findings for all twenty isolated implementation files and the two
+MATLAB `checkcode` returned no findings for all twenty-one isolated implementation files and the two
 extended coupling APIs.
 
 ## 3. Demonstrated state selection
@@ -244,8 +252,8 @@ transition on the expected field scale but does not remove the strict Gaussian p
 This prototype does not yet justify a LiHoF4 production calculation. The next contained steps are:
 
 1. do not revive the rejected Gaussian-local-trace plus 1PI-vertex skeleton;
-2. extend the verified `Q=0` connected-cumulant response block to the signed-frequency local
-   bilocal kernel, including its nonzero-source `C3-C3` Schur term, before attempting another
+2. use the verified finite-mode local response to derive the matching lattice trace and
+   double-counting structure, with an explicit Matsubara-tail budget, before attempting another
    stationary functional; or activate the separately documented biased smooth-`r(h)` backup as an
    explicit experimental prescription;
 3. do not wire a spectral backend until whichever route is chosen passes its thermodynamic, domain,
