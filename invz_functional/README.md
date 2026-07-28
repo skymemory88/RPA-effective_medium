@@ -12,7 +12,26 @@ The retained objects are:
 - a rigorous scalar free-energy tail bound and successive-cutoff convergence audit;
 - the independently varied `(m,h)` common functional;
 - an interval-bounded stationary-root enumerator that compares stable roots by that functional;
+- a stationary cutoff audit that reruns complete root enumeration rather than only re-evaluating a
+  warm-started branch;
 - dense exact finite-cluster and two-site oracles (currently capped at eight scalar sites).
+
+`invzf_projected_inputs` and `invzf_mode_grid_audit` form a read-only diagnostic bridge to the
+production transverse doublet and BZ coupling spectrum.  They do not install a production dispatch:
+the bridge uses a fixed electronic doublet, treats `Bz` only as its projected longitudinal source,
+and explicitly excludes hyperfine, ODD/retarded modes, and the ordered `tanh/xi` replacement.
+
+`invzf_electronuclear_local` is the next isolated local oracle.  It uses the full source-biased
+electronuclear Hamiltonian and a stable Lehmann correlator, with nested source/beta stencils for the
+ring derivatives.  Its first version deliberately requires `transverse_mf='none'`: admitting a
+self-consistent transverse molecular field requires adding its moment and conjugate field to the
+common functional, not patching only the static susceptibility.
+`invzf_electronuclear_inputs` safely separates an applied `Bz` into the common-functional external
+source while passing only the transverse field to that local oracle.
+
+`invzf_local_1pi_static` performs the first WP4 amputation gate for the static scalar
+`gamma2/gamma3/gamma4`.  The full frequency-labelled vertices and nonlocal-return skeleton are only
+specified in `../invzp_functional_wp4_skeleton_spec.md`; they are not yet implemented.
 
 It does not contain EMT, a dressed self-energy, the ordered `tanh/xi` replacement, spectral
 continuation, or any production branch solver.

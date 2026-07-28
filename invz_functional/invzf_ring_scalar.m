@@ -134,7 +134,7 @@ end
 
 function [bound,rho,N] = scalar_tail_bound(loc,J,qw,n)
 % Rigorous positive-frequency remainder for the scalar ring value.  For n>0,
-% C_n=A/(n^2+a^2)<=A/n^2 and
+% C_n<=A/n^2 and
 % |log(1-x)+x|<=x^2/[2(1-|x|)].
 bound = NaN; rho = NaN; N = max(abs(n));
 if N < 1, return; end
@@ -144,9 +144,16 @@ else
     complete = isequal(sort(n),(-N:N).');
 end
 if ~complete, return; end
-delta = loc.Delta/2;
-b = delta^2/loc.E^2;
-A = loc.M^2*b*4*loc.E*tanh(loc.beta*loc.E)*loc.beta^2/(4*pi^2);
+if isfield(loc,'tail_A') && isfinite(loc.tail_A) && loc.tail_A >= 0
+    % General Lehmann reference:
+    % C(iwn)<=S/omega_n^2=(S*beta^2/(4*pi^2))/n^2.
+    A = loc.tail_A;
+else
+    % Closed two-level specialization retained for backward compatibility.
+    delta = loc.Delta/2;
+    b = delta^2/loc.E^2;
+    A = loc.M^2*b*4*loc.E*tanh(loc.beta*loc.E)*loc.beta^2/(4*pi^2);
+end
 rho = max(abs(J))*A/(N+1)^2;
 if ~(isfinite(rho) && rho < 1), return; end
 mu2 = sum(qw.*J.^2);
