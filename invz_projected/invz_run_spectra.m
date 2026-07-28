@@ -36,9 +36,13 @@ eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency 
                                      % converts in/out (with 'meV' it is a no-op). eta is ALWAYS in
                                      % meV (below), independent of eUnit.
 
-% fields = [3.6 4.2 4.8 5.4 6.0];       % few -> slices;  many -> colormap
-fields = linspace(0, 9.0, 101);
-w = (0:0.01:5.5).';                  % eUnit -- field-sweep frequency grid (0-108 GHz ~ 0-0.45 meV)
+% QCP-first production preview: at T = 0.1 K this window straddles the projected
+% 1/z transition (currently about 4.69 T on the default finite sweep).  It is the
+% most useful first visual check because it resolves the soft mode on both sides.
+fields = linspace(4.6, 4.9, 61);
+% fields = linspace(0, 9.0, 101);        % OPTIONAL full-range survey (low-field failures are secondary)
+% fields = [3.6 4.2 4.8 5.4 6.0];       % few -> line slices instead of a colormap
+w = (0:0.01:6).';                    % eUnit -- field-sweep frequency grid
 eta = 5e-5;                          % real-axis Lorentzian HWHM, ALWAYS in meV (1e-3 meV ~ 0.24 GHz),
                                      % independent of eUnit. Lower -> sharper peaks (resolves the
                                      % sub-6-GHz hyperfine lines); keep eta above the w/wq step
@@ -73,7 +77,7 @@ phi_ab = 0.0;                        % deg -- IN-PLANE rotation of the swept fie
                                      % NOT validated (tilt bound was measured under legacy_x).
 transverse_mf = 'legacy_x';         % 'legacy_x' | 'none' | 'vector_ab'
 
-showPeaks = false;                    % true -> ALSO line-plot chi''_cc peak energy vs field
+showPeaks = true;                     % true -> ALSO line-plot chi''_cc peak energy vs field
                                      % (S.Epeak/S.Epeak_rpa, cf. the q-path E_peak(q) stream)
 
 % ---- q-path view (R 2007 Fig 3 trends): set qpath non-empty to switch views -------------

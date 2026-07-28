@@ -33,6 +33,19 @@ two roots only `0.00103702` apart in scaled state have `r=0.768127507` and `0.82
 The immediate path is therefore QCP-anchored coupled continuation, retaining fine arclength only
 where fixed-`h` Newton switches branches.
 
+**QCP-first spectral delivery update, 2026-07-28.** The user's primary
+observable is the uniform susceptibility/mode near the quantum critical
+point; low-field completeness is secondary. The unchanged accepted
+production equations already meet that narrower target. A dense
+`T=0.10 K`, `q=[0 0 0]`, `B=4.60--4.90 T`, `0--6 GHz` run returned 61/61
+finite columns (19 Jensen-ordered, 42 stable paramagnetic, none masked) and
+a continuous soft mode through `Bc_1z=4.6925 T`, bracketed by
+`[4.690,4.695] T`. `invz_projected/invz_run_spectra.m` now defaults to this
+verified visual window and plots both the susceptibility map and extracted
+peak curve. This does not authorize the off-shell smooth branch or relax
+any Route-A/Route-B gate; it only removes full low-field coverage from the
+critical path to the QCP observable.
+
 **Execution update, 2026-07-27.** First-hand inspection of the current `invz_run_spectra` output added
 an important constraint: convergence is non-uniform across the ordered field range; usable columns
 can occur near the apparent QCP while moderate-field columns (for example 1.5 T) are masked. A direct
