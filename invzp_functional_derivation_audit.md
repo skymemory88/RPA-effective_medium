@@ -164,18 +164,37 @@ w_ig_i\frac{\partial\Delta\Sigma_i}{\partial K_j}
 \left[4(g_i+g_j)-g(0)\right]}{\beta g(0)},
 \]
 
-which is nonzero generically. More strongly, the three-frequency cycle condition required for **any**
-finite diagonal symmetrizer contains the generic nonzero factor
+which is nonzero generically. More strongly, define
 
 \[
-a(2a-p)(g_i-g_j)(g_i-g_k)(g_j-g_k).
+M_{ij}=\frac{\partial\Sigma_i^{\rm ord}}{\partial K_j}
+=\frac{w_jg_j}{\beta}\{\phi(g_j)+(p-2a)g_i\},
 \]
 
-This does not exclude a non-diagonal change to natural conjugate variables. It does show that the
-ordered formula cannot simply be appended to the paramagnetic primitive with different Matsubara
-weights. The most likely derivation target is the frequency dependence omitted when J 2.26–2.27
-replaces factors in the internal sums by their zero-frequency values, together with the matching
-ordered vacuum and one-point terms.
+\[
+\phi(x)=(p-a)x-\frac{4a}{g_0}x^2+ag_0-pA.
+\]
+
+Any finite nonzero diagonal symmetrizer requires the three-frequency cycle identity
+`M_ij*M_jk*M_ki=M_ji*M_kj*M_ik`. Its difference is
+
+\[
+\frac{w_iw_jw_kg_ig_jg_k}{\beta^3}
+\frac{a(2a-p)}{g_0^2}
+(g_i-g_j)(g_i-g_k)(g_j-g_k)\mathcal P_{ijk},
+\]
+
+\[
+\mathcal P_{ijk}
+=3ag_0^2-4Ag_0p+g_0^2p-4ag_0(g_i+g_j+g_k)
++16a(g_ig_j+g_ig_k+g_jg_k).
+\]
+
+There is no additional standalone `(p-a)` factor. This does not exclude a non-diagonal change to
+natural conjugate variables. It does show that the ordered formula cannot simply be appended to the
+paramagnetic primitive with different Matsubara weights. The most likely derivation target is the
+frequency dependence omitted when J 2.26–2.27 replaces factors in the internal sums by their
+zero-frequency values, together with the matching ordered vacuum and one-point terms.
 
 ## 3. Direct integrability audit of the current Newton residual
 
@@ -285,8 +304,9 @@ existing staged recommendation:
 3. derive vacuum, one-point, and two-point terms before writing a new solver;
 4. keep production Jensen code unchanged during that derivation.
 
-The initial WP0 theory specification is now recorded in `invzp_functional_wp0_spec.md`, fixing the
-Hamiltonian, source and Matsubara conventions, immutable low-order checks, and exact finite-cluster
-oracle. The next unresolved derivation deliverable is the `C4` vacuum symmetry factor together with
-the complete ordered one-point and two-point diagram inventory. No `invz_functional/` implementation
-begins until those formulas pass the WP0 gates.
+The strict unicyclic WP0 scope is now closed in `invzp_functional_wp0_spec.md` and
+`invzp_functional_wp0_ring_derivation.md`. The complete retained vacuum is the `C2` ring; source
+derivatives supply the ordered `C3` and `C4+C3^2` inventory, and exact two-site gates pass. The
+isolated `invz_functional/` prototype has therefore begun. The next theoretical scope,
+`O(1/z^2)`, remains blocked from implementation until all `C3-C3` bicyclic classes, the one-`C4`
+class, and their `C5/C6` source derivatives are derived together.

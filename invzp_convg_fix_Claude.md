@@ -72,10 +72,11 @@ state/QCP continuity as binding gates. The preferred-route audit is recorded in
 `invzp_functional_derivation_audit.md`: Jensen's field equation supplies a one-dimensional potential
 only after an internal branch has been selected, and the scalar EMT closure has an isolated log
 potential, but neither is a common functional for the coupled resummed equations. The current Newton
-residual is not a direct or diagonally rescaled gradient. The next preferred deliverable is therefore
-the strict scalar two-level WP0 derivation described in `rigorous_z^1_extension_Codex.md`, with no
-production solver edits. Its initial conventions and exact algebra gates are now frozen in
-`invzp_functional_wp0_spec.md`.
+residual is not a direct or diagonally rescaled gradient. The strict scalar two-level WP0 derivation
+is now closed at the unicyclic `O(1/z)` scope in `invzp_functional_wp0_spec.md` and
+`invzp_functional_wp0_ring_derivation.md`. The isolated `invz_functional/` prototype implements the
+ring common functional and exact two-site oracle without modifying or dispatching from the production
+solver. This remains the preferred staged route.
 
 Line numbers below are as of the 2026-07-27 working tree; confirm each before editing.
 
