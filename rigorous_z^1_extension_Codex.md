@@ -38,12 +38,18 @@ couplings, and moves the ordered solutions to `3.6--4.6 T`. A narrower no-state 
 specification level in `invzp_functional_wp4_skeleton_spec.md`; no static-only pole patch is
 authorized.
 
-The WP4 two-level entry fixtures are now complete.  Exact dynamic `C2/C3/C4` and their 1PI
+The WP4 two-level entry fixtures are complete.  Exact dynamic `C2/C3/C4` and their 1PI
 amputations pass analytic source, permutation, beta-delta, and degeneracy gates.  Centred two- and
 three-site clusters freeze the leading `C3-C3` coefficient and the nonzero-source mixed-`C4`
 cancellation coefficient.  Both dipolar backends can now expose the exact q-resolved Hermitian
-coupling pages behind an optional output while leaving ordinary production calls unchanged.  The
-next authorized task is the smallest isolated varied-covariance skeleton, not production wiring.
+coupling pages behind an optional output while leaving ordinary production calls unchanged.
+
+The first varied-covariance candidate nevertheless failed its frozen mixed-chain coefficient already
+at zero source.  The Gaussian local covariance trace cannot be combined with exact local 1PI
+`gamma4` and re-varied without the missing exact local bilocal Legendre kernel.  The temporary solver
+was removed.  WP4 is therefore rejected in its present form; deriving that bilocal kernel is a new
+theory work package, while the biased smooth-`r(h)` plan remains the explicit implementation-ready
+backup.
 
 ## 1. Decision summary
 
@@ -306,8 +312,10 @@ Introduce stationary dressed lines and compare strict-order versus self-consiste
 from the subtracted nonlocal return `R_ij=D_ij-delta_ij*C2`. The one-`C4` double-return and the
 same-order `C3-C3` three-line core are inseparable. The latter is momentum/sublattice dependent and
 cannot be reconstructed from `Jnu_flat`; q-resolved coupling matrices or an equivalent real-space
-transform are required.  Those matrices and all two-level entry fixtures are now available, so the
-smallest isolated implementation is authorized.  See `invzp_functional_wp4_skeleton_spec.md`.
+transform are required.  Those inputs became available, but the resulting smallest implementation
+failed its exact `a^2b^2` gate because the proposed Gaussian local trace is not the exact local
+bilocal/2PI Legendre term.  The candidate is rejected; see
+`invzp_functional_wp4_skeleton_spec.md` section 13.
 
 **Exit gates:**
 

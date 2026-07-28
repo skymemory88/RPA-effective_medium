@@ -2,7 +2,7 @@
 
 **Recorded:** 2026-07-28
 
-**Status:** derivation/pre-registration; no implementation or production authorization
+**Status:** candidate rejected by immutable weak-coupling gate; no production authorization
 
 **Trigger:** the strict electronuclear ring functional has stable ordered states at
 `Bx=1.5--4.6 T` and a stable symmetric state at `4.9 T`, but no admissible stationary state at
@@ -298,9 +298,9 @@ theory failure of this candidate. The backup smooth-`r(h)` prescription remains 
   exist.  The nonzero-source centred-chain mixed-`C4` cancellation oracle also exists, and the
   q-resolved coupling-matrix input is exposed for both dipolar backends.
 
-The immutable two-level fixtures required by gates 1--4 are now present.  This authorizes an isolated
-smallest-skeleton implementation, but not a LiHoF4 run: the full electronuclear frequency-labelled
-vertex engine and the remaining exit gates are still absent.
+The immutable two-level fixtures required by gates 1--4 are present.  The resulting isolated
+smallest-skeleton implementation failed gate 4 and was removed before commit; section 13 records the
+analytic reason.  A LiHoF4 run remains prohibited.
 
 ## 10. Immutable centred-pair `C3-C3` oracle
 
@@ -459,3 +459,73 @@ C_4(n,-n,m,-m)C_2(n)C_2(m),
 converges to the same residual.  A fresh double-precision centred-cluster scan gives the total
 coefficient within `6.5e-10`; the signed Matsubara ring sum through `|n|=320` agrees with the displayed
 ring value within `1e-15`.
+
+## 13. Gate-4 failure of the varied-`D` ansatz
+
+The pre-registered trace-plus-`Phi4+Phi33` functional was implemented temporarily with positive
+inverse-Cholesky covariances and a stationary-residual continuation from `J=0`.  Ring reduction,
+`J=0`, covariance-domain, and leading `C3-C3` gates passed.  The mixed-chain coefficient failed even
+at zero source, where `C3=Phi33=0`; the failure is therefore not a solver, convolution, or 1PI
+`C3*C2*C3` routing issue.
+
+The static one-frequency limit proves the mismatch analytically.  Write
+
+\[
+\lambda=\frac{\gamma_4}{8\beta},\qquad
+J_{12}=a,\quad J_{23}=b .
+\]
+
+The Gaussian central-site return is
+
+\[
+r_0=C^3(a^2+b^2)+O(J^4).
+\]
+
+Varying the proposed Gaussian local trace plus `lambda*r^2` gives instead
+
+\[
+r=\frac{r_0}{1+4\lambda C^2}+O(J^4).
+\]
+
+Consequently its stationary mixed coefficient is
+
+\[
+[a^2b^2]F_{\rm candidate}
+=-\frac{C^4}{2\beta}
++\frac{\gamma_4C^6}
+ {4\beta^2\left(1+\gamma_4C^2/(2\beta)\right)} ,
+\]
+
+whereas the exact connected-cumulant result is
+
+\[
+[a^2b^2]F_{\rm exact}
+=-\frac{C^4}{2\beta}
+-\frac{C_4C^2}{4\beta^2}.
+\]
+
+At the symmetric fixture `Delta=1.3`, `beta=1.7`, `h=0`,
+
+```text
+C = 1.2342890056056328
+C4 = -4.4628700528948588
+gamma4 = 1.9228561663957739
+exact static-cutoff coefficient     = -0.09448221305585625
+candidate stationary coefficient   = -0.36669420473128445
+```
+
+At `h=0.37` the corresponding values are `-0.16948199709553233` and
+`-0.09854567887123727`.  Direct continued stationary solves reproduce the analytic candidate values
+within the finite-difference extraction error.
+
+The cause is structural: `C` and `gamma3/gamma4` are already exact one-particle-irreducible local
+objects.  Combining them with a Gaussian local covariance trace and then re-varying local returns
+does not supply the exact local bilocal Legendre functional; it resums a spurious local mass at the
+same retained weak-coupling order.  The subtraction `R=D-delta*C` makes the correction vanish at
+`J=0` but does not repair that local bilocal kernel.
+
+Therefore the candidate is rejected under gate 4.  Adjusting a symmetry factor to fit the fixture,
+freezing the return during variation, or adding a denominator floor is prohibited.  A future
+functional route must derive the exact local bilocal/2PI irreducible kernel (including its coupling to
+the one-point variable) or use a formally strict, nonstationary cumulant expansion.  The latter
+cannot remove the Gaussian pole and hence is not a convergence fix.

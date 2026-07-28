@@ -41,9 +41,14 @@ source while passing only the transverse field to that local oracle.
 `invzf_local_1pi_static` performs the first WP4 amputation gate for the static scalar
 `gamma2/gamma3/gamma4`.  `invzf_twolevel_cumulant` and `invzf_twolevel_1pi_vertex` extend that gate
 to exact frequency-labelled two-level `C2/C3/C4` and `gamma2/gamma3/gamma4`, using ordered-simplex
-matrix exponentials for analytic KMS/Hermite limits.  The corresponding full electronuclear vertex
-engine and nonlocal-return skeleton are only specified in `../invzp_functional_wp4_skeleton_spec.md`;
-they are not yet implemented.
+matrix exponentials for analytic KMS/Hermite limits.  `invzf_twolevel_vertex_table` freezes those
+objects on a signed convolution grid.
+
+The first varied-covariance ansatz in `../invzp_functional_wp4_skeleton_spec.md` was implemented
+temporarily and rejected by its immutable mixed-chain coefficient before commit.  Its Gaussian local
+trace plus 1PI `gamma4` double bubble uses the wrong local bilocal kernel and changes the retained
+`a^2*b^2` coefficient under stationarity.  No skeleton solver remains in this directory; a corrected
+route must derive the exact local bilocal/2PI Legendre term rather than patching that failed ansatz.
 
 It does not contain EMT, a dressed self-energy, the ordered `tanh/xi` replacement, spectral
 continuation, or any production branch solver.

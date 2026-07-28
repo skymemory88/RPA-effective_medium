@@ -2,8 +2,8 @@
 
 **Recorded:** 2026-07-28
 
-**Status:** backup plan; non-default, not implemented, and not a replacement for the preferred
-common-functional derivation
+**Status:** activated backup plan after the first common-functional skeleton candidate failed its
+immutable weak-coupling gate; non-default and not yet production-integrated
 
 **Trigger:** use only if the common-functional route proves impractical on the required timescale and
 the prescription below is separately preregistered before spectra are inspected
@@ -261,8 +261,13 @@ The preferred staged recommendation remains:
 
 Stage 1 is complete: the focused audit found useful branch-conditioned and fixed-variable
 potentials, but no common functional or binding physical selector. Stage 2 is therefore inapplicable
-to the current equations. Stage 3 has begun with the strict scalar two-level WP0 specification; its
-remaining diagrammatic derivation gates must close before implementation.
+to the current equations. Stage 3 produced a strict scalar common functional and then a
+pre-registered nonlocal-return skeleton candidate.  The strict ring theory passed its gates but
+retained a Gaussian no-state interval; the stationary skeleton failed its exact mixed-chain
+coefficient because it lacked the exact local bilocal Legendre kernel.  That candidate was rejected
+rather than tuned.  The trigger for this backup is therefore satisfied at the implementation-oracle
+level, while all non-default, branch-identity, refinement, and production-stop rules above remain
+binding.
 
 Relevant current records:
 

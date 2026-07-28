@@ -43,7 +43,9 @@
 - `invzf_twolevel_cumulant`: exact frequency-labelled two-level `C2/C3/C4` using analytic
   ordered-simplex matrix exponentials;
 - `invzf_twolevel_1pi_vertex`: dynamic scalar amputation including all three
-  `gamma3*C2*gamma3` quartic channels.
+  `gamma3*C2*gamma3` quartic channels;
+- `invzf_twolevel_vertex_table`: exact signed-grid freezing for future convolution or local-bilocal
+  derivation gates.
 
 No production spectrum or phase solver dispatches into this directory.  The local exact/ring
 fixtures are self-contained; the explicitly named production-input adapters call existing
@@ -117,7 +119,7 @@ The checks cover:
     `-0.265982296240050260...`, and its connected-`C4` residual
     `+0.101177765766970098...`.
 
-MATLAB `checkcode` returned no findings for all eighteen isolated implementation files and the two
+MATLAB `checkcode` returned no findings for all nineteen isolated implementation files and the two
 extended coupling APIs.
 
 ## 3. Demonstrated state selection
@@ -232,12 +234,12 @@ transition on the expected field scale but does not remove the strict Gaussian p
 
 This prototype does not yet justify a LiHoF4 production calculation. The next contained steps are:
 
-1. embed the frozen two-level vertices and q-resolved matrices in the smallest varied-`D` skeleton
-   and reproduce every entry oracle before any LiHoF4 calculation;
-2. build the full electronuclear frequency-labelled vertex engine with explicit local-rank and
-   Matsubara-convolution ladders;
-3. do not wire a spectral backend until the skeleton thermodynamic, domain, and discretization gates
-   pass.
+1. do not revive the rejected Gaussian-local-trace plus 1PI-vertex skeleton;
+2. derive an exact local bilocal/2PI Legendre kernel before attempting another stationary functional,
+   or activate the separately documented biased smooth-`r(h)` backup as an explicit experimental
+   prescription;
+3. do not wire a spectral backend until whichever route is chosen passes its thermodynamic, domain,
+   discretization, and branch-identity gates.
 
 The deferred `O(1/z^2)` non-Gaussian vacuum and the production ordered `tanh/xi` machinery remain out
 of scope.
