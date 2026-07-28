@@ -35,6 +35,7 @@ be inserted into Jensen quadrature without branch-tracked continuation.
 | 0.10 | 1.5 | scaled tangent predictor with fixed-`h` correctors | stops at `h=0.005243548157786061` after 34 accepted nodes: `rcond(J)=1.027e-11` and scaled `abs(deta/ds)=1.771e-6`, with pole margin `6.640e-3`, mean margin `1.735`, and every A–D audit accepted |
 | 0.10 | 1.5 | fold rank audit | `sigma_min(J)=9.672e-6` while `sigma_min([J R_eta])=0.4581` (`cond(J)=1.336e8`): the fixed-`h` Jacobian loses rank while the augmented tangent remains regular |
 | 0.10 | 1.5 | scaled pseudo-arclength across that event | crosses in 24 accepted steps; tangent `deta/ds` changes from `-1.771e-6` to `+8.358e-4`, `min rcond(augmented)=1.953e-5`, maximum branch-correction ratio `2.663e-4`, and all A–D audits pass. A repeat at one-quarter the initial arc step brackets `deta/ds=0`, resolves `min(h)=0.005243548147122800`, and keeps successive oriented-tangent overlap above `0.9999999999` |
+| 0.10 | 1.5 | retained full-state pseudo-arclength oracle | 149 accepted roots from the clean high-`h` endpoint through the fold; every A--D audit passes, `max residual=4.5353e-9`, `min bordered rcond=5.0733e-6`, and local Hermite interpolation gives `h_fold=0.0052435482911986821`, within `1.44e-10 meV` of the earlier one-off quarter-step result |
 | 0.10 | 1.5 | independent low-`h` branch, three cold deterministic seeds | all three seeds converge to the same `h=0` root within scaled-state diameter `4.278e-12`; upward tangent continuation stops after 22 accepted nodes at `h=1.130400753628218e-5`, with `rcond(J)=2.041e-11` and healthy event margins |
 | 0.10 | 1.5 | low-branch rank audit | `sigma_min(J)=1.558e-5` while `sigma_min([J R_eta])=0.5629` (`cond(J)=1.222e8`): this is a second regular fold, about 464 times below the high-branch fold |
 | 0.10 | 1.5 | pseudo-arclength across the low-branch event | crosses in 11 accepted steps; `deta/ds` changes from `+2.677e-7` to `-5.243e-7`, directly resolving `max(h)=1.130402502867847e-5`; minimum oriented-tangent overlap is `0.9999999997`, `min rcond(augmented)=1.091e-6`, and all A–D audits pass |
@@ -57,7 +58,10 @@ multiple-branch outcome of the Phase-1 fork: an explicit physical or preregister
 prescription is required before production integration. The separate 0.31 K/1 T step collapse still
 shows why branch/rank diagnostics are necessary.
 
-One-off drivers and `.mat` files stayed under `/tmp` and were not retained. The surviving
-`invz_ordered_node_newton.m` is the audited numerical kernel; a future retained continuation driver
-must add forward/reverse branch tracking, cold checkpoints, grid/cutoff checks, and Jensen-integral
-error control before promotion.
+One-off drivers and `.mat` files stayed under `/tmp`. The audited numerical kernel now consists of
+`invz_ordered_node_context.m`, `invz_ordered_make_node.m`,
+`invz_ordered_node_equations.m`, and `invz_ordered_node_newton.m`. The extraction leaves the
+fixed-node equations unchanged while exposing the full residual/Jacobian and exact HMF node
+construction to the separately isolated continuation oracle. A future retained enumerator must still
+add forward/reverse branch tracking, cold checkpoints, grid/cutoff checks, event-crossing control,
+and Jensen-integral error control before promotion.

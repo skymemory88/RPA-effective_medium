@@ -66,6 +66,17 @@ preregistered branch-selection prescription (or the common-functional formulatio
 secant-root component may be traced only if its topology is needed to choose or falsify such a
 prescription.
 
+**Retained continuation oracle, 2026-07-28.** The defactored residual/Jacobian and exact HMF
+fixed-`h` node construction are now exposed only under diagnostics, together with a scaled bordered
+pseudo-arclength tracer. On the frozen 0.10 K, 1.5 T legacy 16³ fixture, 149 full-state roots traced
+the clean high-`h` component through its regular fold; every independent A--D audit passed. A local
+Hermite tangent reconstruction gives
+`h_fold=0.0052435482911986821 meV`, only `1.44e-10 meV` from the earlier one-off quarter-step result.
+This validates the retained continuation primitive, not a Jensen path: disconnected root discovery,
+single-valued section construction, endpoints, reverse/cold-seed agreement, and refinement gates
+remain outstanding. The dense oracle cost 1292.9 s, making the already derived
+diagonal-plus-low-rank bordered solve the next measured implementation requirement.
+
 **Theory-route update, 2026-07-28.** The explicit-prescription backup is now specified in
 `biased_convergence_solution.md`, with global smoothness of `r(h)` as its primary declared bias and
 state/QCP continuity as binding gates. The preferred-route audit is recorded in
