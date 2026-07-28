@@ -24,7 +24,9 @@ function out = invzf_multilevel_cumulant(E,O,beta,labels,opts)
 %   versus exponential-action backend.  opts.degeneracy_tolerance sets the
 %   rank-cut multiplet guard.  opts.max_corner_amplification may declare a
 %   caller-side similarity-scaling budget; if omitted, that numerical gate
-%   remains explicitly ungraded.
+%   remains explicitly ungraded.  opts.reality_tolerance (1e-10 relative)
+%   grades projection onto the exact real subspace when the frequency
+%   multiset is invariant under n -> -n.
 %
 %   OUT.discarded_boltzmann_weight reports only omitted thermal weight; it
 %   is not a bound on virtual intermediate-state truncation.  A rank ladder
@@ -95,6 +97,10 @@ if ~isempty(maxCornerAmplification)
         {'real','scalar','finite','positive'}, ...
         mfilename,'opts.max_corner_amplification');
 end
+realityTolerance = get_opt(opts,'reality_tolerance',1e-10);
+validateattributes(realityTolerance,{'numeric'}, ...
+    {'real','scalar','finite','positive'}, ...
+    mfilename,'opts.reality_tolerance');
 
 if localRank < nfull
     rankCutGap = E(localRank+1)-E(localRank);
@@ -147,16 +153,36 @@ if rankCumulant == 4
     connected = full-disconnected;
 end
 
-valueScale = max(1,abs(connected));
-if abs(imag(connected)) <= 2048*eps(valueScale)
-    connected = real(connected);
-end
-fullScale = max(1,abs(full));
-if abs(imag(full)) <= 2048*eps(fullScale)
-    full = real(full);
-end
-if abs(imag(disconnected)) <= 2048*eps(max(1,abs(disconnected)))
-    disconnected = real(disconnected);
+realityExpected = isequal(sort(labels),sort(-labels));
+rawImaginaryParts = imag([full,disconnected,connected]);
+rawRealParts = real([full,disconnected,connected]);
+realityResidual = max(abs(rawImaginaryParts)./max(1,abs(rawRealParts)));
+realityProjectionApplied = false;
+realityProjectionPass = ~realityExpected;
+if realityExpected
+    realityProjectionPass = realityResidual <= realityTolerance;
+    if realityProjectionPass
+        full = real(full);
+        disconnected = real(disconnected);
+        if rankCumulant == 4
+            connected = full-disconnected;
+        else
+            connected = full;
+        end
+        realityProjectionApplied = true;
+    end
+else
+    valueScale = max(1,abs(connected));
+    if abs(imag(connected)) <= 2048*eps(valueScale)
+        connected = real(connected);
+    end
+    fullScale = max(1,abs(full));
+    if abs(imag(full)) <= 2048*eps(fullScale)
+        full = real(full);
+    end
+    if abs(imag(disconnected)) <= 2048*eps(max(1,abs(disconnected)))
+        disconnected = real(disconnected);
+    end
 end
 
 backends = unique({numericalRecords.backend},'stable');
@@ -172,7 +198,7 @@ scalingBudgetPass = scalingBudgetDeclared && ...
     maxObservedCornerAmplification <= maxCornerAmplification;
 
 out = struct( ...
-    'schema','invzf_multilevel_cumulant/v1', ...
+    'schema','invzf_multilevel_cumulant/v2', ...
     'status','ok', ...
     'rank',rankCumulant, ...
     'labels',labels, ...
@@ -200,6 +226,12 @@ out = struct( ...
     'scaling_budget_declared',scalingBudgetDeclared, ...
     'scaling_budget',{maxCornerAmplification}, ...
     'scaling_budget_pass',scalingBudgetPass, ...
+    'reality_expected',realityExpected, ...
+    'reality_tolerance',realityTolerance, ...
+    'reality_residual',realityResidual, ...
+    'raw_imaginary_parts',rawImaginaryParts, ...
+    'reality_projection_applied',realityProjectionApplied, ...
+    'reality_projection_pass',realityProjectionPass, ...
     'functional_use_authorized',false, ...
     'retained_energies',E, ...
     'retained_probabilities',probability, ...
@@ -210,6 +242,8 @@ out = struct( ...
 if any(~isfinite([real(full),imag(full),real(connected), ...
         imag(connected),real(disconnected),imag(disconnected)]))
     out.status = 'nonfinite';
+elseif realityExpected && ~realityProjectionPass
+    out.status = 'reality_projection_failed';
 end
 end
 
