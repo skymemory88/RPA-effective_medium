@@ -49,12 +49,15 @@ temporarily and rejected by its immutable mixed-chain coefficient before commit.
 trace plus 1PI `gamma4` double bubble uses the wrong local bilocal kernel and changes the retained
 `a^2*b^2` coefficient under stationarity.  `invzf_local_bilocal_hessian_static` is the next, smaller
 oracle: it derives the exact `Q=0` local Hessian from the connected `C2/C3/C4` response block and
-recovers the immutable zero-source static coefficient.
+recovers the immutable static connected-`C4` coefficient at zero and nonzero source.
 `invzf_local_bilocal_hessian_modes` extends that response block to nonnegative Matsubara
 representatives, with the distinct zero- and nonzero-frequency pair-disconnected factors and the
-nonzero-source `C3-C3` Schur term.  It remains a finite-mode local oracle: the Matsubara-tail
-completion, lattice trace, and double counting are not derived.  No skeleton solver remains in this
-directory; a corrected route must pass those gates rather than patching the failed ansatz.
+nonzero-source `C3-C3` mixing.  Both oracles distinguish the fixed-source partial Legendre
+curvature from the fixed-moment Schur curvature.  The contemplated off-shell `(m,h,D)` functional
+must use the former; inserting the latter by itself produces a spurious `C3^2` chain coefficient.
+This remains a finite-mode local oracle: the Matsubara-tail completion, lattice trace, and double
+counting are not derived.  No skeleton solver remains in this directory; a corrected route must
+pass those gates rather than patching the failed ansatz.
 
 It does not contain EMT, a dressed self-energy, the ordered `tanh/xi` replacement, spectral
 continuation, or any production branch solver.
