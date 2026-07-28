@@ -183,7 +183,9 @@ R = nan(nres,1);
 J = nan(nres,nvar);
 diag = struct();
 corr = struct('reason','max_corrector','iterations',0, ...
-    'constraint_abs',NaN,'equation_evaluations',0);
+    'constraint_abs',NaN,'residual_inf',NaN, ...
+    'bordered_rcond',NaN,'step_norm',NaN,'last_alpha',NaN, ...
+    'equation_evaluations',0);
 for iter = 1:cfg.max_corrector
     if corr.equation_evaluations >= cfg.max_evaluations_per_attempt
         corr.reason = 'evaluation_budget';
@@ -197,6 +199,7 @@ for iter = 1:cfg.max_corrector
     F = [R;constraint];
     corr.iterations = iter;
     corr.constraint_abs = abs(constraint);
+    corr.residual_inf = norm(R,Inf);
     if isempty(event) && norm(R,Inf) <= cfg.tol_residual && ...
             abs(constraint) <= cfg.tol_constraint
         corr.reason = 'accepted';
@@ -211,12 +214,14 @@ for iter = 1:cfg.max_corrector
 
     B = [J;tangent.'];
     borderedRcond = rcond(B);
+    corr.bordered_rcond = borderedRcond;
     if ~isfinite(borderedRcond) || borderedRcond <= cfg.rcond_min
         corr.reason = 'augmented_rank_loss';
         ok = false;
         return
     end
     delta = -(B\F);
+    corr.step_norm = norm(delta);
     if any(~isfinite(delta))
         corr.reason = 'nonfinite_step';
         ok = false;
@@ -234,11 +239,25 @@ for iter = 1:cfg.max_corrector
         end
         corr.equation_evaluations = corr.equation_evaluations+1;
         trial = y+alpha*delta;
+        corr.last_alpha = alpha;
         [Rt,Jt,diagt] = evaluate(problem,trial,nres,nvar,invalidId);
         eventt = equationEvent(problem,Rt,Jt,diagt);
-        Ft = [Rt;tangent.'*(trial-yPred)];
+        trialConstraint = tangent.'*(trial-yPred);
+        Ft = [Rt;trialConstraint];
         if isempty(eventt) && norm(Ft,2) < baseNorm
             y = trial;
+            if norm(Rt,Inf) <= cfg.tol_residual && ...
+                    abs(trialConstraint) <= cfg.tol_constraint
+                R = Rt;
+                J = Jt;
+                diag = diagt;
+                corr.iterations = min(iter+1,cfg.max_corrector);
+                corr.constraint_abs = abs(trialConstraint);
+                corr.residual_inf = norm(Rt,Inf);
+                corr.reason = 'accepted';
+                ok = true;
+                return
+            end
             acceptedLine = true;
             break
         end
@@ -358,6 +377,10 @@ rec = struct( ...
     'corrector_iterations',0, ...
     'equation_evaluations',0, ...
     'constraint_abs',NaN, ...
+    'residual_inf',NaN, ...
+    'bordered_rcond',NaN, ...
+    'step_norm',NaN, ...
+    'last_alpha',NaN, ...
     'correction_ratio',NaN);
 end
 
@@ -373,6 +396,10 @@ rec.reason = reason;
 rec.corrector_iterations = corr.iterations;
 rec.equation_evaluations = corr.equation_evaluations;
 rec.constraint_abs = corr.constraint_abs;
+rec.residual_inf = corr.residual_inf;
+rec.bordered_rcond = corr.bordered_rcond;
+rec.step_norm = corr.step_norm;
+rec.last_alpha = corr.last_alpha;
 rec.correction_ratio = correctionRatio;
 end
 

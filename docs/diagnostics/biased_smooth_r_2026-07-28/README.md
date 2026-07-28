@@ -30,7 +30,13 @@ trace), and each corrector attempt by
 `max_evaluations_per_attempt` (default 16). Exhausting the former returns
 `status='budget_exhausted'` with the last numerical reason; it never promotes the last iterate. The
 accepted corrector's already-gated `R`, Jacobian, and diagnostic record are carried directly into
-the audit and tangent update, so there is no unmetered or unchecked post-audit equation call.
+the audit and tangent update, so there is no unmetered or unchecked post-audit equation call. A
+line-search trial that already satisfies the residual, constraint, and event gates is promoted
+directly with the same virtual iteration count used by the previous top-of-loop confirmation. Failed
+attempt records retain their last residual, constraint, bordered `rcond`, step norm, and damping
+factor. If the final permitted Newton update itself lands on an accepted root, it is retained rather
+than discarded for lack of a redundant confirmation iteration; the analytic
+`R(u,h)=u+h^2` one-update oracle freezes that boundary semantics.
 
 `invzp_ordered_arclength_problem` is the first invZ-specific adapter. It uses the audited resummed
 node equations and a Richardson-refined centred derivative in the fixed longitudinal field, with
@@ -148,7 +154,7 @@ post-initial curve additionally freezes the retry envelope: two permitted attemp
 evaluations each are both retained, then terminate as
 `budget_exhausted/step_attempt_budget:evaluation_budget`. The cubic fold oracle remains unchanged
 under the default envelope. Replaying the retained low-trace first step reproduced its state,
-tangent, and record exactly: the eighth attempt was accepted and no attempt used more than five of
+tangent, and record exactly: the eighth attempt was accepted and no attempt used more than four of
 the permitted 16 equation evaluations.
 
 On the frozen legacy 16³ LiHoF4 coupling at `T=0.10 K`, `Bx=1.5 T`, the invZ adapter reproduced the
