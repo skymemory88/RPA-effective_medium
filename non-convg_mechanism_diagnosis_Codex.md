@@ -170,6 +170,41 @@ and the diagnostic Newton solve treats `[Sigma(:);K0]` as one coupled system.
 Frequency blocking in `invz_emt_scalar` is a memory implementation detail,
 not frequency-by-frequency continuation.
 
+### 2.4 Direct tests of the two simplest proposed fixes
+
+Two default-off experiments were run on 2026-07-28 and then removed from the
+production path after they failed.
+
+First, the ordered static closure was rewritten in the algebraically
+equivalent reciprocal/defactored `K0` coordinate. At `T=0.10 K`, `B=1.5 T`,
+this accepted `10/33` profile nodes with `max_outer=200`. Raising the limit
+to `1000` accepted the same `10/33` nodes, with the same termination reasons;
+every accepted node's `r`, `Sigma(0)`, `K0`, `D_uni`, and `Dq_min` was
+bit-identical. The extra iterations therefore supplied no missing state.
+
+Second, the full accepted Matsubara `[Sigma;K0]` state at every HMF profile
+node was temporarily exported and used only as the seed for the nearest
+log-`h` node at the next physical field. No state was interpolated, and all
+ordinary A--D acceptance gates remained binding.
+
+- A cold `4.04 T` control accepted `33/33` nodes and returned
+  `hstar=0.0148737 meV`.
+- A complete `4.05 T` profile also accepted `33/33` nodes and returned
+  `hstar=0.0147337 meV`.
+- Seeding `4.04 T` from that complete `4.05 T` profile, with a maximum
+  matched log-`h` distance of only `0.00559` (about `0.56%`), reduced the
+  result to `31/33`; six warm attempts needed the existing cold retry and
+  two still failed.
+- Seeding `4.00 T` from `4.05 T` likewise left it at `32/33`. Seeding only
+  the `h=0` predictor did not repair it either.
+
+Thus the lack of cross-field seeding in the production `parfor` is not the
+primary defect. A nearby accepted self-energy can be an excellent geometric
+guess yet belong to the wrong attraction basin of the next field's Picard
+map. Cross-field warm starting can make convergence worse, so it cannot be
+promoted as a general fix or used to bridge an incomplete field. The
+temporary ledger interface was removed; only this result is retained.
+
 ## 3. Why moderate field can fail while points near the QCP converge
 
 The observation is counter-intuitive only if one equates the nonlinear
@@ -373,24 +408,23 @@ claim, but it need not block an honestly labelled visual preview.
 
 ## 8. Current work estimate
 
-From the present state, a meaningful visual inspection is three focused
-milestones away:
+The earlier estimate of one implementation-and-test cycle to a preview is no
+longer defensible. Three inexpensive candidates have now been tested:
 
-1. make the current fixed-`w` evidence stack fail closed and freeze its
-   diagnostic claim;
-2. expose the guarded branch-following solve behind a default-off option;
-3. run a small `0--9 T`, `0--6 GHz`, `q=[0 0 0]` smoke grid, then hand the
-   same option to `invz_run_spectra.m`.
+1. a coupled Newton correction repairs the small `3.6 T` node deficit but
+   does not complete the `1.5 T` path;
+2. the defactored static coordinate can repair an isolated static solve but
+   does not complete the production outer map, even with 1000 iterations;
+3. matched field-to-field profile seeding can reduce, rather than improve,
+   the accepted-node count.
 
-If the fixed-`w` behaviour observed on the retained `1.5 T` leg transfers to
-the production path, this is one implementation-and-test cycle. If a second
-branch transition appears across the field grid, it becomes two cycles
-because that transition must be masked or assigned an explicit diagnostic
-branch rule.
-
-This preview work is estimated at roughly 20--30% of the remaining project
-effort. A fully certified default solver is substantially more work because
-it must resolve branch selection, not merely numerical convergence.
+The retained fixed-`w` samples also do not yet certify continuous graph
+edges. Therefore the next honest visual preview is no longer a small solver
+tuning task. It requires either a deliberately labelled implementation of
+the explicit branch prescription in Route B, with ambiguous columns masked,
+or enough of the common-functional Route A to select states without the HMF
+path. Both are substantive work; quoting a short percentage or wall-clock
+estimate before choosing between them would be misleading.
 
 ## 9. Bottom line
 
