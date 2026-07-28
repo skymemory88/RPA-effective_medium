@@ -6,9 +6,18 @@ function trace = invzp_trace_fixed_h_sequence(ctx,hValues,initialState,spec)
 %   must pass Newton's independent A-D audit and a frozen full-state
 %   predictor-tube gate. A failure stops the path and leaves explicit
 %   not-run records for the rest of the submitted sequence.
+%
+%   By default INITIALSTATE is copied into the first Newton call. A caller
+%   may instead supply spec.handoff with fields previous_state, previous_h,
+%   and current_h, where INITIALSTATE is the certified state at current_h.
+%   The first predictor then extrapolates the two certified states, and the
+%   second uses INITIALSTATE plus the first accepted scheduled state. This
+%   is the bounded arclength-to-fixed-h handoff; no root is inferred or
+%   accepted from the predictor itself.
 
 invalidId = 'invzp:FixedHTrace:InvalidInput';
-[hValues,spec] = validateInputs(ctx,hValues,initialState,spec,invalidId);
+[hValues,spec,hasHandoff] = validateInputs( ...
+    ctx,hValues,initialState,spec,invalidId);
 npoint = numel(hValues);
 records = repmat(blankRecord(),1,npoint);
 acceptedIndices = zeros(0,1);
@@ -27,12 +36,30 @@ for k = 1:npoint
     end
 
     if k == 1
-        predictor = normalizeState(initialState);
-        predictorKind = 'initial_seed';
+        if hasHandoff
+            current = normalizeState(initialState);
+            previous = spec.handoff.previous_state;
+            ratio = (hValues(k)-spec.handoff.current_h)/ ...
+                (spec.handoff.current_h-spec.handoff.previous_h);
+            predictor = secantPredictor(current,previous,ratio);
+            predictorKind = 'handoff_secant';
+        else
+            predictor = normalizeState(initialState);
+            predictorKind = 'initial_seed';
+        end
         record.seed_id = spec.initial_state_id;
     elseif isscalar(acceptedIndices)
-        predictor = normalizeState(records(acceptedIndices(end)).returned_state);
-        predictorKind = 'copy';
+        if hasHandoff
+            current = normalizeState(records(acceptedIndices(end)).returned_state);
+            previous = normalizeState(initialState);
+            ratio = (hValues(k)-hValues(acceptedIndices(end)))/ ...
+                (hValues(acceptedIndices(end))-spec.handoff.current_h);
+            predictor = secantPredictor(current,previous,ratio);
+            predictorKind = 'handoff_secant';
+        else
+            predictor = normalizeState(records(acceptedIndices(end)).returned_state);
+            predictorKind = 'copy';
+        end
     else
         last = acceptedIndices(end);
         previous = acceptedIndices(end-1);
@@ -163,7 +190,8 @@ if numel(acceptedIndices) >= 2
 end
 end
 
-function [hValues,spec] = validateInputs(ctx,hValues,initialState,spec,invalidId)
+function [hValues,spec,hasHandoff] = validateInputs( ...
+        ctx,hValues,initialState,spec,invalidId)
 if ~isstruct(ctx) || ~isscalar(ctx) || ~isfield(ctx,'schema') || ...
         ~strcmp(ctx.schema,'invzp_ordered_node_context/v1') || ~isfield(ctx,'wn')
     error(invalidId,'ctx must come from invz_ordered_node_context.');
@@ -207,6 +235,31 @@ spec.scale.sigma = sigmaScale(:);
 spec.scale.k0 = positive(spec.scale.k0,'scale.k0',invalidId);
 spec.predictor_tube_max = positive( ...
     spec.predictor_tube_max,'predictor_tube_max',invalidId);
+hasHandoff = isfield(spec,'handoff') && ~isempty(spec.handoff);
+if hasHandoff
+    handoff = spec.handoff;
+    if ~isstruct(handoff) || ~isscalar(handoff)
+        error(invalidId,'spec.handoff must be a scalar struct.');
+    end
+    requiredHandoff = {'previous_state','previous_h','current_h'};
+    for k = 1:numel(requiredHandoff)
+        if ~isfield(handoff,requiredHandoff{k})
+            error(invalidId,'spec.handoff.%s is required.',requiredHandoff{k});
+        end
+    end
+    validateState(handoff.previous_state,nw,invalidId);
+    validateFiniteScalar(handoff.previous_h,'handoff.previous_h',invalidId);
+    validateFiniteScalar(handoff.current_h,'handoff.current_h',invalidId);
+    firstStep = hValues(1)-handoff.current_h;
+    historyStep = handoff.current_h-handoff.previous_h;
+    if historyStep*firstStep <= 0
+        error(invalidId, ...
+            ['spec.handoff fields and hValues must define one strictly ', ...
+             'oriented continuation direction.']);
+    end
+    handoff.previous_state = normalizeState(handoff.previous_state);
+    spec.handoff = handoff;
+end
 end
 
 function validateState(state,nw,invalidId)
@@ -224,6 +277,13 @@ end
 
 function state = normalizeState(state)
 state = struct('Sigma',state.Sigma(:),'K0s',state.K0s);
+end
+
+function predictor = secantPredictor(current,previous,ratio)
+predictor = struct( ...
+    'Sigma',current.Sigma(:)+ratio* ...
+        (current.Sigma(:)-previous.Sigma(:)), ...
+    'K0s',current.K0s+ratio*(current.K0s-previous.K0s));
 end
 
 function distance = stateDistance(state,predictor,sigmaScale,k0Scale)
@@ -310,5 +370,11 @@ function value = positive(value,name,invalidId)
 if ~isnumeric(value) || ~isreal(value) || ~isscalar(value) || ...
         ~isfinite(value) || value <= 0
     error(invalidId,'spec.%s must be a finite positive scalar.',name);
+end
+end
+
+function validateFiniteScalar(value,name,invalidId)
+if ~isnumeric(value) || ~isreal(value) || ~isscalar(value) || ~isfinite(value)
+    error(invalidId,'spec.%s must be a finite real scalar.',name);
 end
 end
