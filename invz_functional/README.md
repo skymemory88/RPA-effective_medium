@@ -47,8 +47,11 @@ objects on a signed convolution grid.
 The first varied-covariance ansatz in `../invzp_functional_wp4_skeleton_spec.md` was implemented
 temporarily and rejected by its immutable mixed-chain coefficient before commit.  Its Gaussian local
 trace plus 1PI `gamma4` double bubble uses the wrong local bilocal kernel and changes the retained
-`a^2*b^2` coefficient under stationarity.  No skeleton solver remains in this directory; a corrected
-route must derive the exact local bilocal/2PI Legendre term rather than patching that failed ansatz.
+`a^2*b^2` coefficient under stationarity.  `invzf_local_bilocal_hessian_static` is the next, smaller
+oracle: it derives the exact `Q=0` local Hessian from the connected `C2/C3/C4` response block and
+recovers the immutable zero-source static coefficient.  It does not yet derive the signed-frequency
+bilocal kernel, lattice trace, or double counting.  No skeleton solver remains in this directory;
+a corrected route must pass those gates rather than patching the failed ansatz.
 
 It does not contain EMT, a dressed self-energy, the ordered `tanh/xi` replacement, spectral
 continuation, or any production branch solver.

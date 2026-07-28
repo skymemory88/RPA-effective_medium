@@ -45,7 +45,9 @@
 - `invzf_twolevel_1pi_vertex`: dynamic scalar amputation including all three
   `gamma3*C2*gamma3` quartic channels;
 - `invzf_twolevel_vertex_table`: exact signed-grid freezing for future convolution or local-bilocal
-  derivation gates.
+  derivation gates;
+- `invzf_local_bilocal_hessian_static`: exact `Q=0` local double-Legendre Hessian from the connected
+  zero-mode `C2/C3/C4` response block, including its fixed-moment Schur complement.
 
 No production spectrum or phase solver dispatches into this directory.  The local exact/ring
 fixtures are self-contained; the explicitly named production-input adapters call existing
@@ -118,8 +120,15 @@ The checks cover:
     `[a^2b^2]F=-0.164804530473080162...`, its ring part
     `-0.265982296240050260...`, and its connected-`C4` residual
     `+0.101177765766970098...`.
+23. the exact static local bilocal Hessian.  For
+    `Delta=1.3`, `M=1`, `beta=1.7`, and zero source, it gives
+    `C2=1.23428900560563`, `C4=-4.46287005289486`, and reproduces the exact
+    mixed-chain coefficient `-0.0944822130558562` with error `1.11e-16`.
+    At source `h=0.37`, the connected response block remains positive
+    (`lambda_min=0.1775`) and its fixed-moment Schur denominator is
+    `0.621968104727707`.
 
-MATLAB `checkcode` returned no findings for all nineteen isolated implementation files and the two
+MATLAB `checkcode` returned no findings for all twenty isolated implementation files and the two
 extended coupling APIs.
 
 ## 3. Demonstrated state selection
@@ -235,9 +244,10 @@ transition on the expected field scale but does not remove the strict Gaussian p
 This prototype does not yet justify a LiHoF4 production calculation. The next contained steps are:
 
 1. do not revive the rejected Gaussian-local-trace plus 1PI-vertex skeleton;
-2. derive an exact local bilocal/2PI Legendre kernel before attempting another stationary functional,
-   or activate the separately documented biased smooth-`r(h)` backup as an explicit experimental
-   prescription;
+2. extend the verified `Q=0` connected-cumulant response block to the signed-frequency local
+   bilocal kernel, including its nonzero-source `C3-C3` Schur term, before attempting another
+   stationary functional; or activate the separately documented biased smooth-`r(h)` backup as an
+   explicit experimental prescription;
 3. do not wire a spectral backend until whichever route is chosen passes its thermodynamic, domain,
    discretization, and branch-identity gates.
 
