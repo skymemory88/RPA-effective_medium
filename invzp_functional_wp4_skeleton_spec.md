@@ -541,5 +541,8 @@ route.  If `m`, `h`, and `D` remain independent off shell and
 At the nonzero-source static fixture, using the Schur curvature alone adds
 `C2*C3^2/(4*beta^2)=0.118329000835305` to the centred-chain coefficient, whose graph inventory permits
 only the ring and connected `C4`.  The fixed-source curvature reproduces that restricted coefficient
-exactly.  This closes a local normalization/coordinate gate only; the matching lattice trace,
-double counting, Matsubara tail, and full stationary functional remain unconstructed.
+exactly.  On the finite nonnegative-frequency grid, re-stationarizing the leading three-site return
+against the Gaussian trace curvature also reproduces
+`-sum_nm w_n*w_m*C4_nm*C2_n*C2_m/(4*beta^2)` algebraically.  This closes the weak-order local
+trace/double-counting normalization only; the nonlinear partial-Legendre term, Matsubara tail, and
+full stationary functional remain unconstructed.

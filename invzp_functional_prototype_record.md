@@ -138,7 +138,11 @@ The checks cover:
     bilinear covariance within `2.22e-16`, including two crossed pairings at `n=m=0`, one at
     `n=m>0`, and none at unequal representatives.  An independent symmetric source difference
     reproduces its `C3(0,n,-n)` row within `1.92e-10`; the block-inverse and Schur-inverse fixed-m
-    Hessians agree to `2.1e-17` relatively.
+    Hessians agree to `2.1e-17` relatively.  Re-stationarizing the leading three-site return using
+    the fixed-source curvature reproduces the finite-cutoff dynamic connected-`C4` residual within
+    `1.7e-15` at zero source and `3.4e-16` at `h=0.37`.  At the latter point the cutoff-3 ring and
+    residual are `-0.265982292019735` and `+0.101148371627387`; the remaining difference from the
+    frozen infinite-frequency residual is a cutoff tail, not a normalization error.
 
 MATLAB `checkcode` returned no findings for all twenty-one isolated implementation files and the two
 extended coupling APIs.
@@ -256,10 +260,9 @@ transition on the expected field scale but does not remove the strict Gaussian p
 This prototype does not yet justify a LiHoF4 production calculation. The next contained steps are:
 
 1. do not revive the rejected Gaussian-local-trace plus 1PI-vertex skeleton;
-2. use the verified finite-mode local response to derive the matching lattice trace and
-   double-counting structure at fixed source, with an explicit Matsubara-tail budget, before
-   attempting another stationary functional; or activate the separately documented biased
-   smooth-`r(h)` backup as an explicit experimental prescription;
+2. derive the nonlinear fixed-source local partial-Legendre functional and an explicit
+   Matsubara-tail budget before attempting another stationary lattice functional; or activate the
+   separately documented biased smooth-`r(h)` backup as an explicit experimental prescription;
 3. do not wire a spectral backend until whichever route is chosen passes its thermodynamic, domain,
    discretization, and branch-identity gates.
 

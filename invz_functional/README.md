@@ -55,8 +55,11 @@ representatives, with the distinct zero- and nonzero-frequency pair-disconnected
 nonzero-source `C3-C3` mixing.  Both oracles distinguish the fixed-source partial Legendre
 curvature from the fixed-moment Schur curvature.  The contemplated off-shell `(m,h,D)` functional
 must use the former; inserting the latter by itself produces a spurious `C3^2` chain coefficient.
-This remains a finite-mode local oracle: the Matsubara-tail completion, lattice trace, and double
-counting are not derived.  No skeleton solver remains in this directory; a corrected route must
+The mode oracle re-stationarizes the leading three-site return against the Gaussian trace curvature
+and verifies that the fixed-source replacement produces exactly the finite-cutoff dynamic
+connected-`C4` residual.  This closes the weak-order trace/local double-counting normalization, not
+the full construction: the Matsubara-tail completion and nonlinear local partial-Legendre
+functional remain underived.  No skeleton solver remains in this directory; a corrected route must
 pass those gates rather than patching the failed ansatz.
 
 It does not contain EMT, a dressed self-energy, the ordered `tanh/xi` replacement, spectral
