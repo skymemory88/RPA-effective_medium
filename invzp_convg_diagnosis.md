@@ -28,8 +28,9 @@ provenance, not missing plotting data.
 The current production theory is **not globally well posed as a phase-selection
 algorithm** — a claim the 2026-07-29 execution diary
 ([`docs/execution/invzp_plan_execution_diary.md`](docs/execution/invzp_plan_execution_diary.md),
-entries E1–E8) *strengthens*, even though it corrects one of the observations
-originally offered in its support below. Its local nonlinear equations can have
+entries E1–E9b) *strengthens*, even though it corrects two of the observations
+originally offered in its support below, and withdraws one attribution made in
+an earlier revision of this document. Its local nonlinear equations can have
 several accepted roots, folds, disconnected branches, and intervals in which the
 resummed static map meets a pole or no admissible fixed point is found. Cold
 starts, warm field continuation, larger iteration limits, stronger damping, and
@@ -44,16 +45,26 @@ converges (0 of 43 node evaluations fail — bisection and the root phase run to
 completion only there, adding evaluations beyond the 34 sampled under masked
 configurations), every consumed node satisfies the full A–D contract, and the
 column returns an accepted root h\* = 0.0172215. The **hard core of nodes that
-fail under every configuration tried is empty.** This is a correction to the
-sentence as written, not a retreat from the larger claim above: E1 is explicit
-that a mask moving with `mix_outer` is evidence the *mask was numerical*, **not**
-evidence that h\* = 0.0172215 *is the equilibrium root* — nothing here ranks
-roots, proves completeness, or licenses a production default change. The
-well-posedness claim is in fact independently *strengthened* at a different
-field by diary entry E8 (§6.2): the 4.05 T coexistence is not the two-state case
-originally recorded here but a family of 6–11 A–D-accepted clusters at
-essentially every h, so removing one configuration-dependent mask at 3.825 T does
-not touch the underlying phase-selection gap that
+fail under every configuration tried is empty at this field.**
+
+**Why the mask moves with `mix_outer` — corrected 2026-07-29 (diary E9b).** An
+earlier version of this paragraph read the configuration dependence as evidence
+that "the mask was numerical". That reading is **withdrawn**; it is too weak and
+it pointed later work in the wrong direction. The measured mechanism (§7.2) is a
+**finite-\(q\) soft mode**: a node fails if and only if the \(q\)-resolved
+denominator \(D(q)=1+(J(q)-K_0)G_{\rm stat}\) passes close to zero there, and
+`mix_outer` does not remove that soft mode — it changes only whether the iterate
+*wanders into* the region where \(D(q)\to0\). At 3.825 T, `mix_outer = 0.30`
+keeps every node out of it; at 1.0 T no damping value keeps 10–11 nodes out. So a
+column that closes under one damping value has not been shown to be free of the
+obstruction; it has been shown to have a path that avoided it.
+
+Nothing in this ranks roots, proves completeness, or licenses a production
+default change. The well-posedness claim is in fact independently *strengthened*
+at a different field by diary entry E8 (§6.2): the 4.05 T coexistence is not the
+two-state case originally recorded here but a family of 6–11 A–D-accepted
+clusters at essentially every h, so removing one configuration-dependent mask at
+3.825 T does not touch the underlying phase-selection gap that
 [`invzp_convg_fix.md`](invzp_convg_fix.md) exists to close.
 
 The root issue is therefore not “insufficient iteration.” It is the combination
@@ -299,14 +310,37 @@ failure this is:
   is a domain rejection. `medium_status` is `not_applicable` (the normal
   resummed value) at every node, and the static closure sub-solve is essentially
   always converged at the point of failure (`resid_B ~ 1e-11` while
-  `resid_A ~ 3.7e-3`). What fails is the outer \(\Sigma\leftrightarrow K\) map,
-  not the static EMT sub-solve.
-- **Fact 4.** The binding node's failure mode is an aperiodic wander through the
-  \(G_{\rm stat}\) pole: for node 23 (h = 0.00241) at `mix_outer = 0.40`,
+  `resid_A ~ 3.7e-3`). The *proximate* symptom is therefore an exhausted outer
+  \(\Sigma\leftrightarrow K\) iteration, not a raised domain flag.
+  **Attribution corrected 2026-07-29 (E9b):** the inference originally drawn from
+  this fact — "what fails is the outer map, not the static EMT sub-solve", i.e.
+  §7.3 rather than §7.2 — is **withdrawn**. `medium_status` not being raised does
+  not mean no denominator is in trouble: that flag reports the *reference* domain
+  check, while the binding obstruction is the \(q\)-resolved \(D(q)\) approaching
+  zero (Fact 5), which the flag does not test. A `max_iter` termination is what
+  an iteration looks like when it is chasing a fixed point that the soft mode has
+  removed.
+- **Fact 4.** The binding node's iteration history is an aperiodic wander with no
+  dominant alternation period: for node 23 (h = 0.00241) at `mix_outer = 0.40`,
   `resid_map` reaches \(5.40\times10^{-5}\) at iteration 803 and then **grows
-  again**; `gstat_local_denom` ranges over \([-2.91,+2.97]\), i.e. the iterate
-  repeatedly crosses the local \(G_{\rm stat}\) pole; no dominant alternation
-  period is present (lag-2…8 \(|\rho|<0.07\)).
+  again**; `gstat_local_denom` ranges over \([-2.91,+2.97]\) (lag-2…8
+  \(|\rho|<0.07\)). **Corrected 2026-07-29 (E9/E9b):** the local
+  \(G_{\rm stat}\) pole crossing recorded here is a **symptom, not the cause**.
+  Diary E9 measured that accepted nodes sit at \(|d_0|\in[0.48,1.61]\) with none
+  below 0.1 while the *path* reaches \(|d_0|\sim10^5\) — the local pole lies on
+  the trajectory, never on the solution — and that making the arithmetic
+  pole-regular changes the failure set by exactly zero nodes (§8.1).
+- **Fact 5 (measured 2026-07-29, diary E9/E9b — the actual mechanism).** A node
+  fails **if and only if** its \(q\)-resolved denominator passes close to zero:
+  `finite Dq_absmin` \(\iff\) `node fails`, without exception in either
+  direction over ~100 node evaluations spanning three iteration configurations
+  and two fields — 1.0 T (11 of 11 failures carry it, 0 of 23 accepted nodes
+  do), 3.825 T at `mix_outer = 0.40` (1 of 1; node 23 has
+  \(D_q^{\min}=-0.6027\), \(|D_q|^{\min}=1.889\times10^{-3}\)), and 3.825 T at
+  `mix_outer = 0.70` (22 of 22; 0 of 12 accepted). Note 27 of 34 nodes at
+  3.825 T have \(D_q^{\min}<0\) **including accepted ones**, so \(D(q)\) merely
+  turning negative somewhere is *not* sufficient — it is \(D(q)\) approaching
+  zero that predicts failure. See §7.2.
 
 At 3.6 T, a diagnostic Newton repair can recover three failed nodes and can make
 one temporary end-to-end path close. That result establishes that some Picard
@@ -424,6 +458,15 @@ The outer update is a full Matsubara-vector problem. Dynamic \(K\), the three
 Changing damping and iteration count alters iteration dynamics but does not alter
 the fixed-point set or define equilibrium.
 
+**Scope correction, 2026-07-29 (diary E9b).** This section is *not* the
+attribution for the 3.825 T or 1.0 T masks; §7.2 is. Diary E1 assigned them here
+and that assignment is withdrawn (§5, Fact 3). The distinction matters for what
+work follows: a §7.3 failure invites a better solver, whereas the measured §7.2
+failure cannot be reached by any solver, because there is no fixed point to find
+where \(D(q)\) has passed through zero. Two attempted §7.3-style repairs
+(pole-regular iteration arithmetic, and a step limiter) were measured and both
+changed the failure set by zero nodes — see §8.1.
+
 ### 7.4 Missing global thermodynamic selector
 
 [`invz_deltaF_ordered.m`](invz_projected/invz_deltaF_ordered.m) is only a partial
@@ -456,6 +499,23 @@ The following may be useful diagnostics but are not root fixes:
 The final item is especially irrelevant: the failure occurs during imaginary-axis
 state construction. Once a state is accepted, real-axis response evaluation is
 healthy in the verified window.
+
+**Added 2026-07-29 (diary E9) — two further branches refuted by direct
+measurement.** Both were attempted at 1.0 T against the soft-mode failure of
+§7.2, each with its refutation criterion written down *before* the run, and both
+are recorded here so they are not retried:
+
+| attempted fix | rationale at the time | measured outcome | verdict |
+|---|---|---|---|
+| **Pole-regular arithmetic** — `closure_coordinate = 'defactored'`, which sets `stable_form = true` and routes the \(q\)-average through `invz_reciprocal_static_closure`, whose weights are regular where \(G_{\rm stat}\) diverges | Fact 4's \(G_{\rm stat}\) pole crossing looked causal, and `invz_gstat_ordered.m:35–38` warns the default arrangement "would turn a removable singularity into a node failure" | `mix_outer = 0.30`: **11/34 → 11/34**, identical node-for-node; `mix_outer = 0.15`: **10/34 → 10/34**. Zero nodes cleared, zero newly failing, at both damping values | **REFUTED.** It regularises the *local* \(d_0\) pole, but only ~2% of iterations sit within \(\lvert d_0\rvert<0.1\) — the iterate leaps across that pole rather than landing on it — and the binding singularity is in \(D(q)\), a different denominator. Reproduces S2's null result at 3.825 T, now explained rather than merely observed |
+| **Backtracking line search / step limiter** on the outer map | The path reaches \(\lvert d_0\rvert\sim1.8\times10^{5}\) while solutions sit at \(\lvert d_0\rvert\approx1\), which looked like unbounded overshoot | Steps worsening the residual: **0.469** of all steps vs **0.467** restricted to steps landing at \(\lvert d_0\rvert>10\); correlation between \(\lvert d_0\rvert\) growth and residual growth **\(-0.002\)** | **REFUTED.** No outward preference and no correlation: a random wander, not a systematic overshoot. A line search would reject ~47% of steps essentially at random. Not implemented |
+
+Both were algorithmic responses to what §7.2 shows is a structural feature, and
+neither could have worked. The `Dq_absmin` column that settles the attribution
+was present in the S1 census table from the first run; the damping-ladder framing
+directed attention to iteration dynamics and delayed reading it. **When a failure
+count is flat in the solver's own knob, that is early evidence the obstacle is
+not in the solver.**
 
 ### 8.2 Strict-medium candidate
 
@@ -542,8 +602,9 @@ into this document. The executable and data artifacts remain.
 ### Plan execution (2026-07-29)
 
 - `docs/execution/invzp_plan_execution_diary.md` — the append-only execution
-  record (entries E1–E8) that is the source for every measurement added to this
-  document on 2026-07-29.
+  record (entries E1–E9b) that is the source for every measurement added to this
+  document on 2026-07-29. It carries the rejected branches and their refuting
+  evidence, which this document summarises but does not duplicate.
 - `docs/execution/invzp_exec_s1_failure_census.m`
 - `docs/execution/invzp_exec_s1_iter_anatomy.m`
 - `docs/execution/invzp_exec_s1_config_sweep.m`
@@ -554,6 +615,19 @@ into this document. The executable and data artifacts remain.
 - `docs/execution/invzp_exec_wp0_gate.m`
 - `docs/execution/invzp_exec_wp1_gate.m`
 - `docs/execution/invzp_exec_wp3_harness_gate.m`
+- `docs/execution/invzp_exec_s9_field_ladder.m` — field-wide damping-ladder
+  census, with the four-way column classification (`ordered` / `pm_no_root` /
+  `pm_no_bare_order` / `failed`) that must not be collapsed into one
+  closed/not-closed rate: only `failed` is a convergence failure.
+- `docs/execution/invzp_exec_s10_outer_eigenvalue.m` — measures the outer-map
+  Jacobian eigenvalue from the damping ladder; reports "linearization invalid"
+  rather than fitting a line through data the linear model does not describe.
+- `docs/execution/invzp_exec_s10_pole_locality.m` — separates a pole on the
+  solution from a pole on the path.
+- `docs/execution/invzp_exec_s10_defactor_probe.m` — the refuted pole-regular
+  coordinate test (§8.1).
+- `docs/execution/invzp_exec_s10_overshoot.m` — the refuted step-limiter test
+  (§8.1).
 
 These scripts are research diagnostics. Unless an individual script says
 otherwise, a successful run establishes its bounded numerical claim only; it is
@@ -583,33 +657,49 @@ field**, not to settle the phase-selection epistemics first (strict zero field
 may be skipped if the double degeneracy is problematic there). This reorders —
 but does not replace — the program above:
 
-1. **S9 — field-wide damping-ladder census (new top packet).** E1 established
-   that the 3.825 T mask is outer-map iteration dynamics, not a domain failure,
-   and that `mix_outer = 0.30` closes that column completely. It is *not*
-   established that this generalises. S9 runs a `mix_outer` ladder
-   (\(\{0.7,0.5,0.4,0.3,0.2,0.15\}\), `max_outer = 1000`) across the full field
-   range of interest and records, per field, the first ladder rung that closes
-   the column, or that none does.
-2. **Conditional adaptive-damping mode**, wired opt-in/default-off into the
-   ordered path and exposed in `invz_run_spectra.m`, only if S9 shows most
-   columns close under some rung.
-3. **S4 — the closed-loop path-dependence test** (specification only as of this
+1. **S9 — field-wide damping-ladder census (in progress).** A `mix_outer` ladder
+   (\(\{0.7,0.5,0.4,0.3,0.2,0.15\}\), `max_outer = 1000`) across the field range
+   of interest, recording per field the first rung that closes the column or that
+   none does. **Its purpose has changed since it was written.** It was justified
+   by E1's claim that the 3.825 T mask is outer-map iteration dynamics rather
+   than a domain failure; E9b withdrew that claim (§7.2). S9 is retained as a
+   **map of where the soft-mode obstruction bites**, not as a route to closing
+   columns. Partial results: every field from 3.0 T upward either closes or is
+   correctly paramagnetic; 1.0 T and 1.5 T close under **no** rung.
+2. **~~Conditional adaptive-damping mode~~ — WITHDRAWN 2026-07-29 (diary E9).**
+   This was to be wired opt-in/default-off into the ordered path and exposed in
+   `invz_run_spectra.m` if most columns closed under some rung. It is withdrawn
+   as a deliverable, not deferred. Damping does not remove the finite-\(q\) soft
+   mode; it changes only whether the iterate enters the region where
+   \(D(q)\to0\) (§7.2). A mode that escalates damping until a column closes would
+   therefore produce low-field spectra by steering around a pole the code exists
+   to refuse, and would label them converged. That is precisely the
+   masked-to-bare/pole-floor class of workaround forbidden by §8.1.
+3. **The physical question opened by E9b, which now gates any low-field
+   \(\chi\).** Is the finite-\(q\) instability (a) a real competing ordering
+   wavevector at low field, (b) an artefact of the \(1/z\) truncation's
+   \(q\)-dependence, or (c) the 1.5 T fold region of §6.1? Note the failing nodes
+   at 1.0 T are a contiguous block \(h\in[0,1.28\times10^{-4}]\) — including
+   \(h=0\) exactly, the double degeneracy — plus isolated nodes between
+   converging neighbours. The column returns `hstar = NaN` because the root
+   bracket loses its small-\(h\) end, **not** because the field is unsolvable:
+   24 of 34 nodes converge there in 50–83 outer iterations.
+4. **S4 — the closed-loop path-dependence test** (specification only as of this
    writing; see the execution diary).
-4. **The WP1 nonzero-frequency blocker** (diary E6): KMS/reality and
+5. **The WP1 nonzero-frequency blocker** (diary E6): KMS/reality and
    high-frequency-tail failures in the 136-state local source oracle, which
    block WP2.
-5. **WP2** — the linked-cluster functional manifest.
+6. **WP2** — the linked-cluster functional manifest.
 
-**Mandatory label.** Any column closed only by the damping ladder or the
-adaptive-damping mode must be reported as
-`converged-under-damping-ladder, branch-not-certified` — never as an equilibrium
-phase label. This is not a formality: diary E4 (root and state sensitivity)
-found that a \(10^{-12}\) arithmetic perturbation — the factored vs.
+**Mandatory label.** Any column closed only by a damping ladder must be reported
+as `converged-under-damping-ladder, branch-not-certified` — never as an
+equilibrium phase label. This is not a formality: diary E4 (root and state
+sensitivity) found that a \(10^{-12}\) arithmetic perturbation — the factored vs.
 defactored reciprocal-coordinate reassociation from the rejected E3 defactoring
 attempt — moves a node to a different A–D-accepted state at 78% relative
 \(\Delta K_0\), and diary E8 (§6.2 above) found 6–11 A–D-accepted root
-clusters at one h near 4.05 T. A column closed by damping alone yields a
-spectrum at an accepted state; it does not yield a certified equilibrium
-branch. Producing \(\chi\) where it was
-previously masked is a legitimate deliverable under this revision; claiming it
-is the equilibrium branch is not.
+clusters at one h near 4.05 T. E9b adds a second reason: a column that closes
+under one damping value has been shown only to have found a path that avoided
+the soft mode, not to be free of it. Producing \(\chi\) where it was previously
+masked is a legitimate deliverable under this revision; claiming it is the
+equilibrium branch is not.

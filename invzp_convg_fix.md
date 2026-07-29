@@ -585,6 +585,27 @@ candidate has a failed immutable coefficient. The quadratic bilocal prototype is
 valid only in bounded \(C_3=0\), finite-cutoff fixtures and is not the required
 nonlinear Legendre construction.
 
+### Solver-side fixes attempted against the low-field mask (2026-07-29)
+
+Three production-side fixes were attempted against the deep-ordered failure
+before its cause was known. All three are **rejected**, and they are recorded
+here — with the criterion each was judged by — so the effort is not repeated.
+Full evidence in `docs/execution/invzp_plan_execution_diary.md` E9/E9b.
+
+| attempt | criterion set in advance | measured | verdict and lesson |
+|---|---|---|---|
+| **Damping ladder** (`mix_outer` \(\in\{0.7,\dots,0.15\}\)) | some rung closes each column | 3.825 T: 22→0 failures across the ladder. 1.0 T: **10–12 of 34 at every rung**, flat over a 3.3× range of \(\alpha\); 1.0 T and 1.5 T close under no rung | **Partial, and misleading where it worked.** Damping does not remove the soft mode — it changes whether the iterate enters the \(D(q)\to0\) region. A column closed this way is `branch-not-certified`. *Lesson: a failure count flat in the solver's own knob is early evidence the obstacle is not in the solver.* |
+| **Pole-regular arithmetic** (`closure_coordinate='defactored'`, `stable_form`) | failure set shrinks at 1.0 T | `mix=0.30`: 11/34 → **11/34 identical node-for-node**; `mix=0.15`: 10/34 → 10/34. Zero cleared | **Rejected.** Regularises the *local* \(d_0\) pole; only ~2% of iterations lie within \(\lvert d_0\rvert<0.1\), and the binding singularity is \(D(q)\), a different denominator. *Lesson: S2's identical null at 3.825 T was read as "defactoring has no effect"; it was really "the local pole is not the mechanism", which would have redirected this work months earlier.* |
+| **Backtracking line search / step limiter** | outward steps preferentially worsen the residual | worsening fraction **0.469** overall vs **0.467** for steps landing at \(\lvert d_0\rvert>10\); corr\((\Delta\lvert d_0\rvert,\Delta\lvert r\rvert)=-0.002\) | **Rejected before implementation.** Random wander, not systematic overshoot; a line search would reject ~47% of steps at random. *Lesson: writing the refutation criterion into the probe before running it stopped a plausible-looking fix from being built.* |
+
+The general lesson for this program: all three were **algorithmic responses to a
+structural feature**. The `Dq_absmin` column that identifies the mechanism was
+present in the census tables from the first run. No globalisation, damping
+schedule, or change of iteration coordinate can supply a fixed point that the
+soft mode has removed — which is exactly why §1's decision to replace the
+equations rather than repair the solver stands unchanged, and is now supported by
+direct measurement rather than by argument alone.
+
 ### Potthoff/self-energy-functional shortcuts
 
 Do not use a reference-system self-energy functional merely because it supplies
@@ -607,12 +628,18 @@ The root problem is formally fixed only when all of the following are true:
    history;
 7. the 1.5 T folds, 3.825 T failure region, 4.05 T coexistence, and QCP window are
    all resolved without pole floors or branch heuristics (**measured
-   2026-07-29:** the 3.825 T region is now known to be
-   solver-configuration-dependent rather than a fixed domain boundary — see
-   `invzp_convg_diagnosis.md` §5 — and the 4.05 T field carries 6–11
-   A–D-accepted states rather than the 2 originally recorded, per diagnosis
-   §6.2 / diary E8 — so this item is a **harder** requirement than when it was
-   written, not an easier one);
+   2026-07-29, and this item is now a materially HARDER requirement than when it
+   was written:** (i) the 3.825 T failures are a **finite-\(q\) soft mode** —
+   a node fails iff its \(q\)-resolved \(D(q)=1+(J(q)-K_0)G_{\rm stat}\) passes
+   close to zero, exceptionless over ~100 node evaluations at two fields, per
+   diagnosis §7.2 / diary E9b. An earlier revision of this line recorded the
+   region as "solver-configuration-dependent rather than a fixed domain
+   boundary"; that was built on diary E1's withdrawn attribution and is
+   **false**. `mix_outer` changes only whether the iterate enters the
+   \(D(q)\to0\) region, not whether the region is there. (ii) The same soft mode
+   is what closes the low-field columns entirely: 1.0 T and 1.5 T converge under
+   no damping value tested. (iii) The 4.05 T field carries 6–11 A–D-accepted
+   states rather than the 2 originally recorded, per diagnosis §6.2 / diary E8);
 8. the static response equals the appropriate functional derivative;
 9. real-axis response passes causality and sum-rule gates; and
 10. every numerical and truncation axis has an independent error budget; and
@@ -645,13 +672,26 @@ the immediate blocker on this critical path — it must be resolved before WP2's
 manifest can be built, because WP2 needs exactly the frequency-resolved
 cumulants WP1 does not yet supply correctly.
 
-Separately, the user's objective of computing \(\chi\) at every magnetic field
-has promoted a parallel production-side packet, S9 (field-wide damping-ladder
-census; see `invzp_convg_diagnosis.md` §11), that does **not** touch this
-functional program and does not substitute for it. S9 can produce spectra
-labelled `converged-under-damping-ladder, branch-not-certified`; it cannot
-produce a certified equilibrium phase label, which remains this document's
-program to deliver.
+Separately, the objective of computing \(\chi\) at every magnetic field promoted a
+parallel production-side packet, S9 (field-wide damping-ladder census; see
+`invzp_convg_diagnosis.md` §11), which does **not** touch this functional program
+and does not substitute for it.
+
+**Outcome of that packet, 2026-07-29 (diary E9/E9b).** S9 did not deliver
+all-field \(\chi\), and the follow-on adaptive-damping mode it was to justify is
+**withdrawn** rather than deferred (§10). What S9 delivered instead is the
+mechanism: the low-field masks are a **finite-\(q\) soft mode**, \(D(q)\)
+approaching zero, with `finite Dq_absmin` \(\iff\) `node fails` exceptionless
+across ~100 node evaluations at two fields. Damping only steers the iterate
+around that region where a path exists; at 1.0 T and 1.5 T none does.
+
+This tightens the case for this document rather than competing with it. A
+production packet aimed at filling masks terminated in a measurement showing the
+masks are where the retained approximation runs out — the low-field \(\chi\)
+question is now **physical** (is the finite-\(q\) instability a real competing
+ordering wavevector, an artefact of the \(1/z\) truncation's \(q\)-dependence, or
+the §6.1 fold region?), and §11 item 7 must resolve it. A solver made to converge
+there without answering that question would be hiding it.
 
 ## 13. Theoretical orientation
 
