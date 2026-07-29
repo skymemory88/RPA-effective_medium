@@ -1,4 +1,4 @@
-function G = invzp_exec_wp0_gate(save_path)
+function G = invzp_exec_wp0_gate(save_path, dpRng_ladder)
 %INVZP_EXEC_WP0_GATE WP0 gate (invzp_convg_fix.md Sec.9, L389-401): "two independent
 % constructors reproduce all frozen microscopic anchors and the same serialized coupling
 % set." Builds the frozen contract (invzf_wp0_contract) and checks:
@@ -6,7 +6,25 @@ function G = invzp_exec_wp0_gate(save_path)
 %                          reproduces the contract's exact-byte digest.
 %   G0b independent constructors agree at finite q -- bruteforce vs ewald, mode by mode, at
 %                          every q the grid retains (Gamma excluded -- the exclusion is
-%                          VERIFIED via invz_is_gamma_equiv, not assumed).
+%                          VERIFIED via invz_is_gamma_equiv, not assumed). The bruteforce leg
+%                          is swept over a dpRng_ladder (default [30 45 60 90], the production
+%                          default dpRng=30 always included as the first rung) against the
+%                          SAME single ewald reference, because bruteforce truncates a
+%                          conditionally-convergent real-space sum at a finite cutoff while
+%                          ewald is convergent -- a shrinking bf/ewald gap with dpRng is a
+%                          truncation artifact, not a constructor disagreement; a plateau
+%                          would be. 2026-07-29 measured ladder (this grid/ewald opts): RMS
+%                          diff over all compared pairs falls monotonically at every rung
+%                          (3.32e-6 -> 9.82e-7 -> 8.81e-7 -> 4.00e-7 meV, dpRng=30/45/60/90),
+%                          a power-law fit of ln(rms) vs ln(dpRng) gives exponent ~-1.83 with
+%                          no sign of a nonzero floor; max|diff| falls ~9x overall (1.14e-4 ->
+%                          1.27e-5 meV) but is not strictly monotone (dpRng=60 ticks up from
+%                          dpRng=45), consistent with shell-commensurability noise on a
+%                          decaying envelope, not a fixed convention offset. dpRng=120 was not
+%                          included in the default ladder: dpRng=90 alone took ~23 min on this
+%                          grid (~64x dpRng=30's ~1 min; cost scales close to dpRng^2.4-3), so
+%                          a fifth rung is a separate, explicit opt-in (pass it in
+%                          dpRng_ladder), not part of the routine gate.
 %   G0c Gamma-point difference is the documented one -- quantified against the Lorentz term.
 %   G0d limit order -- RECORDED (not tested), transcribed from invzp_convg_fix.md Sec.9/2.5/4.2.
 %
@@ -14,9 +32,14 @@ function G = invzp_exec_wp0_gate(save_path)
 % after seeing the numbers below:
 %   G0b: max|branch diff| < 1% of the bruteforce Jcc0 scale (physical coupling energy scale;
 %        an eigenvalue-wise relative error is not used because Jcc(q) branches cross zero).
+%        Evaluated at the BEST-TESTED (largest) dpRng rung -- the question G0b answers is
+%        whether the two constructors agree in the converged limit; production_pass (at
+%        dpRng=30 specifically) is reported alongside as a separate, not-swept-under-the-rug
+%        finding about the CURRENT production default's own convergence adequacy.
 %   G0c: |Jcc0 diff| and max|Jgamma_cc diff| both < 5% of the Lorentz term itself (a mismatch
 %        of ORDER the Lorentz term would mean the correction was not applied to one backend).
 if nargin < 1, save_path = ''; end
+if nargin < 2 || isempty(dpRng_ladder), dpRng_ladder = [30 45 60 90]; end
 root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
 addpath(root); addpath(fullfile(root,'invz_common')); addpath(fullfile(root,'invz_projected'));
 addpath(fullfile(root,'invz_functional'));
@@ -57,29 +80,10 @@ if ~bf.ok || ~ew.ok
     fprintf('G0b: NOT RUN -- %s\n', reason);
     fprintf('G0c: NOT RUN -- %s\n', reason);
 else
-    qvec = bf.detail_summary.qvec;
-    assert(isequal(qvec, ew.detail_summary.qvec), 'invz:wp0GateGridMismatch', ...
-        'bruteforce/ewald backends were not evaluated on the same q-grid.');
+    qvec = ew.detail_summary.qvec;
     isG = invz_is_gamma_equiv(qvec, ion.tau);      % same test invz_jq_modes/invz_jq_path use
     n_gamma = nnz(isG);
-    Ubf = bf.detail_summary.Jnu_unflat(~isG, :);   ew_full = ew.detail_summary.Jnu_unflat;
-    Uew = ew_full(~isG, :);                        qk = qvec(~isG, :);
-
-    % --- G0b ---
-    absd = abs(Uew - Ubf);
-    rel_floor = 1e-6;                              % meV; avoids blow-up at branch zero-crossings
-    reld = absd ./ max(abs(Ubf), rel_floor);
-    [maxabs, iabs] = max(absd(:));  [ra, ca] = ind2sub(size(absd), iabs);
-    [maxrel, irel] = max(reld(:));  [rr, cr] = ind2sub(size(reld), irel);
-    scale = abs(bf.Jcc0);  tol_b = 1e-2;
-    G0b = struct('run', true, 'n_compared', numel(absd), 'n_gamma_excluded', n_gamma, ...
-        'max_abs_diff', maxabs, 'q_at_max_abs', qk(ra,:), 'branch_at_max_abs', ca, ...
-        'max_rel_diff', maxrel, 'rel_floor', rel_floor, 'q_at_max_rel', qk(rr,:), ...
-        'branch_at_max_rel', cr, 'scale', scale, 'tol', tol_b, 'pass', (maxabs/scale) < tol_b);
-    fprintf(['G0b: %d (q,branch) pairs compared, %d Gamma-equivalent rows excluded; ' ...
-        'max abs diff=%.6g meV at q=[%.4g %.4g %.4g] branch %d; max rel diff=%.4g ' ...
-        '(floor %.1g) at q=[%.4g %.4g %.4g] branch %d -> %s\n'], G0b.n_compared, n_gamma, ...
-        maxabs, qk(ra,:), ca, maxrel, rel_floor, qk(rr,:), cr, pf(G0b.pass));
+    Uew = ew.detail_summary.Jnu_unflat(~isG, :);   qk = qvec(~isG, :);
     if n_gamma > 0
         fprintf('   %d Gamma-equivalent rows excluded per the documented exclusion.\n', n_gamma);
     else
@@ -87,6 +91,59 @@ else
     end
     fprintf('   documented Gamma formulas -- bruteforce: %s\n', contract.qgrid.gamma_formula_bruteforce);
     fprintf('                                 ewald:      %s\n', contract.qgrid.gamma_formula_ewald);
+
+    % --- G0b: dpRng convergence ladder (bruteforce, fresh calls) vs the ONE ewald reference ---
+    rel_floor = 1e-6;                              % meV; avoids blow-up at branch zero-crossings
+    nd = numel(dpRng_ladder);
+    ladder(nd) = struct('dpRng',[],'time_s',[],'max_abs',[],'q_max_abs',[],'branch_max_abs',[], ...
+        'max_rel',[],'q_max_rel',[],'branch_max_rel',[],'Jbf_at_max_rel',[],'Jew_at_max_rel',[], ...
+        'rms',[]);
+    for k = 1:nd
+        dp = dpRng_ladder(k);
+        bzOpts = struct('grid', contract.qgrid.grid_used, 'dpRng', dp, 'cache', false, 'dipole', 'bruteforce');
+        t0 = tic;
+        [~, ~, ~, detail] = invz_bz_couplings(ion, bzOpts);
+        tk = toc(t0);
+        assert(isequal(detail.qvec, qvec), 'invz:wp0GateGridMismatch', ...
+            'dpRng=%d: bruteforce/ewald not evaluated on the same q-grid.', dp);
+        Ubf = detail.Jnu_unflat(~isG, :);
+        absd = abs(Uew - Ubf);  reld = absd ./ max(abs(Ubf), rel_floor);
+        [ma, ia] = max(absd(:));  [ra, ca] = ind2sub(size(absd), ia);
+        [mr, ir] = max(reld(:));  [rr, cr] = ind2sub(size(reld), ir);
+        ladder(k) = struct('dpRng', dp, 'time_s', tk, 'max_abs', ma, 'q_max_abs', qk(ra,:), ...
+            'branch_max_abs', ca, 'max_rel', mr, 'q_max_rel', qk(rr,:), 'branch_max_rel', cr, ...
+            'Jbf_at_max_rel', Ubf(rr,cr), 'Jew_at_max_rel', Uew(rr,cr), ...
+            'rms', sqrt(mean(absd(:).^2)));
+        fprintf(['G0b ladder dpRng=%3d (t=%.0fs): max_abs=%.4e meV @ q=[%.3f %.3f %.3f] br%d; ' ...
+            'max_rel=%.4f @ q=[%.3f %.3f %.3f] br%d (|Jbf|=%.3e |Jew|=%.3e meV); rms=%.4e meV\n'], ...
+            dp, tk, ma, qk(ra,:), ca, mr, qk(rr,:), cr, Ubf(rr,cr), Uew(rr,cr), sqrt(mean(absd(:).^2)));
+    end
+    rmsv = [ladder.rms];
+    scale = abs(bf.Jcc0);  tol_b = 1e-2;
+    prod_idx = find([ladder.dpRng] == 30, 1);
+    best_idx = numel(ladder);
+    has_prod = ~isempty(prod_idx);
+    prod_pass = has_prod && (ladder(prod_idx).max_abs/scale) < tol_b;
+    best_pass = (ladder(best_idx).max_abs/scale) < tol_b;
+    G0b = struct('run', true, 'n_compared', numel(qk)*size(Uew,2), 'n_gamma_excluded', n_gamma, ...
+        'ladder', ladder, 'rms_monotone_nonincreasing', all(diff(rmsv) <= 0), ...
+        'scale', scale, 'tol', tol_b, 'production_dpRng', 30, 'production_pass', prod_pass, ...
+        'best_tested_dpRng', ladder(best_idx).dpRng, 'best_tested_pass', best_pass, ...
+        'pass', best_pass);
+    if has_prod
+        fprintf(['G0b summary: %d (q,branch) pairs/rung, %d Gamma rows excluded; RMS monotone ' ...
+            'non-increasing across the ladder = %d; production dpRng=30: max_abs/scale=%.4f%% ' ...
+            '(tol %.0f%%) -> %s; best-tested dpRng=%d: max_abs/scale=%.4f%% -> %s (G0b.pass)\n'], ...
+            G0b.n_compared, n_gamma, G0b.rms_monotone_nonincreasing, ...
+            100*ladder(prod_idx).max_abs/scale, 100*tol_b, pf(prod_pass), ladder(best_idx).dpRng, ...
+            100*ladder(best_idx).max_abs/scale, pf(best_pass));
+    else
+        fprintf(['G0b summary: %d (q,branch) pairs/rung, %d Gamma rows excluded; RMS monotone ' ...
+            'non-increasing across the ladder = %d; dpRng=30 not in this ladder (no ' ...
+            'production_pass); best-tested dpRng=%d: max_abs/scale=%.4f%% -> %s (G0b.pass)\n'], ...
+            G0b.n_compared, n_gamma, G0b.rms_monotone_nonincreasing, ladder(best_idx).dpRng, ...
+            100*ladder(best_idx).max_abs/scale, pf(best_pass));
+    end
 
     % --- G0c ---
     Cc = contract.units.constants;
