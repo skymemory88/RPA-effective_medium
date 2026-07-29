@@ -669,3 +669,40 @@ D(q). The open question is now physical -- whether the finite-q instability is (
 competing ordering wavevector at low field, (b) an artefact of the 1/z truncation's
 q-dependence, or (c) the documented 1.5 T fold region -- and it must be settled before any
 low-field chi is trusted, however cleanly a solver might be made to converge there.
+
+### E9b (2026-07-29) -- CORRECTION TO E1: the 3.825 T failures carry the same soft-mode signature
+
+E1 concluded that the 3.825 T failure is "the outer Sigma<->K map (Sec 7.3), NOT the
+resummed-denominator boundary (Sec 7.2)". **That conclusion is wrong** and is withdrawn.
+
+Re-reading the Dq columns already present in the E1 census tables:
+
+| dataset | finite Dq_absmin | failed | accepted WITH finite Dq_absmin |
+|---|---|---|---|
+| 1.0 T, mix 0.25 (E9) | 11 | 11, same nodes | 0 of 23 |
+| 3.825 T, mix 0.40 | 1 | 1 (node 23) | 0 of 33 |
+| 3.825 T, mix 0.70 (legacy) | 22 | 22, same nodes | 0 of 12 |
+
+`finite Dq_absmin <=> node fails` is exceptionless in both directions over ~100 node
+evaluations, three configurations and two fields. The single 3.825 T failure has
+Dq_min = -0.6027, Dq_absmin = 1.889e-3; the 22 legacy failures all have
+Dq_absmin in [2.8e-4, 8.6e-3]. This is the SAME signature as the 1.0 T failures, so
+Sec 7.2 -- not Sec 7.3 -- is the correct framing at BOTH fields.
+
+**Refinement.** 27 of 34 nodes have Dq_min < 0 at 3.825 T, INCLUDING accepted ones.
+D(q) going negative somewhere is therefore NOT sufficient for failure; it is D(q)
+passing CLOSE TO ZERO (a finite Dq_absmin) that predicts it.
+
+**Why damping appeared to work.** mix_outer does not remove the soft mode. It changes
+whether the iterate wanders into the region where D(q) approaches zero. At 3.825 T
+mix 0.30 keeps every node out of it; at 1.0 T no rung keeps 10-11 nodes out. One
+mechanism, escapable at one field and not at the other -- which also explains E1's
+flat-vs-swinging contrast without needing two different causes.
+
+**Consequences.** (i) The Sec 7.2 qualification added to invzp_convg_diagnosis.md earlier
+today ("not observed at 3.825 T under any tested configuration") is FALSE and must be
+reverted -- it was written from E1's incorrect conclusion. (ii) E1's facts 1-4 stand as
+measurements; only its Sec 7.3-vs-Sec 7.2 attribution is withdrawn. (iii) The lesson in E9
+generalises: the Dq_absmin column was in the census table from the first run and settles
+the attribution immediately; both E1 and E9 spent effort on iteration dynamics before
+reading it.
