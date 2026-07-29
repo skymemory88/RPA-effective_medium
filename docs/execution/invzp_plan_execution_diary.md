@@ -343,6 +343,104 @@ counted an honestly-reported 10⁻⁶ accuracy as a failure.
 
 **Checkpoint.** `ckpt-03-wp3-harness`.
 
+### E6 — WP1: the 136-state local source oracle is wired, and its own gate **fails at nonzero frequency**
+
+**Attempted.** Close the WP1 gap the inventory identified: `invzf_multilevel_cumulant` is
+an exact rank-2/3/4 cumulant engine for any (E, O, β), and `invz_single_ion` already
+exports the 136-state eigenvalues and Jz in that eigenbasis, but nothing connected them —
+so C3/C4 for the electronuclear problem existed only as finite-difference h-derivatives
+of C2. Delivered `invz_functional/invzf_electronuclear_cumulant.m` (the wiring, with the
+source imposed through `hz_fixed` and `transverse_mf = 'none'` so the generator is local
+and not mean-field-dressed) and `docs/execution/invzp_exec_wp1_gate.m` (the identities
+WP1 names: KMS, permutation, Hermiticity, static derivative, high-frequency, plus a
+backend cross-check and a rank ladder).
+
+**Outcome — four of seven pass; two fail, and a third defect was found on the way.**
+
+| gate | result | number |
+|---|---|---|
+| P0 backend cross-check at T = 0.6 K | PASS | dense vs exponential-action agree to 3.9 × 10⁻¹⁵ |
+| P1 Hermiticity of Jz | PASS | 1.2 × 10⁻¹⁶ |
+| P2 static derivative C₂(0) = dm/dh_z | PASS | 2.16 × 10⁻⁹ relative |
+| P3 second derivative C₃(0,0,0) = d²m/dh_z² | PASS | 1.98 × 10⁻⁸ relative |
+| P4 permutation symmetry, C₃ (6 orderings) and C₄ (24) | PASS | 1.9 × 10⁻¹⁵ / 3.3 × 10⁻¹⁵ |
+| **P5 KMS/reality** | **FAIL** | C₂ perfect (5.7 × 10⁻¹⁶, Im = 0); **C₃(2,−5,3) vs conj C₃(−2,5,−3) differ by 2.43 × 10⁻³** |
+| **P6 high-frequency tail** | **FAIL** | ωₙ²C₂(n) at n = 40, 80, 160, 320 is 30.67, 52.13, 107.15, 191.44 — **growing**, ratios 1.70, 2.06, 1.79, where it must approach a constant |
+
+**Defect found while building the gate (independent of P5/P6).**
+`invzf_multilevel_cumulant`'s default `dense_beta_span_limit = 2000` selects the dense
+block-exponential backend up to β·span = 2000, but that backend returns
+`status = 'nonfinite'` — a **NaN cumulant** — for **rank 2 at nonzero Matsubara labels**
+once β·span exceeds roughly 10³. Reproduction: LiHoF4 ion, B = [4 0 0] T, h_z = 0.02 meV,
+labels [3 −3]; `ok` at T ≥ 0.6 K (β·span 813) and `nonfinite` at T = 0.3 K (β·span 1627).
+The 17-state electronic-only problem fails identically at the same span, so it is a span
+effect, not a dimension effect. Rank 2 at zero frequency and rank 3 at nonzero frequency
+are unaffected. Selecting the exponential-action backend gives a finite,
+limit-independent value (37.25855779 at both `dense_beta_span_limit` = 1000 and 100), and
+P0 confirms the two backends agree to 4 × 10⁻¹⁵ where both run.
+`invzf_electronuclear_cumulant` now **errors** rather than returning the NaN, because a
+silent NaN would propagate straight into a functional coefficient.
+
+**Learned.** The three failures share one location: **nonzero Matsubara frequency.**
+Everything static is excellent — the static-derivative identities close to 10⁻⁸–10⁻⁹ on
+all 136 states, which is a genuinely new capability. Everything at nonzero frequency is
+suspect: NaN under the default backend, a 2.4 × 10⁻³ conjugation error at rank 3, and a
+rank-2 tail that decays like ~ωₙ⁻¹·¹ instead of ωₙ⁻². For a Hermitian operator the
+leading tail must be ⟨[[X,H],X]⟩/ωₙ², so ωₙ²C₂ must plateau; it does not.
+
+**Consequence for the critical path, stated plainly.** WP2 needs exactly these
+frequency-resolved cumulants to build the diagram manifest's coefficients, and its
+Matsubara sums converge only as fast as the tail. **The local source oracle is therefore
+not yet fit for WP2**, and this is a blocker, not a nuisance. Resolving it (is the tail
+anomaly the engine's large-frequency accuracy or a genuine property? is the rank-3
+conjugation error the same root cause?) is the next packet on the critical path, ahead of
+any manifest work. Note that P2/P3 passing means the fault is *not* in the wiring, the
+source convention, or the spectrum.
+
+**Two errors of mine that the gate caught, recorded because they are the reason to run
+gates at all.** (i) The P3 normalisation: I divided C₃(0,0,0) by β and it failed by a
+factor of exactly β = 38.68 — with the engine's convention the fully static rank-3
+cumulant *is* d²m/dh_z² directly. (ii) The first `invzf_electronuclear_cumulant` read
+`cum.value`, a field the engine does not have; it returns `.connected`.
+
+**Checkpoint.** `ckpt-04-wp1-oracle`.
+
+### E7 — WP0: contract frozen; the two independent coupling constructors disagree at finite q
+
+**Attempted.** `invzp_convg_fix.md` WP0 and its gate, "two independent constructors
+reproduce all frozen microscopic anchors and the same serialized coupling set". Delivered
+`invz_functional/invzf_wp0_contract.m` (versioned freeze of the ion anchors, unit and
+Boltzmann constants read from `invz_const`, the Matsubara convention read from
+`invz_matsubara`, the q-grid/Fourier/self-site conventions, and exact-byte digests of the
+coupling set under each dipolar backend) and `docs/execution/invzp_exec_wp0_gate.m`.
+
+**Outcome.**
+- **G0a reproducibility PASS** — repeated construction is bit-identical for each backend
+  separately (digests `499922e6c9f8…` brute-force, `87489dd5d8a2…` Ewald).
+- **G0b independent constructors at finite q — FAIL.** Over all 16384 (q, branch) pairs:
+  max absolute difference 1.136 × 10⁻⁴ meV, max relative difference 12.68%.
+- **G0c Γ-point difference PASS** — the backends differ at Γ by the documented Lorentz
+  term to within 0.4% of it (lorz = 1.220 × 10⁻³ meV; Jcc0 differs by 2.77 × 10⁻⁶ meV).
+- **G0d limit order RECORDED** (not tested): stationary equations at nonzero
+  symmetry-breaking source → thermodynamic limit at fixed source and declared dipolar
+  shape convention → source to zero; q → 0⁺ and ω → 0 sit inside the finite-volume
+  sequence and never substitute for it.
+
+**In progress.** G0b's failure is not yet interpretable: the brute-force backend is a
+real-space lattice sum truncated at `dpRng = 30` while Ewald is convergent, so the
+disagreement may be brute-force truncation error rather than a convention mismatch. A
+`dpRng` ladder (30/45/60/90) against the single Ewald reference is running to decide
+between monotone convergence (→ the constructors agree in the limit, and the production
+default carries a quantified truncation error) and a plateau (→ a genuine convention
+mismatch). **Until that lands, G0b stands as FAIL and WP0's gate is not passed.**
+
+**Learned already.** Whatever the ladder shows, the production coupling set is *not* an
+exactly-defined object at the 10⁻⁴ meV level today — the two constructors the repo
+provides do not agree on it, and nothing previously measured that. That is precisely the
+sort of unfrozen anchor WP0 exists to expose before a functional is built on top of it.
+
+**Checkpoint.** `ckpt-04-wp1-oracle` (same commit).
+
 ---
 
 ## Rejected branches (do not retry without new contradicting evidence)
