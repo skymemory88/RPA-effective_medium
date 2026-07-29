@@ -35,10 +35,10 @@ T = 0.1;                             % K
 % Jensen-ordered column carries its residual-accepted predictor Sigma/K0 state downward.
 % Physical-field continuation is necessarily serial; set fieldContinuation='none' and
 % useParallel=true to restore independent parfor columns.
-fieldContinuation = 'qcp_down';      % 'qcp_down' (experimental) | 'none' (independent fields)
-useParallel = false;                 % qcp_down forces serial execution
-outerMix = 0.50;                     % smaller than 0.7 => stronger damping; 0.30 over-damped 4.400 T
-outerMax = 1000;                     % exploratory budget; acceptance tolerances are unchanged
+fieldContinuation = 'none';      % 'qcp_down' (experimental) | 'none' (independent fields)
+useParallel = true;                 % qcp_down forces serial execution
+outerMix = 0.4;                      % smaller than 0.7: stronger damping;
+outerMax = 5000;                     % exploratory budget; acceptance tolerances are unchanged
 eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency INPUTS (w, wq) AND
                                      % the plotted axes. Computation always runs in meV; the driver
                                      % converts in/out (with 'meV' it is a no-op). eta is ALWAYS in
@@ -47,7 +47,7 @@ eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency 
 % Exploratory broad view containing the projected 1/z transition.  The retained
 % finite-16^3 regression is the narrower linspace(4.60,4.90,61) subset; this
 % 3--6 T view is expected to contain masked ordered columns and is not all-column certified.
-fields = linspace(3, 6, 101);
+fields = linspace(3.5, 5, 61);
 % fields = linspace(0, 9.0, 101);        % OPTIONAL full-range survey (low-field failures are secondary)
 % fields = [3.6 4.2 4.8 5.4 6.0];       % few -> line slices instead of a colormap
 w = (0:0.01:6).';                    % eUnit -- field-sweep frequency grid
@@ -85,7 +85,7 @@ phi_ab = 0.0;                        % deg -- IN-PLANE rotation of the swept fie
                                      % NOT validated (tilt bound was measured under legacy_x).
 transverse_mf = 'legacy_x';         % 'legacy_x' | 'none' | 'vector_ab'
 
-showPeaks = true;                     % true -> ALSO line-plot chi''_cc peak energy vs field
+showPeaks = false;                     % true -> ALSO line-plot chi''_cc peak energy vs field
                                      % (S.Epeak/S.Epeak_rpa, cf. the q-path E_peak(q) stream)
 
 % ---- q-path view (R 2007 Fig 3 trends): set qpath non-empty to switch views -------------

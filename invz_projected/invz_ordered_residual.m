@@ -542,29 +542,15 @@ end
 % =============================================================================================
 function out = local_blockB_defactored(tl,lam,Sigma,K0,beta,G0inel0,G0el0,Jnu_flat)
 %LOCAL_BLOCKB_DEFACTORED Independent reciprocal-coordinate static equation.
+% The reciprocal-coordinate arithmetic itself lives in INVZ_RECIPROCAL_STATIC_CLOSURE
+% (one definition shared with invz_emt_static_ordered's opt-in defactored iteration, so
+% the audit and the iteration can never drift apart). Extracted verbatim 2026-07-29.
 [Gstat,go] = invz_gstat_ordered(tl,lam(1:2),K0,Sigma(1),beta, ...
     G0inel0,G0el0,struct('stable_form',true));
-d0 = go.gstat_local_denom;
-Hz = G0inel0+go.xi*G0el0*d0;
-z = d0/Hz;
-Jf = Jnu_flat(:);
-Jscale = max(abs(Jf));
-if isinf(z)
-    Jloc = mean(Jf);
-    Gbar = 0;
-elseif isfinite(z)
-    scale = max(abs(z),Jscale);
-    weights = scale./(z+Jf-K0);
-    meanWeights = mean(weights);
-    Gbar = meanWeights/scale;
-    Jloc = mean(Jf.*weights)/meanWeights;
-else
-    Gbar = NaN;
-    Jloc = NaN;
-end
-out = struct('Gstat',Gstat,'Gbar',Gbar,'Jloc',Jloc,'r',go.r, ...
-    'resid',abs(K0-Jloc)/Jscale, ...
-    'resid_raw',abs(Gbar-Gstat));
+rc = invz_reciprocal_static_closure(go,Jnu_flat,K0);
+out = struct('Gstat',Gstat,'Gbar',rc.Gbar,'Jloc',rc.Jloc,'r',go.r, ...
+    'resid',abs(K0-rc.Jloc)/rc.Jscale, ...
+    'resid_raw',abs(rc.Gbar-Gstat));
 end
 
 % =============================================================================================
