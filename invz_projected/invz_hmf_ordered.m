@@ -359,6 +359,23 @@ if strcmp(prof.status, 'unresolved')
         slope_pred, hmin_abs);
 end
 if ~strcmp(prof.status, 'ok'), return; end
+% ROOT-SELECTION CONVENTION (documented 2026-07-29, execution packet S5; behaviour
+% UNCHANGED). Two separate choices are made on this line, and only the first is derived:
+%   (1) sign pattern (- -> >= 0): the INCREASING crossing of F, i.e. a Landau minimum
+%       rather than a maximum. This is the derived requirement; see the crit_star
+%       comment near the end of this function.
+%   (2) 'last': among ALL increasing crossings present on the h grid, the LARGEST-h one
+%       is taken. This is a CONVENTION, not a derived equilibrium rule. The projected
+%       ordered equations are known to admit several admissible roots at one operating
+%       point -- seven distinct h = 0 roots with folds at 1.5 T, and two states that both
+%       pass the full A-D contract at 4.05 T (invzp_convg_diagnosis.md SS6.1, SS6.2) --
+%       so when more than one increasing crossing exists this line silently selects one
+%       of several stationary states, with no thermodynamic ranking behind the choice.
+% It must NOT be replaced by argmin of any integrated-potential score (Phi = int F dm or
+% similar): that swaps one uncertified convention for another, and the integrated route
+% is outside its validated domain as an absolute selector (blind_convg_plan.md SS2.1-2.3,
+% SS5). The correct replacement is the stationary functional's own selection rule
+% (invzp_convg_fix.md WP7), and nothing before it.
 s = sign(F);  idx = find(s(1:end-1) < 0 & s(2:end) >= 0, 1, 'last');
 if isempty(idx), return; end                          % no nonzero root: PM side
 
