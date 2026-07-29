@@ -25,7 +25,12 @@ function [Gstat, out] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G
 %   false (default -- EVERY existing/resummed call site, preserved bit-identically, G9):
 %     out.Gtil0 = Gstat/(1-K0*Gstat);  out.r = G0bare/Gtil0 -- the historical arithmetic.
 %   true (strict mode only; intended caller: invz_emt_static_ordered under strict
-%     static_medium -- not wired there, or anywhere else, as of this task):
+%     static_medium. NOTE (2026-07-29): the "not wired anywhere" statement this line
+%     used to carry is STALE. stable_form = true is now passed at
+%     invz_emt_static_ordered.m:79 and :140 (strict mode, or the opt-in defactored
+%     closure coordinate) and invz_ordered_residual.m:549. It remains OFF on the
+%     DEFAULT resummed+factored path (invz_emt_static_ordered.m:85, :142), which is
+%     the path the pole warning below is about):
 %     the EXACT reassociation 1/Gtil0 = 1/Gstat - K0, i.e.
 %     out.Gtil0 = 1/(1/Gstat - K0);  out.r = G0bare*(1/Gstat - K0).
 %     Algebraically identical to the false branch everywhere away from a pole: measured at
