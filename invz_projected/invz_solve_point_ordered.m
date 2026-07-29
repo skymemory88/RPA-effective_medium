@@ -57,6 +57,9 @@ function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 % struct shape, pt.hmf_status carrying the invz_hmf_ordered status) when no root exists.
 % jensen mode is TRANSVERSE/SPONTANEOUS only: opts.forced_moment true, or an explicit
 % longitudinal field |Bx(3)| > opts.bz_tol (default 1e-9), raises 'invz:orderedMode'.
+% opts.cold_acceleration = 'signed_aitken1' enables the safeguarded, default-off resummed
+% cold-start experiment in the shared node solver; absent/'none' preserves the ordinary
+% iteration exactly. It changes no equation or final A--D/all-node acceptance gate.
 % CONTRACT (P2-G): pt.crit KEEPS its historical ordinary-Dyson definition
 % (1 + Sigma0 - J0eff*chi0cc0) as a legacy diagnostic in EITHER mode -- it is NOT the ordered
 % pole mass below the boundary; pt.D_uni is. Callers must not conflate the two.
@@ -100,6 +103,7 @@ tmf   = getf(opts, 'transverse_mf', 'legacy_x');
 mixo  = getf(opts, 'mix_outer', 0.7);
 tolo  = getf(opts, 'tol_outer', 1e-8);
 maxo  = getf(opts, 'max_outer', 200);
+cold_accel = getf(opts, 'cold_acceleration', 'none');
 mtol  = getf(opts, 'm_tol', 1e-2);
 eopts = getf(opts, 'emt', struct());
 eso_pub = getf(opts, 'emt_static', struct());
@@ -300,7 +304,7 @@ if strcmp(omode, 'jensen')
     % selects a strict scheme ('invz:nodeSolveNode' otherwise); it is threaded into both EMT
     % leaves there so neither silently re-derives it. Harmless-absent under 'resummed'.
     sopts = struct('mix_outer', mixo, 'max_outer', maxo, 'tol_outer', tolo, ...
-        'cold_retry', true, 'trace', false);
+        'cold_retry', true, 'trace', false, 'cold_acceleration', cold_accel);
     [state, info] = invz_ordered_node_solve(node, [], sopts);   % COLD: this leg always
                                                                  % starts from Sigma=0/K0s=0
     Sigma = state.Sigma;  K = state.K;  lam = state.lam;

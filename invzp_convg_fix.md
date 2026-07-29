@@ -62,10 +62,12 @@ There are now two separate deliverables:
   visual comparison by the user shows visibly more converged field slivers
   in the warm map, and every newly visible mode follows the surrounding
   field evolution smoothly, including the critical mode. This passes the
-  first empirical-coherence gate for the method. A retained 4.400 T trace
-  now shows a signed late-iterate factor near `-0.916`, so a safeguarded
-  cold-start accelerator is the next simpler experiment before paying for
-  all warm-seed direction and spacing gates.
+  first empirical-coherence gate for the method. The safeguarded cold-start
+  experiment has now recovered 4.400 T inside the original 200-step cap and
+  reproduced the complete accepted 1000-step cold state exactly. It did not
+  extrapolate the interval-switching 4.300 T failure and did not repair the
+  broad 3.825 T multi-node failure. Warm-seed direction and spacing gates
+  are therefore needed only for columns not recovered to the same cold root.
 - **Complete low-field ordered coverage:** still open and secondary. No
   continuation branch, smooth-`r` candidate, strict closure, or functional
   prototype is authorized as the production default. In particular, warm
@@ -79,6 +81,7 @@ There are now two separate deliverables:
 | More Picard iterations and heavier damping | A 1 T PM fixed point can be reached after 879 iterations with `mix_outer=0.02`, but it is unstable (`crit=-3.669`); the ordered profile still failed after 10,354 aggregate outer iterations in the stronger test. Near the QCP, 4.400 T has a signed late-iterate factor near `-0.916` and is accepted when the cap rises from 200 to 1000, while changing warm-seeded `mix_outer` from 0.7 to 0.3 loses that solution. | There are two regimes: pole-sensitive/noncontractive low-field behaviour and a locally contractive but budget-limited QCP edge. A larger cap can remove some false negatives, but unconditional cap/mixing changes remain costly, non-monotone, and unable to select roots. |
 | Full-profile warm handoff between fields | A complete 4.05 T auxiliary-`h` profile did not complete 4.04 or 4.00 T; one matched-seed sequence reduced the accepted-node count. | Transferring every off-shell node can put later nodes in different basins. Do not use this stronger handoff as the production rule. |
 | Minimal QCP-down predictor warm continuation | The new opt-in `field_continuation='qcp_down'` transfers only the last fully accepted column's finite zero-`h` predictor state and retains the existing cold retry. With `mix_outer=0.50`, `max_outer=1000`, 4.425, 4.400, and 4.375 T all accepted consecutively; at the former default 0.70/200, 4.400 T was recovered but 4.375 T was not. The user's direct cold/warm susceptibility comparison then showed visibly more converged field slivers, all with empirically sensible, continuously evolving modes including the critical mode. | This establishes a viable local numerical route, proves some masks are initialization/iteration false negatives, and passes a first visual physics sanity check. It remains direction-, spacing-, grid-, and basin-dependent until the quantitative gates below are run; it cannot formally rank multiple residual-valid roots. |
+| Safeguarded cold signed-Aitken acceleration | Default-off, resummed-only cold acceleration recovered 4.400 T at 0.70/200 using three independently residual-decreasing proposals. The complete final state is bit-identical to ordinary 0.70/1000 cold Picard and agrees with the 0.50/1000 warm state to `2.08e-10` or better in the full vectors. At 4.300 T the predictor converges in 13 steps but a finite-`h` node switches intervals and admits no proposal; at the user-identified 3.825 T sliver, 17/34 nodes fail and one accepted proposal still does not pass the final node audit. | Confirms a bounded local remedy for the signed QCP-edge contraction without physical-field seed direction. It is not a global ordered solver or branch selector; same-state warm grading remains necessary elsewhere. |
 | Defactored fixed-node Newton | Repaired all three failed 3.6 T nodes and produced a 33/33 stable profile; at 1.5 T it repaired only the predictor and two nodes. | Confirms a local numerical Picard defect, but a fixed-`h` root is not automatically the continuous thermodynamic branch. Retain as a corrector/oracle only. |
 | Natural-parameter and pseudo-arclength continuation | Crossed regular fixed-`h` folds and showed that the clean 1.5 T high- and low-`h` segments turn away from the intervening interval. | Establishes non-single-valued root geometry and invalidates an unconditional Newton fallback. It does not select a path. |
 | Root census and coordinate stabilization (`q`, equilibrated `h`, `w=z-K0`) | Found seven zero-field roots; row equilibration and `w` greatly improved conditioning; root 6 has two observed legs tied to the same zero-field root. | Other legs and root 7 remain incomplete; finite samples are not continuous signed-edge certificates. Coordinate changes improve solving, not physics selection. |
@@ -100,19 +103,15 @@ There are now two separate deliverables:
    saved cold/warm figures as qualitative evidence. Label newly recovered
    columns as experimental warm-continuation output; visual smoothness is
    supporting evidence, not a substitute for state comparison.
-2. **Try safeguarded acceleration from the cold start before grading warm
-   continuation globally.** At 4.400 T, detect the signed dominant factor
-   from full-state increments after the static interval and inner closure
-   stabilize. For a scalar-coefficient vector extrapolation, fit signed
-   `lambda` from successive `Delta Sigma` vectors and use
-   `Sigma_acc=Sigma_n+lambda/(1-lambda)*Delta Sigma_n`; equivalently test
-   restarted Anderson-1. Keep it behind a default-off flag, require a fresh
-   full residual to decrease, resume ordinary iteration, and retain the
-   unchanged A--D/all-node acceptance audit. Compare the result with the
-   accepted 1000-step cold state and the warm state. Trace 4.300 T rather
-   than assuming it has the same mechanism.
-   The unsigned `0.916` ratio must not be used in a positive-ratio formula,
-   and acceleration is not presumed basin-preserving.
+2. **Retain the completed safeguarded cold-start discriminator.** At
+   4.400 T, three restarted signed-Aitken proposals at outer iterations
+   143/147/152 reduced fresh unmixed residuals while remaining on interval
+   16384; ordinary iteration closed at 153 and the complete state is
+   bit-identical to long cold Picard. At 4.300 T the predictor is already
+   fast and one finite-`h` node alternates between intervals 16384/16376,
+   so no proposal qualifies. At 3.825 T the failure spans 17/34 nodes.
+   Keep the method default off and resummed-only; the unchanged A--D/all-node
+   audit and complete-state overlap remain binding.
 3. **Grade warm continuation only where cold acceleration does not already
    recover the same state.** Freeze the demonstrated `mix_outer=0.50`,
    `max_outer=1000` reference, refine the physical-field step, and record
@@ -192,6 +191,39 @@ The comparison is retained in `Data/cold_seeding_chi_1z.fig` and
 not yet a counted field-by-field or bidirectional state audit. It promotes
 the method to the leading near-QCP numerical candidate, while leaving the
 direction/full-state/refinement gates binding.
+
+**Safeguarded cold-start acceleration result, 2026-07-29.** A default-off
+`cold_acceleration='signed_aitken1'` experiment now operates only on fresh
+cold attempts under the resummed medium. It fits the signed scalar factor
+from four successive full `Sigma` increments and requires a common static
+interval, closed inner solves, a negative stable factor, a small one-mode
+fit error, and a strict decrease of freshly evaluated unmixed full-vector
+residuals. Every proposal restarts the history; ordinary iteration resumes
+and final acceptance remains the unchanged A--D/all-node audit.
+
+At 4.400 T and 0.70/200, proposals at outer iterations 143, 147, and 152
+had signed factors `-0.908610599`, `-0.911828939`, and `-0.921293084`.
+They stayed on interval 16384 and reduced the fresh residual successively
+from `1.17e-3` to `9.20e-5`, `6.47e-5` to `4.20e-7`, and `2.71e-7` to
+`8.45e-10`. Ordinary iteration closed at 153. The complete accepted state
+is bit-identical to the pre-change ordinary 0.70/1000 cold reference and
+agrees with the predictor-warm 0.50/1000 state within `2.08e-10` in
+`Sigma`, `2.70e-12 meV` in `K`, and `1.88e-11` in `lambda`.
+
+The negative controls separate regimes. At 4.300 T the cold predictor
+accepts in 13 iterations; the only failed auxiliary-`h` node instead
+alternates between intervals 16384 and 16376 and has no eligible scalar
+mode or proposal. At the user-identified 3.825 T cold/warm-negative sliver,
+17/34 nodes fail at the 1000-step cap across several interior intervals.
+One later cold retry accepts a residual-decreasing proposal but still fails
+the unchanged node audit. The retained compact evidence and reproduction
+driver are under
+`docs/diagnostics/invzp_cold_accel_2026-07-29/`. This validates a local
+4.400 T remedy, not a global low-field accelerator or branch selector.
+The current cached and freshly generated coupling vectors are bit-identical
+with exact digest `499922e6...`, not the older nominal-fixture digest
+`ddb9532d...`; all current pre-change solver anchors reproduce, but that
+byte-level provenance conflict remains open.
 
 **Thermodynamic-functional literature assessment, 2026-07-28.** McKenzie
 and Stamp, *Phys. Rev. B* **97**, 214430 (2018), derive an exact
@@ -1101,7 +1133,7 @@ where the present one does not.
 | Visual QCP susceptibility and mode | Cold QCP regression and cold/warm comparison inspected; recovered warm columns are empirically coherent | Preserve the figures and finite-`16^3` qualifier. Quantitative comparison still needs the continuation gates and coupling-grid convergence. |
 | QCP coupling/grid convergence | Four-grid sliver/`Bc` shift and the exact `D(Jmax;Bc)` control established; phase-aligned peak curve is sub-percent stable | Extend the cheap `S_N(J0)` lattice sum first. Only then decide whether another state-solver grid is required; retain the peak gate and report the much larger field-axis uncertainty. |
 | Retained diagnostics and coupled audit | Implemented | Maintenance only. They are evidence tools, not a new production branch. |
-| Cold asymptotic acceleration | Not yet implemented; 4.400 T supplies a clean signed `-0.916` fixture and an accepted 1000-step cold reference | Smallest next solver experiment: safeguarded, default off, full-residual decreasing, same-interval, then compare the complete accepted state with long-Picard and warm roots. |
+| Cold asymptotic acceleration | Implemented default-off and validated at 4.400 T: 0.70/200 reaches the exact long-cold state; warm overlap also passes | Retain as a local resummed experiment. It correctly declines the 4.300 T interval-switching node and does not complete the 3.825 T multi-node path; no default promotion. |
 | QCP-down warm continuation | Opt-in preview implemented; three-column edge sequence demonstrated at 0.50/1000; visual cold/warm comparison passed | Apply direction/field-step/basin gates only where cold acceleration does not already recover the same state; spectral pole/residue and grid gates remain before default promotion. |
 | One additional low-field component | Optional, secondary | Bounded endpoint-first experiment at one scientifically useful field. Stop if the component has no unique increasing Jensen zero. |
 | Complete low-field branch prescription | Not authorized | Substantial only after an admissible endpoint exists: continuous event enclosures, independent-direction/seed agreement, full section construction, and discretization refinement. |
@@ -1112,10 +1144,10 @@ where the present one does not.
 1. Preserve the completed finite-`16^3` cold/warm visual comparison and the
    4.60--4.90 T cold subset as regression anchors. Display the grid qualifier
    and mark warm-recovered columns as experimental.
-2. Run the cold 4.400/4.300 T acceleration discriminator specified above.
-   Use signed full-state increments and the unchanged final audit; compare
-   4.400 T with both the 1000-step cold reference and the warm state. Do not
-   assume the 4.300 T failure has the same contraction factor.
+2. Retain the completed cold 4.400/4.300 T discriminator and the added
+   3.825 T negative control. The 4.400 T complete-state overlap passes;
+   4.300 T and 3.825 T establish distinct mechanisms that the safeguards
+   correctly do not promote as successes.
 3. Grade the opt-in QCP-down predictor continuation at the demonstrated
    0.50/1000 reference only for columns not recovered to the same state by
    cold acceleration: field-step refinement, reverse/cold overlap, full
