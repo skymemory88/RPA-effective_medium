@@ -399,6 +399,23 @@ imaginary-axis state.
 **Gate:** two independent constructors reproduce all frozen microscopic anchors
 and the same serialized coupling set.
 
+**Measured 2026-07-29:** G0a reproducibility PASSED for both backends
+(bit-identical repeated construction, per backend). G0c PASSED: the \(\Gamma\)-point
+difference between backends matches the documented Lorentz term to 0.4% (lorz
+\(=1.220\times10^{-3}\) meV; \(J_{cc}(0)\) differs by \(2.77\times10^{-6}\) meV).
+G0d was RECORDED (a limit-order statement), not tested. G0b — "independent
+constructors agree at finite q" — initially **FAILED**: over all 16384
+\((\mathbf q,\,\text{branch})\) pairs, max absolute difference
+\(1.136\times10^{-4}\) meV, max relative difference 12.68%. A `dpRng` ladder
+(30/45/60/90) against the single Ewald reference resolved this as brute-force
+real-space truncation, not a convention mismatch (RMS
+\(3.32\times10^{-6}\to4.00\times10^{-7}\) meV, max relative
+\(0.1268\to0.0254\), fitted decay \(\sim\text{dpRng}^{-1.80}\)). Consequence: the
+gate as literally written passes only as a **limit statement**. At the
+production default `dpRng = 30`, the coupling set carries a declared
+truncation-error contract entry of \(1.14\times10^{-4}\) meV max /
+\(3.32\times10^{-6}\) meV RMS against the convergent Ewald sum.
+
 ### WP1 — Exact local source oracle
 
 - Generate \(W_{\rm loc}\), \(C_1\)–\(C_4\), and derivative-required higher
@@ -410,6 +427,28 @@ and the same serialized coupling set.
 **Gate:** analytic/source derivatives match high-precision finite differences and
 direct Lehmann sums on random and degenerate fixtures.
 
+**Measured 2026-07-29:** wired as
+`invz_functional/invzf_electronuclear_cumulant.m`. **PASS:** backend
+cross-check (\(3.9\times10^{-15}\)), Hermiticity of \(J_z\)
+(\(1.2\times10^{-16}\)), static derivative \(C_2(0)=dm/dh_z\)
+(\(2.16\times10^{-9}\) relative), second derivative
+\(C_3(0,0,0)=d^2m/dh_z^2\) (\(1.98\times10^{-8}\) relative), permutation
+symmetry of \(C_3\) (6 orderings, \(1.9\times10^{-15}\)) and \(C_4\)
+(24 orderings, \(3.3\times10^{-15}\)). **FAIL:** KMS/reality —
+\(C_3(2,-5,3)\) vs. conjugate \(C_3(-2,5,-3)\) differ by
+\(2.43\times10^{-3}\); high-frequency tail — \(\omega_n^2 C_2(n)\) at
+\(n=40,80,160,320\) is 30.67, 52.13, 107.15, 191.44, **growing** where a
+Hermitian operator's tail requires it to plateau. A third defect was found
+while building the gate, independent of the two failures above:
+`invzf_multilevel_cumulant`'s default `dense_beta_span_limit = 2000` returns
+`status = 'nonfinite'` (a NaN cumulant) for rank-2 at nonzero Matsubara labels
+once \(\beta\cdot\text{span}\) exceeds \(\sim10^3\); the exponential-action
+backend gives a finite, limit-independent value where the dense backend
+fails, and the two agree to \(4\times10^{-15}\) where both run. All three
+failures sit at **nonzero frequency**; every static identity (P0–P4) passes.
+This **blocks WP2**, whose Matsubara sums need exactly these
+frequency-resolved cumulants.
+
 ### WP2 — Strict linked-cluster functional
 
 - Enumerate the vacuum diagrams at the declared first non-Gaussian order.
@@ -420,6 +459,11 @@ direct Lehmann sums on random and degenerate fixtures.
 
 **Gate:** independent symbolic and numerical differentiation agree term by term.
 
+**Measured 2026-07-29:** the automatic diagram generator this work package
+calls for does **not exist** anywhere in the repository (confirmed by a
+capability inventory of `invz_functional/` taken before the WP3 work below).
+No enumeration or provenance machinery has been built.
+
 ### WP3 — Exact finite-cluster matching
 
 - Match every low-order coefficient against exact clusters.
@@ -428,6 +472,20 @@ direct Lehmann sums on random and degenerate fixtures.
 
 **Gate:** exact coefficients agree before fitting; any immutable mismatch rejects
 the functional.
+
+**Measured 2026-07-29:** a harness now exists —
+`invz_functional/invzf_taylor_extract.m` (certified Taylor extraction with a
+measured per-coefficient error bar), `invzf_pair_local_manifest.m`
+(hand-derived, machine-checked pair coefficients from local data only), and
+`invzf_cluster_coeff_harness.m` (the comparator) — gated by
+`docs/execution/invzp_exec_wp3_harness_gate.m`. All four gates pass, including
+a negative control (W4) where a self-consistent mean-field pair candidate is
+correctly rejected at order 2, its shortfall matching the missing single-ring
+term to \(1.26\times10^{-7}\) relative. The manifest derives orders 0–2 at any
+source and order 3 at zero source only; orders 3 (\(h\neq0\)) and 4 are frozen
+as regression targets for whoever derives them next: at
+\((\Delta,M,h,\beta)=(0.30,1.00,0.05,20.0)\), \(a_3=+0.448263449489\) and
+\(a_4=+6.16588863563\).
 
 ### WP4 — Nonlinear partial Legendre transform
 
@@ -548,7 +606,13 @@ The root problem is formally fixed only when all of the following are true:
 6. phase selection uses the stationary functional and relaxed Hessian, not seed
    history;
 7. the 1.5 T folds, 3.825 T failure region, 4.05 T coexistence, and QCP window are
-   all resolved without pole floors or branch heuristics;
+   all resolved without pole floors or branch heuristics (**measured
+   2026-07-29:** the 3.825 T region is now known to be
+   solver-configuration-dependent rather than a fixed domain boundary — see
+   `invzp_convg_diagnosis.md` §5 — and the 4.05 T field carries 6–11
+   A–D-accepted states rather than the 2 originally recorded, per diagnosis
+   §6.2 / diary E8 — so this item is a **harder** requirement than when it was
+   written, not an easier one);
 8. the static response equals the appropriate functional derivative;
 9. real-axis response passes causality and sum-rule gates; and
 10. every numerical and truncation axis has an independent error budget; and
@@ -571,6 +635,23 @@ same-order topology.
 
 Only after those coefficients close should effort move to the nonlinear bilocal
 Legendre transform and the full q-resolved tensor 2PI solver.
+
+**Addendum, 2026-07-29.** WP0–WP3 is now partly executed, as recorded in §9
+above and in `docs/execution/invzp_plan_execution_diary.md`: WP0's contract is
+frozen (with a declared finite-q truncation-error entry), WP3's harness exists
+and gates green including its negative control, and WP1 is wired for the full
+136-state problem but **fails at nonzero Matsubara frequency**. That failure is
+the immediate blocker on this critical path — it must be resolved before WP2's
+manifest can be built, because WP2 needs exactly the frequency-resolved
+cumulants WP1 does not yet supply correctly.
+
+Separately, the user's objective of computing \(\chi\) at every magnetic field
+has promoted a parallel production-side packet, S9 (field-wide damping-ladder
+census; see `invzp_convg_diagnosis.md` §11), that does **not** touch this
+functional program and does not substitute for it. S9 can produce spectra
+labelled `converged-under-damping-ladder, branch-not-certified`; it cannot
+produce a certified equilibrium phase label, which remains this document's
+program to deliver.
 
 ## 13. Theoretical orientation
 

@@ -26,15 +26,35 @@ the certified regression window; masked columns in that wider scan are expected
 provenance, not missing plotting data.
 
 The current production theory is **not globally well posed as a phase-selection
-algorithm**. Its local nonlinear equations can have several accepted roots, folds,
-disconnected branches, and intervals in which the resummed static map meets a
-pole or no admissible fixed point is found. Cold starts, warm field continuation,
-larger iteration limits, stronger damping, and the new safeguarded Aitken proposal
-can change which local basin is reached, but none supplies the missing physical
-rule for selecting among coexisting roots. In particular, the narrow data sliver
-near **3.825 T fails on both cold- and warm-seeded paths**; the retained diagnostics
-show that this is representative of a broad path-level failure, not just a slow
-alternating edge mode.
+algorithm** — a claim the 2026-07-29 execution diary
+([`docs/execution/invzp_plan_execution_diary.md`](docs/execution/invzp_plan_execution_diary.md),
+entries E1–E8) *strengthens*, even though it corrects one of the observations
+originally offered in its support below. Its local nonlinear equations can have
+several accepted roots, folds, disconnected branches, and intervals in which the
+resummed static map meets a pole or no admissible fixed point is found. Cold
+starts, warm field continuation, larger iteration limits, stronger damping, and
+the new safeguarded Aitken proposal can change which local basin is reached, but
+none supplies the missing physical rule for selecting among coexisting roots.
+
+**Correction, 2026-07-29.** The narrow data sliver near 3.825 T does *not* fail on
+every seeded path, as this section originally stated. Diary entry E1 shows the
+17-of-34 failure count (§5) is a property of one iteration configuration,
+`mix_outer = 0.70`/`max_outer = 1000`; at `mix_outer = 0.30` the entire column
+converges (0 of 43 node evaluations fail — bisection and the root phase run to
+completion only there, adding evaluations beyond the 34 sampled under masked
+configurations), every consumed node satisfies the full A–D contract, and the
+column returns an accepted root h\* = 0.0172215. The **hard core of nodes that
+fail under every configuration tried is empty.** This is a correction to the
+sentence as written, not a retreat from the larger claim above: E1 is explicit
+that a mask moving with `mix_outer` is evidence the *mask was numerical*, **not**
+evidence that h\* = 0.0172215 *is the equilibrium root* — nothing here ranks
+roots, proves completeness, or licenses a production default change. The
+well-posedness claim is in fact independently *strengthened* at a different
+field by diary entry E8 (§6.2): the 4.05 T coexistence is not the two-state case
+originally recorded here but a family of 6–11 A–D-accepted clusters at
+essentially every h, so removing one configuration-dependent mask at 3.825 T does
+not touch the underlying phase-selection gap that
+[`invzp_convg_fix.md`](invzp_convg_fix.md) exists to close.
 
 The root issue is therefore not “insufficient iteration.” It is the combination
 of:
@@ -68,16 +88,27 @@ diagnostic artifacts, and direct source-contract review.
 ### 2.2 Preserved user worktree state
 
 This documentation handoff deliberately does not normalize the user's
-uncommitted interactive setup. At the time of handoff,
-[`invz_run_spectra.m`](invz_projected/invz_run_spectra.m) contains:
+uncommitted interactive setup. **Updated 2026-07-29** — the driver's uncommitted
+settings have moved again since the previous handoff snapshot;
+[`invz_run_spectra.m`](invz_projected/invz_run_spectra.m) now contains:
 
 - `fieldContinuation = 'none'`;
 - `useParallel = true`;
-- `outerMix = 0.4`, `outerMax = 5000`;
-- `fields = linspace(3.5,5,61)`; and
-- `showPeaks = false`.
+- `outerMix = 0.3`, `outerMax = 2000`;
+- `fields = linspace(3.6,5,61)`;
+- `showPeaks = false`; and
+- `dipoleBackend = 'ewald'` with `ewaldOpts = struct()`.
 
 These are exploratory runner choices, not newly certified production defaults.
+`outerMix = 0.3` is not an arbitrary choice: diary entry E1 (§5) measured it as
+the configuration that closes the entire 3.825 T column. The current
+`ewaldOpts = struct()` **errors** at runtime:
+[`invz_jq_modes.m`](invz_projected/invz_jq_modes.m) requires `opts.ewald` to be a
+scalar struct with EXACTLY the fields `{alpha, r_cut, g_cut, boundary}` when
+`dipoleBackend = 'ewald'` and synthesizes no defaults, and an empty struct
+supplies none of them. The working values used elsewhere in this handoff and in
+the WP0 frozen contract (`invz_functional/invzf_wp0_contract.m`) are
+`alpha = 0.3`, `r_cut = 16`, `g_cut = 3`, `boundary = 'conducting_k0_omitted'`.
 The untracked cold-/warm-seeding `.fig` files under `Data/` and the reference PDF
 under `References/` are also intentionally preserved and are not part of this
 documentation change.
@@ -223,7 +254,8 @@ the accelerator is deliberately narrow.
 
 ## 5. The 3.825 T failure and its relatives
 
-At 3.825 T, 17 of 34 sampled nodes fail. The failures include:
+At 3.825 T, under the `mix_outer = 0.70`, `max_outer = 1000` configuration, 17 of
+34 sampled nodes fail. The failures include:
 
 - a predictor endpoint with \(A\)-block residual of order unity and interval rank
   zero;
@@ -231,9 +263,50 @@ At 3.825 T, 17 of 34 sampled nodes fail. The failures include:
 - a later node at which one acceleration proposal is accepted but the
   \(A\)-block residual is still \(1.82\times10^{-5}\) after 1000 iterations.
 
-Both cold and warm field seeding leave the visible sliver unconverged. This
-directly rules out the hypothesis that all such masks are caused by one cold
-alternating eigenmode.
+Both cold and warm field seeding leave the visible sliver unconverged **under
+that configuration**. This directly rules out the hypothesis that all such masks
+are caused by one cold alternating eigenmode.
+
+**Measured 2026-07-29 (diary E1) — the failure count is a property of the
+iteration configuration, not of the field.** A configuration ladder at the same
+node/field reproduces the count above exactly and shows it is not representative
+of the column:
+
+| `mix_outer` | `max_outer` | accel | status | failed | h\* |
+|---|---|---|---|---|---|
+| 0.20 | 1000 | none | `node_failed` | 11/34 | — |
+| **0.30** | **1000** | none | **`ok`** | **0/43** | **0.0172215** |
+| 0.40 | 1000 | none | `node_failed` | 1/34 | — |
+| 0.50 | 1000 | none | `node_failed` | 2/34 | — |
+| 0.70 | 200 | none | `node_failed` | 22/34 | — |
+| 0.70 | 1000 | none | `node_failed` | 17/34 | — |
+| 0.40 | 5000 | none | `node_failed` | 1/34 | — |
+| 0.40 | 1000 | `signed_aitken1` | `node_failed` | 1/34 | — |
+
+The `mix_outer = 0.70`, `max_outer = 1000` row reproduces this section's original
+17/34 count exactly, which identifies the configuration that count was taken
+under. At `mix_outer = 0.30` every node converges (43 node evaluations, because
+bisection and the root phase run to completion only there), the hard core of
+nodes failing under every configuration tried is **empty**, and "Both cold and
+warm field seeding leave the visible sliver unconverged" above is true at
+`mix_outer = 0.70` and **false at 0.30** — seeding was never the free variable
+that mattered; damping was.
+
+Two further facts from the same measurement, load-bearing for what kind of
+failure this is:
+
+- **Fact 3.** Every failure, in every configuration tested, is `max_iter`; none
+  is a domain rejection. `medium_status` is `not_applicable` (the normal
+  resummed value) at every node, and the static closure sub-solve is essentially
+  always converged at the point of failure (`resid_B ~ 1e-11` while
+  `resid_A ~ 3.7e-3`). What fails is the outer \(\Sigma\leftrightarrow K\) map,
+  not the static EMT sub-solve.
+- **Fact 4.** The binding node's failure mode is an aperiodic wander through the
+  \(G_{\rm stat}\) pole: for node 23 (h = 0.00241) at `mix_outer = 0.40`,
+  `resid_map` reaches \(5.40\times10^{-5}\) at iteration 803 and then **grows
+  again**; `gstat_local_denom` ranges over \([-2.91,+2.97]\), i.e. the iterate
+  repeatedly crosses the local \(G_{\rm stat}\) pole; no dominant alternation
+  period is present (lag-2…8 \(|\rho|<0.07\)).
 
 At 3.6 T, a diagnostic Newton repair can recover three failed nodes and can make
 one temporary end-to-end path close. That result establishes that some Picard
@@ -267,6 +340,38 @@ can identify a connected numerical component; it cannot establish which
 stationary state minimizes the thermodynamic potential, nor prove that every
 competing component has been enumerated.
 
+**Measured 2026-07-29 (diary E8, S3 Newton-polish).** The two states above are
+not a marginal pseudo-root pair sitting inside a loose acceptance tolerance. Both
+polish cleanly under Newton iteration to tight backward error, with distinct
+conditioning:
+
+| root | r | polished residual_inf | rcond | pole margin |
+|---|---|---|---|---|
+| A | 1.0876581 | \(1.94\times10^{-15}\) (at `tol_outer` \(10^{-14}\)) | \(5.19\times10^{-6}\) | 0.008 |
+| B | 0.90653911 | \(6.71\times10^{-13}\) (tightest accepted, \(10^{-12}\)) | \(1.42\times10^{-7}\) | 0.0016 |
+
+Separation \(\lVert u_A-u_B\rVert_\infty=2.40\times10^{-2}\),
+\(|r_A-r_B|=0.181\) — the separation exceeds the worst polished backward error by
+**\(3.57\times10^{10}\)** and the A-block acceptance tolerance by
+\(2.4\times10^{6}\). These are two distinct, numerically resolved zeros of the
+residual, not one root corrupted by a loose tolerance.
+
+The multiplicity is also far larger than two. A 26 h-value × 27-seed coexistence
+scan finds **6 to 11 distinct A–D-accepted root clusters at essentially every
+h** (e.g. 11 clusters at h = 0.0055, r spanning 0.891–1.092; 9 at h = 0.0035, r
+spanning 0.822–1.143). The recorded \(r\approx0.768/0.822\) pair above is
+therefore **one sample of a larger family**, not the complete coexistence
+picture at this field — \(r\approx0.822\) reappears in the scan (at h = 0.0035),
+but the recorded pair is not otherwise distinguished from the rest of the
+family by anything measured.
+
+Polishing to \(10^{-15}\) backward error is **not** interval certification. No
+interval-Newton/Krawczyk enclosure was computed here, so what is established is
+that these are numerically distinct high-accuracy zeros of the residual, not
+that the set of zeros at this h is known or complete.
+[`invzp_convg_fix.md`](invzp_convg_fix.md) §7.2 remains the only route to a
+completeness claim.
+
 ## 7. Mechanistic diagnosis
 
 ### 7.1 Meromorphic discrete transform
@@ -281,7 +386,15 @@ pole encounter into evidence that the physical state is absent.
 The production static closure has an additional resummed denominator. Near its
 reference boundary, interval/domain checks intentionally reject a state rather
 than cross a pole or conceal it with a numerical floor. Many deep-ordered masks
-are raised here.
+are raised here — **but not at 3.825 T.** Diary entry E1 (§5) tested this field
+across the full `mix_outer`/`max_outer`/acceleration configuration ladder and
+found `medium_status = not_applicable` at every node, in every configuration
+tested; no `medium_out_of_domain`, no `degenerate_doublet`, no non-finite state
+was seen there. The 3.825 T mask is instead an outer
+\(\Sigma\leftrightarrow K\)-map iteration-dynamics failure (§5, §7.3). This
+paragraph's claim is not withdrawn — it may still hold at other fields — but it
+is not yet checked field-by-field, and it is now known where it was tested and
+found not to apply.
 
 ### 7.3 Non-contractive coupled map
 
@@ -406,6 +519,22 @@ into this document. The executable and data artifacts remain.
   and event-oracle scripts under
   `docs/diagnostics/biased_smooth_r_2026-07-28/`
 
+### Plan execution (2026-07-29)
+
+- `docs/execution/invzp_plan_execution_diary.md` — the append-only execution
+  record (entries E1–E8) that is the source for every measurement added to this
+  document on 2026-07-29.
+- `docs/execution/invzp_exec_s1_failure_census.m`
+- `docs/execution/invzp_exec_s1_iter_anatomy.m`
+- `docs/execution/invzp_exec_s1_config_sweep.m`
+- `docs/execution/invzp_exec_s2_defactor_gate.m`
+- `docs/execution/invzp_exec_s2_column_effect.m`
+- `docs/execution/invzp_exec_e3_root_sensitivity.m`
+- `docs/execution/invzp_exec_s3_twin_polish.m`
+- `docs/execution/invzp_exec_wp0_gate.m`
+- `docs/execution/invzp_exec_wp1_gate.m`
+- `docs/execution/invzp_exec_wp3_harness_gate.m`
+
 These scripts are research diagnostics. Unless an individual script says
 otherwise, a successful run establishes its bounded numerical claim only; it is
 not an acceptance gate for the production theory.
@@ -426,3 +555,41 @@ Until those gates pass, the projected Jensen code should be handed over as a
 well-instrumented but locally valid research implementation: trustworthy in the
 explicitly verified windows, transparent when it masks a state, and not certified
 as a global equilibrium solver in the moderate/deep ordered regime.
+
+### Priority revision 2026-07-29 (user directive)
+
+The user's stated primary objective is to **compute \(\chi\) at every magnetic
+field**, not to settle the phase-selection epistemics first (strict zero field
+may be skipped if the double degeneracy is problematic there). This reorders —
+but does not replace — the program above:
+
+1. **S9 — field-wide damping-ladder census (new top packet).** E1 established
+   that the 3.825 T mask is outer-map iteration dynamics, not a domain failure,
+   and that `mix_outer = 0.30` closes that column completely. It is *not*
+   established that this generalises. S9 runs a `mix_outer` ladder
+   (\(\{0.7,0.5,0.4,0.3,0.2,0.15\}\), `max_outer = 1000`) across the full field
+   range of interest and records, per field, the first ladder rung that closes
+   the column, or that none does.
+2. **Conditional adaptive-damping mode**, wired opt-in/default-off into the
+   ordered path and exposed in `invz_run_spectra.m`, only if S9 shows most
+   columns close under some rung.
+3. **S4 — the closed-loop path-dependence test** (specification only as of this
+   writing; see the execution diary).
+4. **The WP1 nonzero-frequency blocker** (diary E6): KMS/reality and
+   high-frequency-tail failures in the 136-state local source oracle, which
+   block WP2.
+5. **WP2** — the linked-cluster functional manifest.
+
+**Mandatory label.** Any column closed only by the damping ladder or the
+adaptive-damping mode must be reported as
+`converged-under-damping-ladder, branch-not-certified` — never as an equilibrium
+phase label. This is not a formality: diary E4 (root and state sensitivity)
+found that a \(10^{-12}\) arithmetic perturbation — the factored vs.
+defactored reciprocal-coordinate reassociation from the rejected E3 defactoring
+attempt — moves a node to a different A–D-accepted state at 78% relative
+\(\Delta K_0\), and diary E8 (§6.2 above) found 6–11 A–D-accepted root
+clusters at one h near 4.05 T. A column closed by damping alone yields a
+spectrum at an accepted state; it does not yield a certified equilibrium
+branch. Producing \(\chi\) where it was
+previously masked is a legitimate deliverable under this revision; claiming it
+is the equilibrium branch is not.
