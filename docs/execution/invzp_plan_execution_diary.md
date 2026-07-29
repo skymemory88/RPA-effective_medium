@@ -441,6 +441,55 @@ sort of unfrozen anchor WP0 exists to expose before a functional is built on top
 
 **Checkpoint.** `ckpt-04-wp1-oracle` (same commit).
 
+### E8 — S3: the 4.05 T twins are genuinely distinct, and there are far more than two
+
+**Attempted.** Plan §4's first bounded diagnostic (blind WP1c): Newton-polish the 4.05 T
+coexisting roots to tight backward error with conditioning estimates, to decide whether
+`invzp_convg_diagnosis.md` §6.2's two A–D-accepted states are two distinct high-accuracy
+zeros or a pseudo-root pair that only passes because the acceptance tolerance is loose.
+Harness: `docs/execution/invzp_exec_s3_twin_polish.m`, using the existing node context /
+Newton / enumeration kernels unmodified.
+
+**Outcome — verified facts.**
+
+1. **They are distinct.** Both roots polish cleanly:
+
+   | root | r | polished residual_inf | rcond | pole margin |
+   |---|---|---|---|---|
+   | A | 1.0876581 | 1.94 × 10⁻¹⁵ (at tol_outer 1e-14) | 5.19 × 10⁻⁶ | 0.008 |
+   | B | 0.90653911 | 6.71 × 10⁻¹³ (tightest accepted, 1e-12) | 1.42 × 10⁻⁷ | 0.0016 |
+
+   Separation ‖u_A − u_B‖∞ = 2.40 × 10⁻², |r_A − r_B| = 0.181. The separation exceeds the
+   worst polished backward error by **3.57 × 10¹⁰** and the A-block acceptance tolerance by
+   2.40 × 10⁶. Verdict: *distinct*, in the required form.
+
+2. **The multiplicity is far larger than two.** The coexistence scan (26 h values × 27
+   seeds) finds **6 to 11 distinct accepted root clusters at essentially every h**, e.g.
+   11 clusters at h = 0.0055 with r spanning 0.891–1.092, 9 at h = 0.0035 spanning
+   0.822–1.143. The diagnosis's "two states pass the A–D contract" was a two-seed view of
+   a much larger set.
+
+**Learned.**
+
+- The A–D contract does not select. It admits a whole family, and the family is dense
+  enough in r that no local smoothness, proximity, or continuity criterion can separate
+  it — which retires the last version of the "choose the smoothest root" idea more
+  decisively than §6.2's two-root counterexample did.
+- Polishing to 10⁻¹⁵ backward error is **not** certification. No interval-Newton /
+  Krawczyk enclosure was computed, so the correct statement is that these are two
+  numerically distinct high-accuracy zeros of the residual, not that the set of zeros is
+  known or complete. `invzp_convg_fix.md` §7.2 remains the only route to a completeness
+  claim.
+- Caveat on the count: "distinct cluster" is whatever `invzp_enumerate_ordered_roots`'s
+  clustering metric says, so some clusters may be near-duplicates. The *polished pair* is
+  not subject to that caveat — its separation is six orders above the acceptance
+  tolerance.
+- The r values found (1.088 / 0.907) are **not** the pair recorded in §6.2 (0.768 /
+  0.822); r ≈ 0.822 does appear in the scan at h = 0.0035. The recorded pair was one
+  sample of the family, not a distinguished feature.
+
+**Checkpoint.** `ckpt-05-s3-twins`.
+
 ---
 
 ## Rejected branches (do not retry without new contradicting evidence)
