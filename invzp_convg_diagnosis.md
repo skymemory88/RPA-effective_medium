@@ -49,7 +49,11 @@ govern, together with a fifth solver-edge correction:
    iterate stays on the rightmost coupling interval, the inner static
    residual is about `5e-11`, and late state increments have a signed ratio
    near `-0.916`. This is a locally contractive, oscillatory, linearly
-   convergent outer mode that misses the 200-iteration budget. The ordered
+   convergent outer mode that misses the 200-iteration budget. A subsequent
+   default-off, residual-decreasing signed-Aitken experiment recovered the
+   exact long-cold root inside that budget. It correctly made no proposal at
+   the interval-switching failed 4.300 T node and did not repair the broad
+   17/34-node failure at the user-identified 3.825 T sliver. The ordered
    problem therefore has at least two numerical regimes: budget-limited
    contraction near part of the QCP edge, and pole-sensitive/noncontractive
    or multiroot behaviour deeper in the ordered phase.
@@ -1660,6 +1664,32 @@ it is another budget-limited contraction or a different Block-A failure.
 Acceleration is not assumed basin-preserving: full-state equality on
 overlap is a required result, not a premise.
 
+That experiment has now been run. The default-off resummed-only
+`signed_aitken1` path used four full `Sigma` increments, required a stable
+negative scalar fit on one unchanged coupling interval with closed inner
+solves, and admitted a restarted proposal only when its freshly evaluated
+unmixed full-vector residual was smaller than both the ordinary candidate
+and the current residual. At 4.400 T, three proposals at outer iterations
+143/147/152 reduced the fresh residual to `9.20e-5`, `4.20e-7`, and
+`8.45e-10`; ordinary iteration closed at 153. The complete final state is
+bit-identical to ordinary 0.70/1000 cold Picard and agrees with the
+predictor-warm 0.50/1000 state within `2.08e-10` or better in the full
+vectors.
+
+The controls reject a global reading. At 4.300 T the predictor already
+accepts in 13 iterations; the failed node is at
+`h=0.0028118554912421501 meV`, switches between interval ranks
+16384/16376, and admits no proposal. At 3.825 T—the sliver the user
+observed under neither cold nor warm seeding—17/34 nodes fail across
+several interior intervals. One later cold retry accepts a
+residual-decreasing proposal but still fails the unchanged node audit.
+Thus acceleration removes one budget-limited false negative without curing
+the non-scalar or multi-node low-field regimes. The current cached and
+freshly generated coupling vectors agree bitwise with each other but hash
+to `499922e6...`, not the older nominal-fixture digest `ddb9532d...`;
+current pre-change solver anchors reproduce, while that provenance conflict
+remains unresolved.
+
 This also rejects a *fixed-G* inner replacement at the QCP edge.
 `invz_emt_static_ordered` recomputes `Gstat(K0)` inside each K0 iteration;
 the implemented scalar equation is not `S_N(y)=constant`, and the measured
@@ -1695,10 +1725,11 @@ separable issues:
    and remain empirically sensible, including the critical mode. This makes
    warm continuation the leading **demonstrated** near-QCP candidate, still
    subject to direction, field-step, full-state-continuity, and grid gates.
-   The signed `-0.916` edge mode now makes safeguarded acceleration from a
-   cold start the simpler next experiment: if it reaches the same root,
+   Safeguarded acceleration from a cold start has now recovered the signed
+   `-0.916` 4.400 T edge mode and reached the exact long-cold root, so
    warm-seed direction/basin dependence need not remain on the critical path
-   for those columns.
+   for that column. Its safeguards correctly leave the distinct 4.300 and
+   3.825 T failures unresolved.
 2. **Complete low-field Jensen coverage:** open and secondary. The nested
    Picard map is noncontractive and badly conditioned in parts of the
    auxiliary path; simultaneous equations have multiple roots and folds;

@@ -46,6 +46,17 @@ function [state, info] = invz_ordered_node_solve(node, seed, sopts)
 %               disagree about which tolerance is "the" outer tolerance)
 %   .cold_retry (default true): see the retry semantics below.
 %   .trace      (default false): gates info.iters (see below); default path stays cheap.
+%   .cold_acceleration (default 'none'): 'none' | 'signed_aitken1'. The opt-in pilot is
+%               applied ONLY to a genuinely cold attempt under the resummed static medium.
+%               It fits one signed scalar factor to four successive full Sigma-vector
+%               increments (three ratios), requires a stable negative oscillatory factor,
+%               a common static coupling interval, closed inner solves, and a small
+%               one-mode fit error. A proposal is retained only when fresh unmixed
+%               full-Sigma residual evaluations at the ordinary and accelerated candidates
+%               stay in that interval and the accelerated residual is strictly smaller.
+%               Each accepted/rejected proposal restarts the history, so another proposal
+%               must independently re-earn every gate; ordinary Picard iteration runs
+%               between proposals. Final acceptance remains the unchanged A--D checker.
 %
 % state (struct('Sigma','K','lam','K0s'), FIELD-COMPATIBLE with invz_ordered_residual's
 %        `state` input): the exported tuple of the WINNING attempt (see retry semantics
@@ -98,6 +109,10 @@ function [state, info] = invz_ordered_node_solve(node, seed, sopts)
 %   .medium_status  the same call's out.medium_status ('not_applicable' | 'ok' |
 %                   'ref_denom_nonpositive' | 'ref_denom_small' | 'nonfinite'), exposed
 %                   top-level so a caller does not need to reach into .medium.status.
+%   .acceleration   fixed-schema summary of the cold accelerator: mode/enabled, proposal
+%                   attempt/accept counts, accepted outer iterations and latest signed
+%                   factor, fresh ordinary/proposal residuals, interval rank, mode-fit
+%                   error, and last rejection reason. This is diagnostic only.
 %
 % Retry semantics (deterministic; point 3 of the brief): a WARM-seeded attempt that is not
 % accepted, with sopts.cold_retry true, is retried EXACTLY ONCE from a cold start (fresh
@@ -148,12 +163,24 @@ if ~strcmp(smid_node, 'resummed') && (~isfield(node, 'Jmom') || isempty(node.Jmo
         '(invz_coupling_moments of the static coupling column).'], smid_node);
 end
 
-sopts = struct('mix_outer',  getf(sopts, 'mix_outer', 0.7), ...
-               'max_outer',  getf(sopts, 'max_outer', 200), ...
-               'tol_outer',  getf(sopts, 'tol_outer', 1e-8), ...
-               'cold_retry', getf(sopts, 'cold_retry', true), ...
-               'trace',      getf(sopts, 'trace', false));
-if sopts.trace
+cold_acceleration = getf(sopts, 'cold_acceleration', 'none');
+if ~(ischar(cold_acceleration) && isrow(cold_acceleration)) || ...
+        ~any(strcmp(cold_acceleration, {'none', 'signed_aitken1'}))
+    error('invz:coldAcceleration', ...
+        'cold_acceleration must be ''none'' or ''signed_aitken1''.');
+end
+sopts = struct('mix_outer',       getf(sopts, 'mix_outer', 0.7), ...
+               'max_outer',       getf(sopts, 'max_outer', 200), ...
+               'tol_outer',       getf(sopts, 'tol_outer', 1e-8), ...
+               'cold_retry',      getf(sopts, 'cold_retry', true), ...
+               'trace',           getf(sopts, 'trace', false), ...
+               'cold_acceleration', cold_acceleration);
+accel_requested = strcmp(sopts.cold_acceleration, 'signed_aitken1');
+if accel_requested && ~strcmp(smid_node, 'resummed')
+    error('invz:coldAcceleration', ...
+        'signed_aitken1 is currently restricted to static_medium ''resummed''.');
+end
+if sopts.trace || accel_requested
     Jflat = node.Jnu_flat(:);
     jdiag = struct('flat', Jflat, 'max', max(Jflat), 'sorted', sort(Jflat));
 else
@@ -168,14 +195,16 @@ else
     Sigma0 = zeros(size(node.wn));  K0s0 = 0;  seed_kind0 = 'cold';
 end
 
-[state1, info1] = run_attempt(node, Sigma0, K0s0, sopts, jdiag);
+[state1, info1] = run_attempt(node, Sigma0, K0s0, sopts, jdiag, ...
+    accel_requested && strcmp(seed_kind0, 'cold'));
 
 if info1.res.accepted || ~(sopts.cold_retry && strcmp(seed_kind0, 'warm'))
     state = state1;  info = info1;  seed_kind = seed_kind0;
 else
     % deterministic cold retry: fresh cold start, the failed warm attempt is discarded
     % entirely (not merged/blended) -- point 3 of the brief.
-    [state2, info2] = run_attempt(node, zeros(size(node.wn)), 0, sopts, jdiag);
+    [state2, info2] = run_attempt(node, zeros(size(node.wn)), 0, sopts, jdiag, ...
+        accel_requested);
     state = state2;  info = info2;  seed_kind = 'cold_after_warm_fail';
 end
 info.seed_kind = seed_kind;
@@ -183,7 +212,7 @@ info.accepted  = info.res.accepted;
 end
 
 % =============================================================================================
-function [state, info] = run_attempt(node, Sigma0, K0s0, sopts, jdiag)
+function [state, info] = run_attempt(node, Sigma0, K0s0, sopts, jdiag, accel_enabled)
 %RUN_ATTEMPT One full damped-Picard attempt: the outer Sigma<->EMT loop
 % (invz_solve_point_ordered.m:206-221 / invz_hmf_ordered.m eval_node:313-328, VERBATIM) plus
 % the post-loop static refresh (invz_solve_point_ordered.m:225-227, VERBATIM), from a given
@@ -217,6 +246,9 @@ med = struct('G', nan(size(wn)), 'K', nan(size(wn)), 'converged', false, 'closur
              'iters', 0, 'dynamic_converged', false);
 so    = struct('D_uni', NaN, 'resid', NaN, 'converged', false, 'iters', 0);
 Gstat = NaN;
+acceleration = blank_acceleration_summary(sopts.cold_acceleration, accel_enabled);
+accel_history = struct('deltas', {{}}, 'interval_rank', [], ...
+                       'inner_closed', [], 'pole_clear', []);
 
 for outer = 1:sopts.max_outer
     % (1) dynamic sector -- MIRRORS both loops' emt call verbatim
@@ -234,7 +266,7 @@ for outer = 1:sopts.max_outer
     if ~any(strcmp(medium_status, {'not_applicable', 'ok'}))
         if sopts.trace
             iters = append_iter(iters, outer, NaN, sout, K0s, Gstat_it, ...
-                Sigma(1), G0(1), jdiag, sopts.tol_outer);
+                Sigma(1), G0(1), jdiag, sopts.tol_outer, blank_acceleration_iter());
         end
         outer_used = outer;
         break;
@@ -244,12 +276,26 @@ for outer = 1:sopts.max_outer
     lam = invz_lambdas(K, g, wts, node.beta, [1 2 3]);
     sg  = invz_sigma_ordered(node.tl, lam, K, g, node.beta);
     dS  = invz_finite_max_abs(sg.Sigma, Sigma);
-    if sopts.trace
-        iters = append_iter(iters, outer, dS, sout, K0s, Gstat_it, ...
-            Sigma(1), G0(1), jdiag, sopts.tol_outer);
-    end
     % (6) damped mix
-    Sigma = Sigma + sopts.mix_outer*(sg.Sigma - Sigma);
+    if accel_enabled
+        Sigma_before = Sigma;
+        Sigma_picard = Sigma_before + sopts.mix_outer*(sg.Sigma - Sigma_before);
+        [Sigma, accel_history, acceleration, accel_iter] = try_cold_acceleration( ...
+            node, Sigma_before, Sigma_picard, dS, sout, K0s, Gstat_it, lam, K, ...
+            eopts, eso_local, jdiag, outer, accel_history, acceleration);
+        if sopts.trace
+            iters = append_iter(iters, outer, dS, sout, K0s, Gstat_it, ...
+                Sigma_before(1), G0(1), jdiag, sopts.tol_outer, accel_iter);
+        end
+    else
+        if sopts.trace
+            iters = append_iter(iters, outer, dS, sout, K0s, Gstat_it, ...
+                Sigma(1), G0(1), jdiag, sopts.tol_outer, blank_acceleration_iter());
+        end
+        % Keep the default-off arithmetic statement byte-for-byte identical to the
+        % pre-experiment path (I1).
+        Sigma = Sigma + sopts.mix_outer*(sg.Sigma - Sigma);
+    end
     outer_used = outer;
     % (7) in-loop verdict -- DIAGNOSTIC ONLY (info.loop_converged); NEVER the acceptance
     % test (that is the incomplete gate this whole task replaces).
@@ -291,12 +337,197 @@ so_out = so;  so_out.Gstat = Gstat;
 
 info = struct('res', res, 'loop_converged', loop_converged, 'so', so_out, 'med', med, ...
               'outer_iters', outer_used, 'term_reason', term_reason, 'iters', iters, ...
-              'medium', medium, 'medium_status', medium_status);
+              'medium', medium, 'medium_status', medium_status, ...
+              'acceleration', acceleration);
+end
+
+% =============================================================================================
+function [Sigma_out, hist, summary, diag] = try_cold_acceleration( ...
+        node, Sigma_old, Sigma_picard, dS, sout, K0s, Gstat_it, lam, K, ...
+        eopts, eso_local, jdiag, outer, hist, summary)
+%TRY_COLD_ACCELERATION One default-off, residual-decreasing signed Aitken-1 proposal.
+%
+% The thresholds below are fixed experiment safeguards, not production tuning:
+%   * four full Sigma-vector increments / three signed ratios;
+%   * at least eight ordinary outer iterations;
+%   * lambda in [-0.99,-0.50], ratio spread <= 0.02;
+%   * pooled scalar-mode fit error <= 0.10;
+%   * one common finite pole interval and closed inner solve over the window;
+%   * fresh proposal residual strictly below both the ordinary-candidate residual and
+%     the current residual;
+%   * a fresh four-increment history after every accepted or rejected proposal.
+policy = struct('history', 4, 'min_outer', 8, ...
+                'lambda_min', -0.99, 'lambda_max', -0.50, ...
+                'lambda_spread', 0.02, 'mode_fit_rel', 0.10);
+
+Sigma_out = Sigma_picard;
+diag = blank_acceleration_iter();
+delta = Sigma_picard - Sigma_old;
+[interval_rank, ~, ~] = coupling_interval(jdiag.sorted, K0s - 1/Gstat_it);
+Dq = 1 + (jdiag.flat - K0s).*Gstat_it;
+pole_clear = all(isfinite(Dq)) && ~isempty(Dq) && min(abs(Dq)) > 0;
+inner_closed = sout.converged && isfinite(sout.resid);
+
+hist.deltas{end+1} = delta;
+hist.interval_rank(end+1) = interval_rank;
+hist.inner_closed(end+1) = inner_closed;
+hist.pole_clear(end+1) = pole_clear;
+if numel(hist.deltas) > policy.history
+    hist.deltas = hist.deltas(end-policy.history+1:end);
+    hist.interval_rank = hist.interval_rank(end-policy.history+1:end);
+    hist.inner_closed = hist.inner_closed(end-policy.history+1:end);
+    hist.pole_clear = hist.pole_clear(end-policy.history+1:end);
+end
+
+if numel(hist.deltas) < policy.history || outer < policy.min_outer
+    return;
+end
+
+[lambda, ratio_spread, fit_rel, fit_ok] = signed_increment_factor(hist.deltas);
+diag.lambda = lambda;
+diag.lambda_spread = ratio_spread;
+diag.mode_fit_rel = fit_rel;
+if ~fit_ok || ~(lambda >= policy.lambda_min && lambda <= policy.lambda_max) || ...
+        ratio_spread > policy.lambda_spread || fit_rel > policy.mode_fit_rel
+    return;
+end
+target_rank = hist.interval_rank(end);
+if ~isfinite(target_rank) || any(hist.interval_rank ~= target_rank) || ...
+        ~all(hist.inner_closed) || ~all(hist.pole_clear)
+    return;
+end
+
+coeff = lambda/(1-lambda);
+Sigma_proposal = Sigma_picard + coeff*delta;
+diag.attempted = true;
+diag.interval_rank = target_rank;
+summary.attempted = summary.attempted + 1;
+
+ordinary = fresh_outer_residual(node, Sigma_picard, K0s, lam, K, ...
+    eopts, eso_local, jdiag);
+proposal = fresh_outer_residual(node, Sigma_proposal, K0s, lam, K, ...
+    eopts, eso_local, jdiag);
+diag.resid_ordinary = ordinary.resid;
+diag.resid_proposal = proposal.resid;
+
+same_interval = ordinary.interval_rank == target_rank && ...
+                proposal.interval_rank == target_rank;
+residual_decrease = isfinite(proposal.resid) && isfinite(ordinary.resid) && ...
+                    isfinite(dS) && proposal.resid < ordinary.resid && ...
+                    proposal.resid < dS;
+if ordinary.valid && proposal.valid && ordinary.inner_closed && ...
+        proposal.inner_closed && ordinary.pole_clear && proposal.pole_clear && ...
+        same_interval && residual_decrease
+    Sigma_out = Sigma_proposal;
+    diag.accepted = true;
+    diag.reject_reason = '';
+    summary.accepted = summary.accepted + 1;
+    summary.accepted_outers(end+1) = outer;
+    summary.lambda = lambda;
+    summary.lambda_spread = ratio_spread;
+    summary.mode_fit_rel = fit_rel;
+    summary.resid_ordinary = ordinary.resid;
+    summary.resid_proposal = proposal.resid;
+    summary.interval_rank = target_rank;
+    summary.last_reject_reason = '';
+else
+    if ~(ordinary.valid && proposal.valid)
+        reason = 'nonfinite_candidate';
+    elseif ~(ordinary.inner_closed && proposal.inner_closed)
+        reason = 'inner_not_closed';
+    elseif ~(ordinary.pole_clear && proposal.pole_clear)
+        reason = 'pole_not_clear';
+    elseif ~same_interval
+        reason = 'interval_changed';
+    else
+        reason = 'residual_not_decreased';
+    end
+    diag.reject_reason = reason;
+    summary.last_reject_reason = reason;
+end
+
+% A rejected proposal must earn a fresh four-increment window before another attempt.
+% An accepted proposal is also a restart, so ordinary Picard must establish a new local
+% history before any later proposal. Final A--D acceptance remains independent.
+hist = struct('deltas', {{}}, 'interval_rank', [], ...
+              'inner_closed', [], 'pole_clear', []);
+end
+
+function [lambda, spread, fit_rel, ok] = signed_increment_factor(deltas)
+%SIGNED_INCREMENT_FACTOR Pooled signed scalar fit d_{k+1} ~= lambda*d_k.
+lambda = NaN;  spread = NaN;  fit_rel = NaN;  ok = false;
+n = numel(deltas);
+if n < 2, return; end
+num = 0;  den = 0;  ratios = nan(1, n-1);
+for k = 2:n
+    a = deltas{k-1}(:);  b = deltas{k}(:);
+    da = real(a'*a);
+    if ~(all(isfinite(a)) && all(isfinite(b)) && isfinite(da) && da > 0)
+        return;
+    end
+    cross = real(a'*b);
+    ratios(k-1) = cross/da;
+    num = num + cross;
+    den = den + da;
+end
+if ~(isfinite(den) && den > 0 && all(isfinite(ratios))), return; end
+lambda = num/den;
+err2 = 0;  out2 = 0;
+for k = 2:n
+    a = deltas{k-1}(:);  b = deltas{k}(:);
+    err2 = err2 + real((b-lambda*a)'*(b-lambda*a));
+    out2 = out2 + real(b'*b);
+end
+if ~(isfinite(lambda) && isfinite(err2) && isfinite(out2) && out2 > 0), return; end
+spread = max(abs(ratios-lambda));
+fit_rel = sqrt(max(err2,0)/out2);
+ok = isfinite(spread) && isfinite(fit_rel);
+end
+
+function out = fresh_outer_residual(node, Sigma, K0_seed, lam_seed, K_seed, ...
+                                    eopts, eso_local, jdiag)
+%FRESH_OUTER_RESIDUAL Unmixed full-Sigma residual at one candidate state.
+out = struct('valid', false, 'inner_closed', false, 'pole_clear', false, ...
+             'resid', NaN, 'interval_rank', NaN);
+eopts_local = eopts;
+eopts_local.K0 = K_seed;
+med = invz_emt_scalar(node.G0(:), Sigma(:), node.Jnu_flat, eopts_local);
+Kc = med.K;
+[K0c, Gstatc, soc] = invz_emt_static_ordered(node.tl, lam_seed(1:2), Sigma(1), ...
+    node.Jnu_flat, K0_seed, node.beta, node.J0eff, node.G0inel0, node.G0el0, eso_local);
+medium_status = getf(soc, 'medium_status', 'not_applicable');
+if ~any(strcmp(medium_status, {'not_applicable', 'ok'})), return; end
+Kc(1) = K0c;
+lamc = invz_lambdas(Kc, node.g(:), node.wts(:), node.beta, [1 2 3]);
+sgc = invz_sigma_ordered(node.tl, lamc, Kc, node.g(:), node.beta);
+out.resid = invz_finite_max_abs(sgc.Sigma, Sigma(:));
+[out.interval_rank, ~, ~] = coupling_interval(jdiag.sorted, K0c - 1/Gstatc);
+Dq = 1 + (jdiag.flat-K0c).*Gstatc;
+out.pole_clear = all(isfinite(Dq)) && ~isempty(Dq) && min(abs(Dq)) > 0;
+out.inner_closed = soc.converged && isfinite(soc.resid);
+out.valid = all(isfinite(Sigma(:))) && all(isfinite(Kc(:))) && ...
+    all(isfinite(lamc(:))) && isfinite(K0c) && isfinite(Gstatc) && ...
+    isfinite(out.resid) && isfinite(out.interval_rank);
+end
+
+function out = blank_acceleration_summary(mode, enabled)
+out = struct('mode', mode, 'enabled', logical(enabled), ...
+    'attempted', 0, 'accepted', 0, 'accepted_outers', [], ...
+    'lambda', NaN, 'lambda_spread', NaN, 'mode_fit_rel', NaN, ...
+    'resid_ordinary', NaN, 'resid_proposal', NaN, ...
+    'interval_rank', NaN, 'last_reject_reason', '');
+end
+
+function out = blank_acceleration_iter()
+out = struct('attempted', false, 'accepted', false, ...
+    'lambda', NaN, 'lambda_spread', NaN, 'mode_fit_rel', NaN, ...
+    'resid_ordinary', NaN, 'resid_proposal', NaN, ...
+    'interval_rank', NaN, 'reject_reason', '');
 end
 
 % =============================================================================================
 function iters = append_iter(iters, outer, dS, sout, K0s, Gstat_it, ...
-                             Sigma0, G00, jdiag, tol_outer)
+                             Sigma0, G00, jdiag, tol_outer, accel)
 %APPEND_ITER One per-outer-iteration trace record (sopts.trace only), mirroring
 % invz_hmf_ordered.m eval_node's own per-iteration record (:329-349) field-for-field except
 % `dS` (named `resid_map` there; `dS` is the name this brief specifies).
@@ -325,7 +556,16 @@ irec = struct('outer', outer, 'dS', dS, 'resid_static', sout.resid, 'K0', K0s, .
               'gstat_local_denom', getf(sout, 'gstat_local_denom', NaN), ...
               'xi', getf(sout, 'xi', NaN), ...
               'static_closed_outer_open', sout.converged && ...
-                  ~(isfinite(dS) && dS < tol_outer));
+                  ~(isfinite(dS) && dS < tol_outer), ...
+              'accel_attempted', accel.attempted, ...
+              'accel_accepted', accel.accepted, ...
+              'accel_lambda', accel.lambda, ...
+              'accel_lambda_spread', accel.lambda_spread, ...
+              'accel_mode_fit_rel', accel.mode_fit_rel, ...
+              'accel_resid_ordinary', accel.resid_ordinary, ...
+              'accel_resid_proposal', accel.resid_proposal, ...
+              'accel_interval_rank', accel.interval_rank, ...
+              'accel_reject_reason', accel.reject_reason);
 posmask = Dq > 0;
 if any(posmask)
     ix = find(posmask);  [vmin, jm] = min(Dq(ix));

@@ -42,7 +42,8 @@ function trace = invz_ordered_trace(ion, T, Bx, Jnu_flat, opts)
 %   .save_path     char    if given, `save(save_path, 'trace')` -- the .mat IS the schema;
 %                          nothing here is printed text meant to be parsed back.
 %
-% Returns trace (schema_version = 2):
+% Returns trace (schema_version = 3; v3 adds default-off cold-acceleration
+% node summaries and per-iteration proposal-gate fields):
 %   .schema_version  (double) versioning for downstream (Task 2) consumers.
 %   .meta            run-level, stored ONCE: T, Bx, J0eff (the value invz_hmf_ordered
 %                    actually used), solve_opts (verbatim), qc, Jnu_unflat, nq,
@@ -95,7 +96,7 @@ if ~is_synthetic
     meta.lattice_hash = weak_hash([qc(:); dpRng_(:)]);
 end
 
-trace = struct('schema_version', 2, 'meta', meta, ...
+trace = struct('schema_version', 3, 'meta', meta, ...
     'nodes', trcRaw.nodes, 'iters', trcRaw.iters, ...
     'result', struct('hstar', hstar, 'hmf_status', hprof.status));
 

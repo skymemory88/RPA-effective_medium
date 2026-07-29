@@ -101,6 +101,11 @@ function [hmf_star, prof, trc] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
 % any acceptance gate. A failed warm attempt retains invz_ordered_node_solve's existing
 % one-shot cold retry. prof.hmf_seed_out is populated only when the predictor passes the
 % complete residual checker, allowing a caller to continue between physical fields.
+% opts.cold_acceleration (optional, default 'none'): 'none' | 'signed_aitken1'. The latter
+% is the safeguarded, default-off resummed cold-predictor experiment implemented by
+% invz_ordered_node_solve. A warm attempt is never accelerated; its existing fresh-cold
+% retry is eligible. The full summary for the h=0 predictor is returned in
+% prof.predictor_acceleration.
 if nargin < 5, opts = struct(); end
 J0eff = opts.J0eff;                                  % required, no default (caller-owned)
 Jxx0  = getf(opts, 'Jxx0', ion.Jxx0);
@@ -114,6 +119,7 @@ fbare = getf(opts, 'force_bare', false);
 mixo  = getf(opts, 'mix_outer', 0.7);
 tolo  = getf(opts, 'tol_outer', 1e-8);
 maxo  = getf(opts, 'max_outer', 200);                % ALIGNED with both solvers' default
+cold_accel = getf(opts, 'cold_acceleration', 'none');
 % Static-medium scheme, resolved ONCE by the SOLE authority (invz_check_static_medium, spec
 % SS4.2) and stamped into BOTH leg option structs -- eopts (invz_emt_scalar's PM static slot)
 % and eso (invz_emt_static_ordered's ordered static sector) -- so the two sectors can never run
@@ -151,6 +157,7 @@ prof = struct('hgrid', [], 'r', [], 'h0', [], 'm', [], 'Sigma0', [], 'K0', [], .
               'slope0', NaN, 'r_pm0', NaN, 'G0bare_pm0', NaN, ...
               'Sigma0_pm0', NaN, 'K0_pm0', NaN, 'J0eff', J0eff, ...
               'hmf_seed_out', [], ...
+              'cold_acceleration', cold_accel, 'predictor_acceleration', struct(), ...
               'n_extend', 0, 'hmin_initial', NaN, 'status', 'no_bare_order', ...
               'status_detail', [], ...
               'redensified', false, 'int_Sigma0', NaN, 'int_r_minus_1', NaN, ...
@@ -166,13 +173,13 @@ hmf_star = NaN;
 % via ordinary nested-function workspace sharing -- the SAME mechanism this file already
 % uses (read-only) for mixo/tolo/maxo/Jxx0/tmf etc.; no new production dependency.
 tracing = isfield(opts, 'trace') && ~isempty(opts.trace) && ~isequal(opts.trace, false);
-% schema_version 3: trc.nodes gained the compact failure-ledger fields from the fixed node
-% record, and trc.iters gained the Phase-0 pole-proximity fields. Bumped because this field
+% schema_version 4: trc.nodes/iters gained the cold-acceleration summary/proposal fields.
+% Version 3 added the compact failure-ledger and Phase-0 pole-proximity fields. Bumped because this field
 % exists precisely to signal a trace-record shape change. No consumer in the repo reads/checks
 % THIS struct's schema_version equality
 % (grepped repo-wide): invz_ordered_trace.m never forwards trcRaw.schema_version into its
 % own (separately-versioned) wrapper, so bumping it is inert everywhere today.
-trc = struct('schema_version', 3, 'enabled', tracing, 'meta', struct(), ...
+trc = struct('schema_version', 4, 'enabled', tracing, 'meta', struct(), ...
              'nodes', struct([]), 'iters', struct([]));
 if tracing
     optsRec = opts;
@@ -236,6 +243,7 @@ end
 if tracing, cur_phase = 'predictor'; end             % stage-2c task 0: node phase tag (bookkeeping only)
 [pred, Sigma, K0s] = eval_node(0, Sigma, K0s);
 pred.is_predictor = true;
+prof.predictor_acceleration = pred.acceleration;
 if pred.accepted
     prof.hmf_seed_out = struct('Sigma', Sigma, 'K0s', K0s);
 end
@@ -422,7 +430,8 @@ prof.crit_star = root.crit;
         'omit_mu3',NaN,'omit_cubic',NaN,'omit_max',NaN, ...
         'outer_iters',0,'resid_static',NaN, ...
         'resid_A',NaN,'resid_B',NaN,'resid_C',NaN,'resid_D',NaN, ...
-        'resid_norm',NaN,'is_predictor',false,'in_bracket',false);
+        'resid_norm',NaN,'is_predictor',false,'in_bracket',false, ...
+        'acceleration',blank_acceleration_record());
     end
 
     function [h0, F] = path_from_nodes(nodes, hgrid)
@@ -566,7 +575,7 @@ prof.crit_star = root.crit;
         seed = struct('Sigma', Sigma_in, 'K0s', K0s_in);
     end
     sopts = struct('mix_outer', mixo, 'max_outer', maxo, 'tol_outer', tolo, ...
-        'cold_retry', true, 'trace', tracing);
+        'cold_retry', true, 'trace', tracing, 'cold_acceleration', cold_accel);
     [state, info] = invz_ordered_node_solve(node, seed, sopts);
 
     % checker-gated acceptance: info.accepted is the COMPLETE invz_ordered_residual verdict,
@@ -598,6 +607,7 @@ prof.crit_star = root.crit;
     rec.omit_max = info.so.omit_max;
     rec.medium_status = info.medium_status;
     rec.term_reason   = local_term_reason(info.term_reason);
+    rec.acceleration = info.acceleration;
     % Reference denominator + ACTUAL distance-to-floor (denom - ref_margin), not the floor and
     % not the denominator repeated. Both stay NaN under 'resummed', where medium.ref is [].
     if isstruct(info.medium) && isfield(info.medium, 'ref') && isstruct(info.medium.ref)
@@ -632,11 +642,29 @@ prof.crit_star = root.crit;
                 'y', src.y, 'y_rank', src.y_rank, ...
                 'y_interval_lo', src.y_interval_lo, 'y_interval_hi', src.y_interval_hi, ...
                 'Gstat', src.Gstat, 'gstat_local_denom', src.gstat_local_denom, ...
-                'xi', src.xi, 'static_closed_outer_open', src.static_closed_outer_open);
+                'xi', src.xi, 'static_closed_outer_open', src.static_closed_outer_open, ...
+                'accel_attempted', src.accel_attempted, ...
+                'accel_accepted', src.accel_accepted, ...
+                'accel_lambda', src.accel_lambda, ...
+                'accel_lambda_spread', src.accel_lambda_spread, ...
+                'accel_mode_fit_rel', src.accel_mode_fit_rel, ...
+                'accel_resid_ordinary', src.accel_resid_ordinary, ...
+                'accel_resid_proposal', src.accel_resid_proposal, ...
+                'accel_interval_rank', src.accel_interval_rank, ...
+                'accel_reject_reason', src.accel_reject_reason);
             if isempty(trc.iters), trc.iters = irec; else, trc.iters(end+1) = irec; end
         end
     end
     end
+end
+
+% =============================================================================================
+function out = blank_acceleration_record()
+out = struct('mode', 'none', 'enabled', false, ...
+    'attempted', 0, 'accepted', 0, 'accepted_outers', [], ...
+    'lambda', NaN, 'lambda_spread', NaN, 'mode_fit_rel', NaN, ...
+    'resid_ordinary', NaN, 'resid_proposal', NaN, ...
+    'interval_rank', NaN, 'last_reject_reason', '');
 end
 
 % =============================================================================================
