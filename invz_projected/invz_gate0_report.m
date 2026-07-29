@@ -1,7 +1,7 @@
 function rep = invz_gate0_report(ion, T, ordered_fields, pm_fields, Jnu_flat, opts)
 %INVZ_GATE0_REPORT Gate-0 domain/omitted-order diagnostic driver (Task 18). The frozen
-% predicate it measures is quoted verbatim in
-% docs/invzp_strict_medium_gate0_report.md SS1. A DIAGNOSTIC DRIVER, NOT A TEST: it measures
+% predicate it measures is encoded by invz_gate0_aggregate.m and summarized in
+% invzp_convg_diagnosis.md Section 8.2. A DIAGNOSTIC DRIVER, NOT A TEST: it measures
 % and reports the frozen promotion predicate on the real production coupling multiset. It
 % never widens a tolerance, switches scheme, or filters a failed node out of the gate. G = -chi
 % (meV^-1), ferromagnetic positive J.
@@ -13,8 +13,7 @@ function rep = invz_gate0_report(ion, T, ordered_fields, pm_fields, Jnu_flat, op
 %   does not fit one foreground MATLAB call (600 s cap), so the intended usage is to invoke
 %   this function ONCE PER CHUNK (one field, or one (field,nH) pair) and merge the returned
 %   `rep.ordered` / `rep.pm` rows across calls before a FINAL invz_gate0_aggregate call on the
-%   union -- the chunk plan actually used is recorded in
-%   docs/invzp_strict_medium_gate0_report.md. The digest
+%   union. The digest
 %   check below runs on EVERY invocation regardless: reloading Jnu_flat from a .mat does not
 %   exempt a caller from it.
 % Jnu_flat: the exact production coupling column (invz_bz_couplings, frozen tuple, prereg SS8).
@@ -43,8 +42,8 @@ function rep = invz_gate0_report(ion, T, ordered_fields, pm_fields, Jnu_flat, op
 % unchanged and aborts this report, exactly like an unclassified/wiring error should.
 if nargin < 6, opts = struct(); end
 
-% ---- FROZEN constants (user approval 2026-07-25; quoted in
-% docs/invzp_strict_medium_gate0_report.md SS1).
+% ---- FROZEN constants (user approval 2026-07-25; see
+% invzp_convg_diagnosis.md Section 8.2).
 % Never derived from output, never widened on a failure. ------------------------------------
 FROZEN_DIGEST  = 'ddb9532d11326458554b93b2ce09c80a3299cca9baa69202dc311f138b4fae17';
 CRIT_TOL       = 1e-6;

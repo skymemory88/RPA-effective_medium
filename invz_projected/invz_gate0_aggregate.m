@@ -1,7 +1,7 @@
 function rep = invz_gate0_aggregate(ordered_rows, pm_rows, expected_fields, expected_nH)
 %INVZ_GATE0_AGGREGATE Pure Gate-0 pass/fail reduction (Task 18 Step 2). The frozen
-% predicate -- the "Gate-0 negative-outcome rule" -- is quoted verbatim in
-% docs/invzp_strict_medium_gate0_report.md SS1. G = -chi (meV^-1), ferromagnetic positive J.
+% predicate -- the "Gate-0 negative-outcome rule" -- is implemented below and summarized in
+% invzp_convg_diagnosis.md Section 8.2. G = -chi (meV^-1), ferromagnetic positive J.
 %
 % This is the ONLY place the five clause Booleans (a)-(e) are decided. invz_gate0_report.m
 % reduces raw invz_hmf_ordered/invz_solve_point output (trc/prof) into the fixed-schema ROW
@@ -46,8 +46,7 @@ function rep = invz_gate0_aggregate(ordered_rows, pm_rows, expected_fields, expe
 % -- EXACTLY that formula, no extra term. rep.detail.* records which row(s)/field(s) tripped
 % each clause, so a failure is always attributable, never merely asserted.
 %
-% Frozen constants (user-approved 2026-07-25; quoted in
-% docs/invzp_strict_medium_gate0_report.md SS1):
+% Frozen constants (user-approved 2026-07-25; see invzp_convg_diagnosis.md Section 8.2):
 %   omit_promote = 0.10.  crit_tol is READ per-row (it is threaded through, not re-derived, so
 %   this function never needs to guess the caller's Ecut/T-independent constant); D_tol/Dq_tol
 %   are likewise read per-row (state-dependent). This function hardcodes ONLY omit_promote,

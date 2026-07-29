@@ -30,8 +30,8 @@ function [K0, info] = invz_medium_moment_closure(Gref, mom, scheme)
 % ratio is 0 when its own numerator is also 0, else Inf.
 %
 % This leaf NEVER rejects a node on a large ratio: the truncated polynomial stays defined, and
-% the frozen omit_report/omit_promote thresholds (quoted in
-% docs/invzp_strict_medium_gate0_report.md SS1) are the
+% the frozen omit_report/omit_promote thresholds (summarized in
+% invzp_convg_diagnosis.md Section 8.2) are the
 % CALLER's promotion gate. A large ratio must never trigger a scheme switch.
 % An unknown or 'resummed' scheme is a wiring error (invz:staticMedium); the resummed path
 % bypasses this primitive entirely.

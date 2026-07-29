@@ -14,7 +14,7 @@ function [Jnu, info, Jaa0, detail] = invz_bz_couplings(ion, opts)
 % and the returned info provenance.  It is nargout-gated; existing one-
 % through three-output callers retain the previous invz_jq_modes call.
 %
-% Ewald Step-5 Task 4 (summarised in docs/INVZ-DEVELOPMENT-RECORD.md, 2026-07-24):
+% Ewald Step-5 Task 4 (2026-07-24; operative contract retained here):
 %   opts.dipole/opts.ewald   forwarded into invz_jq_modes BY PRESENCE only (absent here means
 %                            absent there too -- see invz_jq_modes.m for their exact contract).
 %   opts.gridConvention      'legacy_inclusive' | 'halfopen'

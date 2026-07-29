@@ -5,9 +5,10 @@ function [state, info] = invz_ordered_node_solve(node, seed, sopts)
 % invz_hmf_ordered.m's eval_node (:313-368, excluding its fbare shortcut -- see the note
 % below) -- into ONE function, run VERBATIM (same helper calls, same argument order, no
 % physics change), gating node ACCEPTANCE on the Task-1a complete residual checker
-% (invz_ordered_residual.m; contract: docs/invz_ordered_residual_contract.md) instead of the
+% (invz_ordered_residual.m; contract summarized in invzp_convg_diagnosis.md Section 2.4)
+% instead of the
 % current incomplete in-loop `dS < tol_outer && sout.converged` alone (that verdict is still
-% computed and exposed as info.loop_converged, a diagnostic -- see the contract Sec 0/2 for
+% computed and exposed as info.loop_converged, a diagnostic -- see that contract summary for
 % why it under-certifies a fixed point: the dynamic K(2:end) is never recomputed from the
 % final mixed Sigma).
 %

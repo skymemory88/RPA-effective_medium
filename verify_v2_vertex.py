@@ -1,5 +1,5 @@
-"""Verify the NEW results of three_level_1z_extension_v2.html against
-independent numerics. Checks:
+"""Historical three-level vertex oracle retained after its superseded derivation
+was archived in Git history. Verifies the following results against independent numerics:
   A. Cardano eigenvalues, Eq. (6), vs numpy eigvalsh of Eq. (4).
   B. Ordered kernels I2 (24), I3 (25) vs direct quadrature.
   C. Exact four-point transform F_{n,l}, Eq. (26), vs independent
