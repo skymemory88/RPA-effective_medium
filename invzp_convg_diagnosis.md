@@ -386,15 +386,35 @@ pole encounter into evidence that the physical state is absent.
 The production static closure has an additional resummed denominator. Near its
 reference boundary, interval/domain checks intentionally reject a state rather
 than cross a pole or conceal it with a numerical floor. Many deep-ordered masks
-are raised here — **but not at 3.825 T.** Diary entry E1 (§5) tested this field
-across the full `mix_outer`/`max_outer`/acceleration configuration ladder and
-found `medium_status = not_applicable` at every node, in every configuration
-tested; no `medium_out_of_domain`, no `degenerate_doublet`, no non-finite state
-was seen there. The 3.825 T mask is instead an outer
-\(\Sigma\leftrightarrow K\)-map iteration-dynamics failure (§5, §7.3). This
-paragraph's claim is not withdrawn — it may still hold at other fields — but it
-is not yet checked field-by-field, and it is now known where it was tested and
-found not to apply.
+are raised here — **including at 3.825 T, and this is now the confirmed
+attribution at every field measured.**
+
+**Correction, 2026-07-29 (diary E9b, superseding an earlier E1 conclusion).** An
+earlier revision of this section, written from diary entry E1, stated that the
+3.825 T mask was *not* raised here but was instead an outer
+\(\Sigma\leftrightarrow K\)-map iteration-dynamics failure (§7.3). **That is
+withdrawn.** The `Dq` columns already present in E1's own census tables show the
+correspondence
+
+> a node has a finite `Dq_absmin` \(\iff\) that node fails
+
+holding without exception in both directions over ~100 node evaluations, three
+iteration configurations and two fields: 1.0 T (11 of 11 failures carry it, 0 of
+23 accepted nodes do), 3.825 T at `mix_outer = 0.40` (1 of 1; node 23 has
+\(D_q^{\min}=-0.6027\), \(|D_q|^{\min}=1.889\times10^{-3}\)), and 3.825 T at
+`mix_outer = 0.70` (22 of 22, all with \(|D_q|^{\min}\in[2.8\times10^{-4},
+8.6\times10^{-3}]\); 0 of 12 accepted). The q-resolved denominator
+\(D(q)=1+(J(q)-K_0)G_{\rm stat}\) passing close to zero is the failure mechanism
+at both fields, so this section — not §7.3 — is the correct framing.
+
+Two refinements the same data forces. (i) 27 of 34 nodes at 3.825 T have
+\(D_q^{\min}<0\) **including accepted ones**, so \(D(q)\) turning negative
+somewhere is *not* sufficient for failure; it is \(D(q)\) approaching zero that
+predicts it. (ii) `mix_outer` does not remove the soft mode — it changes whether
+the iterate wanders into the region where \(D(q)\to0\). At 3.825 T
+`mix_outer = 0.30` keeps every node out of that region; at 1.0 T no rung keeps
+10–11 nodes out. One mechanism, escapable at one field and not the other, which
+accounts for E1's damping-sensitivity contrast without a second cause.
 
 ### 7.3 Non-contractive coupled map
 
