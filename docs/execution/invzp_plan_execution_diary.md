@@ -426,17 +426,40 @@ coupling set under each dipolar backend) and `docs/execution/invzp_exec_wp0_gate
   shape convention → source to zero; q → 0⁺ and ω → 0 sit inside the finite-volume
   sequence and never substitute for it.
 
-**In progress.** G0b's failure is not yet interpretable: the brute-force backend is a
+**G0b resolved (dpRng ladder, against the single Ewald reference).**
+
+| dpRng | max abs diff (meV) | max rel diff | RMS diff (meV) |
+|---|---|---|---|
+| 30 (production default) | 1.136 x 10^-4 | 0.1268 | 3.32 x 10^-6 |
+| 45 | 2.113 x 10^-5 | 0.0874 | 9.82 x 10^-7 |
+| 60 | 2.894 x 10^-5 | 0.0614 | 8.81 x 10^-7 |
+| 90 | 1.273 x 10^-5 | 0.0254 | 4.00 x 10^-7 |
+
+Verdict **(a): convergence toward Ewald**, i.e. brute-force real-space truncation, not a
+convention mismatch. RMS and max-relative fall monotonically (8.3x and 5.0x over a 3x
+cutoff increase); max-absolute falls overall by 8.9x but non-monotonically at 45 -> 60,
+which is expected of a max taken over 16384 modes as the truncation shell moves between
+them. Fitted decay max|diff| ~ dpRng^(-1.80).
+
+So the two constructors do agree in the converged limit, and the correct statement of G0b
+is: **the production dpRng = 30 coupling set carries a real-space truncation error of
+1.14 x 10^-4 meV max / 3.32 x 10^-6 meV RMS against the convergent Ewald sum.** WP0's gate
+as literally written -- "the same serialized coupling set" -- is therefore **not passed at
+the production default**; it is passed only as a limit statement. That error had not been
+measured before, and it is now a declared entry in the frozen contract rather than an
+unknown.
+
+**Superseded reading.** G0b's failure was not interpretable at first: the brute-force backend is a
 real-space lattice sum truncated at `dpRng = 30` while Ewald is convergent, so the
 disagreement may be brute-force truncation error rather than a convention mismatch. A
 `dpRng` ladder (30/45/60/90) against the single Ewald reference is running to decide
-between monotone convergence (→ the constructors agree in the limit, and the production
-default carries a quantified truncation error) and a plateau (→ a genuine convention
-mismatch). **Until that lands, G0b stands as FAIL and WP0's gate is not passed.**
+between monotone convergence and a plateau. The ladder above settled it in favour of the
+former.
 
-**Learned already.** Whatever the ladder shows, the production coupling set is *not* an
+**Learned.** The production coupling set is *not* an
 exactly-defined object at the 10⁻⁴ meV level today — the two constructors the repo
-provides do not agree on it, and nothing previously measured that. That is precisely the
+provides differ on it by ~1e-4 meV at the production cutoff, and nothing previously
+measured that. That is precisely the
 sort of unfrozen anchor WP0 exists to expose before a functional is built on top of it.
 
 **Checkpoint.** `ckpt-04-wp1-oracle` (same commit).
