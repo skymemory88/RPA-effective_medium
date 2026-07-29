@@ -533,12 +533,13 @@ Design decisions taken by the user 2026-07-29. Not started; this section is the 
 **Plane.** Rectangular loop in (h, Bx) at fixed T = 0.1 K:
 (h1,B1) -> (h2,B1) -> (h2,B2) -> (h1,B2) -> (h1,B1), traversed in both directions.
 
-**Location.** Bx in [3.0, 3.8] T -- the user's choice, overriding the certified 4.60-4.90 T
-window, on the grounds that 3.0-3.8 T is where convergence is hardest and therefore where
-the test is most informative. RISK TO MANAGE, not to argue away: E1 showed many nodes in
-this band fail under some configurations, and a loop requires EVERY point on all four legs
-to be an accepted node. So step 1 below is reconnaissance; the loop rectangle is chosen
-from the converged sub-region rather than assumed.
+**Location.** Bx in the certified 4.60-4.90 T window (revised by the user 2026-07-29 after
+the 'not constructible' risk was raised; the earlier choice was 3.0-3.8 T). A loop requires
+EVERY point on all four legs to be an accepted node, and E1 showed many nodes in the
+3.0-3.8 T band fail under some configurations. Step 1 below is still reconnaissance -- the
+rectangle is chosen from the converged sub-region rather than assumed -- but in this window
+it should succeed. Consequence to state in the writeup: a loop that closes HERE says
+nothing about the hard band; only a loop that FAILS here would be decisive.
 
 **Endpoint test.** ||delta u||_inf < 1e-6 on the full u = [Sigma; K0]. This is six orders
 below the 4.05 T inter-root separation (2.4e-2, E8), so it cannot mistake two distinct
@@ -574,3 +575,42 @@ of non-integrability -- that distinction is the whole point of the test.
 
 **Do not** loosen the endpoint tolerance, substitute a bare state for a masked one, or
 report a loop integral computed across a branch transition.
+
+---
+
+## PRIORITY REVISION 2026-07-29 (user): all-field susceptibility is the goal
+
+The user's primary objective is to **compute chi at every magnetic field**, not to settle
+the epistemics first. Strict zero field may be skipped if the double degeneracy is
+problematic there. This reorders the remaining work.
+
+**New top packet -- S9: field-wide damping-ladder census.** E1 established that the
+3.825 T mask is outer-map iteration dynamics, not a domain failure, and that
+mix_outer = 0.30 closes that column completely (0/34 nodes fail, accepted A-D at every
+node). It is NOT established that this generalises. The decisive measurement:
+
+  For Bx over the full range of interest (e.g. 3.0-6.0 T at the driver's 0.025 T step,
+  plus a coarse low-field pass), run the column at a LADDER of mix_outer values
+  {0.7, 0.5, 0.4, 0.3, 0.2, 0.15} with max_outer 1000, and record for each field the
+  first ladder rung that closes the column, or that none does.
+
+  Output: the fraction of the field axis recoverable by damping alone, and the residual
+  set of fields that no rung closes. Reuse invzp_exec_s1_failure_census /
+  invzp_exec_s1_config_sweep unchanged -- this is a measurement, not new machinery.
+
+**If most columns close:** wire an opt-in adaptive-damping mode (try rungs until the
+column closes, record which rung was used) into the ordered path, default-off, and expose
+it in invz_run_spectra.m. That gives all-field chi spectra now.
+
+**The honest label that must ride with it.** A column closed by a damping ladder yields a
+SPECTRUM at an accepted state; it does not yield a certified equilibrium phase label. E4
+showed a 1e-12 arithmetic perturbation moving nodes to different A-D-accepted states, and
+E8 found 6-11 accepted states at one h. So such columns must be reported as
+`converged-under-damping-ladder, branch-not-certified` -- which is exactly the interim
+vocabulary of plan SS2.7/SS4, and does not breach the promotion boundary as long as the
+phase LABEL is not claimed. Producing chi where it was previously masked is a legitimate
+deliverable; claiming it is the equilibrium branch is not.
+
+**Resulting order:** S9 census -> (conditional) adaptive-damping mode -> S4 loop test ->
+WP1 nonzero-frequency blocker -> WP2 manifest. S4 drops below S9 because it is an
+epistemic check, while S9 is on the path to the user's actual deliverable.
