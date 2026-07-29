@@ -36,8 +36,8 @@ function [Jnu, info, Juni, Jcc_pages] = invz_jq_modes(ion, qvec, opts)
 % opts.odd remains brute-force-only: an active ODD request combined with the
 % Ewald dipolar backend (below) is rejected before either diversion runs.
 %
-% Dipolar backend (Step-5 Task 2, opt-in; parameters frozen 2026-07-24, summarised
-% in docs/INVZ-DEVELOPMENT-RECORD.md):
+% Dipolar backend (Step-5 Task 2, opt-in; parameters frozen 2026-07-24; operative
+% contract retained here):
 % opts.dipole = absent | 'bruteforce' (both resolve to the unchanged
 % brute-force MF_dipole path; identical cache identity) | 'ewald' (opt-in
 % invz_dipole_ewald primitive; opts.ewald must then be a scalar struct with

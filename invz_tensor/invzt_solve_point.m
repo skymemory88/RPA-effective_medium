@@ -3,8 +3,8 @@ function pt = invzt_solve_point(ion, T, B, lat, opts)
 %   pt = INVZT_SOLVE_POINT(ion, T, B, lat, opts) solves the paramagnetic 1/z
 %   self-energy fixed point at one (T, B) point using the FULL 12x12 tensor RPA
 %   (3 Cartesian x 4 sublattice) as the effective-medium lattice engine. This is
-%   the A1 dominant-sector bridge (docs/superpowers/plans/2026-07-17-invz-tensor-
-%   full.md, Task 6): the tensor RPA carries the transverse (ODD) mediation
+%   the A1 dominant-sector bridge (historical Task 6): the tensor RPA carries the
+%   transverse (ODD) mediation
 %   automatically and retarded, so A1 needs NO invz_chiperp / invz_odd_deltaJ.
 %
 %   B : scalar (transverse-along-a, historical) or [Bx By Bz] in Tesla.

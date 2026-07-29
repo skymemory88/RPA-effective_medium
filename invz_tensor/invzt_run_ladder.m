@@ -1,8 +1,8 @@
 function out = invzt_run_ladder(ion, opts)
 %INVZT_RUN_LADDER  A4 basis-defined state-space ladder driver (DATA ONLY, budget-refusing).
 %
-%   out = INVZT_RUN_LADDER(ion, opts) climbs the state-space ladder (Task 13,
-%   docs/superpowers/plans/2026-07-17-invz-tensor-full.md) -- 'three' (toy) then the
+%   out = INVZT_RUN_LADDER(ion, opts) climbs the historical Task-13 state-space ladder --
+%   'three' (toy) then the
 %   basis-content rungs 'e3'/'e6'/'e17' (lowest 3/6/17 CF states, multiplet-complete) and
 %   their 'xI8' nuclear products -- and reports how the tensor 1/z ODD physics evolves with
 %   BASIS CONTENT, cross-validated against the projected Tier-1+2 numbers. It RETURNS A

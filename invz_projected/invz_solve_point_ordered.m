@@ -401,8 +401,8 @@ if strcmp(omode, 'jensen')
     % path_omit_max FAILS CLOSED (plan-owner ruling 2026-07-26, mirroring the task-3 omit_max
     % ruling and DELIBERATELY replacing this brief's isfinite-filtered version): it is a
     % load-bearing promotion gate (the frozen predicate compares max(omit_max) over the
-    % solved path against omit_promote = 0.10 -- quoted in
-    % docs/invzp_strict_medium_gate0_report.md SS1), so a
+    % solved path against omit_promote = 0.10 -- summarized in
+    % invzp_convg_diagnosis.md Section 8.2), so a
     % corrupted node must never be quietly dropped from the maximum. Inf DOMINATES, NaN POISONS.
     if isempty(hprof.omit_max)
         pt.path_omit_max = NaN;

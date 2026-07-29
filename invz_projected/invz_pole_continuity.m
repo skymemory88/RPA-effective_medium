@@ -1,7 +1,7 @@
 function res = invz_pole_continuity(h, d, y, tol)
 %INVZ_POLE_CONTINUITY Actual-path G17 crossing-continuity check (Task 18 Step 1; the
-% preregistered algorithm, implemented verbatim -- constants quoted in
-% docs/invzp_strict_medium_gate0_report.md SS1). G = -chi (meV^-1), ferromagnetic positive J.
+% preregistered algorithm, implemented verbatim -- constants summarized in
+% invzp_convg_diagnosis.md Section 8.2). G = -chi (meV^-1), ferromagnetic positive J.
 %
 % Detects every crossing of the LOCAL Gstat denominator d = prof.gstat_local_denom along the
 % actual solved profile h = prof.hgrid, and checks that the observable y (prof.r or prof.crit)

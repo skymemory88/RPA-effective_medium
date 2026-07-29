@@ -14,8 +14,8 @@ function g = invzt_qgrid(n, conv)
 %                     convention (both) and the duplicated reciprocal-
 %                     periodic face convention (legacy_inclusive only).
 %
-%   CONVENTIONS (Global Constraints, docs/superpowers/plans/2026-07-17-
-%   invz-tensor-full.md, LOCKED -- never mix conventions inside one
+%   CONVENTIONS (historical tensor Global Constraints, LOCKED -- never mix
+%   conventions inside one
 %   comparison):
 %     'halfopen' (default for new tensor work)
 %       ndgrid((0:n-1)/n) replicated over the 3 axes -- n DISTINCT points per

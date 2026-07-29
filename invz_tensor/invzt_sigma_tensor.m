@@ -6,8 +6,8 @@ function out = invzt_sigma_tensor(si, T, lat_eff, wn, beta, opts)
 %   [3,3,nwn] for the three-state single-ion toy si (INVZT_THREESTATE), resums it
 %   into a renormalized local susceptibility, closes it against the lattice through
 %   the A2 matrix effective medium, and iterates the whole map to self-consistency.
-%   This is the A3 rung of docs/superpowers/plans/2026-07-17-invz-tensor-full.md
-%   (Task 12); its central validation is the framework SS11.8 EMERGENCE gate (A3's
+%   This is the historical A3/Task-12 rung; its central validation is the protected
+%   framework Section 11.8 EMERGENCE gate (A3's
 %   Gaussian truncation reproduces A1/E1), exercised by INVZT_SOLVE_POINT mode 'a3'.
 %
 %   INPUTS

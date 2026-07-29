@@ -1,8 +1,7 @@
 function res = invz_ordered_residual(node, state, opts)
 %INVZ_ORDERED_RESIDUAL Pure, non-mutating complete-residual checker for a jensen ordered
-% node's exported (Sigma, K, lam, K0s) tuple (stage-2c task 1a/9; contract:
-% docs/invz_ordered_residual_contract.md -- read that file for the full derivation, units,
-% and scale justification of every number used below; NOTHING here is tuned to a run).
+% node's exported (Sigma, K, lam, K0s) tuple (stage-2c task 1a/9; contract summarized
+% in invzp_convg_diagnosis.md Section 2.4; NOTHING here is tuned to a run).
 % G = -chi (meV^-1), ferromagnetic positive J.
 %
 % Implements four independently-recomputed residual blocks:
@@ -84,7 +83,7 @@ function res = invz_ordered_residual(node, state, opts)
 %       contract Sec. 4 and its dated Block-B subsection).
 %   .D_uni, .Dq_min, .Dq_max -- block B's independent recomputation, exposed per the
 %       contract (never folded away: a sign-changing Dq/D_uni may be PHYSICAL instability,
-%       not noise -- stage2c-context.md).
+%       not noise; see invzp_convg_diagnosis.md).
 %   .stability -- struct('crit','D_uni','Dq_min','class','pass'), class in {'stable',
 %       'unstable','boundary_band','undefined'} (prereg SS1). Computed for EVERY node but
 %       folded into .accepted for NONE: intermediate path nodes are the unstable Landau

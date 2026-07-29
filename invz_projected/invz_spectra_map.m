@@ -19,7 +19,7 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %   Per-field diagnostics: S.phase (1 = moment-form (spontaneous FM below Bc, or field-induced
 %   under a longitudinal tilt -- a rounded crossover, no sharp Bc), 2 = strict paramagnet,
 %   0 = masked). RPA and 1/z are DIFFERENT theories with different critical fields
-%   (invzp_convg_diagnosis.md, especially SS9.5). S.phase stays the AUTO dispatch
+%   (invzp_convg_diagnosis.md, especially Sections 2.4 and 8). S.phase stays the AUTO dispatch
 %   (ordered-first bare-MF); the
 %   Sigma = 0 overlay built from it approximates the RPA state only where the ordered 1/z
 %   EMT converged to the bare boundary -- an RPA-independent dispatcher is a scheduled
@@ -159,9 +159,8 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %     'unstable_endpoint' 'medium_out_of_domain' 'degenerate_doublet' 'solver_failed'
 %     'pm_probe_unknown' 'boundary_indeterminate' 'not_attempted_longitudinal'
 %     'bare_not_ordered' 'response_failed'                  (masked columns)
-%   VOCABULARY EXTENSION, NOT YET RATIFIED IN THE SPEC (review M7). The design spec
-%   docs/superpowers/specs/2026-07-25-invzp-ordered-solver-static-medium-design.md:562-565
-%   enumerates phase_1z_reason as a CLOSED list of ELEVEN values; 'response_failed' (added by
+%   VOCABULARY EXTENSION (review M7). The historical design spec in Git history enumerated
+%   phase_1z_reason as a CLOSED list of ELEVEN values; 'response_failed' (added by
 %   review F3, so a chiz response failure under a strict scheme masks the column instead of
 %   letting an all-NaN spectrum anchor Bc_1z while wearing a 'pm'/'ordered' label) makes TWELVE.
 %   A Stage-4 G12/G16 consumer switching on this enum must handle it. It is unreachable today
@@ -518,10 +517,9 @@ function [chiz, chirpa, Sigma0, phase, phase_1z, crit_pm, m_1z, D_ord, static_me
           pm_probe_status, pm_probe_error_id, stability_1z, phase_1z_reason, ...
           ordered_diag_reason, response_error_id, hmf_seed_out] = ...
     one_field(ion, T, B, Jnu, Jcc0, Jaa0, Jshape, w, eta, hyp, sopts, bztol, o1z, sm)
-%ONE_FIELD chi''_cc(omega) at one field -- TWO independently phased legs (QCP Stage 1,
-% docs/superpowers/plans/2026-07-21-invzp-qcp-stage1-split-overlays.md; ordered 1/z leg
-% below Bc_1z upgraded to the Stage-2 jensen solve, docs/superpowers/plans/
-% 2026-07-22-invzp-stage2-ordered-thermodynamics.md):
+%ONE_FIELD chi''_cc(omega) at one field -- TWO independently phased legs (QCP Stage 1;
+% ordered 1/z leg below Bc_1z upgraded to the Stage-2 Jensen solve; see
+% invz_projected/README.html and invzp_convg_diagnosis.md):
 %   auto/overlay leg (chirpa): the ordered-first invz_solve_auto selection (bare-MF
 %     moment), UNCHANGED -- phase = 1 moment-form (FM or field-induced), 2 strict PM,
 %     0 masked, historical semantics. The Sigma = 0 overlay built from it approximates

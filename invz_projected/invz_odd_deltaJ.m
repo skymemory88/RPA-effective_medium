@@ -32,9 +32,8 @@ function [dJ, d, dinfo] = invz_odd_deltaJ(Vca, Vcb, Xp)
 %   NOT feed q-paths or partial meshes: the subtraction would then remove a
 %   path average, not a BZ average, and E4/E5 lose their meaning.
 %
-%   BOOKKEEPING -- NO DOUBLE COUNTING (ODD main-body plan T1.3 + section 8;
-%   docs/superpowers/plans/2026-07-16-invz-odd-mainbody.md and
-%   odd_implementation_plan.html):
+%   BOOKKEEPING -- NO DOUBLE COUNTING (ODD main-body T1.3; the theory is retained in
+%   jensen_1z_framework.html Section 11 and the operational contract below):
 %     The on-site constant subtracted by E4 multiplies (sigma^z_i)^2 = 1 in
 %     the strict two-level limit -- it is a PURE ENERGY SHIFT with no Tc
 %     content, which is why it is removed from the grid matrices here and

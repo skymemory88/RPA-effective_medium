@@ -29,8 +29,7 @@ function [cdom, crest, mspec] = invzt_chi0_split(si, T, z, opts)
 %   cdom + crest == full to floating-point round-off, independent of any
 %   physics judgment call folded into cdom's mask or elastic convention.
 %
-%   ELASTIC CONVENTION (LOCKED, docs/superpowers/plans/
-%   2026-07-17-invz-tensor-full.md Task 5): INVZ_CHI0Z's z~0 elastic term
+%   ELASTIC CONVENTION (LOCKED, historical tensor Task 5): INVZ_CHI0Z's z~0 elastic term
 %   is, per Cartesian pair (mu,nu):
 %       el(mu,nu) = beta*( sum_{(a,b) degenerate} M_mu(a,b) M_nu(b,a) p(a) )
 %                   - beta*Jexp(mu)*Jexp(nu),      Jexp = si.Jexp

@@ -1,1180 +1,604 @@
-# invzp ordered-leg non-convergence — implementation plan
-
-**Written 2026-07-27.** Derived from the consolidated diagnosis in
-`invzp_convg_diagnosis.md` (source-first, then reconciled against `docs/`, an independent QCP
-analysis now preserved in its §9.5, and external review).
-
-**Independently audited 2026-07-27 against the current MATLAB source.** The upstream diagnosis is
-substantially supported, but the original Phase 1 was not implementable as written:
-`invz_ordered_residual` is an acceptance checker that returns scalar norms and pass flags, not a vector
-residual for Newton, and its Block A calls the nested fixed-point map that the experiment is meant to
-replace. The continuation experiment and its decision fork have therefore been rewritten below. The
-audit also corrects the proposed node census, trace placement, h-grid work, and the scope of `omit_max`.
-A fresh MATLAB R2025a production-path run gave
-`hstar=NaN`, `status=node_failed`, 33 profile nodes/6 accepted, and 34 ledger nodes/6 accepted with the
-predictor failed. A separate R2025a semantics check confirmed that bare `max` omits NaN by default.
-Subsequent review feedback was folded in only where it survived an independent source/algebra audit:
-the Phase-1 Jacobian structure is explicit, the static residual is defactored to remove its
-`Gstat = 0` normalization degeneracy, and the four-variable reduction remains only a
-branch-conditioned analysis tool. The final pass replaces the coordinate-singular `Q` event by the
-physical `mean(Gq)` event, evaluates the diagnostic in the exact reciprocal chart `z = 1/Gstat` with
-`stable_form = true`, and defers structured-linear-algebra optimization until a profile or a
-low-temperature run justifies it.
-
-**Simultaneous-audit correction, 2026-07-28.** A QCP-anchored 4.05 T trace showed that the old
-Block-A audit replayed the nested static Picard solve and could choose a second `K0` root while
-grading a valid simultaneous `[Sigma,K0]` state. Accepted coupled roots had A/C/D residuals at
-`0`--`7.3e-15` and defactored B below `7.72e-10`, while the nested replay falsely reported
-`3.40e-3`--`3.12e-2`. The optional coupled audit now exactly matches
-`invz_ordered_node_equations`, derives and checks `K`/`lambda`, and invokes no nested static solve
-by default. The legacy/default formulation remains unchanged. This carried 126 accepted states from
-`h=0.0041142866` to `0.0117280521 meV`. Branch selection is still necessary: at one identical field
-two roots only `0.00103702` apart in scaled state have `r=0.768127507` and `0.822169537`.
-The immediate path is therefore QCP-anchored coupled continuation, retaining fine arclength only
-where fixed-`h` Newton switches branches.
-
-**QCP-first spectral delivery update, 2026-07-28.** The user's primary
-observable is the uniform susceptibility/mode near the quantum critical
-point; low-field completeness is secondary. The unchanged accepted
-production equations already meet that narrower target. A dense
-`T=0.10 K`, `q=[0 0 0]`, `B=4.60--4.90 T`, `0--6 GHz` run returned 61/61
-finite columns (19 Jensen-ordered, 42 stable paramagnetic, none masked) and
-a continuous soft mode through `Bc_1z=4.6925 T`, bracketed by
-`[4.690,4.695] T`. Commit `31a7fd0` made this the verified visual
-configuration and enabled both the susceptibility map and extracted peak
-curve. The current working tree has since been broadened by the user to
-3--6 T; that larger range must not be described as 101/101 verified merely
-because its 4.60--4.90 T subset is. A later grid ladder established that the
-accepted ordered width is a finite-grid sliver and that `Bc_1z` moves by
-`0.02067 T` from `12^3` to `24^3`. The `16^3` result is therefore a useful
-visual preview and regression anchor, not a grid-converged research result.
-
-## Current decision baseline
-
-There are now two separate deliverables:
-
-- **QCP susceptibility/modes:** ready for visual inspection on the verified
-  finite-`16^3`, 4.60--4.90 T window using the unchanged accepted production
-  equations. Quantitative comparison must carry the grid qualifier. An
-  opt-in downward-field warm continuation is now available for exploratory
-  visual maps; it changes initialization only and has already recovered
-  accepted columns just below the former QCP-side edge. A direct cold/warm
-  visual comparison by the user shows visibly more converged field slivers
-  in the warm map, and every newly visible mode follows the surrounding
-  field evolution smoothly, including the critical mode. This passes the
-  first empirical-coherence gate for the method. The safeguarded cold-start
-  experiment has now recovered 4.400 T inside the original 200-step cap and
-  reproduced the complete accepted 1000-step cold state exactly. It did not
-  extrapolate the interval-switching 4.300 T failure and did not repair the
-  broad 3.825 T multi-node failure. Warm-seed direction and spacing gates
-  are therefore needed only for columns not recovered to the same cold root.
-- **Complete low-field ordered coverage:** still open and secondary. No
-  continuation branch, smooth-`r` candidate, strict closure, or functional
-  prototype is authorized as the production default. In particular, warm
-  convergence proves that a numerical false negative was removed; it does
-  not by itself decide which of several accepted roots is thermodynamic.
-
-### Strategies tried and what each established
-
-| strategy | measured result | deficiency / decision |
-|---|---|---|
-| More Picard iterations and heavier damping | A 1 T PM fixed point can be reached after 879 iterations with `mix_outer=0.02`, but it is unstable (`crit=-3.669`); the ordered profile still failed after 10,354 aggregate outer iterations in the stronger test. Near the QCP, 4.400 T has a signed late-iterate factor near `-0.916` and is accepted when the cap rises from 200 to 1000, while changing warm-seeded `mix_outer` from 0.7 to 0.3 loses that solution. | There are two regimes: pole-sensitive/noncontractive low-field behaviour and a locally contractive but budget-limited QCP edge. A larger cap can remove some false negatives, but unconditional cap/mixing changes remain costly, non-monotone, and unable to select roots. |
-| Full-profile warm handoff between fields | A complete 4.05 T auxiliary-`h` profile did not complete 4.04 or 4.00 T; one matched-seed sequence reduced the accepted-node count. | Transferring every off-shell node can put later nodes in different basins. Do not use this stronger handoff as the production rule. |
-| Minimal QCP-down predictor warm continuation | The new opt-in `field_continuation='qcp_down'` transfers only the last fully accepted column's finite zero-`h` predictor state and retains the existing cold retry. With `mix_outer=0.50`, `max_outer=1000`, 4.425, 4.400, and 4.375 T all accepted consecutively; at the former default 0.70/200, 4.400 T was recovered but 4.375 T was not. The user's direct cold/warm susceptibility comparison then showed visibly more converged field slivers, all with empirically sensible, continuously evolving modes including the critical mode. | This establishes a viable local numerical route, proves some masks are initialization/iteration false negatives, and passes a first visual physics sanity check. It remains direction-, spacing-, grid-, and basin-dependent until the quantitative gates below are run; it cannot formally rank multiple residual-valid roots. |
-| Safeguarded cold signed-Aitken acceleration | Default-off, resummed-only cold acceleration recovered 4.400 T at 0.70/200 using three independently residual-decreasing proposals. The complete final state is bit-identical to ordinary 0.70/1000 cold Picard and agrees with the 0.50/1000 warm state to `2.08e-10` or better in the full vectors. At 4.300 T the predictor converges in 13 steps but a finite-`h` node switches intervals and admits no proposal; at the user-identified 3.825 T sliver, 17/34 nodes fail and one accepted proposal still does not pass the final node audit. | Confirms a bounded local remedy for the signed QCP-edge contraction without physical-field seed direction. It is not a global ordered solver or branch selector; same-state warm grading remains necessary elsewhere. |
-| Defactored fixed-node Newton | Repaired all three failed 3.6 T nodes and produced a 33/33 stable profile; at 1.5 T it repaired only the predictor and two nodes. | Confirms a local numerical Picard defect, but a fixed-`h` root is not automatically the continuous thermodynamic branch. Retain as a corrector/oracle only. |
-| Natural-parameter and pseudo-arclength continuation | Crossed regular fixed-`h` folds and showed that the clean 1.5 T high- and low-`h` segments turn away from the intervening interval. | Establishes non-single-valued root geometry and invalidates an unconditional Newton fallback. It does not select a path. |
-| Root census and coordinate stabilization (`q`, equilibrated `h`, `w=z-K0`) | Found seven zero-field roots; row equilibration and `w` greatly improved conditioning; root 6 has two observed legs tied to the same zero-field root. | Other legs and root 7 remain incomplete; finite samples are not continuous signed-edge certificates. Coordinate changes improve solving, not physics selection. |
-| Coupled simultaneous audit | Removed the false nested Block-A veto: accepted roots have A/C/D at machine precision and B below `7.72e-10`; a 126-state trace became auditable. | Also exposed two accepted roots at the same `h`. The correction proves equation closure, not uniqueness or thermodynamic admissibility. |
-| Smooth-`r(h)` backup and evidence graph | Scale-free shape selector, fail-closed graph schemas, root enumerator, guarded fixed-`h`/arclength primitives, and adaptive two-state handoff are implemented diagnostically. | No complete candidate graph, continuous event enclosure, direction/cold-seed/refinement proof, or production dispatch exists. |
-| QCP-connected smooth low-`r` branch at 4.05 T | Continued accurately to the common ceiling, but its own `F_path` stayed negative (`-0.00293612268` at `h=0.02313633386565907 meV`). | It has no nonzero admissible Jensen endpoint. The legacy branch's crossing cannot be borrowed. Return `no_admissible_endpoint`; do not use its off-shell spectrum. |
-| Strict static medium and Ewald backend | Removing the resummed pole establishes mechanism; Ewald fixes a separate lattice-sum defect. | The strict candidate failed its frozen Gate 0, and both dipolar backends exhibit the ordered failure. Neither supplies branch selection. |
-| Common-functional route | The ring functional, exact cluster/cumulant oracles, electronuclear local reference, and exact-local bilocal curvature produced valuable checks. The simplest varied-covariance skeleton failed its immutable mixed-chain oracle. McKenzie and Stamp's Hubbard--Stratonovich construction gives an exact local-cumulant action and source-generator identities for a related quantum-Ising/spin-bath model, and therefore supplies a useful normalization/sign oracle. | The paper does not give a 2PI functional for the present dressed `Sigma/K0` equations or rank their roots. A correct electronuclear local-bilocal/2PI functional still needs same-order `C3-C3`, nonlinear Legendre, tail, thermodynamic, and discretization work. It remains the preferred formal selection route, but not a quick spectra patch. |
-| Unchanged production QCP sweep | 61/61 finite columns, no masks, and a continuous soft mode through `Bc_1z=4.6925 T`. | This is a narrow finite-`16^3` visual regression, not evidence that its boundary is grid-converged or that 3--6 T / 0--9 T is complete. |
-| Coupling-only plus state-only grid ladder | The Γ-exclusion gap scales about `N^-1.103`; the contiguous accepted width scales about `N^-1.076`. At criticality the exact edge control is `D(Jmax)=|S_N(J0)|(J0-Jmax)`, and measured width divided by this control is `3.08--3.33 T`. `Bc_1z` moves from 4.68228 T (`12^3`) to 4.70296 T (`24^3`). | Confirms a finite-grid computability sliver and falsifies the expected `<=0.01 T` boundary shift. Extend the cheap pure-lattice `S_N(J0)` convergence before another expensive state grid; the `16^3` QCP spectrum is not grid-converged. |
-| Phase-aligned QCP susceptibility gate | At ten matched `B-Bc(N)` offsets, all 40 columns are finite/correctly phased and the `12^3--24^3` peak curves differ by only `0.38--0.53%`; a halved frequency step reproduces the extreme-grid spreads. | The shape is robust once aligned, but the estimated field-axis displacement contributes `~0.26--0.28 GHz`, more than fifty times the largest graded vertical spread (`0.00437 GHz`). This gate does not grade spectral weight/analytic poles. |
-| Fixed-G and coupled inner charts | Source inspection shows `Gstat(K0)` is recomputed inside the static K0 loop; at the 4.400 T failure the inner static residual is already about `5e-11` while the outer Σ residual fails. | Reject `S_N(y)=constant` at this edge. The distinct coupled chart `R(K0)=S_N(y(K0))-Gstat(K0)` is compatible with the inner equation on a declared interval, but it targets the wrong QCP block; demote it to a possible low-field diagnostic. |
-| Jensen area-rule oracle | `F=h0-J0*m` and `integral(crit dh)` converge toward each other at second-order trapezoidal rate; direct subtraction is ill-conditioned near the crossing. | Useful cancellation/quadrature meter only. A finer 65-node grid sampled a new failed state, so it cannot bypass missing path nodes. |
-
-### Planned next steps, in priority order
-
-1. **Retain the cold/warm visual comparison as the first passed gate.**
-   Preserve the cold 4.60--4.90 T result as the regression control and the
-   saved cold/warm figures as qualitative evidence. Label newly recovered
-   columns as experimental warm-continuation output; visual smoothness is
-   supporting evidence, not a substitute for state comparison.
-2. **Retain the completed safeguarded cold-start discriminator.** At
-   4.400 T, three restarted signed-Aitken proposals at outer iterations
-   143/147/152 reduced fresh unmixed residuals while remaining on interval
-   16384; ordinary iteration closed at 153 and the complete state is
-   bit-identical to long cold Picard. At 4.300 T the predictor is already
-   fast and one finite-`h` node alternates between intervals 16384/16376,
-   so no proposal qualifies. At 3.825 T the failure spans 17/34 nodes.
-   Keep the method default off and resummed-only; the unchanged A--D/all-node
-   audit and complete-state overlap remain binding.
-3. **Grade warm continuation only where cold acceleration does not already
-   recover the same state.** Freeze the demonstrated `mix_outer=0.50`,
-   `max_outer=1000` reference, refine the physical-field step, and record
-   accepted-column count plus seed provenance, `hstar`, `rstar`, `Sigma(0)`,
-   moment, pole, and full residual. Compare downward, upward, accelerated-
-   cold, and ordinary-cold solves wherever they overlap. A root jump or
-   direction-dependent state is `branch_ambiguous`, not a successful fill.
-4. **Converge the coupling transform before another solver-grid gate.**
-   Extend the cheap pure-lattice `S_N(J0)` calculation beyond `24^3`, then
-   propagate it through `K0=J0+1/S_N`. If a fine-grid/tabulated `S(x)` is
-   handed to a coarser state solver, first prove explicit-grid reproduction
-   and bound interpolation/edge error; this numerical representation is not
-   assumed equivalent. Then repeat accepted support and phase-aligned peaks.
-5. **Use spectral weight as a rejection and empirical-discrimination gate,
-   not the formal selector.** Compare analytic pole residues or integrated
-   peak areas (not broadened peak height), positivity/causality, and relevant
-   sum rules for competing residual-valid states. If more than one state
-   passes, the thermodynamic ambiguity remains.
-6. **Develop the common functional in bounded oracle-first steps.** First
-   map the McKenzie--Stamp source/action convention to the existing exact
-   `C2/C3/C4` cluster oracles. Then derive the source-dependent local
-   bilocal/2PI Legendre functional whose stationarity reproduces the same
-   one- and two-point equations and whose Hessian gives the response. Only
-   after the same-order `C3-C3`, electronuclear tail, Maxwell/energy, and
-   grid/cutoff gates pass may stationary values be used to rank roots.
-7. **Keep complete low-field coverage fail-closed and secondary.** For a
-   named useful field, first test that the followed component has its own
-   admissible Jensen endpoint. Preserve the documented scale-free smooth-
-   `r(h)` prescription only as an explicit backup if the common-functional
-   route remains impractical; it is a declared bias, not derived
-   thermodynamics.
-
-For low-field continuation, endpoint-first remains the principal
-simplification: reject a branch that cannot satisfy its own Jensen
-free-energy equation before paying for global topology or production
-wiring. Warm seeding has already shown that initialization can remove local
-false negatives. The signed edge contraction now makes safeguarded cold
-acceleration the still simpler next experiment because it may recover the
-same root without physical-field seed direction. For the QCP observable,
-coupling-transform convergence still precedes any quantitative absolute-
-field claim.
-
-## Dated execution record
-
-**Minimal QCP-down warm-continuation result, 2026-07-28.** Source inspection
-showed that the ordinary spectra map solved physical-field columns
-independently; its warm starts were only along the auxiliary Jensen
-`h`-grid inside one field. Commit `ee00752` added an opt-in sequential
-`field_continuation='qcp_down'`. It solves in descending physical field,
-passes only the last fully accepted column's finite `(Sigma,K0s)` state to
-the next column's zero-`h` predictor, retains the existing cold retry, and
-never advances the seed after a failed/incomplete column. The equations,
-all-node Jensen gate, residual tolerances, stability labels, and default
-map mode are unchanged; result fields expose whether and from which field a
-seed was supplied.
-
-On the frozen `16^3`, `T=0.10 K` edge fixture, default-like
-`mix_outer=0.70`, `max_outer=200` accepted 4.425 T cold and recovered
-4.400 T warm, but not 4.375 T. Stronger damping
-(`mix_outer=0.30`, cap 1000) lost the warm 4.400 T result. Intermediate
-damping (`mix_outer=0.50`, cap 1000) accepted 4.425, 4.400, and 4.375 T
-consecutively with the unchanged residual gates. A continuation-off cold
-regression still accepted 4.425 T without a seed. This is direct evidence
-for a local algorithmic component and a useful visual-preview route, not
-evidence of global uniqueness. The committed measured reference is
-0.50/1000; any later interactive-driver setting, including the current
-user-edited 0.40/5000 configuration, is exploratory until its output is
-separately graded.
-
-The subsequent user-run cold/warm susceptibility comparison supplied the
-first observable-level check. The warm-seeded map contains visibly more
-converged slivers along the magnetic-field axis than the cold map. Every
-recovered sliver was judged empirically sensible: its modes evolve
-continuously with neighboring field columns, including the critical mode.
-The comparison is retained in `Data/cold_seeding_chi_1z.fig` and
-`Data/warm_seeding_chi_1z.fig`. This is first-hand qualitative evidence,
-not yet a counted field-by-field or bidirectional state audit. It promotes
-the method to the leading near-QCP numerical candidate, while leaving the
-direction/full-state/refinement gates binding.
-
-**Safeguarded cold-start acceleration result, 2026-07-29.** A default-off
-`cold_acceleration='signed_aitken1'` experiment now operates only on fresh
-cold attempts under the resummed medium. It fits the signed scalar factor
-from four successive full `Sigma` increments and requires a common static
-interval, closed inner solves, a negative stable factor, a small one-mode
-fit error, and a strict decrease of freshly evaluated unmixed full-vector
-residuals. Every proposal restarts the history; ordinary iteration resumes
-and final acceptance remains the unchanged A--D/all-node audit.
-
-At 4.400 T and 0.70/200, proposals at outer iterations 143, 147, and 152
-had signed factors `-0.908610599`, `-0.911828939`, and `-0.921293084`.
-They stayed on interval 16384 and reduced the fresh residual successively
-from `1.17e-3` to `9.20e-5`, `6.47e-5` to `4.20e-7`, and `2.71e-7` to
-`8.45e-10`. Ordinary iteration closed at 153. The complete accepted state
-is bit-identical to the pre-change ordinary 0.70/1000 cold reference and
-agrees with the predictor-warm 0.50/1000 state within `2.08e-10` in
-`Sigma`, `2.70e-12 meV` in `K`, and `1.88e-11` in `lambda`.
-
-The negative controls separate regimes. At 4.300 T the cold predictor
-accepts in 13 iterations; the only failed auxiliary-`h` node instead
-alternates between intervals 16384 and 16376 and has no eligible scalar
-mode or proposal. At the user-identified 3.825 T cold/warm-negative sliver,
-17/34 nodes fail at the 1000-step cap across several interior intervals.
-One later cold retry accepts a residual-decreasing proposal but still fails
-the unchanged node audit. The retained compact evidence and reproduction
-driver are under
-`docs/diagnostics/invzp_cold_accel_2026-07-29/`. This validates a local
-4.400 T remedy, not a global low-field accelerator or branch selector.
-The current cached and freshly generated coupling vectors are bit-identical
-with exact digest `499922e6...`, not the older nominal-fixture digest
-`ddb9532d...`; all current pre-change solver anchors reproduce, but that
-byte-level provenance conflict remains open.
-
-**Thermodynamic-functional literature assessment, 2026-07-28.** McKenzie
-and Stamp, *Phys. Rev. B* **97**, 214430 (2018), derive an exact
-Hubbard--Stratonovich partition-integral action for their stated
-quantum-Ising/spin-bath Hamiltonian in Eqs. 19--36. Its vertices are exact
-single-site connected cumulants, and source derivatives generate
-magnetization and correlations; the quadratic truncation recovers RPA and
-Eq. 37 displays the local cubic/quartic vertices. This is a useful external
-check on the signs, beta factors, source normalization, and
-`C2/C3/C4` organization already required by WP0. It does **not** provide
-the nonlinear local-bilocal/2PI Legendre functional for the present
-resummed `(Sigma,K0)` stationary equations, nor a value that can simply be
-evaluated on the seven current roots. The proposed use is therefore a
-small normalization cross-audit first, followed only on success by the
-same-order 2PI derivation; it is not a literature-authorized retrofit of a
-free-energy score to the existing residual. Full equation-level assessment
-is in `invzp_functional_derivation_audit.md` §4.1 (commit `fab74cc`).
-
-**QCP grid/conditioning gate, 2026-07-28.** Coupling-only calculations were
-run before the state gate. For `N=12,16,20,24`, the excluded-Γ gaps are
-`0.60124,0.43930,0.33866,0.28143 μeV`, approximately `N^-1.103`, while
-`S_N(J0)` moves from `-196.7302` to `-199.3844 meV^-1`. The state-only gate
-used the same common `4.000:0.025:4.700 T` mesh and solver-grade PM mass
-roots. `Bc_1z` is `4.6822845,4.6927582,4.6990936,4.7029572 T`; the
-contiguous accepted ordered width below it is
-`0.38228,0.26776,0.22409,0.17796 T`, approximately `N^-1.076`. The width
-prediction is supported; the expected `<=0.01 T` boundary shift is
-falsified.
-
-At the `16^3` acceptance edge, 4.400 T and 4.425 T both stay in the
-rightmost `y>Jmax` interval. The failed 4.400 T predictor has a converged
-inner static residual but an outer-map residual ratio near `0.916`;
-4.425 T converges in 13 iterations. Raising `max_outer` to 1000 accepts
-4.400 T but still fails 4.300 T. The proposed fixed-G monotone inner solve
-is therefore not implemented: source inspection confirms that
-`Gstat(K0)` is recomputed inside the K0 loop, and the failing block is the
-outer Σ closure. The area-rule comparison is retained as a diagnostic
-only. Full results and reproduction are in
-`docs/diagnostics/invzp_qcp_grid_2026-07-28/README.md`.
-
-The companion response gate evaluated ten offsets from each grid-specific
-`Bc`, spanning `±0.005--0.080 T`, on a `0.002 GHz` real-frequency mesh. All
-40 susceptibility columns were finite and correctly phased. Peak curves
-across `12^3--24^3` have relative spreads of `0.38--0.53%`; repeating four
-offsets on `12^3/24^3` at `0.001 GHz` changes individual peaks by only about
-`1e-5 GHz`. The phase-aligned soft-mode shape is therefore stable; the
-remaining load-bearing grid uncertainty is chiefly absolute field
-alignment through `Bc(N)`.
-
-**External-plan review disposition, 2026-07-29.** Independent recalculation
-confirmed the review's main regime correction. The retained 4.400 T
-increments alternate with signed factor about `-0.916`; it is a slow local
-contraction, so the old global “not slowly converging” claim is withdrawn.
-This supports a safeguarded cold-start acceleration pilot before the full
-warm-continuation campaign. Two review claims were not adopted literally:
-an unsigned `+0.916` extrapolation has the wrong sign, and
-`rho=10^(-8/max_outer)` omits the transient and residual prefactor, so it
-is not an exact acceptance-edge law. Likewise acceleration is not assumed
-basin-preserving; agreement with the long-Picard and warm stationary states
-is a gate.
-
-The same audit verified the critical coupling identities. At `16^3`,
-`G=S_N(J0)=-198.0061 meV^-1`, `K0=J0+1/G`, and the most negative coupling
-gives `u=+1.6112` (`D=2.6112`), while the near-FM edge gives
-`u=-0.9130` (`D=0.0870`). Thus the strict geometric series is not uniformly
-controlled at criticality even though the resummed rightmost-branch closure
-is solvable. The exact FM-edge distance
-`D(Jmax)=|S_N(J0)|(J0-Jmax)` predicts the measured ordered width with a
-factor `3.08--3.33 T`. This promotes fine-grid convergence of the cheap
-pure-lattice `S_N(J0)` ahead of another state-solver grid. Finally, the
-estimated field-axis displacement changes the mode by `~0.26--0.28 GHz`,
-more than fifty times the largest phase-aligned vertical grid spread; a
-shape-only experimental comparison may fit `Bc`, while an absolute-field
-claim may not.
-
-**Execution update, 2026-07-27.** First-hand inspection of the current `invz_run_spectra` output added
-an important constraint: convergence is non-uniform across the ordered field range; usable columns
-can occur near the apparent QCP while moderate-field columns (for example 1.5 T) are masked. A direct
-solver-only pilot on the exact legacy 16³/brute-force production coupling confirmed that pattern.
-At `T = 0.10 K`, Picard accepted 30/33 profile nodes at 3.6 T but only 11/33 at 1.5 T. Reversing the
-3.6 T node traversal left exactly the same three failed nodes, whereas a defactored residual Newton
-corrector repaired only those nodes in 4/4/8 iterations; the unchanged HMF equations then gave
-33/33 nodes, `hmf = 0.01949623263696515 meV`, and a stable endpoint. At 1.5 T the same method repaired
-the predictor and two nodes but left the path incomplete (13/33). Thus a local numerical-stability
-defect is established at 3.6 T, while the moderate-field failure needs continuation rather than a
-one-node solver swap. A subsequent 300-node natural-`h` trace at 1.5 T remained A–D accepted down to
-`h = 0.003414300661 meV` without a pole or mean-cancellation event, but it did not have a sufficient
-branch-identity gate. Repeating the trace with scaled variables and an analytic tangent predictor
-instead stopped at `h = 0.005243548157786061 meV`, where `rcond(J) = 1.027e-11`,
-`|deta/ds| = 1.771e-6`, and `sigma_min(J) = 9.672e-6`, while the augmented tangent block remained
-regular with `sigma_min([J R_eta]) = 0.4581`. Scaled pseudo-arclength crossed this fold with all A–D
-audits accepted and changed `deta/ds` from `-1.771e-6` to `+8.358e-4`. Thus the clean high-`h`
-branch turns back toward increasing `h`; the earlier lower-`h` secant roots were reached by a branch
-jump and are not evidence of a continuous Jensen path. Repeating the local segment at one-quarter
-the initial arc step bracketed the zero of `deta/ds`, returned the unbounded interpolation estimate
-`h = 0.005243548147122800 meV`, and kept successive oriented-tangent overlap above
-`0.9999999999`. The fold topology is established near `5.243548e-3 meV`; the coordinate is not
-certified.
-
-An independent low-`h` test then used three declared deterministic cold seeds, none derived from the
-high-`h` trace. All converged to the same `h = 0` root within a scaled-state diameter of `4.278e-12`.
-Upward tangent continuation reached a second fixed-`h` rank loss at only
-`h = 1.130400753628218e-5 meV`: `sigma_min(J) = 1.558e-5` while
-`sigma_min([J R_eta]) = 0.5629`. Pseudo-arclength crossed it with all A–D audits accepted and changed
-`deta/ds` from `+2.677e-7` to `-5.243e-7`, establishing a local maximum near
-`h≈1.1304e-5 meV`. Its raw interpolation output, `1.130402502867847e-5 meV`, has no retained
-enclosure or uncertainty. The directly traced low- and high-`h` neighborhoods are disjoint and
-turn away from the intervening range. Roots returned by the earlier secant experiment between the two
-folds must lie on at least one additional branch segment. More remote folds could in principle join
-segments globally, but the two local folds already establish multiple real fixed-`h` roots and hence
-the branch-selection obstruction.
-
-That result changes the near-term priority, not the rigor threshold. The retained Newton kernel lives
-under `docs/diagnostics/invzp_solver_stability_2026-07-27/` and is not wired into production HMF:
-an A–D-accepted fixed-`h` root is not automatically the continuous branch required by the Jensen
-integral. The low-`h` overlap test is now complete and has reached the second row of the Phase-1 fork:
-multiple reproducible real branches/components. No fixed-node Newton fallback is eligible for
-production, and a wider field map or expensive grid/cutoff funnel would not resolve which component
-belongs in the Jensen integral. The next implementation requires a separately justified and
-preregistered branch-selection prescription (or the common-functional formulation). The intermediate
-secant-root component may be traced only if its topology is needed to choose or falsify such a
-prescription.
-
-**Retained continuation oracle, 2026-07-28.** The defactored residual/Jacobian and exact HMF
-fixed-`h` node construction are now exposed only under diagnostics, together with a scaled bordered
-pseudo-arclength tracer. On the frozen 0.10 K, 1.5 T legacy 16³ fixture, 149 full-state roots traced
-the clean high-`h` component through its regular fold; every independent A--D audit passed. A local
-Hermite tangent reconstruction returned `0.0052435482911986821 meV`, but that value lies above the
-accepted node at `0.005243548157786061 meV` and therefore cannot be a certified minimum. Both it and
-the quarter-step output are rejected as precision claims; the tangent sign change and regular
-bordered corrector, not a fold coordinate, validate the retained continuation primitive. They do
-not validate a Jensen path: disconnected root discovery,
-single-valued section construction, endpoints, reverse/cold-seed agreement, and refinement gates
-remain outstanding. The dense oracle cost 1292.9 s, making the already derived
-diagonal-plus-low-rank bordered solve an obvious candidate until profiling showed otherwise: at the
-742-variable fold the dense solve plus `rcond` costs only `0.0141 s`, versus `1.771 s` for one
-Richardson equation/Jacobian evaluation. The exact factor solve agrees to `1.66e-15` but saves only
-milliseconds. Exact last-point caching is therefore adopted; redundant node/field-derivative
-evaluation is the next performance target. A deterministic retry envelope now limits attempts per
-accepted step and equation evaluations per corrector attempt. Exhaustion is retained as an explicit
-failure and cannot be mistaken for a physical endpoint.
-
-At the low positive endpoint, a bounded h-coordinate corrector now fails reproducibly rather than
-running away: the best tested field column has `1.30e-3` Richardson drift against bordered
-`rcond≈1.76e-11`, and the corrector stagnates at residual `1.91e-5`. A separate diagnostic
-`q=(h/h_reference)^2` adapter, with
-`h_reference=6.890625e-9 meV` fixed to the last accepted h-coordinate handoff, preserves every
-original positive-h equation and advances three
-A--D-audited points to `q=0.775`. The next attempted point exposed a static-only
-`1.33548e-8` machine-resolution floor that row scaling did not remove. A default-off, one-shot
-scalar-`K0` proposal bounded by physical-`K0` ULPs and every unchanged full acceptance gate removes
-that floor; adaptive centred q stencils then carry the same component to
-`q=0.062004970571964718`, where independent q-Jacobian refinements disagree by about 6% and the
-trace stops. It deliberately labels `q=0` unresolved; without a proof of even-in-h smoothness, a
-finite q stencil cannot rule out a `sqrt(q)` term or identify an h=0 root. This is a numerical
-stability result, not production-path authorization.
-
-The subsequent derivative-free fixed-`h` audit shows that the apparent endpoint rank loss is largely
-row scaling: the physical-coordinate raw/equilibrated Jacobian `rcond` values are
-`8.27e-13/6.10e-9`. Default-off row equilibration, applied only to the Newton solve/rank gate, extends
-the same A--D-accepted component to `h=3.4035747258282251e-10 meV`. It then fails under refinement;
-a direct `h=0` solve has residual `5.077e-2`, and the last accepted positive state is at least `0.312`
-from all seven enumerated zero-field roots. The endpoint identity is therefore unresolved rather
-than numerically selected, and production/Jensen wiring remains prohibited.
-
-**Root-census and low-endpoint update, 2026-07-28.** A retained explicit-seed enumerator now records
-all fixed-`h` attempts and clusters the complete independent coordinates `[Sigma;K0]` through an
-order-independent uncertainty band; `K` and `lambda` remain derived. At 1.5 T and `h=0`, a 25-seed
-product census produced 16 accepted attempts and seven distinct roots; the earlier agreement of
-three cold seeds was therefore basin-local, not uniqueness evidence.
-A staged trace used cheap fixed-`h` nodes away from the low fold and pseudo-arclength only locally,
-crossing the same fold. Its short-trace interpolation returned `1.1303917626651595e-5 meV`, below an
-accepted node at `1.130400753628218e-5 meV`, so it is rejected as a certified maximum. On the
-returning leg the raw q-average closure is
-amplified by `G*Gbar`; the optional diagnostic `audit_coordinate='defactored'` instead checks the
-equivalent regular-domain equation `|K0-Jloc|/Jscale`. It carried the branch to
-`h=6.890625e-9 meV`, where the original raw fixed-`h` rank gate intervened. The later
-row-equilibrated audit above shows that this gate was dominated by row imbalance and extends the
-component farther, but still establishes no connection to any enumerated `h=0` root. Branch
-topology, Jensen-section construction, and production wiring remain unresolved.
-
-**Theory-route update, 2026-07-28.** The explicit-prescription backup is now specified in
-`backup_plan_biased_convergence_solution.md`, with global smoothness of `r(h)` as its primary declared bias and
-state/QCP continuity as binding gates. The preferred-route audit is recorded in
-`invzp_functional_derivation_audit.md`: Jensen's field equation supplies a one-dimensional potential
-only after an internal branch has been selected, and the scalar EMT closure has an isolated log
-potential, but neither is a common functional for the coupled resummed equations. The current Newton
-residual is not a direct or diagonally rescaled gradient. The strict scalar two-level WP0 derivation
-is now closed at the unicyclic `O(1/z)` scope in `invzp_functional_wp0_spec.md` and
-`invzp_functional_wp0_ring_derivation.md`. The isolated `invz_functional/` prototype implements the
-ring common functional and exact two-site oracle without modifying or dispatching from the production
-solver. This remains the preferred staged route.
-
-The backup route now also has an evidence-only graph assembler. It creates no edge from geometric
-proximity: every vertex must carry strict residual, A--D, domain, and signed-margin certificates,
-and every edge must carry local-continuation, predictor-tube, signed-event-bracket, and applicable
-tangent evidence. Equal-`h` adjacencies always require the tangent gate. Nonmonotone fold segments
-remain graph evidence rather than Jensen sections, and unresolved terminations remain blockers.
-This closes graph normalization only; it does not supply the missing low endpoint or authorize path
-selection.
-
-The fixed-`h` trace now has a strict graph-input adapter. Future Newton records carry their complete
-normalized gate configuration, and a passing edge certificate must be tied to a preregistered
-method, exact source/pair, signed-margin list, positive full-edge lower bounds, and proof payload.
-The adapter never promotes pointwise-positive margins. The retained root-6 reverse trace therefore
-produces 33 vertex inputs but all 32 adjacencies remain explicit signed-event blockers; this removes
-manual schema translation without overstating connectivity.
-
-A subsequent discrete reparameterization by `w=z-K0` strengthens the numerical diagnosis without
-changing that graph verdict. On the same root-6 opposite leg, all 32 positive targets corrected in at
-most four Newton iterations, with maximum residual `9.4914e-11`, minimum bordered
-`rcond=1.6065e-9`, and maximum fixed-`h` state mismatch `5.8624e-11`. The separate zero-field anchor
-retained residual `7.5218e-14`. These are well-conditioned sampled roots, not continuous edges.
-The fail-closed evidence adapter now labels all 32 scalar intervals conditional, supplies no
-unproved normalized `z` bound, and unlocks zero graph edges. Fresh guards reject NaN
-residual/condition/anchor data, failed nested audits, provenance mismatch, and a residual-passing
-point below the bordered-rank floor.
-
-**Simple-first multi-root update, 2026-07-28.** The seven zero-field roots do not share one uniform
-convergence failure. A cheap upward screen followed by local continuation found two additional
-regular folds. Root 4 turns near `5.56814e-6 meV`; root 6 turns near
-`9.54114e-6 meV`, with no certified enclosure attached to its raw turn estimate. The root-6
-returning leg crosses zero and, after a small local refinement,
-matches the root-6 census medoid within `1.42e-14` in the frozen cluster metric. Its interpolated
-predictor correction is `7.43e-12`, below the `1e-9` same-root threshold. This is the first certified
-zero-field endpoint connection for one of the newly enumerated components. A cheap 33-node
-fixed-`h` reverse trace then reached zero along the opposite root-6 leg with every A--D gate
-accepted, no event failure, and endpoint distance `7.92e-14` from root 6. This closes the endpoint
-identity question for both observed root-6 legs, but the sampled fixed-`h` sequence does not supply
-the continuous signed-edge certificate required by the backup graph.
-
-The same campaign isolates two avoidable numerical costs. First, a corrector tolerance of `8e-9`
-was too close to the independent `1e-8` A/C gates and could accept a predictor before it was accurate
-enough for the A--D audit; the defactored continuation uses `1e-9` instead. Second, the raw closure
-can reject an accepted defactored root through susceptibility amplification: one root-4 point has
-vector residual `2.78e-10`, but raw closure residual `2.39e-8` against a `1.14e-8` gate. The exact
-defactored `|K0-Jloc|/Jscale` diagnostic coordinate removes that veto without changing the algebraic
-equation; it does not replace frozen production/raw certification. A proposed h-coordinate copy of
-the q-path ULP polish was removed after both root-4/root-5 proposals fell outside its registered
-envelope. These findings strengthen the numerical-stability diagnosis but do not authorize
-production: root 7's endpoint, untraced legs of other roots, signed event-edge certificates, and a
-complete single-valued Jensen candidate remain unresolved. Further diagnostics must be one root per
-process and checkpoint before summaries.
-
-**First production-input functional pilot, 2026-07-28.** The isolated strict functional now has a
-read-only adapter to the actual scalar BZ coupling multiset and transverse electronic doublet. At
-`T=0.1 K, Bx=1.5 T` it finds two stable, degenerate ordered minima on the legacy `16^3` couplings;
-the positive state is `h=0.0329775225244 meV`, `m=5.13313920359`, with minimum ring denominator
-`0.9322`. Complete root re-enumeration is stable over Matsubara cutoffs `32,64,128` and BZ grids
-`8,12,16`. This is independent evidence that the moderate-field Jensen masking is not simply the
-absence of an ordered state. It is not yet a spectral fix: the fixed electronic-doublet mode is
-about `85 GHz` even after the uniform RPA shift, whereas the reported window is `0--6 GHz`, so the
-electronuclear manifold is essential. The strict electronic pilot also develops a Gaussian-pole
-no-state interval around `3.2--3.5 T`, between its ordered and paramagnetic solutions. Production
-integration is therefore still prohibited; the next isolated gate is a source-biased
-electronuclear local reference, followed—only if the no-state interval remains—by a newly specified
-stationary skeleton/2PI extension.
-
-**Electronuclear gate result, 2026-07-28.** A full 136-state source-biased local oracle now supplies
-`f0`, `m`, connected `C2(iwn)`, and nested-stencil source/beta derivatives from one Hamiltonian.
-It agrees with the independent `invz_chi0z` path to `1.9e-13` and closes the local Maxwell identities
-to roughly `1e-6` relative or better. To preserve a single generator, this first oracle uses
-`transverse_mf='none'`; the production transverse molecular field would require its own conjugate
-functional variables. On the actual `16^3` couplings it finds a cutoff-stable `1.5 T` minimum at
-`h=0.0340929334913 meV`, `m=5.30675931175`. Hyperfine structure restores ordered minima at
-`3.6,4.0,4.5,4.6 T` and a stable symmetric state at `4.9 T`, but no strict-ring stationary root at
-`4.7,4.8,4.85 T`. The pole/no-state interval is narrower and on the experimental field scale, but
-it survives. The next candidate must therefore be a stationary nonlocal-return skeleton containing
-the complete one-`C4` and `C3-C3` 2PI cores; a zero-frequency-only mass patch is disallowed.
-That candidate and its stop gates are now pre-registered in
-`invzp_functional_wp4_skeleton_spec.md`.
-
-**WP4 entry-gate result, 2026-07-28.** The smallest skeleton has not yet been run, but its immutable
-two-level inputs are now complete.  Exact frequency-labelled `C2/C3/C4` and 1PI
-`gamma2/gamma3/gamma4` use ordered-simplex matrix exponentials and pass the source-derivative,
-permutation, zero-source beta-delta, and near-degenerate gates.  A centred pair fixes the leading
-`C3-C3` coefficient; a centred three-site chain fixes the nonzero-source mixed-`C4` coefficient that
-must cancel reducible `C3*C2*C3` content after 1PI conversion.  Optional q-resolved Hermitian
-coupling pages are exposed for both brute-force and Ewald backends without changing ordinary
-production outputs.
-
-**WP4 gate verdict, 2026-07-28.** The preregistered varied-covariance ansatz was then implemented
-temporarily and failed that mixed-chain gate already at zero source, where `C3=Phi33=0`.  The failure
-is analytic: varying a Gaussian local covariance trace plus the exact local 1PI `gamma4` generates a
-spurious local-return denominator and changes the retained `a^2b^2` coefficient.  The temporary
-solver was removed before commit.  A corrected functional would need the exact local bilocal/2PI
-Legendre kernel, not another symmetry-factor or pole patch.  The preferred route has therefore
-reached a genuine new-derivation boundary; production dispatch of this
-functional candidate remains blocked and the documented smooth-`r(h)`
-prescription is the only implementation-ready **explicit low-field branch
-prescription**. The later predictor-only warm route is a separate numerical
-preview method and does not supply that prescription.
-The separately accepted production QCP spectra are unaffected.
-
-**Exact local-curvature follow-up, 2026-07-28.** The rejected 1PI local mass has now been replaced
-at oracle level by the exact connected bilinear response.  For an off-shell `(m,h,D)` functional,
-the required curvature is the fixed-source partial-Legendre block `K^-1/beta`; using the fixed-moment
-Schur block before eliminating `h` adds a forbidden `C3^2` chain coefficient.  The finite-mode
-three-site re-expansion with `K^-1/beta` reproduces the complete dynamic connected-`C4` residual.
-A general retained-rank multilevel cumulant engine now supplies electronuclear `C3/C4` without
-enumerating `d^4` state paths.  Its rank truncation remains unproved for virtual intermediate states
-and is not authorized as a functional input.
-
-**Quadratic-bilocal discriminator, 2026-07-28.** At a C3-zero input, an isolated Gaussian-trace plus
-exact-local-curvature pilot has one positive-domain stationary medium at every symmetric
-`Bx=4.6--4.9 T` fixture on the cutoff-3/rank-64/legacy-16³ input.  Thus the corrected local kernel
-removes the strict Gaussian pole gap without a floor in this finite trial functional.  This is not
-yet an ordered state or a spectrum: roots are only those found from the declared starts, the
-nonzero-source `C3-C3` core is absent by scope, and the Matsubara sequence is not converged
-(`Sigma(0)` at `4.8 T` moves from `0.0003251` at cutoff 1 to `0.0005924 meV` at cutoff 14).
-The latest increments decrease approximately as a summable `N^-2.29` sequence, with the local
-exponent still drifting toward its asymptote; an analytic or independently graded tail completion
-is still required.  Cutoff 14 corresponds to only `0.758 meV` at `0.1 K` and is not yet in the
-uniform high-frequency regime of the full electronuclear spectrum.  Moreover, omitted modes enter
-the low-frequency curvature through a Schur complement, so fitting the apparent fractional power
-or adding a correction only to `Sigma(0)` would break the variational stationarity.  The contained
-next test is therefore a preregistered nested-cutoff root continuation with a hold-out cutoff and
-agreement of admissible integer-power extrapolants, not a fitted tail patch.
-Production and spectral dispatch of this trial functional remain prohibited.
-
-**Effort-window decision, 2026-07-28.** The exact local-bilocal result remains useful theory
-evidence, but at this decision point its ordered completion was removed from the immediate
-spectra-delivery path. The
-prospectively stated 6--12 focused-hour / 1--2 day window cannot contain a whole-functional
-electronuclear tail, the same-order signed-frequency and momentum-resolved `C3-C3` core, its
-`C5/C6` source derivatives, the nonlinear partial Legendre transform, and all thermodynamic and
-discretization gates.  Omitting any of those terms would lose the requested order consistency.
-`backup_plan_biased_convergence_solution.md` records the dated evidence and activates its fail-closed
-smooth-`r(h)` prescription for implementation.  This does not authorize a default flip or a
-low-field backup spectrum: branch reconstruction, endpoint/QCP continuity,
-thermodynamic, grid/cutoff, and forward/reverse/cold-seed gates remain
-binding. It does not retract the independently accepted QCP-window result.
-
-**Branch-specific endpoint result, 2026-07-28.** The QCP-connected smooth
-low-`r` component at 4.05 T was continued through 1369 accepted states to
-the common ceiling `h=0.02313633386565907 meV`. Its own free-energy
-function remained negative, ending at `F_path=-0.00293612268` with
-`r=0.429100409` and `m=3.27662221`; it has no nonzero increasing Jensen
-zero. The legacy high-`r` component is positive at the same ceiling
-(`F=0.00342692213`, `r=0.996459592`) and crosses at
-`hstar=0.01473374100101341 meV`, but that crossing is branch-specific and
-cannot be borrowed. The smooth component therefore fails immediately as
-`no_admissible_endpoint`. Endpoint reconstruction is now the first
-low-field backup gate, ahead of completing a global branch graph.
-
-Line numbers below are as of the 2026-07-27 working tree; confirm each before editing.
-
----
-
-The phased specification below is retained as the implementation and gate
-record. Phase 0 and the main Phase-1 discriminator have been executed; the
-current work queue is the prioritized list under **Current decision
-baseline**, not the original future-tense sequencing.
-
-## 0. What this plan is, and the one thing it is not
-
-The failure is **thermodynamic state construction**, upstream of the response: `invz_chi_realaxis` has no
-lattice loop on the production path (no caller sets `opts.Jfull`; `invz_chi_realaxis.m:57`) and returned
-60/60 finite samples at each of the four measured valid-state anchors. The ordered leg fails because the Jensen H_MF
-quadrature must evaluate the ω = 0 medium from `h ≈ 0` upward, and on the real coupling multiset that
-medium's q-average is taken across denominators that change sign, so the outer Picard map is
-meromorphic and pole-sensitive. It is noncontractive on measured
-pole-crossed low-field intervals, while the 0.10 K, 4.400 T QCP-side edge
-is a distinct oscillatory contraction that is merely too slow for the
-200-iteration budget.
-
-**The original plan did not preselect a physics fix.** Its branch-tracked
-vector-residual experiment has now been run: it confirms numerical
-non-contraction, crosses regular folds, and finds multiple accepted roots.
-It therefore reached the “branch prescription required” arm of Phase 1.
-Even a locally unique finite-grid segment does not by itself prove a
-physical off-shell continuation. Phase 1 remains a discriminator rather
-than a production solver authorization.
-
-### Invariants every phase must respect
-
-| # | invariant | why |
-|---|---|---|
-| **I1** | all pre-existing numeric/status outputs of the default `static_medium = 'resummed'` path stay **bit-identical**, except a separately identified non-finite-acceptance defect | additive fields necessarily change whole-struct equality; frozen gate G9 checks the established outputs |
-| **I2** | the frozen Gate-0 preregistration is not amended in-run, and no rejected candidate is promoted | prereg §3 forbids in-run fallback |
-| **I3** | acceptance rules are not relaxed; a masked column stays masked | §5/D2 — the all-node gate is severe but presently correct |
-| **I4** | no pole regularisation (broadening, `ε` in a denominator, a floor on `Dq`) | the pole is a statement, not a numerical nuisance |
-| **I5** | every numerical-method change is additive or flag-gated, default off | so I1 holds by construction |
-
-Any task that cannot satisfy I1 by construction carries an explicit G9 comparison in its acceptance
-criteria.
-
----
-
-## Phase 0 — instrumentation delivered; broad computability map deferred
-
-**Goal:** convert "masked column, no information" into "this node, this reason", and produce the one
-artifact with immediate scientific value. **Touches no theory or preregistration; pre-existing finite
-default outputs remain unchanged.** The sole intended behavioural correction is fail-closed handling of
-a partially non-finite residual in 0.3. The failure ledger/binding-node
-provenance and NaN-propagating norms are complete (`261b12b`, `c6a5fc4`).
-The full `(T,B)` availability map was not needed for the QCP deliverable and
-remains deferred; the specification below is retained for any future global
-domain claim.
-
-### 0.1 Failure ledger and node census (D2 / D3 / R6) — COMPLETE
-
-* **Files:** `invz_projected/invz_solve_point_ordered.m` (jensen early return),
-  `invz_projected/invz_hmf_ordered.m`, and `invz_projected/invz_hmf_status.m`.
-* **Change:** attach `pt.hmf_prof = hprof` on the `hstar = NaN` return and change the reducer to
-  `[status,status_detail]` while preserving its first output exactly. This is one patch, not separate
-  "export" and "census" work.
-* Extend the existing fixed node record with `h`, outer-iteration count, raw static residual, and the
-  four scalar A–D residuals, populated from the already-available `info`; do not create another node
-  schema. On a non-`ok` exit the reducer
-  filters `[predictor,nodes]` into a compact `status_detail` containing only the fields needed to explain
-  the verdict: `h`, accepted, outer iterations, A–D residuals, raw static residual, `medium_status`,
-  `Dq_min`, `min(abs(Dq))`, `D_uni`, `ref_denom`, predictor flag, and bracket membership. Return
-  `status_detail = []` on `ok`, so successful untraced calls allocate no ledger.
-* Per-outer-iteration records remain behind `opts.trace`; extend the existing `append_iter` record in
-  place in 0.2 rather than creating another tracer.
-* Define a deterministic **binding node** using the same precedence as the status reducer:
-  first degenerate doublet, then first medium-domain event, then first non-finite failed residual,
-  otherwise the largest normalized failed residual (stable evaluation-order tie break). On the early
-  return, copy that node's `medium_status`, `ref_denom`, and `ref_margin` to the existing point-level
-  fields. Do not use an undefined "worst node" rule.
-* **Acceptance/I1:** at `T = 0.31 K`, `B = 1 T`, jensen, resummed, the point remains
-  `'node_failed'`; `prof` has 33 profile-node records, while `status_detail` includes the separate
-  `h = 0` predictor and reports 34 total records, 6 accepted, and `predictor_failed = true`. Its
-  failing-node list reproduces the archived 2026-07-27 `diag2_B1.log`
-  (`31a7fd0:docs/diagnostics/claude_convg_2026-07-27/diag2_B1.log`). Additive
-  fields do not change the verdict or gate. Confirm that successful untraced
-  calls allocate no failure ledger, and measure failed-call memory/time
-  separately from G9 (which checks results, not performance).
-* **Explicitly not in scope:** relaxing the gate, skipping nodes, or interpolating `r(h)` across them.
-  That was R3 and it is withdrawn — the failed nodes sit exactly where the path crosses poles or may
-  change branch, so interpolation manufactures the Jensen integral; and the `r(0) = 1 + Σ(0)`
-  predictor identity needs the very `Σ(0)` that failed to converge.
-### 0.2 Pole-proximity instrumentation (Step 1a)
-
-* **Primary file:** `invz_projected/invz_ordered_node_solve.m`. The node solver already has `G0`,
-  `Sigma`, `K0`, `Gstat`, and the coupling vector at each outer iteration, so the EMT leaf interfaces
-  need not be expanded just to duplicate these diagnostics.
-* **Change:** extend the existing `append_iter` record; do not build a parallel diagnostic path. Compute
-  each denominator vector once per traced iteration and record
-  * dynamic sector — `x = −(1+Σ(1))/G0(1)`, `x − max_q J_ν`, `min(abs(1+Σ(1)+J_νG0(1)))`,
-    and the count of nonpositive denominators;
-  * static sector — `y = K0 − 1/Gstat`, `min_q Dq`, `min_q |Dq|` (reuse the existing closest-positive
-    and closest-nonpositive values), `D_uni`, the count of
-    nonpositive `Dq`, the interval/rank of `y` in the sorted coupling multiset, `Gstat`,
-    `gstat_local_denom`, and `xi`;
-  * whether the inner static closure closed while the outer residual did not (the discriminator
-    preserved in the consolidated diagnosis §9.3/§9.5; measured at 3.6 T: static 4.9e−11, outer
-    4.0e−2).
-* **Store only under `opts.trace`**; the untraced path remains untouched. Cache coupling extrema/order
-  once per traced node rather than sorting inside the outer loop.
-* **Acceptance:** when `Gstat < 0`, reproduce diag11's identity
-  `min_q Dq − D_uni = (J0eff − max_q J_ν)·|Gstat|` to ≤ 1e−12 relative at the 4.0 T jensen endpoint
-  (measured 0.0854417 vs 0.0854417). The sign qualification matters: for `Gstat > 0`, the minimum
-  is controlled by `min_q J_ν`, not `max_q J_ν`. Here `J0eff` is the separately supplied effective
-  uniform coupling, not a `q = 0` row of the sampled `J_ν` array.
-* **I1:** untraced path allocation-free and numerically untouched.
-
-### 0.3 NaN-propagating residuals (D5) — COMPLETE
-
-* **Files:** there are **four**, not three, projected-path copies:
-  `invz_ordered_node_solve.m:234`, `invz_solve_point.m:282`,
-  `invz_solve_point.m:389` (Tier-2 helper), and `invz_solve_point_ordered.m:328`.
-* MATLAB R2025a was checked directly: `max([NaN 2])` returns `2`, while
-  `max([NaN 2],[],'includemissing')` returns `NaN`. Replace all four copies with one shared finite
-  max-absolute-difference helper. Move the checker's local `robust_max_abs` to that helper too, so the
-  solver gates and checker cannot drift. The helper should reject both NaN and Inf.
-* **Risk, and how to handle it:** this *can* change acceptance — but only where a partially non-finite Σ
-  is currently being declared converged, which is the defect. **If the G9 comparison shows any
-  default-path result changing, stop and report the differing point as a finding** rather than
-  proceeding; a difference means a state was previously accepted with non-finite Σ and that is a result
-  in its own right.
-* **Acceptance:** a focused helper guard covers finite, one-NaN, one-Inf, and shape-mismatch inputs;
-  established finite G9 anchors remain bit-identical. If an old point changes only because its iterate
-  was partially non-finite, report that point as the defect this task was intended to expose.
-
-### 0.4 h-grid re-grading (R2) — deferred until after Phase 1
-
-Do **not** implement the proposed `'root_scaled'` grid in Phase 0. `F(h)` contains
-`∫_0^h r(h')dh'`, so a coarse root bracket cannot be obtained without first computing the very
-low-`h` path the proposal hoped to skip. Refining only inside a bracket would also leave the integral's
-quadrature error uncontrolled. The continuation experiment should choose steps from conditioning, not
-from the production quadrature grid.
-
-After a branch prescription exists, design an error-controlled adaptive quadrature over the full
-`[0,h*]` interval and compare its integral/root against the legacy geometric grid. Keep the current
-three-argument `invz_hmf_grid` untouched until then.
-
-### 0.5 Deliverable — the `(T, B)` computability map, staged
-
-* **New diagnostic driver** under `docs/diagnostics/` only if the map is intended as a retained
-  scientific artifact. Ad-hoc guards belong under `/tmp`, in keeping with the cleaned worktree.
-* **Stage A, on the critical path:** emit the four 0.31 K anchors already required by G9 plus the
-  1.00 K/2.9 T positive control. This validates the schema without a long sweep.
-* **Stage B, after the Phase-1 pilot:** map
-  `T ∈ {0.10, 0.31, 0.60, 0.90, 1.20, 1.50} K`. Start on a 0.4 T field grid from 0.5 T to above
-  `B_c(T)` and refine every status-transition or non-monotone interval to 0.2 T. Do not assume the
-  availability set is monotone. Use the measured 4.709 / 4.021 / 3.562 / 3.192 / 2.717 / 2.001 T
-  values (§9.4 vii) as placement guides, labelled as interpolated estimates unless this run refines
-  them. This gives the same declared transition resolution without paying for a full Cartesian sweep
-  in featureless regions.
-* **Record per point:** PM convergence/stability, `x`, `x − max_q J_ν`, Jensen status, accepted-node
-  census, pole-distance metrics, and the same under `strict_1z_dyson_ref` as a labelled comparator.
-  `path_omit_max` is meaningful only for the strict moment closure and is expected to be NaN on the
-  resummed path.
-* **Output:** a **scheme/grid-specific numerical availability map**, not a physical phase map:
-  {stable PM available} / {ordered Jensen state available} / {ordered Jensen state unavailable} /
-  {no accepted state}, plus the raw table at full precision.
-* **Why this matters now:** §9.4(viii) already shows the ordered leg solving at 2.9–3.0 T at
-  `T = 1.00 K` while solving nowhere on that field set at `T = 0.10 K`. That boundary has never been
-  mapped. It tells you where this implementation can currently construct an ordered state; it does not
-  validate that state as a controlled ordered 1/z thermodynamics.
-
----
-
-## Phase 1 — branch-tracked full-residual discriminator — EXECUTED
-
-**Goal:** determine whether the existing Jensen equations have a reproducible real continuation along the
-H_MF path at fields where Picard fails, as specified in the consolidated diagnosis §10.2. It can
-establish the algebraic branch structure of the discretized equations; it cannot, by numerical
-convergence alone, establish the physical off-shell prescription.
-
-**Entirely a diagnostic script — no production file is modified, so there is no G9 or preregistration
-exposure.** Build the first guard in `/tmp`; retain it under `docs/diagnostics/` only if its outputs
-become part of the scientific record.
-
-The first guards did become part of the scientific record and are retained in
-`docs/diagnostics/invzp_solver_stability_2026-07-27/`. The implementation deliberately stops at a
-fixed-node corrector. Reusable root-enumeration, fixed-sequence, and pseudo-arclength primitives are
-retained separately under `docs/diagnostics/biased_smooth_r_2026-07-28/`; none is a production
-solver. Temporary end-to-end wiring was used once to establish the 3.6 T numerical result above,
-then removed because it had no branch-identity gate.
-
-The experiment reached the multiple-root/fold arm of §1.5. The remaining
-subsections preserve its construction and the still-binding requirements
-for any future low-field authorization; they are not an instruction to
-rerun the completed positive controls.
-
-### 1.1 Expose a square vector residual
-
-At fixed `h`, use unknowns `u = [Σ(1..n_w); K0]`. Do **not** pass
-`invz_ordered_residual` to Newton: it returns four scalar norms/pass flags, not a vector with
-`n_w+1` components. Its default/nested formulation replays the static
-iteration; its later `formulation='coupled'` is an independent simultaneous
-audit with no nested static solve, but remains a scalar audit rather than
-the Newton equation. The vector equation is
-`invz_ordered_node_equations`.
-
-This experiment is specifically for the existing **resummed** equations. Retain the fixed-`h`
-single-ion/two-level domain screen before constructing the residual; strict one-shot media have a
-different static equation and are not silently routed through this residual. Under resummed,
-`medium_status = 'not_applicable'`, so bypassing `invz_emt_static_ordered` does not drop a hidden
-reference-denominator gate.
-
-Define one explicit, non-iterating residual evaluation:
-
-1. Compute the dynamic medium `Kdyn = invz_emt_scalar(G0, Σ, Jnu, eopts).K` and set
-   `K = [K0; Kdyn(2:end)]`. Use the existing helper initially; add a dynamic-only variant only if a
-   profile shows the discarded slot is material.
-2. Derive `λ = invz_lambdas(K, g, wts, beta, [1 2 3])`.
-3. Derive `Σmap = invz_sigma_ordered(tl, λ, K, g, beta).Sigma`.
-4. Evaluate `[Gstat, go] = invz_gstat_ordered(..., struct('stable_form',true))` **once**, without
-   calling `invz_emt_static_ordered`. This is diagnostic-only exact reassociation, not regularisation.
-   Use the finite reciprocal coordinate
-   `z = 1/Gstat = d0/(G0inel0 + go.xi*G0el0*d0)`, where
-   `d0 = go.gstat_local_denom`; this expression remains finite at the removable `d0 = 0`,
-   `Gstat = ±Inf` crossing. For the load-bearing diagnostic values, evaluate
-   `Gtil0 = 1/(z-K0)` and `r = go.G0bare*(z-K0)` directly from this same `z`; away from singular
-   limits they must agree with `go.Gtil0`/`go.r` to floating-point tolerance.
-5. With `E_q = z + Jnu-K0`, choose a common scale
-   `s = max(abs(z),Jscale)`, `Jscale = max(abs(Jnu(:)))`, and weights `w_q = s/E_q`.
-   Then
-   `Gbar = mean(w_q)/s`,
-   `Jloc = mean(Jnu.*w_q)/mean(w_q)`, and
-   `RK = (K0-Jloc)/Jscale`.
-   Use the analytic `z -> ±Inf` limit `Jloc -> mean(Jnu)`, `Gbar -> 0`; require finite positive
-   `Jscale`. Return `RΣ = Σmap-Σ` and `RK`.
-
-This is the original defactored EMT equation
-`K0 = mean(Jnu.*Gq)/mean(Gq)`, evaluated with
-`Gq = 1/(z+Jnu-K0)`. It is algebraically identical to the previous `P/Q` form away from limits, but
-has one stable chart through `Gstat = ±Inf` and an explicit limit at `Gstat = 0`. At `Gstat -> 0`,
-`RK -> (K0-mean(Jnu))/Jscale` instead of vanishing for every `K0`. Do not use `Q-1` or
-`mean(Gq)-Gstat` as the load-bearing residual: both contain the spurious `Gstat = 0` factor.
-
-Preregister two dimensionless event measures:
-
-* `pole_margin = min(abs(E_q))/s` approaching zero — a genuine lattice denominator pole;
-* `mean_margin = abs(Gbar)*Jscale` approaching zero — at finite `z`, a genuine cancellation in the
-  denominator of the defactored K closure; as `abs(z)/Jscale -> Inf`, the separately identifiable
-  `Gstat -> 0` boundary with an unbounded Jensen integrand. The analytic `Jloc -> mean(Jnu)` limit
-  keeps the residual evaluable in the latter case, but does not make that thermodynamic path point
-  admissible.
-
-Keep `Q` only as a reported coordinate. The useful precision monitor is
-`q_cancel = abs(mean(w_q))/mean(abs(w_q))`, which is invariant to the common scale and does not
-misclassify the traversable `z = 0` crossing. If `Q` is reconstructed, use `Q = z*Gbar` with its
-analytic `z -> ±Inf` limit rather than forming the original `Dq`. Require finite stable `Gtil0` and
-`r`; allow `Gstat = ±Inf` when `z`, `Gtil0`, `r`, and the residual remain finite. Thresholds classify
-and halt unresolved events; they are never inserted into an equation.
-
-After a corrector claims convergence, construct the complete state and run
-`invz_ordered_residual` as an **independent acceptance audit**. Its A–D blocks must all pass. This uses
-the existing checker for the job it was designed to do without making its scalar norms into Newton
-equations. The `mean(Gq)` event gate, finite-`r` gate, and defactored `RK` remain independently binding
-because the current resummed Block B uses the factored `mean(Gq)-Gstat` residual and can accept
-`Gstat = 0`.
-
-At an exact `d0 = 0` crossing the production checker may produce NaN because its resummed arithmetic
-does not use `stable_form`. Do not modify it for this experiment and do not waive A–D. Instead require
-accepted correctors on both sides whose residuals and stable `r` converge to the same limit; the
-coordinate-singular point itself is recorded as a traversed limit, not counted as an accepted node.
-
-**Jacobian implementation.** On a static coupling vector, each dynamic slot is
-`K_n = kappa_n(Sigma_n)`. Its derivative is analytic: the existing q-loop gives
-`A'_n = -mean(Jnu./(D_n + Jnu*G0_n).^2)`, after which `kappa'_n` follows by the quotient rule. Since
-the only cross-frequency quantities are `lambda_1`, `lambda_2`, and `lambda_3`, the `RΣ` block is a
-diagonal matrix plus rank at most three. The `RK` row is **dense**, not sparse:
-`Gstat` depends on `lambda_1` and `lambda_2` through `xi`, so every dynamic slot contributes through
-those two sums. Even so, with the dense `K0` column and bordered `RK` row included, the complete
-Jacobian is diagonal plus a rank-at-most-five correction. Differentiate the stable static row:
-differentiate the closed quotient for `z`, then
-`dE_q = dz-dK0`,
-`dGbar = -mean(dE_q./E_q.^2)`,
-`dN = -mean(Jnu.*dE_q./E_q.^2)`, and
-`d(K0-N/Gbar) = dK0-(Gbar*dN-N*dGbar)/Gbar^2`, where
-`N = mean(Jnu./E_q)`. These formulas stay finite at `z = 0`.
-
-Stage the linear algebra to get an informative result before optimizing:
-
-1. Bring up the residual and corrector on the small `T = 1.00 K`, 2.9 T positive control
-   (`n_w ≈ 75`) with a centred-finite-difference dense Jacobian. It is slow per step but cheap enough
-   here, and separates residual/driver errors from analytic-derivative errors.
-2. Assemble the analytic Jacobian densely from the formulas above, compare its entries and Newton step
-   with the finite-difference oracle, then use MATLAB's dense solve for the first 0.31 K edge run
-   (`n_w ≈ 240`).
-3. Only if profiling says the dense linear solve is material, or before extending the experiment to
-   `T = 0.10 K` (`n_w ≈ 740`), expose those same terms as diagonal-plus-low-rank factors and add the
-   Woodbury/bordered solve. Keep the dense path as the oracle/fallback; do not write another residual.
-
-The optional four-variable reduction is **not** on the initial implementation path. Add it only if the
-full solve exposes multiple branches that need per-frequency scalar-root enumeration; it is
-branch-conditioned and fails at implicit scalar folds.
-
-### 1.2 Continuation driver
-
-1. Start at the largest `h` node where Picard converges cleanly (measured at 1 T: nodes 28–33, 13–20
-   iterations, `D_uni`/`Dq_min` ≈ 0.8–0.99).
-2. Implement adaptive natural-parameter continuation downward in `h` first, using one damped Newton
-   corrector and step-retry policy. Add pseudo-arclength only if the fixed-`h` Jacobian loses rank while
-   the augmented tangent remains regular or the computed tangent has `dh/ds` approaching zero. Then
-   augment the same residual on `[u;h]` with one bordered arclength equation; a tangent predictor plus
-   a fixed-`h` corrector is not pseudo-arclength and cannot pass a fold.
-3. Record `x`, stable `z` and `y = K0-z`, `pole_margin`, signed `Dq_min`, `D_uni`, the coupling interval
-   containing `y`, `Gbar`, `mean_margin`, `q_cancel`, reported `Q`, `Gstat`,
-   `gstat_local_denom`, `xi`, `Gtil0`, `r`, residual norms, step size, corrector iterations, and a
-   smallest-singular-value/condition estimate. Compute legacy `Dq` metrics only where their arithmetic
-   is finite; `pole_margin` is the load-bearing pole measure.
-4. Halt on `pole_margin` reaching its declared threshold; `mean_margin` reaching its declared threshold
-   (classified as finite-`z` cancellation or `Gstat -> 0`/unbounded `r`); rank loss of an already
-   augmented system; corrector step collapse after retries; or a branch-identity jump not resolved by
-   step reduction. Do **not** halt merely because `Q -> 0`, `Gstat -> ±Inf`, or `z -> 0`: the exact
-   reciprocal chart is designed to traverse that local-denominator crossing.
-5. Use the staged Jacobian policy in §1.1. Finite differences are a positive-control oracle only;
-   analytic dense solves are acceptable for the initial 0.31 K campaign, and Woodbury is a profiled
-   optimization or low-temperature prerequisite rather than an up-front deliverable.
-
-### 1.3 Reproducibility protocol, applied as a funnel
-
-The positive-control and first edge pilots use the registered 16³/`Ecut` configuration. They validate
-implementation only and support no domain claim. Once a pilot produces a candidate branch, promote
-only that branch and its event/end points through:
-
-* decreasing-`h` and increasing-`h` traces, with the reverse trace seeded independently where possible;
-  merely retracing from the final forward solution tests determinism, not branch independence;
-* cold correctors at registered checkpoints versus warm continuation;
-* at least **three** coupling grids (12³, 16³, and 20³) for a convergence trend. Two grids can show a
-  difference, not separate branch structure from the Γ-exclusion artifact;
-* the registered `Ecut` plus one Matsubara-cutoff refinement;
-* tolerances declared **before** the run for the scaled defactored vector residual, A–D audit, `m0`,
-  `Σ(0)`, `K0`, `hstar`, the Jensen integral, `pole_margin`, `mean_margin`, `q_cancel`, and branch
-  metrics.
-
-Run that protocol at production size before making a continuation-domain claim. Do not take the
-Cartesian product of every exploratory field, direction, grid, and cutoff: refine the representative
-branch plus each distinct fold/pole/cancellation end point, and expand only if different pilot fields
-show different branch topology.
-
-The numerical, mathematical, and algorithmic mechanism behind this nonuniform, apparently stochastic
-pattern is consolidated in `non-convg_mechanism_diagnosis_Codex.md`. The retained solvers contain no
-random-number path and no frequency-order continuation: the sensitivity comes from a noncontractive
-pole-dependent Picard map, multiple seed basins, fixed-`h` folds, row/coordinate conditioning, and
-finite acceptance budgets. Critical slowing of the physical response is therefore not the relevant
-predictor of nonlinear-solver difficulty.
-
-### 1.4 Field funnel
-
-1. `T = 1.00 K`, 2.9 T — positive control where resummed Picard already solves.
-2. `T = 0.31 K`, 3.6 T — first failed edge case and cheapest informative branch test.
-3. `T = 0.31 K`, 1.0 T — deep-ordered stress test only after the edge corrector is validated.
-4. Expand to 0.31 K at 2.0/3.0 T and 1.00 K at 2.5 T only to map a branch-topology change or support a
-   promoted domain claim. All four 0.31 K fields are `node_failed` today; 2.9 T is the positive control.
-
-### 1.5 The fork
-
-| outcome | reading | next |
-|---|---|---|
-| defactored-residual- and A–D-accepted, finite-Jensen-integrand, direction-independent branch with a grid/cutoff limit | strong evidence that Picard non-contraction is a numerical defect of the current solver | keep continuation diagnostic/flagged; then justify the off-shell branch physically before any default change |
-| folds or multiple reproducible real branches | the algebraic equations need a branch-selection prescription | common-functional work, or a separately preregistered continuation prescription |
-| no branch within the declared search, with reproducible pole/rank-loss events | evidence that the chosen **real finite-grid continuation** fails | report its domain; this does not prove that every analytic/PV/complex continuation or the H_MF representation is impossible |
-| the 2.9 T positive control is not reproduced | the continuation implementation or residual is invalid | fix the experiment before drawing a physics conclusion |
-
-**Phase 2′ (only after the first outcome and an explicit branch prescription).** Add
-`opts.ordered_solver = 'picard' | 'continuation'`, default `'picard'` (I1), initially as an experimental
-path. Establish equivalence at every point where Picard succeeds, full `[0,h*]` quadrature convergence,
-and grid/cutoff convergence where Picard fails. A default flip is a separate reviewed and preregistered
-production decision; finite-grid uniqueness alone is not sufficient.
-
----
-
-## Phase 2 — theory candidates (separate research tracks)
-
-These candidates are not logically gated only on a non-unique Phase-1 branch. They change either the
-closure or the coupling measure and therefore remain theory candidates even if the finite-grid
-continuation is unique. **One** fully specified candidate may be preregistered and evaluated at a time;
-I2 forbids switching between them as an in-flight fallback.
-
-### Candidate A — replace the strict reference `Gref` (motivated, not yet specified)
-
-§9.4(viii) isolates the one temperature-robust Gate-0 failure: clause (a), `ref_denom_nonpositive`,
-fires at 0.05–1 T at `T = 0.10 K` and 0.05–2.0 T at `T = 1.00 K`. Clause (c) is inside its frozen gate
-at T ≈ 1 K (omit 0.058–0.075) and clause (e)'s PM half fired on controls placed 1.2–1.6 T *inside* the
-ordered phase. Thus one important failure is localized to `Gref = G0bare/(1+Σ(0))`, chosen
-for its `m → 0` cross-leg identity and **untested at large `m`** — which is the record's own §11 item 1.
-
-"Build the reference from the ordered local propagator" is not yet an implementable candidate. Before
-code, specify the formula, order counting, domain, and whether it depends on `K0`, `λ`, or `xi`.
-Dependence on those quantities can make the supposedly one-shot closure self-consistent again and
-reintroduce the same denominator feedback. Derive the candidate from the ordered expansion, prove the
-`m → 0` cross-leg identity, and define its omitted-order estimator before preregistration.
-
-### Candidate B — density / continuation prescription (Step 1b)
-
-Replace the empirical measure by a smooth `ρ`, evaluated inside the support by singularity subtraction,
-`PV∫ρ(J)/(J−x)dJ = ∫[ρ(J)−ρ(x)]/(J−x)dJ + ρ(x)·ln|(J_max−x)/(x−J_min)|`, with `S(x ∓ i0) = PV ∓ iπρ(x)`
-as the one-sided alternative.
-
-**This is a new approximation, not a stabler evaluation.** For the real 16384-value multiset `S_N` is a
-rational function with 16384 simple poles — meromorphic, not cut — so smoothing changes the medium by an
-amount nobody has bounded. It must not be sold as an implementation change, and `−πρ(x)` must not be
-described as a decay rate without a dynamical derivation (`ρ` is a density of couplings over **q**).
-
-### Preregistration requirements for whichever is chosen
-
-1. Register a **`(T, B)` domain**, not a single cut. The frozen fixture is the worst case: §9.4(vii)
-   shows its field set is a `T ≈ 1 K` set evaluated at `T = 0.10 K`.
-2. Place ordered fields and PM controls against **measured `B_c(T)`** (§9.4 vii), not against an
-   inherited constant.
-3. For a candidate that retains the **same coupling-moment expansion**, gate its own omitted terms at
-   the registered temperature and every required path node. The present `omit_max` is tied to
-   `K0 = Jbar − μ2Gref` and its specific `μ3/μ4` remainder; it is not automatically the right gate for
-   a density prescription or a differently derived functional.
-4. Keep the two-tier verdict (`converged` vs `stable_1z`); do not collapse them.
-5. State the m → 0 cross-leg identity as a pass/fail gate.
-
-**Prerequisite decision (yours):** whether to amend the frozen fixture. That is a dated amendment, not
-something to fold into a candidate spec.
-
----
-
-## Phase 3 — the durable formulation
-
-The consolidated diagnosis §10.2's scientifically durable route, regardless of the Phase-1 outcome:
-derive the ordered thermodynamics **and** the response from one truncated free-energy/effective-action
-functional, with χ from the stationary Hessian. The ordered state then comes from stationarity rather
-than from integrating a separately resummed susceptibility across an undefined unstable branch.
-Multiple stationary solutions and spinodals may still require numerical continuation, but the
-functional supplies the missing thermodynamic comparison/selection principle.
-
-The 2026-07-28 focused audit in `invzp_functional_derivation_audit.md` found no already implied common
-functional or thermodynamic branch rule in the current hybrid. It did identify the branch-conditioned
-`Phi_path` and an isolated scalar-EMT log potential; both are useful checks for WP0, but neither
-authorizes selecting the present multiple roots.
-
-The McKenzie--Stamp spin-bath paper added after that audit supplies a useful
-starting convention but not the missing answer. Its Hubbard--Stratonovich
-action and source-generator identities fix a related model's normalization
-and organize exact local connected cumulants; they should first be
-cross-checked against the existing finite-cluster `C2/C3/C4` oracles. The
-paper does not vary a dressed local covariance, does not derive the present
-EMT closure, and does not compare the current stationary roots. It therefore
-cannot be used as an off-shell free-energy score. The remaining target is a
-source-dependent partial Legendre/bilocal 2PI functional
-`Gamma[m,h,D]`: its first derivatives must reproduce the retained one- and
-two-point equations, its stationary Hessian must generate susceptibility,
-and its value may rank roots only after the thermodynamic gates pass. At
-fixed external controls, the intended selector is the lowest admissible
-stationary value among locally stable states, with coexistence retained when
-values agree within controlled numerical/theoretical uncertainty.
-
-The checklist remains: strict retained-order vacuum / one-point / two-point diagrams;
-validation against a small exact finite-cluster oracle; analytic handling of the elastic zero-frequency
-sector; resummation only where it follows from stationarity of the same functional; PM/FM boundary
-closure on the real coupling density. Entry point: `rigorous_z^1_extension_Codex.md`.
-
-One constraint to carry into the spec: every approximation needs an omitted-order/error diagnostic
-derived from **its own** expansion. The current `omit_max` remains valid only for the existing
-coupling-moment closure and reference convention; it cannot be inherited by a different functional
-merely because both formulas contain powers of a propagator. A functional derivation supplies a
-consistent construction and branch-selection criterion, not by itself a lattice sum that converges
-where the present one does not.
-
----
-
-## Interim production posture (in force throughout)
-
-* Treat the verified `T = 0.10 K`, `q = [0 0 0]`,
-  `B = 4.60--4.90 T` Jensen window as the current observable regression
-  anchor. Accepted columns may be plotted for visual inspection without
-  waiting for complete low-field coverage, but any quantitative comparison
-  must state `16^3` and must not quote its ordered width or `Bc` as
-  grid-converged.
-* The opt-in `field_continuation='qcp_down'` may be used for exploratory
-  visual maps. Mark its newly recovered columns as warm-seeded, retain the
-  cold control, and do not interpret acceptance alone as thermodynamic
-  selection.
-* Keep `jensen` columns masked where the path is incomplete. Do not relax (I3).
-* Keep `ordered_mode = 'bare'` available as an **explicitly labelled** bare-H_MF moment-form 1/z
-  response — never substituted into a column requested as `jensen`. It converged across the measured
-  real-field anchors because it never evaluates the Jensen medium along the unstable path, and its
-  moment onsets at the mean-field boundary, so it is a labelled product and not an answer.
-* Report per ordered column: dynamic support margin, `min|Dq|`, static branch interval,
-  scheme-appropriate omitted-order diagnostics, `Σ(0)`, and the node census.
-* Do not promote either strict scheme (I2).
-
----
-
-## Explicitly excluded, with the reason
-
-| excluded | why |
-|---|---|
-| raising `max_outer`, softening `mix_outer`, or widening tolerances as an unconditional production fix | the low-field pole-sensitive map has O(10²–10³) sign-indefinite gain, while the QCP edge includes a slow `-0.916` contraction. A larger cap can move the mask edge but is costly and supplies no branch selection; tolerance relaxation remains forbidden. Default-off, residual-decreasing cold acceleration and fixed warm-seed experiments are allowed because final acceptance is unchanged. |
-| replacing the static inner loop by `S_N(y)=constant` rightmost-root bisection | `Gstat` is a K0-dependent part of the implemented inner residual and is recomputed inside that loop; at the measured QCP edge the inner residual is already closed while the outer Σ residual fails. This exclusion does not apply to the distinct coupled chart `S_N(y(K0))-Gstat(K0)=0`, which is merely demoted to a low-field diagnostic. |
-| skipping failed H_MF nodes or interpolating `r(h)` across them | the failures sit at pole/branch events — interpolation manufactures the integral (withdrawn R3) |
-| making the `h = 0` predictor non-fatal via `r(0) = 1 + Σ(0)` | needs the `Σ(0)` that failed to converge |
-| regularising the pole | I4 |
-| switching dipolar backends | Ewald vs brute-force differ by 1.168e−3 in `norm(sort J)`; both return `node_failed` at 1 T. Ewald is right on its own merits, unrelated to this failure |
-| promoting `strict_1z_dyson_ref` on convergence evidence | failed a preregistered gate; refining *why* is not overturning it |
-| treating D4 (damping Σ but not λ/K0s) as a defect to fix | block-Picard with an inner converged solve is legitimate; no evidence separate damping helps. It belongs in Phase 1's coupled solve, not a maintenance list |
-
----
-
-## Verification checklist (applies to every phase)
-
-1. **G9 bit-identity of pre-existing outputs** on the finite default resummed path — capture a fresh
-   baseline and compare before/after each numerical Phase 0 change set. Implement 0.1/0.2 together
-   because they extend the same node/trace records; audit the behaviour-changing 0.3 separately. Added
-   diagnostic fields are excluded from whole-struct equality.
-2. **Coupling provenance:** verify fixture digest `ddb9532d…` on the registered 16³ baseline
-   (already enforced); record separate exact digests for 12³/20³ rather than expecting the 16³ digest.
-3. **QCP observable regression:** on the exact verified configuration
-   (`T = 0.10 K`, `q = [0 0 0]`, 61 fields over 4.60--4.90 T, 0--6 GHz),
-   require 19 Jensen-ordered plus 42 stable-PM columns, no masked or
-   non-finite peak columns, and a local boundary bracket
-   `[4.690,4.695] T`. If the interactive driver is configured for a broader
-   range, run this subset directly rather than treating the broader range as
-   already certified. This is a finite-`16^3` regression only.
-4. **Mechanism anchors**, not only the 24-point synthetic fixture: a deep ordered point (1 T), the failure edge
-   (3.6 T), a near-boundary accepted point (3.8 T), and a PM point (4.6 T), all at `T = 0.31 K`.
-5. **Defactored square vector residual plus the four-block A–D audit, finite-`r` gate,
-   `pole_margin`, and `mean_margin`**, not inner static closure or small `Q` alone — a small
-   `resid_static` is not evidence of a physical medium (measured 6e−11 with `Dq_min = −155`).
-6. **Jacobian oracle:** first reproduce the positive control with centred finite differences; then
-   compare the analytic dense Jacobian and Newton step against that oracle. If Woodbury is implemented,
-   compare its bordered step with the same dense solve before using it.
-7. **Forward/reverse and cold/warm agreement** for anything involving
-   continuation. For physical-field warm seeding, also retain the source
-   field, compare the full stationary state wherever both directions
-   converge, and fail ambiguous rather than selecting by convergence speed.
-8. **Acceleration gate:** estimate a signed factor from full-state
-   increments, not an unsigned residual norm; require a stable pole
-   interval and closed inner residual; reject an accelerated proposal that
-   does not decrease a freshly evaluated unmixed full residual; and compare
-   the accepted state against ordinary long-Picard and warm solutions. A
-   common cold start is not proof of basin preservation.
-9. **At least three coupling grids and one `Ecut` refinement** for any
-   continuation-domain claim. For a quantitative QCP claim, also require
-   convergence of `S_N(J0)`, solver-grade `Bc_1z`, the accepted-state
-   support, and the pole/peak curve; the completed `12^3--24^3` gate
-   falsifies grid independence but does not yet establish the limit.
-10. **`(T, B)` reporting**, never a single cut, for any domain claim.
-
-## Practical notes
-
-* MATLAB process name is `MATLAB_maca64` (`pgrep`); long runs must be launched with `nohup … &`, never
-  through a pipe — piping `matlab -batch` buffers all output and the run looks dead.
-* Write progress to a log file line by line (`fopen`/`fprintf`/`fclose` per line) so a long run can be
-  followed; poll with `until grep -q "^done" <log>`.
-* Keep one-off fresh guards in `/tmp` and remove them after use. Only retained scientific diagnostics
-  belong in `docs/diagnostics/`; they are **not** on the MATLAB path and set explicit `addpath` calls.
-  Do not `addpath(genpath(<repo root>))`.
-
-## Effort and sequencing
-
-| work item | present state | remaining effort / gate |
-|---|---|---|
-| Visual QCP susceptibility and mode | Cold QCP regression and cold/warm comparison inspected; recovered warm columns are empirically coherent | Preserve the figures and finite-`16^3` qualifier. Quantitative comparison still needs the continuation gates and coupling-grid convergence. |
-| QCP coupling/grid convergence | Four-grid sliver/`Bc` shift and the exact `D(Jmax;Bc)` control established; phase-aligned peak curve is sub-percent stable | Extend the cheap `S_N(J0)` lattice sum first. Only then decide whether another state-solver grid is required; retain the peak gate and report the much larger field-axis uncertainty. |
-| Retained diagnostics and coupled audit | Implemented | Maintenance only. They are evidence tools, not a new production branch. |
-| Cold asymptotic acceleration | Implemented default-off and validated at 4.400 T: 0.70/200 reaches the exact long-cold state; warm overlap also passes | Retain as a local resummed experiment. It correctly declines the 4.300 T interval-switching node and does not complete the 3.825 T multi-node path; no default promotion. |
-| QCP-down warm continuation | Opt-in preview implemented; three-column edge sequence demonstrated at 0.50/1000; visual cold/warm comparison passed | Apply direction/field-step/basin gates only where cold acceleration does not already recover the same state; spectral pole/residue and grid gates remain before default promotion. |
-| One additional low-field component | Optional, secondary | Bounded endpoint-first experiment at one scientifically useful field. Stop if the component has no unique increasing Jensen zero. |
-| Complete low-field branch prescription | Not authorized | Substantial only after an admissible endpoint exists: continuous event enclosures, independent-direction/seed agreement, full section construction, and discretization refinement. |
-| Common functional / exact local-bilocal route | Literature normalization clue identified; full derivation still paused | First cross-audit the paper's HS/source convention against exact local cumulants. Resume the nonlinear electronuclear 2PI work only as a rigor-driven theory project; it is the formal multi-root selector, not required for the immediate visual preview. |
-
-## Recommended execution order
-
-1. Preserve the completed finite-`16^3` cold/warm visual comparison and the
-   4.60--4.90 T cold subset as regression anchors. Display the grid qualifier
-   and mark warm-recovered columns as experimental.
-2. Retain the completed cold 4.400/4.300 T discriminator and the added
-   3.825 T negative control. The 4.400 T complete-state overlap passes;
-   4.300 T and 3.825 T establish distinct mechanisms that the safeguards
-   correctly do not promote as successes.
-3. Grade the opt-in QCP-down predictor continuation at the demonstrated
-   0.50/1000 reference only for columns not recovered to the same state by
-   cold acceleration: field-step refinement, reverse/cold overlap, full
-   state continuity, pole/residue continuity, and grid provenance.
-4. Before another state grid, extend the coupling-only `S_N(J0)` scan and
-   quantify its limit. Then test any fine-grid/tabulated `S(x)`
-   representation against explicit-grid values before using it to refine
-   absolute `Bc` and accepted support. The phase-aligned peak curve remains
-   the observable regression.
-5. Use the paper only for the bounded local-cumulant normalization audit,
-   then retain the exact local-bilocal/2PI programme as the formal root-
-   selection route. Spectral weight may reject or empirically distinguish
-   roots, but does not replace a common thermodynamic functional.
-6. Resume deeper low-field work only for a named scientific target. Follow one
-   QCP-connected component with fixed-`h` coupled correction on regular
-   pieces and arclength at measured folds, and reconstruct that component's
-   own `F_path`.
-7. If there is no unique increasing Jensen zero, return
-   `no_admissible_endpoint` and leave the column masked. If there is one,
-   then pay for the continuous-edge, reverse/cold-seed, complete-section,
-   and grid/cutoff gates required by the backup prescription.
-8. Do not promote an experimental continuation state merely because its
-   residual is small. Default production integration remains conditional on
-   the direction/state-continuity and thermodynamic gates above.
-
-The strict-medium Gate-0 FAIL remains in force unless a separately dated
-theoretical amendment changes its frozen candidate or oracle. Likewise, the
-common-functional programme requires a fully derived same-order candidate;
-the failed simple skeleton and the existence of more elaborate candidates
-do not authorize a production substitution.
+# A formal replacement for the invZ projected branch-selection algorithm
+
+**Canonical handoff document 2 of 2**
+
+**Status:** recommended research program; not yet implemented
+
+**Priority:** theoretical soundness and algorithmic completeness over compatibility,
+runtime, or preservation of the current scalar closure
+
+The current implementation and failure evidence are summarized in
+[`invzp_convg_diagnosis.md`](invzp_convg_diagnosis.md). The protected Jensen
+foundation remains
+[`jensen_1z_framework.html`](jensen_1z_framework.html).
+
+## 1. Decision
+
+The formal fix is to replace the present chain of independently motivated
+self-consistency maps with a **single source-dependent stationary thermodynamic
+functional** for the full electronuclear lattice problem. The order parameter,
+propagator/medium, self-energy, free energy, stability matrix, and response must
+all be derivatives of the same truncated functional.
+
+The replacement must:
+
+1. retain the exact 136-state local Ho electronuclear Hamiltonian;
+2. retain component, sublattice, Matsubara-frequency, and momentum labels until a
+   reduction is proven;
+3. use a skeleton-complete expansion at a declared order;
+4. find all stationary branches in a certified search domain;
+5. select equilibrium by the functional value, with metastability classified by
+   the reduced Hessian; and
+6. derive real-axis response from the same irreducible kernels.
+
+This is more expensive than repairing the projected Picard solver. That cost is
+intentional. A globally convergent nonlinear solver for the current equations
+would still leave the central physical question unanswered: which of several
+valid roots is the equilibrium state?
+
+## 2. Non-negotiable standard
+
+A candidate theory is not accepted because it produces a smooth spectrum or
+fills the masked fields. It is accepted only when the following proof obligations
+are met.
+
+### 2.1 Common origin
+
+There is one explicitly written functional \(\Gamma\), with stated independent
+variables, normalization, source convention, double-counting terms, and
+truncation order. Every state equation used by the code is obtained by
+differentiating that \(\Gamma\). No equation may be inserted because it gives a
+desirable resummation.
+
+### 2.2 Skeleton completeness
+
+At the retained order, all diagrams allowed by the same counting rule and
+symmetries are present. In particular, a selected \(C_4\) contribution cannot be
+kept while an equally ordered \(C_3\)-\(C_3\) contribution or its source
+derivative is omitted.
+
+### 2.3 Thermodynamic and response consistency
+
+The free energy used to rank roots is the stationary value of \(\Gamma\). The
+static susceptibility is the derivative of the same stationary solution with
+respect to its physical source, including relaxation of every internal
+variational variable. Dynamic response uses the corresponding irreducible kernel
+and obeys causality, Kramers–Kronig, spectral-moment, and equal-time sum rules.
+
+### 2.4 Completeness or explicit ambiguity
+
+The algorithm either certifies that every stationary solution in a declared
+bounded domain has been found, or returns `ambiguous/incomplete`. It may not
+silently select the root produced by one seed.
+
+### 2.5 Controlled limits
+
+The theory must reduce to exact single-ion, noninteracting, symmetric-phase,
+mean-field, Gaussian/RPA, and finite-cluster limits where those limits apply. The
+coupling grid, Matsubara rank, local-state rank, momentum grid, real-axis
+broadening, and skeleton order are independent convergence axes.
+
+## 3. Why the current residual cannot simply be integrated
+
+The present accepted-state contract is valuable as a numerical audit, but it was
+assembled from a nested sequence of EMT, static closure, lambda, and self-energy
+maps. In the tested positive-control coordinates its finite-difference Jacobian
+is not symmetric; one measured pair is
+
+\[
+J_{12}\simeq-1.6649\times10^{-3},\qquad J_{21}=0.
+\]
+
+A continuously differentiable Euclidean gradient would have symmetric mixed
+partials. Therefore the existing residual is not already
+\(\nabla\Gamma\) in those coordinates.
+
+This result has a limited but decisive interpretation:
+
+- it **does not** prove that the underlying physical approximation has no
+  variational representation in better variables;
+- it **does** rule out declaring a line integral of the current residual to be a
+  path-independent free energy; and
+- it requires deriving new state equations from a functional rather than
+  reverse-engineering a scalar score from the old maps.
+
+The current `invz_deltaF_ordered` route discrepancy of about 13.7% is consistent
+with this limitation. Thermodynamic integration may remain an independent audit,
+but not the primary selector until path independence and the relevant derivative
+identities have been proved.
+
+## 4. Exact source construction
+
+### 4.1 Microscopic variables
+
+Start from the full local Hamiltonian already represented by the 136-state
+electronuclear basis:
+
+\[
+H_{\rm loc}
+=H_{\rm CF}+H_{\rm Z}+H_{\rm hf}
+\text{any explicitly declared local terms}.
+\]
+
+Let \(O^a_i(\tau)\) denote the physical magnetic operators, with the compound
+index \(a\) retaining Cartesian component, sublattice, and any additional channel
+required by the chosen exact representation. The intersite interaction is a
+fully indexed \(J^{ab}_{ij}\), including dipolar, exchange, and—when promoted—
+off-diagonal-dipolar terms in one convention.
+
+Do not project to a scalar doublet or a single uniform eigenmode at this stage.
+Such a reduction is allowed only after a controlled-limit identity or a measured
+error bound.
+
+### 4.2 Generating functional
+
+With all physical fields included in the microscopic action \(S\), introduce
+auxiliary linear and symmetric bilocal sources:
+
+\[
+Z[\eta,Q]
+=\operatorname{Tr}\,\mathcal T_\tau
+\exp\!\left[
+-S+\int\eta_a O^a
++\frac12\iint O^a Q_{ab}O^b
+\right],
+\qquad W[\eta,Q]=\log Z[\eta,Q].
+\]
+
+Using one frozen sign and normalization convention, define
+
+\[
+m_a=\frac{\delta W}{\delta\eta_a},\qquad
+G_{ab}=2\frac{\delta W}{\delta Q_{ab}}-m_am_b.
+\]
+
+The exact double Legendre transform
+
+\[
+\Gamma[m,G]
+=\eta\!\cdot\!m
++\frac12 Q:(G+mm)-W[\eta,Q]
+\]
+
+is stationary at zero auxiliary sources. This definition fixes what “free
+energy,” “self-consistency,” and “response” mean before any approximation is
+made.
+
+With the dimensionless convention \(W=\log Z\) above, the stationary Helmholtz
+free energy is \(\beta^{-1}\Gamma\) (or the corresponding grand potential after
+including its physical sources). The implementation must not compare a
+dimensionless \(\Gamma\) from one convention with an energy-valued functional
+from another.
+
+The transform exists only on its representable source domain. Use the
+Legendre–Fenchel transform where a global transform is required and a branchwise
+Legendre transform only where the source-response Jacobian is demonstrably
+nonsingular. WP4 must identify the domain, singular boundary, and any loss of
+one-to-one source inversion; a solver may not extrapolate \(\Gamma\) through an
+unproved branch.
+
+There is also an essential order of limits. A finite system at zero longitudinal
+source has a symmetry-restored convex Gibbs functional, not two spontaneously
+ordered equilibrium states. The broken-symmetry branches must be defined by
+solving at nonzero conjugate source, taking the thermodynamic limit at fixed
+source and declared dipolar shape/boundary convention, and only then taking the
+source to zero. Exact finite clusters are coefficient and source-identity
+oracles; they are not expected to exhibit a true spontaneous transition.
+Metastable continuations require a stated constrained/coarse-grained potential
+or branchwise analytic construction and must never be confused with the exact
+convex equilibrium functional.
+
+The implementation should derive signs and factors from automated source
+derivatives of small exact systems; they must not be copied by analogy from a
+fermionic formula.
+
+### 4.3 Exact local generator and vertices
+
+Construct the isolated-site \(W_{\rm loc}[\eta,Q]\) by exact diagonalization of
+the full local Hamiltonian. Its connected time-ordered derivatives generate
+\(C_1,C_2,C_3,C_4,\ldots\), including:
+
+- arbitrary source field and ordered moment;
+- bosonic Matsubara frequencies with exact conservation;
+- all retained component indices;
+- KMS/cyclic identities;
+- coincident-frequency and degenerate-level limits; and
+- analytic derivatives with respect to the physical field.
+
+\(C_1\)–\(C_4\) are the minimum for the first non-Gaussian construction.
+Derivatives of \(C_3\) and \(C_4\) that enter response may require \(C_5\) and
+\(C_6\). Those vertices must be generated when the derivative counting requires
+them; treating lower vertices as source-independent would break the common-origin
+contract.
+
+## 5. Controlled approximation
+
+### 5.1 Expand the functional, not selected equations
+
+Introduce an explicit bookkeeping parameter—coordination order, interaction
+order, or another stated small parameter—and perform the linked-cluster/2PI
+expansion of \(\Gamma[m,G]\). Enumerate vacuum skeletons algorithmically, reduce
+them by symmetry, and attach:
+
+- topology and automorphism factor;
+- component and sublattice contractions;
+- momentum/frequency conservation;
+- retained-order label; and
+- the source derivatives that generate state and response kernels.
+
+The diagram manifest is part of the theory specification. A code path is rejected
+if a term in its residual lacks a parent vacuum diagram or if differentiating the
+manifest produces a term absent from the implementation.
+
+Skeleton completeness and a common functional are necessary, not sufficient.
+A finite 2PI truncation can still violate convexity, produce extra stationary
+points, or fail spectral positivity/causality. The cluster, Hessian, controlled-
+limit, and real-axis gates below remain independent rejection tests;
+“\(\Phi\)-derivable” is not itself a promotion verdict.
+
+### 5.2 Exact local reference, direct lattice propagation
+
+Use the exact local problem as the reference and keep the lattice propagator
+\(G^{ab}(\mathbf q,i\omega_n)\) explicitly momentum resolved in the first formal
+implementation. This avoids imposing a scalar effective-medium closure before a
+corresponding log functional and double-counting correction have been derived.
+
+An EMT/DMFT-like compression can be reconsidered later, but only if:
+
+1. its functional is stated;
+2. differentiating it reproduces the impurity and lattice Dyson equations;
+3. its local/lattice double counting is explicit; and
+4. its finite-grid poles are distinguished from physical singularities.
+
+### 5.3 Required same-order terms
+
+For the first non-Gaussian order, the manifest must test explicitly whether the
+following occur at the same declared order:
+
+- a local \(C_4\) vertex closed by two lattice lines;
+- two \(C_3\) vertices linked by three lattice lines;
+- tadpole/counterterm structures induced by a nonzero moment;
+- source derivatives of every retained vertex;
+- sublattice- and component-exchange partners; and
+- the vacuum terms whose derivatives supply the state equations.
+
+The list is a classification obligation, not permission to assume the
+coefficients. Coefficients and signs come from the exact source construction and
+finite-cluster matching.
+
+## 6. Independent coefficient oracles
+
+Before solving the infinite lattice, build exact two-, three-, and where needed
+four-site clusters using the same local Hamiltonian and interaction convention.
+Expand their exact \(\log Z\), moments, connected correlators, and susceptibilities
+in the coupling parameter.
+
+For every retained monomial:
+
+1. compute its coefficient by exact finite-cluster differentiation;
+2. compute it independently from the diagram generator;
+3. compare before any resummation or numerical fitting; and
+4. freeze the matching coefficient and convention in a regression fixture.
+
+This gate has already exposed a material failure in an earlier varied-\(D\)
+skeleton attempt: at a symmetric fixture an exact static mixed-chain coefficient
+was \(-0.0944822\), while the candidate gave \(-0.366694\). Because this is an
+immutable series coefficient, the candidate was rejected rather than tuned.
+
+The same standard applies to every proposed resummation. Agreement of a final
+critical field cannot compensate for a wrong low-order coefficient.
+
+## 7. Stationarity and phase-selection algorithm
+
+### 7.1 Discovery
+
+Discretize only after the functional and derivatives are fixed. Solve
+
+\[
+\frac{\delta\Gamma}{\delta m}=0,\qquad
+\frac{\delta\Gamma}{\delta G}=0
+\]
+
+with analytic or automatic-differentiation Jacobian-vector products. Use
+globalized Newton/trust-region methods for local convergence, pseudo-arclength
+continuation through folds, and deflation or symmetry-aware multi-start searches
+to discover disconnected stationary components.
+
+These methods are discovery tools. None decides phase stability.
+
+### 7.2 Certification
+
+Partition a physically bounded domain into continuation slabs. Use interval
+Newton/Krawczyk operators, validated linear solves, or an equivalent certified
+root-counting method to:
+
+- enclose every nonsingular stationary point;
+- detect unresolved boxes near singular bifurcations;
+- certify empty boxes;
+- preserve symmetry-related multiplicities; and
+- report an incomplete domain rather than choose from an unproved list.
+
+For the large discretized system, a practical hierarchy is acceptable:
+certify reduced critical eigenspaces and tail bounds analytically, then apply
+interval methods to the reduced border system. The reduction itself needs a
+residual and spectral-gap bound.
+
+### 7.3 Stability
+
+At a stationary point, eliminate internal propagator variations before
+classifying order-parameter stability. If the Hessian is blocked as
+
+\[
+H=
+\begin{pmatrix}
+\Gamma_{mm}&\Gamma_{mG}\\
+\Gamma_{Gm}&\Gamma_{GG}
+\end{pmatrix},
+\]
+
+then the relaxed inverse susceptibility is the Schur complement
+
+\[
+\chi^{-1}_{\rm relaxed}
+=\Gamma_{mm}
+-\Gamma_{mG}\Gamma_{GG}^{-1}\Gamma_{Gm},
+\]
+
+subject to the declared sign convention. Testing only \(\Gamma_{mm}\) while
+holding \(G\) fixed would misclassify a coupled instability.
+
+After removing exact symmetry zero modes:
+
+- a positive reduced Hessian identifies a local minimum/metastable phase;
+- a negative direction identifies a saddle or maximum;
+- a zero eigenvalue triggers bifurcation analysis and finer certification.
+
+### 7.4 Equilibrium
+
+Evaluate the **same** \(\Gamma\), including every constant and
+double-counting term, at all certified local minima. The global minimum is the
+equilibrium phase; other minima are metastable. Equal minima locate a first-order
+boundary, while a vanishing relaxed Hessian eigenvalue locates a continuous
+boundary.
+
+If the stationary search or free-energy error bars cannot order two candidates,
+the result is `ambiguous`, not a seeded guess.
+
+## 8. Response from the same theory
+
+Differentiate the stationary equations with respect to the physical magnetic
+source. This automatically includes vertex motion and the relaxation of \(G\).
+The Matsubara susceptibility must agree with the inverse reduced Hessian in the
+static limit.
+
+For real frequency:
+
+1. continue the irreducible kernels or solve their spectral representation;
+2. rebuild the retarded response with the same skeleton content;
+3. verify analyticity in the upper half-plane and nonnegative physical spectral
+   weight where required;
+4. check Kramers–Kronig and equal-time moment sum rules; and
+5. show convergence independently in Matsubara cutoff, spectral quadrature,
+   broadening, local rank, and momentum grid.
+
+Real-axis broadening is a resolution parameter, never a repair for a missing
+imaginary-axis state.
+
+## 9. Work packages and gates
+
+### WP0 — Freeze the microscopic contract
+
+- Freeze the Hamiltonian, energy units, Fourier convention, self-site
+  subtraction, Ewald/shape convention, component basis, and coupling-grid digest.
+- Freeze the finite-volume sequence and the order of the thermodynamic,
+  symmetry-breaking-source, and zero-frequency/momentum limits.
+- Record which ODD, exchange, demagnetization, and hyperfine terms are included.
+- Keep `jensen_1z_framework.html` immutable as a comparison derivation; do not
+  assume every hybrid resummation in the legacy code must survive.
+
+**Gate:** two independent constructors reproduce all frozen microscopic anchors
+and the same serialized coupling set.
+
+### WP1 — Exact local source oracle
+
+- Generate \(W_{\rm loc}\), \(C_1\)–\(C_4\), and derivative-required higher
+  vertices from all 136 states.
+- Implement degeneracy-safe divided differences or contour formulas.
+- Verify KMS, permutation, Hermiticity, static derivative, and high-frequency
+  identities.
+
+**Gate:** analytic/source derivatives match high-precision finite differences and
+direct Lehmann sums on random and degenerate fixtures.
+
+### WP2 — Strict linked-cluster functional
+
+- Enumerate the vacuum diagrams at the declared first non-Gaussian order.
+- Derive moment, propagator, and response equations symbolically from that
+  manifest.
+- Produce a machine-readable provenance map from each residual term to its parent
+  diagram.
+
+**Gate:** independent symbolic and numerical differentiation agree term by term.
+
+### WP3 — Exact finite-cluster matching
+
+- Match every low-order coefficient against exact clusters.
+- Include ordered, symmetric, zero-temperature, finite-temperature, and
+  component-mixing fixtures.
+
+**Gate:** exact coefficients agree before fitting; any immutable mismatch rejects
+the functional.
+
+### WP4 — Nonlinear partial Legendre transform
+
+- Construct and validate the bilocal effective action for the non-Gaussian local
+  reference.
+- Prove convexity/domain statements that are actually used by the solver.
+- Resolve the currently missing nonlinear relation between source, connected
+  propagator, and local irreducible vertices.
+
+**Gate:** forward source solve followed by the Legendre inversion returns the
+source, \(m\), \(G\), and functional value within certified errors.
+
+### WP5 — Full tensor 2PI assembly
+
+- Assemble the q-resolved, full-component functional with all same-order
+  skeletons and double-counting terms.
+- Differentiate it to produce stationarity, Hessian, and source-response kernels.
+
+**Gate:** mixed derivatives agree, exact limits reduce correctly, and no residual
+term lacks diagram provenance.
+
+### WP6 — Global stationary solver
+
+- Add globalized Newton/trust-region iteration, pseudo-arclength continuation,
+  deflation, and certified slab/root counting.
+- Preserve every stationary branch and bifurcation event in a versioned trace.
+
+**Gate:** synthetic fold/cusp fixtures and exact finite clusters have complete
+root counts; seed order does not change the certified set.
+
+### WP7 — Equilibrium selection
+
+- Classify the relaxed Hessian.
+- Compare stationary functional values with numerical error bounds.
+- Return equilibrium, metastable, unstable, or ambiguous status.
+
+**Gate:** exact finite-cluster phase rankings and susceptibilities are recovered;
+coexisting minima are ordered independently of continuation direction.
+
+### WP8 — Independent convergence
+
+- Converge local rank, Matsubara rank, q grid/Ewald range, diagram order, nonlinear
+  tolerances, and certification bounds separately.
+- Perform continuum extrapolation only when its asymptotic regime is demonstrated.
+
+**Gate:** the claimed precision has an error budget with no cancellation between
+unconverged axes.
+
+### WP9 — Real-axis response
+
+- Derive and implement the retarded kernel from the same functional.
+- Test causality, positivity, Kramers–Kronig, equal-time, and spectral moments.
+
+**Gate:** static response agrees with the relaxed functional Hessian and all
+response identities close within the declared discretization error.
+
+### WP10 — Production promotion
+
+- Introduce the formal solver behind a new explicit theory flag.
+- Compare with Jensen, strict-ring, exact-cluster, and experimental observables
+  without tuning to fill masks.
+- Change the default only after every preceding gate passes.
+
+**Gate:** no undocumented fallback, seed-dependent phase label, pole floor, or
+masked-to-bare substitution remains.
+
+## 10. Disposition of existing approaches
+
+### Safeguarded Aitken
+
+Retain as a default-off accelerator for the legacy `resummed` solver. It has a
+valid narrow contract and useful regression evidence. It is not part of the
+formal phase-selection proof.
+
+### Warm continuation, Newton repair, and branch graphs
+
+Retain as discovery and diagnostic tools. They provide initial guesses and reveal
+folds, disconnected components, and local solver weaknesses. Their output must
+feed the certified stationary search; it must not directly assign equilibrium.
+
+### Smooth-\(r\) objective
+
+Retire as a proposed final selector. It has no source-functional derivation and
+can choose a smooth metastable or disconnected component.
+
+### Strict ring/local functional
+
+Retain its exact local generator, algebraic checks, cluster oracles, and
+high-frequency machinery. Do not promote the current strict-ring lattice theory:
+its Gaussian pole/no-state interval shows that removing the legacy resummed pole
+is insufficient.
+
+### Earlier varied-\(D\) and quadratic bilocal prototypes
+
+Retain only as falsification evidence and oracle infrastructure. The varied-\(D\)
+candidate has a failed immutable coefficient. The quadratic bilocal prototype is
+valid only in bounded \(C_3=0\), finite-cutoff fixtures and is not the required
+nonlinear Legendre construction.
+
+### Potthoff/self-energy-functional shortcuts
+
+Do not use a reference-system self-energy functional merely because it supplies
+a scalar score. Its universality and representability assumptions must be proved
+for this non-Gaussian spin/electronuclear action and chosen variables. It may be
+considered only after it passes the same exact-cluster and mixed-derivative gates.
+
+## 11. Definition of done
+
+The root problem is formally fixed only when all of the following are true:
+
+1. one versioned functional specification generates state, free energy,
+   stability, and response;
+2. all retained diagrams and coefficients have machine-auditable provenance;
+3. exact local and finite-cluster coefficient gates pass;
+4. mixed derivatives and controlled limits pass;
+5. the solver certifies all stationary states in its declared domain or returns
+   `ambiguous`;
+6. phase selection uses the stationary functional and relaxed Hessian, not seed
+   history;
+7. the 1.5 T folds, 3.825 T failure region, 4.05 T coexistence, and QCP window are
+   all resolved without pole floors or branch heuristics;
+8. the static response equals the appropriate functional derivative;
+9. real-axis response passes causality and sum-rule gates; and
+10. every numerical and truncation axis has an independent error budget; and
+11. the symmetry-breaking and dipolar thermodynamic limits are declared and
+    numerically stable under the prescribed order.
+
+If a skeleton-complete candidate still has a no-state interval, that is a failure
+of the candidate approximation at that order. The correct response is to derive
+the next complete order or change the controlled expansion—not to clip a
+denominator, inject a preferred root, or hide the interval.
+
+## 12. Recommended first action
+
+Begin with WP0–WP3, not with another production solver modification. The most
+valuable immediate deliverable is a small exact-cluster coefficient harness tied
+to an automatically generated diagram manifest. It can falsify an unsound
+functional cheaply relative to a full lattice implementation and prevents a
+large computation from concealing a wrong sign, symmetry factor, or omitted
+same-order topology.
+
+Only after those coefficients close should effort move to the nonlinear bilocal
+Legendre transform and the full q-resolved tensor 2PI solver.
+
+## 13. Theoretical orientation
+
+The recommended construction follows the stationary-functional logic of
+Luttinger–Ward/Baym–Kadanoff and the two-particle-irreducible effective action,
+adapted explicitly—not by formula substitution—to a finite-dimensional quantum
+spin/electronuclear reference:
+
+- J. M. Luttinger and J. C. Ward, *Phys. Rev.* **118**, 1417 (1960),
+  doi:10.1103/PhysRev.118.1417.
+- G. Baym, *Phys. Rev.* **127**, 1391 (1962),
+  doi:10.1103/PhysRev.127.1391.
+- J. M. Cornwall, R. Jackiw, and E. Tomboulis, *Phys. Rev. D* **10**, 2428
+  (1974), doi:10.1103/PhysRevD.10.2428.
+
+These references provide architecture, not a ready-made LiHoF4 formula. The
+actual functional, signs, symmetry factors, local vertices, and double counting
+must be derived and verified by the source and cluster program above.
+
+The independently supplied McKenzie–Stamp spin-bath paper is a particularly
+useful WP1/WP2 normalization oracle. Its Hubbard–Stratonovich construction for
+its stated quantum-Ising/spin-bath Hamiltonian organizes the action in exact
+single-site connected cumulants and recovers RPA at quadratic order, so its
+source signs, beta factors, and \(C_2/C_3/C_4\) organization should be
+cross-audited against the new local generator. It does **not** furnish the
+nonlinear bilocal/2PI Legendre functional for the current
+\((\Sigma,K_0)\) equations or a value that can be evaluated on the existing
+roots; it cannot authorize a retrospective free-energy score.
+
+- R. D. McKenzie and P. C. E. Stamp, *Phys. Rev. B* **97**, 214430 (2018),
+  doi:10.1103/PhysRevB.97.214430. A copy is retained under `References/`.
