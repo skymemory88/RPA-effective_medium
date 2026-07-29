@@ -113,16 +113,34 @@ for i = 1:numel(fields)
         if strcmp(st, 'ok')
             if isnan(first_ok), first_ok = ladder(k); hstar = hs; end
             if ~full_ladder, break; end
+        elseif strcmp(st, 'no_bare_order')
+            % NOT a convergence failure and NOT damping-dependent. invz_hmf_ordered.m:201
+            % returns this when the BARE single-ion mean-field solve does not order
+            % (|<Jz>| <= 1e-6), which is decided before any outer Sigma<->K iteration
+            % runs -- so mix_outer cannot influence it, and the remaining rungs would
+            % reproduce it identically. Measured in the 2026-07-29 pilot: at 5.0/5.4/6.0 T
+            % all six rungs returned no_bare_order with 0/0 nodes and identical
+            % sub-second wall times. Stop the ladder here.
+            break
         end
     end
     row = struct('Bx', Bx, 'rungs', rungs, 'first_ok_mix', first_ok, ...
-        'hstar', hstar, 'closed', ~isnan(first_ok), 'wall_s', toc(t0));
+        'hstar', hstar, 'closed', ~isnan(first_ok), 'wall_s', toc(t0), ...
+        'class', local_classify(rungs, first_ok, hstar));
     if isempty(S.rows), S.rows = row; else, S.rows(end+1) = row; end
-    if row.closed
-        fprintf('   => CLOSED at mix = %.2f, hstar = %.7g  (%.1f s for this field)\n\n', ...
-            first_ok, hstar, row.wall_s);
-    else
-        fprintf('   => NO RUNG CLOSED THIS COLUMN  (%.1f s for this field)\n\n', row.wall_s);
+    switch row.class
+        case 'ordered'
+            fprintf('   => CLOSED at mix = %.2f with an ORDERED root, hstar = %.7g  (%.1f s)\n\n', ...
+                first_ok, hstar, row.wall_s);
+        case 'pm_no_root'
+            fprintf('   => converged at mix = %.2f, NO nonzero root (PM side)  (%.1f s)\n\n', ...
+                first_ok, row.wall_s);
+        case 'pm_no_bare_order'
+            fprintf('   => PM: bare single ion does not order (mix-independent)  (%.1f s)\n\n', ...
+                row.wall_s);
+        otherwise
+            fprintf('   => NO RUNG CONVERGED -- GENUINE CONVERGENCE FAILURE  (%.1f s)\n\n', ...
+                row.wall_s);
     end
     if ~isempty(save_path), save(save_path, 'S'); end
 end
@@ -130,17 +148,37 @@ end
 % ---- summary ---------------------------------------------------------------
 r = S.rows;
 if ~isempty(r)
-    cl = [r.closed];
-    fprintf('--- summary: %d/%d field(s) closed by some rung ---\n', sum(cl), numel(r));
-    for k = 1:numel(ladder)
-        n = sum(cl & ([r.first_ok_mix] == ladder(k)));
-        if n > 0, fprintf('   first closed at mix = %.2f : %d field(s)\n', ladder(k), n); end
+    cls = {r.class};
+    ord = strcmp(cls, 'ordered');
+    pmr = strcmp(cls, 'pm_no_root');
+    pmb = strcmp(cls, 'pm_no_bare_order');
+    fail = strcmp(cls, 'failed');
+    % The four classes are reported SEPARATELY and never summed into one
+    % "closed" rate. Only 'failed' is a convergence failure; both PM classes are
+    % the physically correct answer that no ordered root exists at that field,
+    % and folding them into a failure count would overstate the residual set.
+    fprintf('--- summary over %d field(s) ---\n', numel(r));
+    fprintf('   ordered root found        : %d\n', sum(ord));
+    fprintf('   PM, converged, no root    : %d  (status ok, hstar NaN)\n', sum(pmr));
+    fprintf('   PM, bare does not order   : %d  (mix-independent, not a failure)\n', sum(pmb));
+    fprintf('   GENUINE convergence fail  : %d\n', sum(fail));
+    if any(ord)
+        fprintf('\n   rung that first closed each ORDERED column:\n');
+        for k = 1:numel(ladder)
+            n = sum(ord & ([r.first_ok_mix] == ladder(k)));
+            if n > 0
+                fprintf('      mix = %.2f : %d field(s)\n', ladder(k), n);
+            end
+        end
     end
-    bad = [r(~cl).Bx];
-    if isempty(bad)
-        fprintf('   residual set (no rung closes): EMPTY\n');
+    if any(fail)
+        fprintf('\n   RESIDUAL FAILURE SET (no rung converges): %s\n', num2str([r(fail).Bx]));
     else
-        fprintf('   residual set (no rung closes): %s\n', num2str(bad));
+        fprintf('\n   RESIDUAL FAILURE SET (no rung converges): EMPTY\n');
+    end
+    if any(ord)
+        fprintf('   ordered-root field range: %.4f to %.4f T\n', ...
+            min([r(ord).Bx]), max([r(ord).Bx]));
     end
     fprintf('   total wall %.1f s (%.1f s/field mean)\n', sum([r.wall_s]), mean([r.wall_s]));
     if full_ladder
@@ -155,6 +193,28 @@ if ~isempty(r)
     end
 end
 if ~isempty(save_path), save(save_path, 'S'); fprintf('\nsaved: %s\n', save_path); end
+end
+
+function c = local_classify(rungs, first_ok, hstar)
+%LOCAL_CLASSIFY Four-way column outcome. Only 'failed' is a convergence failure.
+%
+%   ordered           some rung returned status 'ok' AND a finite nonzero root h*.
+%                     This is the deliverable: chi is computable on an ordered branch.
+%   pm_no_root        some rung returned 'ok' but h* is NaN. invz_hmf_ordered.m:380
+%                     returns here when the bracket contains no nonzero root -- the
+%                     column CONVERGED and the correct answer is "no ordered state".
+%   pm_no_bare_order  every rung returned 'no_bare_order' (invz_hmf_ordered.m:201):
+%                     the bare single ion does not order, decided before any outer
+%                     iteration, hence independent of mix_outer.
+%   failed            no rung converged for any other reason (node_failed etc.).
+%                     THIS is the set the damping ladder exists to shrink.
+if ~isnan(first_ok)
+    if isfinite(hstar) && hstar ~= 0, c = 'ordered'; else, c = 'pm_no_root'; end
+elseif ~isempty(rungs) && all(strcmp({rungs.status}, 'no_bare_order'))
+    c = 'pm_no_bare_order';
+else
+    c = 'failed';
+end
 end
 
 function v = getf(s, f, d)
