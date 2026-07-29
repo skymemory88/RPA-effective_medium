@@ -523,3 +523,54 @@ Newton / enumeration kernels unmodified.
 | `signed_aitken1` as a fix for the 3.825 T masks | no change at `mix_outer = 0.40` (E1); the binding node has no clean alternating mode (lag-2…8 autocorrelation \|ρ\| < 0.07) |
 | Reading the 3.825 T mask as a resummed-denominator domain rejection | `medium_status` is `not_applicable` at every node in every configuration; every failure is `max_iter` with `resid_B ~ 1e-11` (E1) |
 | Larger iteration budget alone | `max_outer` 1000 → 5000 at `mix_outer = 0.40` changes nothing (E1) |
+
+---
+
+## S4 — closed-loop path-dependence test: SPECIFICATION, not yet executed
+
+Design decisions taken by the user 2026-07-29. Not started; this section is the brief.
+
+**Plane.** Rectangular loop in (h, Bx) at fixed T = 0.1 K:
+(h1,B1) -> (h2,B1) -> (h2,B2) -> (h1,B2) -> (h1,B1), traversed in both directions.
+
+**Location.** Bx in [3.0, 3.8] T -- the user's choice, overriding the certified 4.60-4.90 T
+window, on the grounds that 3.0-3.8 T is where convergence is hardest and therefore where
+the test is most informative. RISK TO MANAGE, not to argue away: E1 showed many nodes in
+this band fail under some configurations, and a loop requires EVERY point on all four legs
+to be an accepted node. So step 1 below is reconnaissance; the loop rectangle is chosen
+from the converged sub-region rather than assumed.
+
+**Endpoint test.** ||delta u||_inf < 1e-6 on the full u = [Sigma; K0]. This is six orders
+below the 4.05 T inter-root separation (2.4e-2, E8), so it cannot mistake two distinct
+roots for one. A loop failing this is reported as `branch transition`, NEVER as evidence
+of non-integrability -- that distinction is the whole point of the test.
+
+**Budget.** ~25 points per leg, ~100 node solves per loop direction.
+
+**Steps.**
+1. Reconnaissance: at T = 0.1 K, for Bx in {3.0, 3.2, 3.4, 3.6, 3.8} and a coarse h grid,
+   record which (Bx, h) nodes reach an accepted A-D state, and at which mix_outer. Use
+   invzp_exec_s1_failure_census as the pattern. Output: the converged region's boundary.
+2. Choose (h1, h2, B1, B2) as the largest rectangle wholly inside that region. If no
+   rectangle exists, REPORT THAT and stop -- do not shrink the loop until it fits by
+   excluding the hard points, which would test only the easy region while claiming to test
+   the hard one.
+3. Walk each leg with warm continuation, recording at every point the complete state
+   (m, Sigma, K0), r, the accepted/failed verdict, and any change in which root cluster
+   the state belongs to (a branch transition).
+4. Compute the loop integral of m dh along the h legs plus the corresponding Bx-leg terms,
+   in both traversal directions, with the quadrature error estimated by halving the point
+   count.
+5. Verdict, in exactly one of these forms:
+   - `loop closes`: |loop integral| is within its quadrature error AND the endpoint test
+     passes. Proves NOTHING about global integrability -- it is a necessary condition only,
+     and cross-sheet constants remain unfixed.
+   - `loop does not close`: |loop integral| exceeds its quadrature error with the endpoint
+     test passing. Falsifies a common potential in these coordinates.
+   - `branch transition`: the endpoint test fails, or a branch transition was recorded on
+     any leg. The loop integral is then uninterpretable and must not be quoted as evidence
+     either way.
+   - `not constructible`: no rectangle of converged nodes exists in the window.
+
+**Do not** loosen the endpoint tolerance, substitute a bare state for a masked one, or
+report a loop integral computed across a branch transition.
