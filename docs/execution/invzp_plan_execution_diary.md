@@ -616,3 +616,56 @@ deliverable; claiming it is the equilibrium branch is not.
 **Resulting order:** S9 census -> (conditional) adaptive-damping mode -> S4 loop test ->
 WP1 nonzero-frequency blocker -> WP2 manifest. S4 drops below S9 because it is an
 epistemic check, while S9 is on the path to the user's actual deliverable.
+
+## E9 (2026-07-29) -- S10: deep-ordered root cause is a finite-q SOFT MODE, not a solver defect
+
+Trigger: S9 found 1.0 T failing every rung of the damping ladder (962.7 s), with the
+failure count FLAT in mix_outer (10-12 of 34 over 0.15-0.50) where 3.825 T went 22 -> 0.
+
+**Verified facts.**
+1. No local linear regime exists. The tail ratio of the raw map step never settles
+   (IQR 0.9-2.5 on all ten commonly-failing nodes), so the dominant Jacobian eigenvalue
+   is not measurable and neither "lambda > 1 unstable" nor "lambda < 1 slow" applies.
+   (invzp_exec_s10_outer_eigenvalue.m; out/s10_B1_summary.mat)
+2. The LOCAL Gstat pole is on the PATH, not the solution. Accepted nodes sit at
+   |d0| in [0.476, 1.61] with none below 0.1, identically across all four alpha, while
+   the path reaches |d0| ~ 1.8e5 and changes sign 912-1410 times per 1000 iterations.
+   (invzp_exec_s10_pole_locality.m; out/s10_pole_locality.mat)
+3. **The failures correspond ONE-TO-ONE with a near-vanishing q-resolved denominator.**
+   At 1.0 T, 11 of 34 nodes have a FINITE Dq_absmin and 11 fail -- the same 11. No node
+   with finite Dq_absmin is accepted; no failing node lacks it. Six have Dq_min < 0, i.e.
+   D(q) = 1 + (J(q) - K0)*Gstat CROSSES ZERO in the Brillouin zone (min |D(q)| down to
+   8.19e-4). Every node of the converging 3.825 T column has Dq_absmin = NaN.
+4. 1.0 T is NOT a globally failing column: 24 of 34 nodes converge in 50-83 outer
+   iterations. Failures are two populations -- a contiguous block h in [0, 1.28e-4]
+   (including h = 0 exactly, the double degeneracy), and isolated nodes 19/22/23/24
+   sitting between converging neighbours (the E8 multiplicity signature). The column
+   returns hstar = NaN because the root bracket needs the small-h end that is missing,
+   not because the field is unsolvable.
+
+**Interpretation (inference, not yet independently confirmed).** At low transverse field
+and small longitudinal source the 1/z effective medium develops a divergent static
+response at a finite wavevector. The static closure q-averages 1/D(q); where D(q) changes
+sign that average has a genuine pole and no admissible fixed point exists. The solver is
+not failing to find a state -- it is correctly declining to cross a pole, which is the
+deliberate behaviour described in invzp_convg_diagnosis.md Sec 7.2.
+
+**REJECTED BRANCHES (both refuted by pre-stated criteria, before any solver was written).**
+
+| branch | prediction | measured | verdict |
+|---|---|---|---|
+| pole-regular arithmetic (`closure_coordinate='defactored'`, `stable_form`) clears the mask | fewer failures at 1.0 T | mix=0.30: **11/34 -> 11/34, identical node-for-node** [1 2 3 4 5 6 7 19 22 23 24]; mix=0.15: 10/34 both | REFUTED. It regularises the LOCAL d0 pole, but only ~2% of iterations sit within |d0| < 0.1 -- the iterate leaps across that pole rather than landing on it, and the binding singularity is in D(q), a different denominator. |
+| backtracking line search / step limiter would prevent the excursion | outward steps preferentially worsen the residual | frac worsening = 0.469 overall vs **0.467** restricted to steps landing at |d0| > 10; corr(d|d0|, d|resid|) = **-0.002** | REFUTED. No outward preference and no correlation: a random wander, not a systematic overshoot. A line search would reject ~47% of steps at random. |
+
+**Lesson.** Both rejected fixes were algorithmic responses to what is a structural feature.
+The `Dq_absmin` column was present in the S1 census table from the start and would have
+identified this immediately; the damping-ladder framing (S9) directed attention to
+iteration dynamics and delayed reading it. When a failure count is FLAT in the solver's
+own knob, that is early evidence the obstacle is not in the solver.
+
+**Consequence for the plan.** An adaptive-damping production mode is NOT justified and is
+withdrawn as a deliverable: it cannot close columns whose obstruction is a sign change in
+D(q). The open question is now physical -- whether the finite-q instability is (a) a real
+competing ordering wavevector at low field, (b) an artefact of the 1/z truncation's
+q-dependence, or (c) the documented 1.5 T fold region -- and it must be settled before any
+low-field chi is trusted, however cleanly a solver might be made to converge there.
