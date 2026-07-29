@@ -54,15 +54,40 @@ mix   = getf(opts, 'mix', 0.5);
 warn  = getf(opts, 'warn', true);            % emit the invz:emtStatic non-convergence warning
 Jf = Jnu_flat(:);
 smid = getf(opts, 'static_medium', 'resummed');
+% opts.closure_coordinate ('factored' default | 'defactored'): which ARITHMETIC the
+% resummed q-average is evaluated in. 'factored' is the historical seven-argument form,
+% preserved bitwise. 'defactored' evaluates the SAME closure through
+% INVZ_RECIPROCAL_STATIC_CLOSURE (Gq = 1/(1/Gstat + J(q) - K0)), which is an exact
+% algebraic reassociation -- no floor, no broadening, no clipped denominator -- and which
+% therefore evaluates the finite limit at the local Gstat pole where the factored form
+% produces Inf/Inf = NaN. The CLOSURE CONDITION and the exported out.resid are unchanged
+% (|mean_q Gq - Gstat| < resid_tol in both), so acceptance semantics do not move; only the
+% iterates' behaviour on a pole crossing does. Default-off (blind_convg_plan.md SS2.6, SS4
+% promotion boundary): it must not change a production phase label until its gates pass.
+defactored = strcmp(getf(opts, 'closure_coordinate', 'factored'), 'defactored');
+if ~ismember(getf(opts, 'closure_coordinate', 'factored'), {'factored', 'defactored'})
+    error('invz:emtStatic', ...
+        'opts.closure_coordinate must be ''factored'' or ''defactored''; got %s.', ...
+        char(string(getf(opts, 'closure_coordinate', 'factored'))));
+end
 medium = struct('scheme', smid, 'status', 'not_applicable', 'ref', [], 'closure', []);
 if strcmp(smid, 'resummed')
     K0 = K0_seed;
     for it = 1:maxit
-        Gs = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G0el0);
-        Gq = Gs ./ (1 + (Jf - K0).*Gs);
-        Gbar = mean(Gq);
-        if abs(Gbar - Gs) < rtol, break; end % closed at the CURRENT K0 -- exported as-is
-        K0_new = mean(Jf .* Gq) / Gbar;
+        if defactored
+            [Gs, gof] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G0el0, ...
+                                           struct('stable_form', true));
+            rc = invz_reciprocal_static_closure(gof, Jf, K0);
+            Gbar = rc.Gbar;
+            if abs(Gbar - Gs) < rtol, break; end % SAME closure test as the factored branch
+            K0_new = rc.Jloc;
+        else
+            Gs = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G0el0);
+            Gq = Gs ./ (1 + (Jf - K0).*Gs);
+            Gbar = mean(Gq);
+            if abs(Gbar - Gs) < rtol, break; end % closed at the CURRENT K0 -- exported as-is
+            K0_new = mean(Jf .* Gq) / Gbar;
+        end
         dK = abs(K0_new - K0);
         if dK < max(tol, 4*eps(abs(K0)))     % TRUE stall: no representable progress possible
             break;
@@ -107,16 +132,22 @@ if strict_mode && ~strcmp(medium.status, 'ok')
     % stop before lambdas/Sigma consume it.
     Gstat = NaN;
     go = struct('xi', NaN, 'h0', NaN, 'G0bare', G0inel0 + G0el0, ...
-                'Gtil0', NaN, 'r', NaN, 'gstat_local_denom', NaN);
+                'Gtil0', NaN, 'r', NaN, 'gstat_local_denom', NaN, ...
+                'G0inel0', G0inel0, 'G0el0', G0el0);   % same field set as invz_gstat_ordered
 else
-    if strict_mode
+    if strict_mode || defactored
         [Gstat, go] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G0el0, ...
                                          struct('stable_form', true));
     else
         [Gstat, go] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G0el0);
     end
 end
-Gq = Gstat ./ (1 + (Jf - K0).*Gstat);
+if defactored && ~strict_mode
+    Gbar_out = invz_reciprocal_static_closure(go, Jf, K0).Gbar;
+else
+    Gq = Gstat ./ (1 + (Jf - K0).*Gstat);
+    Gbar_out = mean(Gq);
+end
 out = go;
 out.D_uni = 1 + (J0eff - K0)*Gstat;      % collective observable, built from the PHYSICAL Gstat
 out.Dq_min = min(1 + (Jf - K0).*Gstat);
@@ -126,7 +157,7 @@ out.iters = it;
 out.medium = medium;  out.medium_status = medium.status;
 out.omit_mu3 = NaN;  out.omit_cubic = NaN;  out.omit_max = NaN;
 if strcmp(medium.status, 'not_applicable')
-    out.resid = abs(mean(Gq) - Gstat);   % resummed: the q-average closure residual
+    out.resid = abs(Gbar_out - Gstat);   % resummed: the q-average closure residual
     out.converged = out.resid < rtol;    % measured on the EXPORTED tuple
     if warn && ~out.converged
         warning('invz:emtStatic', 'static closure not converged after %d iterations: resid = %.3g', it, out.resid);

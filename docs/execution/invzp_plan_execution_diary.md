@@ -146,7 +146,7 @@ states that both pass A–D at 4.05 T), and records that it must not be swapped 
 argmin-Φ score and is replaced only by `invzp_convg_fix.md` WP7. **No behaviour
 change**; the executable line is byte-identical.
 
-**Learned.** The convention is not merely undocumented, it is *silently* load-bearing:
+**Learned (E2).** The convention is not merely undocumented, it is *silently* load-bearing:
 `prof.status` reaches `'ok'` and a root is published without any record that a choice
 among admissible crossings was made. Any future certificate vocabulary (plan §2.7)
 needs a `multiple-crossings-present` flag emitted from this site, otherwise the
@@ -155,3 +155,131 @@ interim reports cannot distinguish `unique-accepted-within-budget` from
 because emitting it changes the trace schema.
 
 **Checkpoint.** `ckpt-01-s1-census` (same commit).
+
+### E3 — S2 cheap fix attempt: full-closure defactoring. **Correct, gated, and it does not help.**
+
+**Attempted.** Plan §2.6 / review §4: the `stable_form` reassociation fixes `Gtil0`/`r`
+at the local `Gstat` pole but the *other* consumer,
+`Gq = Gstat./(1 + (J(q) − K0).*Gstat)`, still evaluates Inf/Inf = NaN there. Hypothesis:
+E1 showed the binding node's outer iteration crosses `gstat_local_denom = 0` repeatedly,
+so removing that NaN might let the map walk through the pole and converge.
+
+Implementation (all opt-in, default-off):
+- `invz_common/invz_reciprocal_static_closure.m` — **one** definition of the q-average in
+  the reciprocal coordinate, `Gq = 1/(1/Gstat + J(q) − K0)`, with `1/Gstat` built from
+  `Gstat`'s own parts (`z = d0/(G0inel0 + xi*G0el0*d0)`) so no infinity is ever formed.
+  Exact algebraic reassociation: no floor, no broadening, no added tolerance, no sign change.
+- `invz_emt_static_ordered.m` — new `opts.closure_coordinate` (`'factored'` default |
+  `'defactored'`). The **closure condition and `out.resid` are unchanged**
+  (`|mean_q Gq − Gstat| < resid_tol` in both), so acceptance semantics do not move.
+- `invz_ordered_residual.m` — its private `local_blockB_defactored` now calls the shared
+  function instead of carrying a second copy, so audit and iteration cannot drift apart.
+- `invz_gstat_ordered.m` — records `G0inel0`/`G0el0` (values only; `G0bare` is their sum
+  and the split is not recoverable from it).
+
+**Outcome.**
+
+*Gates pass* (`invzp_exec_s2_defactor_gate.m`, fixture = the real T = 0.1 K / 3.825 T /
+h = 0.00241 node, 16384 modes):
+- G1 equivalence over the K₀ range the failing node visits: worst relative disagreement
+  7.8 × 10⁻¹³ (typical ~10⁻¹⁵), and — the load-bearing part of the claim — the agreement
+  is **best near the pole** (6.7 × 10⁻¹⁵ for |d₀| < 0.15) and worst away from it, i.e. the
+  error does not track the pole. A tighter ulp-scaled budget was tried first and rejected
+  as the wrong bar: both arrangements inherit a common-mode amplified rounding error from
+  `d0 = 1 + Σ₀ + K₀·G0inel0`, which is itself formed by cancellation.
+- G2 at the pole: the factored form is non-finite exactly at d₀ = 0, the reciprocal form is
+  finite there and at every offset tested, and it reproduces the analytic limit
+  `Gq → 1/(J(q) − K0)` to 2.2 × 10⁻¹⁵.
+- G3 behaviour-neutrality: the default path is **bit-identical** to the explicit
+  `'factored'` option in (K₀, Gstat, resid, iters), and the two coordinates reach the same
+  fixed point to 1.0 × 10⁻¹⁵.
+
+*Column effect: none.* `invzp_exec_s2_column_effect.m` at 3.825 T:
+
+| `mix_outer` | `max_outer` | factored | defactored |
+|---|---|---|---|
+| 0.40 | 1000 | 1 failed, ids {23} | 1 failed, ids {23} |
+| 0.70 | 1000 | 17 failed, same ids | 17 failed, same ids |
+| 0.70 | 200 | 22 failed, same ids | 22 failed, same ids |
+| 0.30 | 1000 | `ok`, h\* = 0.017221493 | `ok`, h\* = 0.017268978 |
+
+The failure sets are **identical, node for node**, in every masked configuration. This
+also re-verifies behaviour neutrality at the column level: the factored rows reproduce
+E1's pre-change counts exactly.
+
+**Learned — why the hypothesis was wrong.** The static closure iterates on K₀ at *fixed*
+(λ, Σ₀); within one static solve K₀ stays in a well-conditioned region and the pole is
+never actually reached. The pole crossings E1 measured are **outer**-loop events, where
+`d0` moves because **Σ₀** moves between outer iterations. So the Inf/Inf site the review
+identified is real but is not on the path that fails. Defactoring the inner q-average
+therefore cannot address the outer map's non-contractivity, and it did not.
+
+**Disposition.** Kept, default-off. It removes a demonstrated NaN failure mode (G2), it
+de-duplicates the reciprocal-coordinate arithmetic, and it costs nothing when unused. It
+is **not** presented as a convergence fix, and per the promotion boundary it may not
+change a production phase label. Rejected as a fix for the 3.825 T masks — recorded in
+the rejected-branch list below so it is not retried.
+
+**Checkpoint.** `ckpt-02-s2-defactor`.
+
+### E4 — Root and state sensitivity: two A–D-accepted states at one h, from a 10⁻¹² perturbation
+
+**Attempted.** E1's open question — do the configurations that close the 3.825 T column
+close it to the *same* root? `invzp_exec_e3_root_sensitivity.m` perturbs a closing
+configuration along two axes that cannot change the fixed-point set: the arithmetic
+coordinate (factored vs defactored, disagreeing by ≤ 8 × 10⁻¹³ per G1) and `mix_outer`
+(damping changes iteration dynamics only).
+
+**Outcome — verified facts.**
+
+1. **Two distinct A–D-accepted states at the same h.** Comparing the two arithmetic
+   variants node by node at `mix_outer = 0.30`, the difference is *not* a smooth
+   accumulation. Nodes 1–4 differ only at the 10⁻¹⁰–10⁻¹² level (rounding). Then:
+
+   | node | h | rel Δr | rel ΔK₀ | iters (fac / def) |
+   |---|---|---|---|---|
+   | 23 | 0.00241 | 1.38 × 10⁻² | **7.8 × 10⁻¹** | 70 / 35 |
+   | 24 | 0.00299 | 1.74 × 10⁻² | **7.2 × 10⁻¹** | 26 / 92 |
+
+   Both runs report **zero failed nodes**, so both states at each of these h passed the
+   full A–D contract at `tol_outer = 1e-8`. A K₀ differing by 78% is not a tolerance
+   artifact: these are two different accepted fixed points at one operating point,
+   selected by a 10⁻¹²-level arithmetic difference upstream.
+
+2. **The published root moves by about three root-tolerance units, not more.**
+   h\*(factored) = 0.0172214927186, h\*(defactored) = 0.0172689777947 → 2.76 × 10⁻³
+   relative. Across the damping window {0.28, 0.30, 0.32, 0.34, 0.36} — all of which
+   close — h\* takes exactly four distinct values, {0.0172215, 0.0172373, 0.0172531,
+   0.0172690}, **evenly spaced by 1.58 × 10⁻⁵**. That spacing is the bisection's final
+   bracket width under `tol_root = 1e-3` (≈ 1.7 × 10⁻⁵ at h ≈ 0.0172), so the h\* spread
+   is at the root finder's own reported precision. `mix_outer = 0.26` fails 2 nodes.
+
+**Learned.**
+
+- Fact 1 extends the diagnosis's coexisting-accepted-roots evidence
+  (`invzp_convg_diagnosis.md` §6.2, recorded at 4.05 T) to 3.825 T, and strengthens it:
+  there, two roots were found by *seeding*; here they are reached by an arithmetic
+  perturbation smaller than the acceptance tolerance by four orders of magnitude. The
+  A–D contract is not selective enough to distinguish them — exactly the gap
+  `invzp_convg_fix.md` §7 exists to close.
+- Fact 2 is the honest limit on how far fact 1 goes *at this field*: the coexistence
+  happens at nodes far below the crossing (h = 0.0024, 0.0030 vs h\* = 0.0172), where the
+  contribution to h₀ = ∫r dh′ is small, so the published root is not visibly destabilised
+  here. It would be an overclaim to call the root chaotic on this evidence. What is
+  established is that the *state path* is not determined, and that the current reporting
+  cannot tell the user which of two accepted states each node took.
+- This makes the missing certificate flag from E2 concrete: the interim vocabulary needs
+  `multiple-accepted-unranked` to be *emittable per node*, not only per column.
+
+**Checkpoint.** `ckpt-02-s2-defactor` (same commit).
+
+---
+
+## Rejected branches (do not retry without new contradicting evidence)
+
+| Branch | Rejecting evidence |
+|---|---|
+| Defactoring the static q-average as a fix for the 3.825 T masks | identical failure sets node-for-node in all three masked configurations (E3); the pole crossings are outer-loop, not inner-closure, events |
+| `signed_aitken1` as a fix for the 3.825 T masks | no change at `mix_outer = 0.40` (E1); the binding node has no clean alternating mode (lag-2…8 autocorrelation \|ρ\| < 0.07) |
+| Reading the 3.825 T mask as a resummed-denominator domain rejection | `medium_status` is `not_applicable` at every node in every configuration; every failure is `max_iter` with `resid_B ~ 1e-11` (E1) |
+| Larger iteration budget alone | `max_outer` 1000 → 5000 at `mix_outer = 0.40` changes nothing (E1) |

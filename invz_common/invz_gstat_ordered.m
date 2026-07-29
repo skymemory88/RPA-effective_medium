@@ -64,6 +64,11 @@ else
     Gtil0 = Gstat/(1 - K0*Gstat);
     r     = G0bare/Gtil0;
 end
+% G0inel0/G0el0 are recorded because G0bare is their SUM and the split is not
+% recoverable from it; the reciprocal-coordinate closure
+% (INVZ_RECIPROCAL_STATIC_CLOSURE) needs both to rebuild 1/Gstat from Gstat's own
+% parts. Values only -- no behaviour depends on these two fields here.
 out = struct('xi', xi, 'h0', h0, 'G0bare', G0bare, 'Gtil0', Gtil0, 'r', r, ...
-             'gstat_local_denom', gstat_local_denom);
+             'gstat_local_denom', gstat_local_denom, ...
+             'G0inel0', G0inel0, 'G0el0', G0el0);
 end
