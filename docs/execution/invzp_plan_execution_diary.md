@@ -586,8 +586,10 @@ problematic there. This reorders the remaining work.
 
 **New top packet -- S9: field-wide damping-ladder census.** E1 established that the
 3.825 T mask is outer-map iteration dynamics, not a domain failure, and that
-mix_outer = 0.30 closes that column completely (0/34 nodes fail, accepted A-D at every
-node). It is NOT established that this generalises. The decisive measurement:
+mix_outer = 0.30 closes that column completely (0/43 node evaluations fail, accepted A-D
+at every node -- 43 not 34 because bisection and the root phase run to completion only
+there; the E1 table above is the authority for this count). It is NOT established that
+this generalises. The decisive measurement:
 
   For Bx over the full range of interest (e.g. 3.0-6.0 T at the driver's 0.025 T step,
   plus a coarse low-field pass), run the column at a LADDER of mix_outer values
