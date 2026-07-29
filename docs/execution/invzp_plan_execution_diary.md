@@ -273,6 +273,76 @@ coordinate (factored vs defactored, disagreeing by ≤ 8 × 10⁻¹³ per G1) an
 
 **Checkpoint.** `ckpt-02-s2-defactor` (same commit).
 
+### E5 — Critical path: the exact-cluster coefficient harness (fix doc §12) is built and gated
+
+**Attempted.** `invzp_convg_fix.md` §12's named first deliverable: "a small exact-cluster
+coefficient harness tied to an automatically generated diagram manifest", implementing
+§6's four steps for the two-site X–X bond.
+
+A capability inventory of `invz_functional/` was run first, to avoid rebuilding what the
+repo has. Result: the exact cluster oracles exist (`invzf_cluster_exact` for 1–8 sites,
+`invzf_two_site_exact`, `invzf_centered_*`) but **only produce exact numbers** — no file
+extracts coupling-order coefficients from them and none compares against a candidate;
+exact rank-2/3/4 local cumulants exist (`invzf_multilevel_cumulant`) but are wired
+end-to-end only for the two-level model, not the 136-state one; and **no diagram
+enumeration or provenance machinery exists anywhere in the repo**.
+
+**Delivered.**
+- `invz_functional/invzf_taylor_extract.m` — certified Taylor extraction from a handle
+  J ↦ F(J): Chebyshev-node polynomial fits repeated over a halving sequence of radii, so
+  the **spread across radii is a measured error bar per coefficient** rather than an
+  assumed accuracy. A comparator whose own error is unknown cannot grade anything.
+- `invz_functional/invzf_pair_local_manifest.m` — the independent side. Predicts the pair
+  free-energy coefficients from **local data only** (m and Cₙ at J = 0) via the
+  linked-cluster cumulant expansion, with the derivation recorded in the header and each
+  retained monomial carrying its topology and symmetry factor:
+  a₁ = −m² (one line, C1 on each site); a₂ = −m²C₀ (two lines, C2 on one site and two
+  disconnected C1 on the other, factor 1) − (1/2β)ΣₙCₙ² (two lines, C2 on each site,
+  factor ½ — the single ring). Order 3 is derived **only at h = 0**, where the local
+  X-flip unitary maps J → −J so every odd coefficient vanishes; order 3 at h ≠ 0 and
+  order 4 are returned `derived = false` and are reported **ungraded, never passed**.
+- `invz_functional/invzf_cluster_coeff_harness.m` — the comparator and regression fixture.
+- `docs/execution/invzp_exec_wp3_harness_gate.m` — the gate.
+
+**Outcome — all four gates pass.**
+- **W1 extractor self-test** on exp(0.7J): orders 0–2 recovered to ≤ 8.3 × 10⁻¹²
+  relative; the reported error bar bounds the true error at every order (worst ratio
+  1.00). Order 4 is only ~2 × 10⁻⁶ accurate at r₀ = 0.05 — and the harness *reports* that,
+  which is the property being tested.
+- **W2 parity fixture** (h = 0): a₁ = −5.4 × 10⁻¹⁸, a₃ = 1.0 × 10⁻¹³, a₅ = −4.9 × 10⁻¹⁰,
+  each inside its own error bar, against a₂ = −1.708. The extractor can certify a
+  coefficient as zero, which is the harder half of a coefficient gate.
+- **W3 manifest vs exact cluster**: match at orders 0, 1, 2 at both h = 0 and h = 0.05,
+  worst |diff| 7.4 × 10⁻¹²; order 3 matches at h = 0 (parity). Orders reported `ungraded`
+  are exactly those the manifest does not derive.
+- **W4 negative control**: a self-consistent mean-field pair functional reproduces orders
+  0 and 1 and is **rejected at order 2**, and its shortfall equals the predicted missing
+  single-ring term −ΣₙCₙ²/(2β) to **1.26 × 10⁻⁷ relative**.
+
+**Learned.** W4 is the load-bearing capability: the harness does not merely say a
+candidate is wrong, it says **which diagram is missing and by how much**. That is what
+makes it a cheap falsifier for a functional candidate, as §12 argues, and it is now
+demonstrated rather than asserted. Two flaws in my own first verdict logic were found and
+fixed by running it: a relative tolerance keyed to the coefficient's own magnitude
+declared a correctly-vanishing coefficient "ungradeable" (fixed by keying tolerances to
+the expansion scale), and a self-test threshold that ignored the reported error bar
+counted an honestly-reported 10⁻⁶ accuracy as a failure.
+
+**What remains open on the critical path, stated plainly.**
+- WP2's *automatic* diagram generator does not exist and was not built. The manifest here
+  is hand-derived and machine-checked, covering orders 0–2 at any source and order 3 at
+  zero source. Orders 3 (h ≠ 0) and 4 are **frozen as exact numbers** in the regression
+  fixture so whoever derives them has an immediate target: at (Δ, M, h, β) =
+  (0.30, 1.00, 0.05, 20.0), a₃ = +0.448263449489 and a₄ = +6.16588863563.
+- WP1 is complete for the two-level model but **not** for the 136 electronuclear states:
+  `invzf_multilevel_cumulant` is a general exact rank-2/3/4 engine that is simply not
+  wired to `invz_single_ion`'s spectrum and operator. That wiring, plus KMS/permutation/
+  high-frequency identity checks, is the next bounded packet.
+- The harness is candidate-agnostic (it takes a handle), so it will grade a 2PI candidate
+  the day one exists, with no change.
+
+**Checkpoint.** `ckpt-03-wp3-harness`.
+
 ---
 
 ## Rejected branches (do not retry without new contradicting evidence)
