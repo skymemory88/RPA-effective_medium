@@ -580,6 +580,9 @@ should be integrated only after those steps establish a valid branch.
 - Resolution-census artifact:
   `docs/diagnostics/invzp_outer_wp2/wp2_hmf_node_resolution_census.mat`.
   Its checkpointed one-off generator is recoverable from commit `02bc7d3`.
+- Endpoint-trapezoid artifact:
+  `docs/diagnostics/invzp_outer_wp2/wp2_endpoint_trapezoid_census.mat`.
+  Its checkpointed one-off generator is recoverable from commit `540ebbe`.
 - 4 T adaptive continuation and endpoint artifacts:
   `docs/diagnostics/invzp_outer_wp2/wp2_4t_adaptive_boundary_continuation.mat`,
   `wp2_4t_adaptive_target_audit.mat`,

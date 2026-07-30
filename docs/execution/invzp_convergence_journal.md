@@ -861,7 +861,9 @@ observations within this method, not additional trials.
 the 18-field table, endpoint states, residual brackets, and frozen options.
 Artifact assertions pass for the strict-lower failures, PM convergence
 partition, upper-endpoint topology, bracket coverage, and endpoint mass signs.
-The one-off generator passes MATLAB Code Analyzer and `git diff --check`.
+The one-off generator passed MATLAB Code Analyzer and `git diff --check`; it
+was removed after checkpoint closure and remains recoverable from commit
+`540ebbe`.
 
 **Interpretation boundary.** Do not promote this quadrature rule to
 production. Interior smoothness is not the decisive issue: a selected
