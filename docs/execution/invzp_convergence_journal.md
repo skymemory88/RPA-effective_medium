@@ -1444,3 +1444,69 @@ the corrected upper/saturation anchor and component-topology analysis.
 `invzp_closed_twolevel_landmarks.m`, and
 `wp3_closed_twolevel_landmarks.mat`. Both reproducible diagnostics pass MATLAB
 Code Analyzer.
+
+## 2026-07-30 — Checkpoint 19: upper anchor fails the hybrid tail prerequisite
+
+**Derivation.** With \(\delta h(h)=H_0(h)-h\), equation (45) implies
+
+\[
+\frac{d\delta h}{dh}=r(h)-1.
+\]
+
+The proposed saturation form
+
+\[
+\delta h(h)=-\int_h^\infty[r(s)-1]\,ds
+\]
+
+therefore has three independent obligations: connected fluctuations must
+justify \(\delta h(\infty)=0\); \(r-1\) must be integrable; and the certified
+representation must reach the fitted asymptotic regime without a component or
+model-validity boundary.
+
+**Production-hybrid measurement.** Deterministic outer-map continuation was
+started at 128 times the ordinary profile ceiling and carried downward through
+25 logarithmic nodes at 1 and 4 T. All 50 nodes certify, with positive static,
+uniform, and dynamic margins. Over factors 8--128:
+
+| \(B_x\) (T) | \(h\) range (meV) | exponent of \(|r-1|\) | exponent of full \(J_z\) connected variance |
+|---:|---:|---:|---:|
+| 1 | 0.0436--5.575 | 0.593 | 0.176 |
+| 4 | 0.0238--3.040 | 0.811 | 0.166 |
+
+Both \(r-1\) fits retain one sign, but exponents below one do not define the
+required infinite tail. Later-window sensitivity fits remain below one. At
+the largest nodes the full electronuclear connected variances are still 2.24
+and 2.97, so the single-ion response is not close to saturation.
+
+**Matched control.** The internally closed two-level model was evaluated on
+the identical nodes. Its \(r-1\) exponents are 1.733 at 1 T and 1.568 at 4 T;
+its connected-variance exponents are 1.147 and 1.148. This supports the upper
+anchor in the closed Jensen theory and isolates the production failure to the
+full-response/two-level-vertex hybrid's slow multilevel saturation.
+
+**Validity boundary.** The finite 136-state calculation eventually saturates
+only when \(h\) is tens of meV: a direct check at \(h=50\) meV gives
+\(\langle J_z\rangle\approx7.98\) and variance \(\approx0.076\). At such
+fields the Zeeman span across \(J=8\) is hundreds of meV, so omitted higher
+multiplets can no longer be ignored. Extending the numerical tail until it
+becomes integrable would not be a controlled repair of the current model.
+
+**Decision.** No upper-anchored production root is attempted. A finite upper
+cutoff would choose an arbitrary additive constant. Reconsideration requires
+a multilevel asymptotic completion or analytic tail that includes the omitted
+states and proves both integrability and \(\delta h(\infty)=0\).
+
+**Execution pause.** The accumulated controls now reject node density,
+rejected-state contamination as a complete repair, small-\(M^2\) arithmetic,
+both cheap representation replacements, and the production upper anchor.
+The next planned item is no longer an inexpensive local experiment: it is the
+exact reduced simultaneous residual followed by disconnected-component
+search, or a re-derivation of whether equation (45) legitimately requires
+unstable constrained states outside the present positive-mass domain. That
+choice changes the mathematical strategy and is left for human review rather
+than started unsupervised.
+
+**Evidence.**
+`docs/diagnostics/invzp_integral_wp5/invzp_saturation_tail_census.m` and
+`wp5_saturation_tail_census.mat`; the reproducer passes MATLAB Code Analyzer.
