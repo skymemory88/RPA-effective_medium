@@ -83,24 +83,13 @@ switch eUnit
     otherwise, error('invz_run_spectra:eUnit', 'eUnit must be ''meV'' or ''GHz''.');
 end
 
-% TEMPORARY VISUAL-INSPECTION MODE (2026-07-30): evaluate the 256-node ordered
-% profile, keep the same independent PM-limit lower endpoint used by the
-% two-node experiment, discard Inf/NaN positive-h integrand nodes, and apply a
-% trapezoid over the retained sequence. A finite last iterate may enter this
-% visual quadrature even when its node did not certify, but root refinement and
-% the final susceptibility state must still converge. Missing intervals are
-% bridged by straight panels. The result is NOT a certified Eq.-45 integral.
-% Remove the five nH/hmf fields to restore the strict full profile without
-% changing the solver default.
-solve_opts = struct('mix_outer', outerMix, 'max_outer', outerMax, ...
-    'nH',256, ...
-    'hmf_integral_mode','filtered_profile_visual', ...
-    'hmf_filtered_include_unconverged',true, ...
-    'hmf_endpoint_allow_unconverged_pm',true, ...
-    'hmf_endpoint_pm_max_outer',1000);
-warning('invz:visualFilteredIntegral', ...
-    ['VISUAL ONLY: ordered columns integrate a PM lower endpoint plus finite ' ...
-     'H_MF last iterates, including uncertified nodes; gaps are bridged.']);
+% TEMPORARY STRICT-COMPARISON MODE (2026-07-30): the visual filtered-profile
+% experiment remains implemented but is not selected here. Production uses the
+% solver's strict full_profile default and its default 33-node H_MF profile.
+% Every profile node must certify; no PM anchor, Inf/NaN filtering, or bridged
+% panel enters equation (45). The stronger exploratory outer damping/budget
+% above remain active.
+solve_opts = struct('mix_outer', outerMix, 'max_outer', outerMax);
 
 % The quadrature convention is fixed; backend and resolution remain explicit.
 coupling_opts = struct('grid', [gridN gridN gridN], 'dpRng', dpRng, ...
@@ -167,7 +156,7 @@ else
     else
         Splot = S;  Splot.w = S.w * eScale;    % display-only copy; solve above always ran in meV
         figure('Position', [100 100 1150 460]);
-        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z VISUAL filtered 256-node Eq.-45 approximation, T = %.2f K', T), eUnit);
+        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z STRICT 33-node Eq.-45 profile, T = %.2f K', T), eUnit);
         ax2 = subplot(1, 2, 2);  invz_plot_spectra_map(ax2, Splot, Splot.chirpa, sprintf('RPA, T = %.2f K', T), eUnit);
     end
 

@@ -342,19 +342,17 @@ uncertified. Endpoint linearization is not an all-field repair and must not be
 wired into production. Evidence is `wp2_endpoint_trapezoid_census.mat`; exact
 values and acceptance limits are recorded in the execution journal.
 
-For visual inspection only, the two-endpoint mode remains available as an
-explicit option, but `invz_run_spectra.m` now selects the more resolved
-`hmf_integral_mode='filtered_profile_visual'` with `nH=256`,
-`mix_outer=0.15`, and `max_outer=3000`. It retains the same independent PM
-lower endpoint, removes nonfinite positive-\(h\) nodes, and applies a
-trapezoid to the retained sequence. The ordered-solver default remains the
-strict full profile. This temporary mode generates finite 1--4.5 T ordered
-columns in the 65-node coverage census. Exact 256-node probes converge at 1,
-1.5, and 4 T but return `filtered_no_bracket` at 4.68 T. The 1 and 1.5 T
-roots still use unconverged PM anchors, while the 4 and 4.68 T PM anchors
-converge. Its PM-to-ordered lower panel crosses the unresolved component
-interval and the low-field anchors remain path dependent. No result from
-either visual mode may update the physical convergence claims above.
+The two visual integration modes remain available as explicit diagnostic
+options, but they are temporarily disabled in `invz_run_spectra.m` for a
+strict-output comparison. The production driver now supplies only
+`mix_outer=0.15` and `max_outer=3000`, so the ordered solver uses its
+`full_profile` default with `nH=33`. No PM anchor, nonfinite-node filtering, or
+bridged panel enters equation (45). Exact strict probes at 1, 4, and 4.68 T
+all return `node_failed`; their \(h=0\) predictors fail and only 10, 5, and 4
+of 33 positive-\(h\) profile nodes certify, respectively. Thus
+`filtered_no_bracket` did not cause the general mask: it was a fail-closed
+status inside a workaround that bypassed these broader strict-profile
+failures. The strict comparison is expected to mask the ordered output.
 
 ### Feedback-informed implementation order
 
@@ -530,6 +528,15 @@ controlled node-count comparator for this 256-node table. In particular, the
 large 1 T change must not be assigned to resolution alone. The unconverged PM
 anchors and finite lower bridges continue to preclude a low-field physical
 claim.
+
+For a direct output comparison, the production driver now temporarily
+disables `filtered_profile_visual` without deleting its implementation. It
+uses strict `full_profile`, the default 33-node profile, `mix_outer=0.15`, and
+`max_outer=3000`. Direct probes give `node_failed` at 1, 4, and 4.68 T; the
+strict \(h=0\) predictor fails at all three, and 10/33, 5/33, and 4/33 profile
+nodes certify. This comparison separates the effect of bypassing the visual
+filter from permanent code removal. It also shows that deleting only the
+`filtered_no_bracket` status could not repair the underlying failure.
 Exact census, endpoint provenance, residuals, and dispatcher/default checks
 are retained in
 `docs/diagnostics/invzp_outer_wp2/wp2_filtered_profile_visual_census.mat`.
