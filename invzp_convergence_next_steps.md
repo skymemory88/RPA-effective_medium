@@ -284,6 +284,23 @@ adaptive field continuation, not another scalar damping value. Machine-readable
 evidence is `wp2_4t_reverse_continuation.mat` and
 `wp2_4t_reverse_boundary_audit.mat`.
 
+Adaptive downward \(H_{\rm MF}\) continuation subsequently reaches node 28 in
+six accepted steps. This exposed and corrected a separate numerical defect in
+`invz_bounded_roots`: sign-bracket refinement stopped at the first residual
+below \(10^{-10}\), while the equivalent closure residual could remain just
+above \(10^{-10}\), making admissibility depend on grid phase. Sign roots are
+now polished to `x_tol`, and adjacent sign brackets suppress duplicate
+tangency polishing. The node-28 root is stable over the full 3-by-3
+scan-density/endpoint-margin grid, is contractive, and passes every static and
+dynamic margin gate. The direct coarse node-29-to-node-28 transfer still
+fails, so both the polishing fix and adaptive parameter continuation are
+load-bearing. Evidence is `wp2_4t_adaptive_boundary_continuation.mat` and
+`wp2_4t_adaptive_target_audit.mat`.
+
+This remains diagnostic-only. The next bounded packet is one additional 4 T
+coarse gap, node 28 to node 27; whole-profile and production integration remain
+premature.
+
 ## Work package 3: audit the electronic/electronuclear hybrid
 
 Compare three internally defined calculations at representative healthy and

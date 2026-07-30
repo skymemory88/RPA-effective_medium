@@ -511,3 +511,98 @@ bracket the 4 T boundary with adaptive downward field steps from node 29 while
 keeping the same deterministic map and undamped acceptance contract. Stop at
 the first reproducible loss of the coupled component; do not infer
 thermodynamic equilibrium from continuation.
+
+## 2026-07-30 — Checkpoint 4: adaptive 4 T node-29 to node-28 continuation
+
+**Production status.** None of the deterministic-map or continuation
+diagnostics is wired into `invz_solve_point_ordered`. The blanket ordered mask
+seen in a production rerun is therefore expected: the fatal \(h_z=0\)
+predictor and low-to-high legacy profile iteration remain unchanged. PM output
+is unaffected.
+
+**Initial adaptive result and contradiction.** A diagnostic controller was
+started from the certified 4 T node-29 solution. It halves rejected
+\(H_{\rm MF}\) proposals, grows accepted steps by at most 1.5, and otherwise
+keeps the unique bounded static map, leading-mode gate, undamped Picard, outer
+residual, and denominator acceptance contract fixed. The first run advanced
+through nine accepted roots to \(h=0.00836206475\), then repeatedly reported
+Arnoldi domain boundaries even for \(3\times10^{-9}\) self-energy
+perturbations. This contradicted the positive explicit margins and a fully
+defined first Picard segment, so nonlinear continuation was paused.
+
+**Root mathematical cause.** The failing perturbation always contained the
+same interior mathematical static root, with supremum mass 0.01255 and uniform
+mass 0.01608. Some scan configurations exported it and others rejected it only
+because:
+
+1. sign-bracket bisection stopped at the first point satisfying
+   \(|\widehat R|\le10^{-10}\);
+2. the independently recomputed but algebraically equivalent closure residual
+   has different local conditioning and landed at
+   \(1.01\)--\(1.08\times10^{-10}\); and
+3. both quantities were gated at the same \(10^{-10}\) tolerance.
+
+Grid phase therefore changed the first below-tolerance bisection point and
+produced false `no_admissible_static_root` statuses. The generic root
+enumerator now continues a sign bracket to `x_tol` before applying residual
+acceptance. It also does not launch a tangency minimization in a cell already
+covered by an adjacent sign bracket, preventing a less accurately polished
+duplicate of a simple root. A focused steep-root regression was added.
+
+The retained failing direction then becomes uniquely admissible over the full
+Cartesian product of 2049/4097/8193 scan points and endpoint margins
+\(10^{-8}/10^{-10}/10^{-12}\), with root/closure residuals of order
+\(10^{-12}\)--\(10^{-11}\). Arnoldi no longer encounters a map-domain
+boundary. Very small finite-difference steps eventually become
+roundoff-limited, as expected, but the physical classification is stable.
+
+**Adaptive rerun.** Restarting from node 29 after the polishing fix reaches
+node 28 in 11 proposals and six accepted downward steps. Direct node-29 to
+node-28 transfers still have no admissible static root, so adaptive parameter
+steps are genuinely required; polishing alone is not a substitute for
+continuation.
+
+At the node-28 target \(h=0.0080712748574\):
+
+- all nine scan/endpoint combinations contain exactly one admissible root;
+- maximum outer residual is \(4.07\times10^{-9}\), maximum root residual
+  \(9.72\times10^{-12}\), and maximum closure residual
+  \(2.82\times10^{-11}\);
+- minimum supremum, uniform, mesh-\(x\), and medium-mesh masses are
+  0.0010506, 0.0013877, 0.0088186, and 0.0116482;
+- minimum dynamic absolute denominator is 0.31507, with zero nonpositive
+  dynamic denominators;
+- the dominant eigenvalue is \(-0.17726\), stable for finite-difference steps
+  \(10^{-5},3\times10^{-6},10^{-6}\); and
+- an undamped halfway-to-root start returns to the continued root within
+  \(1.75\times10^{-9}\).
+
+Evidence:
+`wp2_4t_adaptive_boundary_continuation.mat` and
+`wp2_4t_adaptive_target_audit.mat` under
+`docs/diagnostics/invzp_outer_wp2/`.
+
+**Interpretation.** This packet isolates two distinct algorithmic causes:
+insufficient root polishing created false static-domain failures, while the
+coarse \(H_{\rm MF}\) grid still crosses outside the continued component's
+basin/domain. The result certifies one additional coarse node, not the complete
+profile, the \(H_{\rm MF}\) integral, thermodynamic branch selection, or
+0--9 T production susceptibility.
+
+**Trial accounting.** The 4 T coarse reverse-grid method remains one failed
+method. Adaptive continuation is a distinct successful method for the
+node-29-to-node-28 gap. Rejected internal step proposals are controller
+observations, not separate methods. The 1 T node-22 failed-method counter
+remains 2.
+
+**Checks at checkpoint.** `test_invzp_static_domain` passes 13/13 checks;
+the 2049/4097/8193 static resolution ladder passes with healthy-root \(x\)
+spread \(5.47\times10^{-12}\); `test_invzp_outer_map` passes; the target audit
+is resolution-stable and branch-consistent; Code Analyzer reports zero
+messages on all new/modified kernels, tests, and diagnostics; and
+`git diff --check` passes.
+
+**Next bounded option.** After validation and a clean checkpoint, extend the
+same adaptive controller across only the next 4 T coarse gap (node 28 to
+node 27). Reassess root count, masses, Jacobian structure, and step demand
+before attempting a whole-profile controller or production integration.
