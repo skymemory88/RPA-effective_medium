@@ -1510,3 +1510,24 @@ than started unsupervised.
 **Evidence.**
 `docs/diagnostics/invzp_integral_wp5/invzp_saturation_tail_census.m` and
 `wp5_saturation_tail_census.mat`; the reproducer passes MATLAB Code Analyzer.
+
+## 2026-07-30 — Checkpoint 20: diagnosis consolidation
+
+**Documentation change.** `root_search_problem.md` was replaced by
+`converg_diagnosis.md`. The new diagnosis incorporates the accepted-state
+rollback, low-field \(M^2\) limit, representation controls, and saturation-tail
+test, while preserving the distinction among static-root, coupled-node, and
+equation-(45) failures. Its next decision point is the reduced simultaneous
+residual/component search versus re-derivation of the constrained
+equation-(45) path.
+
+**Legacy fixture decision.** `diag_rev3_check.mat` was not deleted. It remains
+a direct input to two maintained static-domain regression tests and four WP2
+reproducibility scripts. The newer result artifacts do not contain replacement
+frozen 1 T/3 T node inputs. A later cleanup may relocate and rename the fixture
+only together with all consumers and their validation.
+
+**Checks.** Every evidence path named by the diagnosis exists. No code or
+documentation link requires the old path; this checkpoint mentions it only as
+rename history. `git diff --check` passes. No solver, production option, or
+numerical artifact changed.
