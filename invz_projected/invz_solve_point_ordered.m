@@ -257,8 +257,13 @@ eopts = getf(opts, 'emt', struct());
 % ONE node solve at hz_fixed = 0 gives THIS machinery's PM fixed point. Its mass
 %   slope_pred = r(0) + J0eff*G0bare(0) = 1 + Sigma0(0) - J0eff*chi_path(0)   (= crit, SS5)
 % predicts root existence INDEPENDENTLY of any sampled profile value.
-Sigma = [];  K0s = 0;                                % warm-start carriers across nodes
-[r0n, ~, S0pm, K0pm, ~, Gb0, ~, ok0, Sigma, K0s, st0] = eval_node(0, Sigma, K0s);
+Sigma = [];  K0s = 0;                                % last accepted node state
+[r0n, ~, S0pm, K0pm, ~, Gb0, ~, ok0, Sigma_candidate, K0_candidate, st0] = ...
+    eval_node(0, Sigma, K0s);
+if ok0
+    Sigma = Sigma_candidate;
+    K0s = K0_candidate;
+end
 prof.predictor_converged = ok0;
 prof.predictor_static_status = st0;
 predictor_usable = ok0;
@@ -360,8 +365,12 @@ while strict_profile && predictor_usable && slope_pred < 0 && ...
     [re, me, S0e, K0e, De, Gbe, Gse] = deal(nan(1, 3));  ce = false(1, 3);
     ste = strings(1,3);
     for k = 1:3
-        [re(k), me(k), S0e(k), K0e(k), De(k), Gbe(k), Gse(k), ce(k), Sigma, K0s, ste(k)] = ...
-            eval_node(hext(k), Sigma, K0s);
+        [re(k), me(k), S0e(k), K0e(k), De(k), Gbe(k), Gse(k), ce(k), ...
+            Sigma_candidate, K0_candidate, ste(k)] = eval_node(hext(k), Sigma, K0s);
+        if ce(k)
+            Sigma = Sigma_candidate;
+            K0s = K0_candidate;
+        end
     end
     hgrid = [hext hgrid];  rv = [re rv];  mv = [me mv];  cnv = [ce cnv]; %#ok<AGROW>
     stv = [ste stv]; %#ok<AGROW>
@@ -458,7 +467,8 @@ prof.root_bracket_bridged = ib > ia+1;
 a = hgrid(ia);  b = hgrid(ib);  Fa = F(ia);  h0a = h0(ia);  ra = rv(ia);
 for it = 1:12
     c = 0.5*(a + b);
-    [rc, mc, ~, ~, ~, ~, ~, okc, Sigma, K0s, stc] = eval_node(c, Sigma, K0s);
+    [rc, mc, ~, ~, ~, ~, ~, okc, Sigma_candidate, K0_candidate, stc] = ...
+        eval_node(c, Sigma, K0s);
     if ~okc
         prof.refinement_failure_status = stc;
         if filtered_visual
@@ -469,6 +479,8 @@ for it = 1:12
         hmf_star = NaN;                              % TERMINATES the solve -- never a root
         return;                                       % from a partial bracket
     end
+    Sigma = Sigma_candidate;
+    K0s = K0_candidate;
     if endpoint_visual
         h0c = 0.5*c*(endpoint_r0+rc);
     else
@@ -498,22 +510,28 @@ end
 prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star = Gs_s;
 
     function [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s, stv] = run_sweep(hgrid, Sigma, K0s)
-    % Behavior-neutral factoring of the per-node nH sweep (execution amendment 3):
-    % evaluate eval_node at every point of hgrid in ascending order, warm-starting
-    % Sigma/K0s across calls. Shared by the initial profile sweep and the re-densify
-    % pass; the extension's 3-node prepends stay inline (unchanged).
+    % Evaluate every point in ascending order, warm-starting only from the
+    % last accepted node. A failed candidate is retained in the diagnostic
+    % arrays but is never committed as the next node's seed.
     n = numel(hgrid);
     [rv, mv, S0v, K0v, Dv, Gbv, Gsv] = deal(nan(1, n));  cnv = false(1, n);
     stv = strings(1,n);
     for is = 1:n
-        [rv(is), mv(is), S0v(is), K0v(is), Dv(is), Gbv(is), Gsv(is), cnv(is), Sigma, K0s, stv(is)] = ...
-            eval_node(hgrid(is), Sigma, K0s);
+        [rv(is), mv(is), S0v(is), K0v(is), Dv(is), Gbv(is), Gsv(is), cnv(is), ...
+            Sigma_candidate, K0_candidate, stv(is)] = eval_node(hgrid(is), Sigma, K0s);
+        if cnv(is)
+            Sigma = Sigma_candidate;
+            K0s = K0_candidate;
+        end
     end
     end
 
     function [rk, mk, S0k, K0k, Dk, Gbk, Gsk, ok, Sigma, K0s, node_status] = eval_node(hp, Sigma, K0s)
     % One fixed-field node: si (hz_fixed, NO order), tl, c0/G0, then the ordered
     % Sigma<->EMT loop WITH the static-sector closure each pass (Interfaces bullet).
+    % This function computes a candidate from value-input seeds. Its caller
+    % commits the returned Sigma/K0s only if ok=true, so a failed node cannot
+    % contaminate later profile nodes while its last iterate remains inspectable.
     sio = sibase;  sio.hz_fixed = hp;
     si = invz_single_ion(ion, T, Bvec, sio);
     if abs(si.hz - hp) > 1e-12

@@ -1225,3 +1225,83 @@ that the lattice average contains a discrete exact-Gamma weight, that
 coordinate can eliminate a genuine `no_admissible_static_root` result.
 
 No production code or numerical result changed at this checkpoint.
+
+## 2026-07-30 — Checkpoint 15 entry: purity and low-field asymptotics
+
+**Authorized sequence.** Human review accepted the revised plan. Execution
+starts with pure/transactional fixed-\((B_x,h,\mathrm{seed})\) node evaluation
+and the two contradictory 1 T shared-node controls. Only after rejected-state
+history is removed will a bounded \(0.5\)--\(2.2\) T matrix-element census
+begin.
+
+**Low-field hypothesis.** A physically tiny real-axis susceptibility cannot
+directly cause the current phase mask because phase acceptance precedes
+`invz_chi_realaxis`. A common cause remains plausible: the ordered two-level
+matrix element \(M^2\) enters both spectral weight and the self-energy
+arithmetic, while the static closure retains a full electronuclear response.
+The packet will measure \(M^2\), the dominant/full response share, the ordered
+elastic split, stability margins, and solver status rather than infer causality
+from the approximate 1.8 T visual threshold.
+
+**Exact numerical check to retain.** The apparently singular factor in the
+ordered self-energy has the removable reassociation
+
+\[
+(2m^2/M^2)\gamma_0
+=2m^2[\lambda_1-(1-n_{01}^2)K_0]/n_{01}^2.
+\]
+
+No arithmetic rewrite is authorized until the full \(M^2\to0\) limit is
+derived, the current cancellation error is measured, and healthy fixtures are
+protected. A valid low-field state with vanishing response should be exported
+as a finite near-zero susceptibility, never fabricated from a failed state.
+
+## 2026-07-30 — Checkpoint 16: rejected-node rollback verified
+
+**Change.** `invz_solve_point_ordered.m` now treats each ordered profile-node
+solve as a candidate transaction. The \(h=0\) predictor, main sweep, lower
+extension, and bisection refinement update their continuation
+\((\Sigma,K_0)\) carrier only when the candidate passes the existing static,
+outer, residual, and finite-value gates. Failed last iterates are still
+retained in the profile diagnostics. No physical acceptance condition was
+relaxed.
+
+**Decisive control.** The production-equivalent 1 T ladder used exactly the
+prior `nH=33,65,129`, `mix_outer=0.35`, `max_outer=200`,
+`tol_outer=1e-8`, and `Ecut=40` settings. After rollback:
+
+- all 33 nodes shared by the 33/65/129 grids have identical convergence
+  verdicts;
+- all 65 nodes shared by the 65/129 grids have identical verdicts;
+- \(h=0.0062416231096\) meV is accepted at every resolution with
+  \(\Sigma_0=-0.29267261\) to \(-0.29267263\);
+- \(h=0.0077454658051\) meV is accepted at every resolution with
+  \(\Sigma_0=-0.176825909\); and
+- across jointly accepted shared nodes, the maximum resolution-pair
+  differences are \(2.28\times10^{-8}\) in \(\Sigma_0\) and
+  \(1.00\times10^{-11}\) meV in \(K_0\).
+
+Those same two nodes previously changed from accepted to
+`no_admissible_static_root` solely when extra failed nodes preceded them.
+Because every lower positive-\(h\) node is rejected before the first accepted
+node in these profiles, rollback also makes the contradictory-node calls
+fresh-start controls without adding a diagnostic seed mode.
+
+**Remaining failure.** The strict profiles are still `node_failed`: the
+independent \(h=0\) predictor has `no_admissible_static_root`, and only 10/33,
+20/65, and 39/129 positive-\(h\) nodes certify. Rollback therefore removes a
+real history-dependent solver defect but does not establish a branch reaching
+\(h=0\), a valid equation-(45) integral, or a converged low-field
+susceptibility.
+
+**Evidence and checks.**
+`docs/diagnostics/invzp_outer_wp2/wp2_hmf_node_transaction_census.mat`
+contains the new profiles, exact options, timings, and baseline-artifact
+reference. MATLAB Code Analyzer reports no issue in the changed solver;
+`test_invzp_filtered_profile_integral` and all 13
+`test_invzp_static_domain` checks pass. `test_invzp_outer_map` reproduces the
+healthy 4 T residual and dominant eigenvalue, and
+`test_invzp_static_domain_resolution` remains stable across its full
+scan-density/endpoint-margin ladder. Tests that save tracked machine-readable
+results rewrote those artifacts during execution; the byte-level outputs are
+restored rather than included as source changes.
