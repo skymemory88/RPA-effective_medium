@@ -606,3 +606,92 @@ messages on all new/modified kernels, tests, and diagnostics; and
 same adaptive controller across only the next 4 T coarse gap (node 28 to
 node 27). Reassess root count, masses, Jacobian structure, and step demand
 before attempting a whole-profile controller or production integration.
+
+## 2026-07-30 — Checkpoint 5: 4 T component endpoint below node 28
+
+**Bounded experiment.** The same corrected adaptive controller was started
+from the certified node-28 root and targeted node 27. The controller logic was
+factored only enough to select the adjacent certified-start artifact; no
+acceptance rule, nonlinear map, damping, or production code changed.
+
+The controller accepted eight progressively smaller downward steps but reached
+only \(h=0.008042919679\), far above node 27 at
+\(h=0.00650417379\). The minimum-step gate then stopped the run. Unlike the
+node-29-to-node-28 packet, step demand collapsed systematically:
+
+- the uniform mass decreased from \(7.87\times10^{-4}\) at the first accepted
+  step to \(2.74\times10^{-6}\) at the last;
+- the equivalent supremum mass decreased from \(5.95\times10^{-4}\) to
+  \(2.06\times10^{-6}\);
+- the medium-mesh margin remained above 0.0103 and the dynamic minimum above
+  0.3147; and
+- the last-root dominant eigenvalue is \(-0.20142\), stable over
+  \(10^{-5},3\times10^{-6},10^{-6}\), so outer noncontractivity is not the
+  stopping cause.
+
+**Component-edge audit.** The last root is uniquely admissible over the full
+3-by-3 scan-density/endpoint-margin grid. Its maximum outer, root, and closure
+residuals are \(2.33\times10^{-9}\), \(8.73\times10^{-12}\), and
+\(3.04\times10^{-11}\). A halfway-to-root undamped start returns within
+\(6.76\times10^{-9}\).
+
+Linear fits over the last 3, 4, and 5 accepted roots give:
+
+\[
+h_c(D_{\rm uni})=0.00804286313\text{--}0.00804286319,\qquad
+h_c(D_{\rm sup})=0.00804286314\text{--}0.00804286321 ,
+\]
+
+with displayed \(R^2=1\) at artifact precision. The two masses are the same
+uniform/supremum pole condition expressed in the medium and physical-\(x\)
+coordinates, so their common zero is expected rather than independent
+evidence. The last accepted root lies only \(5.65\times10^{-8}\) above this
+local extrapolated edge.
+
+The last retained below-edge proposal at \(h=0.008042766469\) has zero
+mathematical and zero admissible static roots for all nine scan configurations;
+its minimum sampled scalar residual is \(1.44\times10^{-3}\). This is no
+longer a marginal residual-polishing classification.
+
+Evidence:
+`wp2_4t_adaptive_node28_to27.mat` and
+`wp2_4t_adaptive_component_edge_audit.mat` under
+`docs/diagnostics/invzp_outer_wp2/`.
+
+**Interpretation boundary.** The continued high-\(h\) component reaches the
+physical static-domain endpoint \(1+J_{\rm sup}x=0\) at finite positive
+\(H_{\rm MF}\). It cannot be step-shrunk through that pole while retaining the
+current physical acceptance contract. This does not prove that no disconnected
+admissible coupled component exists below \(h_c\), and it does not determine
+which component is thermodynamically selected.
+
+The production \(h_z=0\) predictor failure is therefore not merely an
+initialization inconvenience for this component: the certified high-\(h\)
+branch itself does not connect to \(h=0\). A production controller that simply
+continues this branch cannot supply the full \(0\)-to-\(H_{\rm MF}\) integral.
+
+**Trial accounting.** Adaptive continuation successfully crossed node 29 to
+node 28, but one application of the same method failed to reach node 27 and
+instead certified the component edge. The node-28-to-node-27 failed-method
+counter is 1. The 1 T node-22 counter remains 2. No step-size variant will be
+tried across this pole.
+
+**Checks at checkpoint.** The generalized controller reproduces the committed
+node-29-to-node-28 path and target audit. The component-edge audit passes its
+3-by-3 resolution gate and halfway-start check. All three focused MATLAB tests
+pass (including 13/13 static-domain checks); Code Analyzer reports zero
+messages on the modified kernels/tests and all adaptive diagnostic sources;
+and `git diff --check` passes.
+
+**Required review before a next solver method.** Pause at this checkpoint and
+review the underlying ordered construction:
+
+1. determine whether a disconnected admissible coupled component exists below
+   \(h_c\), using a bounded root search that does not assume continuity from
+   the high-\(h\) component;
+2. establish a thermodynamic selector before joining or switching components;
+   and
+3. reconsider the \(H_{\rm MF}\)-integral construction if its derivation
+   requires one physical component to extend continuously to \(h=0\).
+
+Do not wire adaptive continuation into production yet.
