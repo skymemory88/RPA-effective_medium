@@ -426,7 +426,13 @@ components remain open.
    reassociation changes measured-node arithmetic only at roundoff and the
    current form becomes nonfinite only at underflow scale. The next part of
    this packet is therefore the representation comparison, not a production
-   arithmetic rewrite.
+   arithmetic rewrite. **Representation checkpoint:** the fixed lowest-16
+   electronuclear sector is smooth and spectrally isolated but captures only
+   0.5--73% of the connected variance on the sampled accepted nodes; every
+   non-predictor sample requires all 136 states to exceed 90% on the tested
+   rank ladder. A closed electronic two-level control also retains a detached
+   high-\(h\) component and fails at every \(h=0\) predictor. Neither cheap
+   representation route supplies the missing equation-(45) path.
 3. **Corrected saturation-anchor feasibility.** Starting from
    \(dH_0/dh=r(h)\), derive the asymptotic condition on
    \(\delta H=H_0-h\). If \(\delta H(\infty)=0\) is justified, test
@@ -504,6 +510,30 @@ artifact.
 
 This work package decides whether the hybrid is a cause of the remaining outer
 failures or only a quantitative approximation.
+
+### Low-field representation checkpoint
+
+The electronic/full-response mismatch is quantitatively large but is not, by
+itself, the topological cause of the strict low-field mask:
+
+- the framework's fixed-rank 16-state field-adapted manifold has a large
+  16/17 gap, unit population mass, and continuous subspace overlap across the
+  observed status boundary, but its connected-variance share falls to
+  0.5--40% at the accepted high-\(h\) endpoints from 0.5 to 2.2 T;
+- even 96 states remain below 90% connected-variance coverage at every
+  non-predictor sample, so the existing 16-state dense-vertex construction is
+  not a controlled comparator in this regime; and
+- an internally closed electronic two-level model, evaluated over every
+  source-grid node with accepted-state rollback, still has no admissible
+  \(h=0\) predictor and exposes a shorter certified high-\(h\) component than
+  the production hybrid.
+
+The hybrid remains a quantitative systematic, particularly for the final
+susceptibility, but replacing it with either cheap construction cannot restore
+the required lower integration path. A definitive full-electronuclear vertex
+would require a new feasible formulation; the existing dense full-space route
+is budget-refused. The next equation-(45) work should therefore examine
+anchoring/component topology rather than promote a low-rank bridge.
 
 ## Work package 4: lattice and cutoff convergence
 
