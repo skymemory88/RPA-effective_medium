@@ -1191,3 +1191,37 @@ settings and probe results are stored as `strict_current_settings` in
 Artifact/configuration assertions, the retained filtered-helper regression,
 MATLAB Code Analyzer on the driver, and `git diff --check` pass. No one-off
 probe script was created.
+
+## 2026-07-30 — Checkpoint 14: ordered-root assessment disposition
+
+**Input disposition.** The untracked external assessment
+`invzp_ordered_root_verdict.md` was reviewed against Sections 9.2--9.4, the
+bounded static implementation, and the retained continuation evidence. Its
+useful conclusions were incorporated into the action plan; the source file was
+then removed at the user's request.
+
+**Retained contributions.** The plan now:
+
+- uses \(F'=r(1+J_{0,\mathrm{eff}}\widetilde G_0)\) only on differentiable
+  certified components and treats the 4 T endpoint as spinodal-like rather
+  than a global proof;
+- specifies a pure fixed-\((B_x,h,\mathrm{seed})\) node interface, with no
+  caller-state mutation before acceptance;
+- requires recording every uniform-mass crossing instead of assuming a unique
+  electronuclear root;
+- allows PM-side transport of an integration constant only as a falsifiable
+  diagnostic using the exact \(r-1\) relation, not as a certified
+  extrapolation;
+- measures the anisotropic band-edge exponent without treating exact Gamma as
+  a discrete member of \(\Phi\); and
+- defers embedded ODE quadrature and endpoint remapping until branch selection,
+  anchoring, and the edge exponent are established.
+
+**Rejected conclusions.** The project does not adopt the assessment's claims
+that every low-\(h\) failure is one thermodynamic spinodal, that numerical
+repairs cannot recover any ordered nodes, that \(H_0(0)=0\) may be discarded,
+that the lattice average contains a discrete exact-Gamma weight, that
+\(\Sigma_0\) is the general finite-moment tail integrand, or that a sigmoid
+coordinate can eliminate a genuine `no_admissible_static_root` result.
+
+No production code or numerical result changed at this checkpoint.
