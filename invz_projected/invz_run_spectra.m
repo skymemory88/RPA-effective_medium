@@ -83,7 +83,19 @@ switch eUnit
     otherwise, error('invz_run_spectra:eUnit', 'eUnit must be ''meV'' or ''GHz''.');
 end
 
-solve_opts = struct('mix_outer', outerMix, 'max_outer', outerMax);
+% TEMPORARY VISUAL-INSPECTION MODE (2026-07-30): approximate Jensen Eq. 45
+% with only its PM-limit lower endpoint and the candidate ordered upper
+% endpoint. This can jump across an inadmissible interior component boundary
+% and may use an unconverged PM last iterate, so its ordered output is NOT
+% certified physics. Remove these hmf_* options to restore the strict full
+% profile without changing the solver default.
+solve_opts = struct('mix_outer', outerMix, 'max_outer', outerMax, ...
+    'hmf_integral_mode','endpoint_trapezoid_visual', ...
+    'hmf_endpoint_allow_unconverged_pm',true, ...
+    'hmf_endpoint_pm_max_outer',1000);
+warning('invz:visualEndpointIntegral', ...
+    ['VISUAL ONLY: ordered columns use a two-endpoint approximation to Eq. 45; ' ...
+     'they may bridge an inadmissible component boundary.']);
 
 % The quadrature convention is fixed; backend and resolution remain explicit.
 coupling_opts = struct('grid', [gridN gridN gridN], 'dpRng', dpRng, ...
@@ -150,13 +162,13 @@ else
     else
         Splot = S;  Splot.w = S.w * eScale;    % display-only copy; solve above always ran in meV
         figure('Position', [100 100 1150 460]);
-        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z (Jensen ordered below B_c), T = %.2f K', T), eUnit);
+        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z VISUAL endpoint-Eq.-45 approximation, T = %.2f K', T), eUnit);
         ax2 = subplot(1, 2, 2);  invz_plot_spectra_map(ax2, Splot, Splot.chirpa, sprintf('RPA, T = %.2f K', T), eUnit);
     end
 
     if showPeaks
         % ---- susceptibility peak energy vs field (toggle) --------------------------------
-        figure; hold on;
+        figure; hold on; %#ok<UNRCH>
         plot(S.fields, S.Epeak*eScale,     '-',  'DisplayName', '1/z');
         plot(S.fields, S.Epeak_rpa*eScale, '--', 'DisplayName', 'RPA');
         xlabel('|B| (T)');

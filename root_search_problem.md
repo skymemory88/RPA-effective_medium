@@ -438,6 +438,15 @@ This result shows that endpoint finiteness alone is insufficient. Equation
 (45) still lacks a single selected admissible component over the integration
 window, so the coarse values are not certified susceptibility inputs.
 
+**Temporary visual wiring.** An explicit
+`hmf_integral_mode='endpoint_trapezoid_visual'` option now implements this
+approximation without changing the strict solver default.
+`invz_run_spectra.m` temporarily enables it and may use a finite unconverged
+PM last iterate. This produces finite reconstructed ordered states at
+1--4.5 T for morphology inspection, but the 1--3 T roots change when the PM
+iteration path changes. The mode is labelled `visual_only` and is not new
+evidence for a physical integration path.
+
 ## Central interpretation
 
 Equation (45) assumes that, along the integration path:
