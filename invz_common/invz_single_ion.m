@@ -51,8 +51,7 @@ mix  = 1.0;         if isfield(opts,'mf_mix'), mix = opts.mf_mix; elseif order, 
 maxit = 200;        if isfield(opts,'mf_maxit'), maxit = opts.mf_maxit; elseif order, maxit = 800; end
 C   = invz_const();
 oJ  = stevens_ops(ion.J);
-B44s = 0;  if isfield(ion,'B44s'), B44s = ion.B44s; end   % sine partner of B44: only set by
-                                                          % the rotated-CF route (invz_cfrot)
+B44s = 0;  if isfield(ion,'B44s'), B44s = ion.B44s; end   % optional sine partner of B44
 Hcf = ion.B20*oJ.O20 + ion.B40*oJ.O40 + ion.B44*oJ.O44 + B44s*oJ.O44s ...
     + ion.B60*oJ.O60 + ion.B64c*oJ.O64c + ion.B64s*oJ.O64s;
 if hyp

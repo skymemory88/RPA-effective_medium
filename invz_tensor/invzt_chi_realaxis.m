@@ -137,7 +137,7 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 %   continuing the full Vmat(i*omega_n) needs either direct real-axis kernel
 %   evaluation (the tensor kernels accept complex frequency arguments) or a
 %   fitted continuation -- a separate future work item
-%   (historical tensor Tasks 8 and 12; see invzp_convg_diagnosis.md Section 2.1).
+%   (historical tensor Tasks 8 and 12).
 %
 %   See also INVZT_SOLVE_POINT, INVZT_SOLVE_POINT_ORDERED, INVZT_CHI_RPA,
 %   INVZT_CHI0_SPLIT, INVZ_CHI0Z, INVZT_JQ_TENSOR, INVZT_GCC_LATTICE,

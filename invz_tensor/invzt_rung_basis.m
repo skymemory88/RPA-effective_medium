@@ -3,7 +3,7 @@ function rb = invzt_rung_basis(ion, rung, opts)
 %
 %   rb = INVZT_RUNG_BASIS(ion, rung, opts) builds the reduced-basis PROJECTOR for one
 %   rung of the A4 state-space ladder (historical Task 13; current module status is
-%   summarized in invzp_convg_diagnosis.md Section 2.1). A rung is defined by BASIS
+%   established during the projected-solver investigation). A rung is defined by BASIS
 %   CONTENT, NEVER by a lowest-N cut of
 %   the 136-dim electronuclear spectrum:
 %

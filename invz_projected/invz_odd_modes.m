@@ -4,7 +4,7 @@ function [Jnu, Juni] = invz_odd_modes(Vcc, dJ)
 % dJ may be [] (no correction). Second output Juni(iq) = real(v'*M*v), v = ones(4,1)/2
 % (uniform FM-mode projection), computed only when requested.
 % VALUES-ONLY by design (eig jobz 'N'): the eigenvector sites in
-% invz_solve_point (retarded weights) and invz_odd_fieldvar deliberately use
+% invz_solve_point's optional retarded path deliberately uses
 % separate eig(M,'vector') calls -- do not fold them in here (last-bit identity).
 nq   = size(Vcc, 3);
 Jnu  = zeros(nq, 4);

@@ -34,7 +34,7 @@ function [Vca, Vcb, Vcc, info] = invz_odd_blocks(ion, qvec, opts)
 %
 %   INPUTS / OPTS
 %     opts.dpRng (default 30) : MF_dipole/exchange lattice-sum range (unit cells).
-%     opts.cache (default true): read/write the geometric blocks to the
+%     opts.cache (default false): optionally read/write geometric blocks in the
 %       invz_projected/cache directory under the `odd1_` namespace.
 %
 %   CACHE CONTRACT (Global Constraints; own namespace, never touches jq4_)
@@ -54,7 +54,7 @@ function [Vca, Vcb, Vcc, info] = invz_odd_blocks(ion, qvec, opts)
 %   See also INVZ_JQ_MODES, MF_DIPOLE, EXCHANGE, INVZ_IS_GAMMA_EQUIV.
 if nargin < 3, opts = struct(); end
 dpRng = 30;  if isfield(opts,'dpRng'), dpRng = opts.dpRng; end
-useCache = ~isfield(opts,'cache') || opts.cache;
+useCache = isfield(opts,'cache') && opts.cache;
 C = invz_const();
 
 % Intrinsic-only layer: demag must be off. The shape term is Cartesian-diagonal

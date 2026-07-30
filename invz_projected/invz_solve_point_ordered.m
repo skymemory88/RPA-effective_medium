@@ -1,445 +1,472 @@
 function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
-%INVZ_SOLVE_POINT_ORDERED Self-consistent 1/z solution at one FERROMAGNETIC (T, Bx) point.
-% Bx: scalar (transverse, historical) or [Bx By Bz] vector (T).
-% Ordered-phase counterpart of invz_solve_point: the single-ion problem is solved with the
-% longitudinal ORDERING mean field (spontaneous moment m0 = <Jz>), the self-energy uses the
-% elastic-sector form (invz_sigma_ordered, framework SS9.2, J 2.26-2.27), and the whole thing is iterated
-% against the effective medium exactly as in the paramagnet.
+%INVZ_SOLVE_POINT_ORDERED Jensen-consistent ordered 1/z solution at one point.
+% Bx is a scalar transverse field along the crystallographic a axis (T).
+% The applied-field/H_MF relation and ordered static EMT closure are always
+% enforced; the retired bare-order-parameter route is not supported.
+% The local functions below own both ordered-only stages so the complete
+% ordered solve can be inspected and debugged from this one file.
 %
-% opts.forced_moment (logical, default false): when true (set by invz_solve_auto's
-% longitudinal route) the moment is treated as FIELD-INDUCED rather than spontaneous -- the
-% |m0| > m_tol gate is bypassed, a sign-aware seed/one mirrored retry enforces alignment with
-% the applied Bz, and a non-converged mean-field loop is itself an early-return condition.
-% forced_moment with Bx(3) = 0 skips the alignment check (no field sign to align to).
-% opts.mz_seed / opts.mf_maxit / opts.mf_mix forward to invz_single_ion (diagnostics/tests).
-%
-% Returns pt.is_ordered: strictly "this point uses the moment-form self-energy", true for
-% EITHER a spontaneous FM moment (|m0| > m_tol) or a forced_moment field-induced solve; FALSE
-% on the spontaneous-mode paramagnetic early return AND on the forced-moment failure paths (MF non-convergence; persistent branch misalignment) -- acceptance always also requires pt.converged.
-% When ordered, pt carries the same fields as
-% invz_solve_point plus pt.m0 (order parameter), pt.alpha_m, pt.si (the ordered single-ion
-% struct), pt.is_ordered = true, and pt.moment_branch ∈ {'spontaneous','field_induced','none'}
-% ('none' only on the spontaneous-mode paramagnetic early return). EVERY return path (early
-% or converged) carries the full field set: m0, is_ordered, converged, Sigma0, crit, si, tl,
-% moment_branch -- tl = [] on early returns (no two-level params were built).
-%
-% SCOPE NOTE (Option A): for the spontaneous route, m0 is the bare mean-field order parameter
-% (the applied-field/H_MF self-consistency (framework SS9.3, J 2.31-2.33) is deferred), so it onsets at the
-% mean-field boundary, slightly above the true 1/z boundary; the gap matters only near B_c,
-% not deep in the ordered phase.
-%
-% ODD extension (T1.4, opt-in): same contract as invz_solve_point — opts.odd = true
-% requires opts.odd_blocks (Vca/Vcb/Vcc/Jcc0 UNSHIFTED, from invz_odd_blocks) and
-% Jnu_flat = [] ('invz:oddArgs' otherwise). The cc modes are rebuilt from
-% Vcc + deltaJ(T,Bx) and the explicit -d (E5) is applied ONCE to J0eff below, which
-% here feeds BOTH the single-ion ordering mean field (siopts.J0z) and pt.crit: the
-% shifted value is the physical uniform coupling, so both uses receive it. chi_perp
-% is evaluated at the PARAMAGNETIC-MF single-ion state by design (T1.2: Van Vleck
-% dominated, insensitive to the cc order parameter — never solved self-consistently
-% with the moment). pt gains pt.odd = struct('d','Xp') on the full solve path only
-% (early returns keep their fixed field set). Flag off: byte-identical pre-ODD path.
-%
-% Jensen ordered mode (Stage-2 task 4, opt-in): opts.ordered_mode = 'bare' (default) runs the
-% SCOPE-NOTE bare mean-field order parameter above, unchanged. opts.ordered_mode = 'jensen'
-% instead imposes the H_MF applied-field/self-consistency root (invz_hmf_ordered, framework
-% SS9.3, J 2.31-2.33) as a FIXED longitudinal field (siopts.hz_fixed, order = false -- P0-1:
-% the ordering update is NOT re-applied on top of the imposed root) and closes the final
-% Sigma<->EMT loop with the SAME static-sector elastic closure used by that machinery's nodes
-% (invz_emt_static_ordered), so pt.G(1) is the CLOSED ELASTIC static function -- NOT the
-% ordinary-Dyson value invz_emt_scalar alone would produce at omega = 0. In jensen mode pt
-% additionally carries pt.ordered_mode, pt.hmf (the refined root, meV), pt.hmf_prof (the
-% invz_hmf_ordered profile), pt.D_uni = 1 + (J0eff - K(1))*pt.G(1) (the ordered static
-% inverse response AT THE FINAL STATE -- the pole observable), and pt.final_resid (the
-% closure-residual revalidation of the exported (Sigma, K, lambda) tuple, required <
-% opts.tol_outer for pt.converged -- the tuple is thereby closure-consistent to the STATED
-% OUTER TOLERANCE, not exactly self-consistent). pt.is_ordered is gated on H_MF ROOT
-% EXISTENCE (isfinite(hmf_star)), NOT on m_tol, with a paramagnetic early return (existing
-% struct shape, pt.hmf_status carrying the invz_hmf_ordered status) when no root exists.
-% jensen mode is TRANSVERSE/SPONTANEOUS only: opts.forced_moment true, or an explicit
-% longitudinal field |Bx(3)| > opts.bz_tol (default 1e-9), raises 'invz:orderedMode'.
-% opts.cold_acceleration = 'signed_aitken1' enables the safeguarded, default-off resummed
-% cold-start experiment in the shared node solver; absent/'none' preserves the ordinary
-% iteration exactly. It changes no equation or final A--D/all-node acceptance gate.
-% CONTRACT (P2-G): pt.crit KEEPS its historical ordinary-Dyson definition
-% (1 + Sigma0 - J0eff*chi0cc0) as a legacy diagnostic in EITHER mode -- it is NOT the ordered
-% pole mass below the boundary; pt.D_uni is. Callers must not conflate the two.
-%
-% Static medium (spec SS4.2, opt-in): opts.static_medium = 'resummed' (DEFAULT, legacy and
-% numerically bit-identical) | 'strict_1z_dyson_ref' | 'strict_1z_bare_ref', with
-% opts.ref_margin (1e-6) the reference-denominator floor. The scheme is resolved ONCE at this
-% entry by invz_check_static_medium and stamped into BOTH legs (opts.emt for the dynamic slot,
-% opts.emt_static for the ordered static sector) plus the invz_hmf_ordered context, so the two
-% sectors can never run different truncation orders; setting it per leg is a CONFLICT
-% ('invz:staticMedium'), never an override. Under a strict scheme a non-vector (retarded
-% [nJ,nw]) Jnu_flat and opts.odd_retarded(_exact) are both rejected with 'invz:staticMedium':
-% there is no retarded ordered path here, and silently solving the static multiset instead
-% would be indistinguishable from a retarded solve in the output. pt ALWAYS carries
-% pt.static_medium, pt.Jmom (invz_coupling_moments of this point's final spectrum),
-% pt.medium_status, pt.medium_denom and pt.medium_margin (= denom - floor, the DISTANCE TO THE
-% FLOOR, not the denominator) on EVERY return path, early ones included.
-%
-% TWO-TIER ACCEPTANCE in jensen mode (spec SS1): pt.converged KEEPS its existing meaning --
-% info.accepted, the closure-consistency tier -- so no existing consumer shifts meaning under
-% it. ENDPOINT STABILITY is the separate pt.stable_1z: the checker's own res.stability verdict
-% (already carrying the frozen crit_tol/D_tol/Dq_tol) for the accepted root, AND agreement
-% between that node's crit and the profile's crit_star. The two must not be collapsed --
-% intermediate path nodes are the unstable Landau interval by construction, so folding
-% stability into acceptance would re-mask the ordered phase. jensen mode additionally exports
-% pt.crit_1z (hmf profile's crit_star), pt.Dq_min, the endpoint's omitted-term ratios
-% pt.omit_mu3/.omit_cubic/.omit_max, and pt.path_omit_max -- the FAIL-CLOSED maximum of the
-% solved path's omit_max (empty or any NaN node => NaN; Inf dominates), the quantity the frozen
-% prereg's omit_promote gate reads.
-% FIELD-PRESENCE CONTRACT ACROSS MODES: those jensen-only members -- stable_1z, crit_1z,
-% Dq_min, D_uni, omit_mu3, omit_cubic, omit_max, path_omit_max -- are ABSENT ENTIRELY in bare
-% mode (isfield false, not NaN-valued), so consumers must test isfield before reading them and
-% must not infer bare-mode results from a NaN. By contrast static_medium, medium_status,
-% medium_denom, medium_margin and Jmom are present in BOTH modes on EVERY return path.
+% ODD (opt-in): opts.odd=true requires opts.odd_blocks with Vca/Vcb/Vcc/Jcc0
+% from invz_odd_blocks and Jnu_flat=[]. The temperature/field-dependent modes
+% and uniform -d shift are rebuilt here.
 if nargin < 5, opts = struct(); end
+if any(isfield(opts, {'odd_tier2','tier2','tol_tier2','max_tier2'}))
+    error('invz:removedOption', 'The incomplete ODD Tier-2 route has been removed.');
+end
+if ~(isnumeric(Bx) && isreal(Bx) && isscalar(Bx) && isfinite(Bx))
+    error('invz:field', 'Bx must be a finite real scalar transverse field.');
+end
+Bvec = [Bx 0 0];
+
 Ecut  = getf(opts, 'Ecut', 40);
 hyp   = getf(opts, 'hyp', true);
 J0eff = getf(opts, 'J0eff', ion.J0eff);
 Jxx0  = getf(opts, 'Jxx0', ion.Jxx0);
-tmf   = getf(opts, 'transverse_mf', 'legacy_x');
 mixo  = getf(opts, 'mix_outer', 0.7);
 tolo  = getf(opts, 'tol_outer', 1e-8);
 maxo  = getf(opts, 'max_outer', 200);
-cold_accel = getf(opts, 'cold_acceleration', 'none');
-mtol  = getf(opts, 'm_tol', 1e-2);
 eopts = getf(opts, 'emt', struct());
-eso_pub = getf(opts, 'emt_static', struct());
-% Static-medium scheme: resolved ONCE at this public entry by the sole authority and stamped
-% into BOTH leg option structs (spec SS4.2), so the dynamic PM slot and the ordered static
-% sector can never run different truncation orders. Absent => 'resummed' => numerically
-% identical to the pre-strict path. Validation is idempotent by design, so the stamped structs
-% are forwarded verbatim into invz_hmf_ordered, which resolves the scheme again.
-[sm, eopts, eso_pub] = invz_check_static_medium(opts, eopts, eso_pub);
-Bx = invz_field_vec(Bx);                       % scalar -> [Bx 0 0]; 3-vector passes through
-fmom = getf(opts, 'forced_moment', false);
 
-% --- ODD diversion (T1.4): strictly additive and opt-in; everything else in
-% this function is the pre-ODD code path, byte-untouched when the flag is off.
 oddOn = isfield(opts, 'odd') && ~isempty(opts.odd) && ~isequal(opts.odd, false);
 if oddOn
     ob = getf(opts, 'odd_blocks', []);
-    if ~(isstruct(ob) && isscalar(ob) && all(isfield(ob, {'Vca', 'Vcb', 'Vcc', 'Jcc0'})))   % Jcc0: contract/audit field, required for caller-side consistency; unused here (J0eff comes via opts)
-        error('invz:oddArgs', ['opts.odd = true requires opts.odd_blocks = struct(' ...
-            '''Vca'',''Vcb'',''Vcc'',''Jcc0'') precomputed once by the caller from ' ...
-            'invz_odd_blocks (P0.4: no disk/cache reads inside solver loops; Jcc0 UNSHIFTED).']);
+    if ~(isstruct(ob) && isscalar(ob) && all(isfield(ob, {'Vca', 'Vcb', 'Vcc', 'Jcc0'})))
+        error('invz:oddArgs', ['opts.odd=true requires opts.odd_blocks with ' ...
+            'Vca/Vcb/Vcc/Jcc0 from invz_odd_blocks.']);
     end
     if ~isempty(Jnu_flat)
-        error('invz:oddArgs', ['opts.odd = true requires Jnu_flat = []: the cc modes are ' ...
-            'rebuilt here from odd_blocks + deltaJ, and a caller-supplied baseline Jnu ' ...
-            'would silently override the rebuild.']);
+        error('invz:oddArgs', 'opts.odd=true requires Jnu_flat=[]; modes are rebuilt internally.');
     end
-    % chi_perp at the shared single-ion option set (T1.2); its si is the
-    % PARAMAGNETIC-MF state and is NOT reused here (the ordered solve below
-    % needs the ordering-MF state, a different siopts).
-    Xp = invz_chiperp(ion, T, Bx, struct('hyp', hyp, 'Jxx0', Jxx0, 'transverse_mf', tmf));
+    Xp = invz_chiperp(ion, T, Bx, struct('hyp', hyp, 'Jxx0', Jxx0));
     [dJ, d] = invz_odd_deltaJ(ob.Vca, ob.Vcb, Xp);
-    Jnu_odd = invz_odd_modes(ob.Vcc, dJ);      % values-only kernel (shared)
-    Jnu_flat = Jnu_odd(:);
-    % E5 uniform shift, applied HERE exactly once (T1.3 bookkeeping rule: the grid
-    % matrices' diagonal already carries -d via E4; J0eff carries the explicit -d;
-    % NO other q = 0 handling). Callers pass the UNSHIFTED info.Jcc0 as opts.J0eff.
-    % That unshifted value comes from invz_odd_blocks' infoB.Jcc0 (or the flag-off
-    % invz_jq_modes info.Jcc0) -- NOT from invz_jq_modes' opts.odd path, whose
-    % exported info.Jcc0 is ALREADY shifted by -d.
-    % The shifted J0eff is the physical uniform coupling: it seeds siopts.J0z AND
-    % enters pt.crit below (both uses receive the same single shift).
+    Jnu_flat = reshape(invz_odd_modes(ob.Vcc, dJ), [], 1);
     J0eff = J0eff - d;
-end
-
-% Moments AFTER the point's coupling spectrum is resolved: the ODD branch above rebuilds
-% Jnu_flat from odd_blocks + deltaJ, so taking them earlier would describe the wrong multiset.
-Jmom = invz_coupling_moments(Jnu_flat);
-eopts.Jmom = Jmom;  eso_pub.Jmom = Jmom;
-if sm.is_strict && ~isvector(Jnu_flat)
-    error('invz:staticMedium', ['strict ordered/Jensen mode does not support the [nJ,nw] ' ...
-        'retarded coupling matrix in this phase; PM strict mode remains supported.']);
-end
-% opts.odd_retarded / opts.odd_retarded_exact are SILENTLY IGNORED by this solver (they appear
-% nowhere else in it -- there is no retarded ordered path, and no invented 'ordered_retarded'
-% option). Under a strict scheme that silence would become load-bearing: the caller would get a
-% strict ordered solve built on the static multiset while believing it retarded. Rejected here,
-% after the options are actually resolved and before any HMF work starts.
-if sm.is_strict
-    for f = {'odd_retarded', 'odd_retarded_exact'}
-        if isfield(opts, f{1}) && ~isempty(opts.(f{1})) && ~isequal(opts.(f{1}), false)
-            error('invz:staticMedium', ['opts.%s is not supported under static_medium ''%s'': ' ...
-                'this solver has no retarded ordered path (the flag is silently ignored on the ' ...
-                '''resummed'' path), so a strict ordered solve would silently describe the ' ...
-                'STATIC coupling multiset. Use the PM leg for retarded strict solves.'], ...
-                f{1}, sm.scheme);
-        end
-    end
 end
 
 [wn, wts, beta] = invz_matsubara(T, Ecut);
 
-% Ordered mean-field solve (full electronuclear space): spontaneous moment m0 and field hz.
-% J0z is the SAME cc coupling J(0) used by the criticality and the RPA/1z denominator.
-% forced_moment (spec 2026-07-16): with an explicit longitudinal Bx(3) the moment is
-% field-induced -- the spontaneous |m0| > mtol gate is bypassed and branch alignment
-% with the applied Bz is enforced (sign-aware seed + one mirrored retry).
-siopts = struct('hyp', hyp, 'order', true, 'J0z', J0eff, 'Jxx0', Jxx0, 'transverse_mf', tmf);
-for f = {'mz_seed', 'mf_maxit', 'mf_mix'}                  % diagnostic pass-throughs (tests)
-    if isfield(opts, f{1}), siopts.(f{1}) = opts.(f{1}); end
+hopts = opts;
+hopts.J0eff = J0eff;
+for f = {'ordered_mode', 'forced_moment', 'transverse_mf', 'bz_tol'}
+    if isfield(hopts, f{1}), hopts = rmfield(hopts, f{1}); end
 end
-
-omode = getf(opts, 'ordered_mode', 'bare');
-if ~any(strcmp(omode, {'bare', 'jensen'}))
-    error('invz:orderedMode', 'ordered_mode must be ''bare'' or ''jensen''.');
-end
-if strcmp(omode, 'jensen')
-    if fmom || abs(Bx(3)) > getf(opts, 'bz_tol', 1e-9)
-        error('invz:orderedMode', 'ordered_mode ''jensen'' is transverse/spontaneous only.');
-    end
-    hopts = opts;                                    % FULL numerical context (P1-6) ...
-    hopts.J0eff = J0eff;                             % ... with the ODD-shifted coupling
-    hopts.Jmom = Jmom;                               % ... the resolved moments (no re-derive)
-    hopts.static_medium = sm.scheme;                 % ... and the resolved scheme
-    hopts.emt = eopts;  hopts.emt_static = eso_pub;  % ... stamped (validation is idempotent)
-    for f = {'ordered_mode', 'forced_moment'}        % ... and mode fields stripped
-        if isfield(hopts, f{1}), hopts = rmfield(hopts, f{1}); end
-    end
-    [hstar, hprof] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, hopts);
-    if ~isfinite(hstar)
-        si = invz_single_ion(ion, T, Bx, struct('hyp', hyp, 'hz_fixed', 0, ...
-                                                'Jxx0', Jxx0, 'transverse_mf', tmf));
-        pt = early_return(0, si, 'none', sm, Jmom);  % paramagnetic: PM leg owns this field
-        pt.ordered_mode = omode;  pt.hmf_status = hprof.status;  pt.hmf_prof = hprof;
-        % Preserve the reducer's deterministic binding cause at point level. The shared early
-        % builder supplied safe defaults; override them only when a failed/domain node exists.
-        if isfield(hprof, 'status_detail') && isstruct(hprof.status_detail) && ...
-                isscalar(hprof.status_detail) && ...
-                isfield(hprof.status_detail, 'binding_node') && ...
-                isstruct(hprof.status_detail.binding_node) && ...
-                isscalar(hprof.status_detail.binding_node)
-            binding = hprof.status_detail.binding_node;
-            pt.medium_status = binding.medium_status;
-            pt.medium_denom = binding.ref_denom;
-            pt.medium_margin = binding.ref_margin;
-        end
-        % Jensen-only members, blanked so the jensen exit schema is uniform. This is the ONLY
-        % early return reachable in jensen mode (the other three sit behind forced_moment,
-        % which jensen rejects, and behind ~is_ordered, which jensen overrides to true), so
-        % there is exactly one blank site and one populated site -- no drift surface. No root
-        % was accepted, so there is no endpoint to classify and no solved path to reduce; NaN
-        % is also the fail-closed value of path_omit_max. A domain/degenerate reason is NOT
-        % lost here -- pt.hmf_status carries it.
-        pt.D_uni = NaN;  pt.crit_1z = NaN;  pt.Dq_min = NaN;  pt.stable_1z = false;
-        pt.omit_mu3 = NaN;  pt.omit_cubic = NaN;  pt.omit_max = NaN;  pt.path_omit_max = NaN;
-        if strcmp(hprof.status, 'unresolved')
-            pt.converged = false;                    % round-3 P0-3: ordering was PREDICTED
-        end                                          % but unbracketed -- NOT a PM verdict;
-        return;                                      % the map masks this column
-    end
-    siopts.hz_fixed = hstar;                         % impose the jensen molecular field ...
-    siopts.order = false;                            % ... WITHOUT the ordering update (P0-1)
-end
-si = invz_single_ion(ion, T, Bx, siopts);
-branch = 'spontaneous';  if fmom, branch = 'field_induced'; end
-if fmom && Bx(3) ~= 0 && si.mf_converged && abs(si.Jexp(3)) > 1e-10 && sign(si.Jexp(3)) ~= sign(Bx(3))
-    % converged onto the metastable anti-aligned branch: one mirrored retry
-    siopts.mz_seed = -sign(si.Jexp(3));
-    si2 = invz_single_ion(ion, T, Bx, siopts);
-    if si2.mf_converged && sign(si2.Jexp(3)) == sign(Bx(3))
-        si = si2;
-    else
-        warning('invz:branchMismatch', ...
-            'Anti-aligned moment persists at Bz = %.3g T after mirrored retry.', Bx(3));
-        pt = early_return(si.Jexp(3), si, branch, sm, Jmom);
-        return;
-    end
-end
-if fmom && ~si.mf_converged
-    pt = early_return(si.Jexp(3), si, branch, sm, Jmom);   % MF gate (second review finding 6)
+[hstar, hprof] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, hopts);
+if ~isfinite(hstar)
+    si = invz_single_ion(ion, T, Bvec, struct('hyp', hyp, 'hz_fixed', 0, 'Jxx0', Jxx0));
+    pt = early_return(si, hprof);
     return;
 end
+
+si = invz_single_ion(ion, T, Bvec, ...
+    struct('hyp', hyp, 'hz_fixed', hstar, 'Jxx0', Jxx0));
 m0 = si.Jexp(3);
-pt.m0 = m0;
-pt.is_ordered = fmom || abs(m0) > mtol;
-if strcmp(omode, 'jensen'), pt.is_ordered = true; end      % root existence gates jensen (P1-4)
-if ~pt.is_ordered
-    pt = early_return(m0, si, 'none', sm, Jmom);           % paramagnetic point: use invz_solve_point
-    return;
+
+c0 = invz_chi0z(si, T, 1i*wn, struct('elastic', true));
+G0 = -real(squeeze(c0(3,3,:)));
+tl = invz_twolevel_ordered(ion, T, Bx, si.hz, struct('Jxx0', Jxx0));
+g  = real(invz_g(tl, 1i*wn));
+
+% Full-electronuclear static split for the Jensen elastic closure.
+eso = getf(opts, 'emt_static', struct());
+eso.warn = false;
+c0i = invz_chi0z(si, T, 1i*wn(1), struct('elastic', false));
+G0inel0 = -real(c0i(3,3,1));
+X = real(c0(:, :, 1));
+feedback = X(3,1) * (Jxx0 / (1 - Jxx0*X(1,1))) * X(1,3);
+G0bare0 = -(X(3,3) + feedback);
+G0el0 = G0bare0 - G0inel0;
+
+Sigma = zeros(size(wn));
+K = zeros(size(wn));
+K0s = 0;
+lam = [0; 0; 0];
+converged = false;
+med = struct('G', nan(size(wn)), 'converged', false);
+sg = struct('alpha', NaN, 'alpha_m', NaN);
+sout = struct('converged', false);
+for outer = 1:maxo
+    eopts.K0 = K;
+    med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
+    K = med.K;
+
+    [K0s, ~, sout] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), ...
+        Jnu_flat, K0s, beta, J0eff, G0inel0, G0el0, eso);
+    K(1) = K0s;
+
+    lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
+    sg = invz_sigma_ordered(tl, lam, K, g, beta);
+    dS = max(abs(sg.Sigma - Sigma));
+    Sigma = Sigma + mixo*(sg.Sigma - Sigma);
+    if dS < tolo && sout.converged
+        converged = true;
+        break;
+    end
 end
 
-c0  = invz_chi0z(si, T, 1i*wn, struct('elastic', true));
-G0  = -real(squeeze(c0(3,3,:)));               % full electronuclear cc, ordered moment included
-tl  = invz_twolevel_ordered(ion, T, Bx, si.hz, struct('Jxx0', Jxx0, 'transverse_mf', tmf));
-g   = real(invz_g(tl, 1i*wn));
+% Refresh the static closure at the exported self-energy.
+[K0s, Gstat, so] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), ...
+    Jnu_flat, K0s, beta, J0eff, G0inel0, G0el0, eso);
+K(1) = K0s;
+ctol = getf(eso, 'resid_tol', 1e-10);
+staticok = so.converged && isfinite(so.resid) && so.resid < ctol;
 
-Sigma = zeros(size(wn));  K = zeros(size(wn));
-converged = false;
-if strcmp(omode, 'jensen')
-    % Static-sector closure insertion (Task 3's eval_node statement order, P1-F/P1-A):
-    % full-electronuclear split weights from the FINAL si, mode-switched chain rule.
-    eso = eso_pub;      % the scheme/ref_margin/Jmom-stamped struct resolved at the entry
-    eso.warn = false;   % solver gates on so.converged; suppress the per-node console flood
+lam_check = invz_lambdas(K, g, wts, beta, [1 2 3]);
+Sigma_check = invz_sigma_ordered(tl, lam_check, K, g, beta);
+final_resid = max(abs(Sigma_check.Sigma - Sigma));
+med.G(1) = Gstat;
+
+pt.m0 = m0;
+pt.is_ordered = true;
+pt.Sigma0 = Sigma(1);
+pt.alpha = sg.alpha;
+pt.alpha_m = sg.alpha_m;
+pt.lambda = lam;
+pt.K = K;
+pt.G = med.G;
+pt.Sigma = Sigma;
+pt.tl = tl;
+pt.si = si;
+pt.chi0cc0 = -G0(1);
+pt.crit = 1 + pt.Sigma0 - J0eff*pt.chi0cc0;
+pt.sumrule_rel = abs(sum(wts.*med.G)/beta + si.JzJz_fluct) ...
+    / max(abs(si.JzJz_fluct), 1e-12);
+pt.final_resid = final_resid;
+pt.converged = converged && med.converged && staticok && final_resid < tolo;
+pt.outer_iters = outer;
+pt.hmf = hstar;
+pt.hmf_prof = hprof;
+pt.D_uni = 1 + (J0eff - K(1))*med.G(1);
+if oddOn
+    pt.odd = struct('d', d, 'Xp', Xp);
+end
+if abs(pt.si.hz - hstar) > 1e-12
+    error('invz:hzFixed', 'Jensen final state did not hold hmf: %.6g vs %.6g.', pt.si.hz, hstar);
+end
+end
+
+function pt = early_return(si, hprof)
+pt = struct('m0', 0, 'is_ordered', false, 'converged', false, ...
+    'Sigma0', NaN, 'crit', NaN, 'si', si, 'tl', [], ...
+    'hmf', NaN, 'hmf_prof', hprof, 'hmf_status', hprof.status, ...
+    'D_uni', NaN, 'final_resid', NaN);
+end
+
+function [hmf_star, prof] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
+%INVZ_HMF_ORDERED Jensen applied-field/H_MF self-consistency, spontaneous root (SS9.3, J 2.31-2.33).
+%   h0(hmf) = int_0^hmf r(h') dh',   r = G0(0;h')/Gtil0(0;h')
+% with Gtil0 built on the STATIC-CLOSURE K0 (invz_emt_static_ordered, P0-2), evaluated on
+% fixed-field single-ion states (hz_fixed WITHOUT order -- P0-1, invz:hzFixed asserted).
+% Spontaneous condition (zero applied longitudinal field): h0(hmf) = J0eff*<Jz>(hmf); the
+% nonzero root is bracketed on a GEOMETRIC profile clustered at 0 (P1-4) and refined by
+% bisection with direct node evaluations to opts.tol_root. F(h)/h -> crit as h -> 0+
+% (SS5), returned as prof.slope0. Returns NaN when no nonzero root exists, or when the
+% separate bare (order=true) bracketing solve does not order.
+%
+% Status contract (round-5 P2, binding): 'unresolved' means ordering was PREDICTED
+% (slope0 < 0) but no bracket was found above hmin_abs, OR the bracket did not refine
+% to tol_root. 'node_failed' means ANY node evaluated along the way -- the h=0
+% predictor, a profile node, a bisection iterate, or the final root evaluation --
+% failed to converge/close. Both map to a NaN hmf_star and MUST be read by callers as
+% converged = false, never as a PM label.
+if nargin < 5, opts = struct(); end
+if ~(isnumeric(Bx) && isreal(Bx) && isscalar(Bx) && isfinite(Bx))
+    error('invz:field', 'Bx must be a finite real scalar transverse field.');
+end
+Bvec = [Bx 0 0];
+J0eff = opts.J0eff;                                  % required, no default (caller-owned)
+Jxx0  = getf(opts, 'Jxx0', ion.Jxx0);
+hyp   = getf(opts, 'hyp', true);
+nH    = getf(opts, 'nH', 33);
+hfac  = getf(opts, 'hmax_fac', 1.25);
+hfrac = getf(opts, 'hmin_frac', 1e-3);
+trt   = getf(opts, 'tol_root', 1e-3);
+mixo  = getf(opts, 'mix_outer', 0.7);
+tolo  = getf(opts, 'tol_outer', 1e-8);
+maxo  = getf(opts, 'max_outer', 200);                % ALIGNED with both solvers' default
+eso   = getf(opts, 'emt_static', struct());          % static-closure opts, threaded (P1-F)
+eso.warn = false;   % node loop gates on so.converged; suppress the per-node console flood
+
+% Fixed-field nodes do not re-apply the ordering update.
+sibase = struct('hyp', hyp, 'Jxx0', Jxx0);
+hmin_abs = getf(opts, 'hmin_abs', NaN);              % resolved after hmax below (P1-C)
+
+prof = struct('hgrid', [], 'r', [], 'h0', [], 'm', [], 'Sigma0', [], 'K0', [], ...
+              'D_uni', [], 'G0bare', [], 'Gstat', [], 'node_conv', [], 'F', [], ...
+              'slope0', NaN, 'Sigma0_pm0', NaN, 'K0_pm0', NaN, 'J0eff', J0eff, ...
+              'n_extend', 0, 'hmin_initial', NaN, 'status', 'no_bare_order', ...
+              'redensified', false, ...
+              'predictor_converged', false, 'converged_node_count', 0, ...
+              'm_star', NaN, 'D_uni_star', NaN, 'r_star', NaN, 'Gstat_star', NaN);
+hmf_star = NaN;
+
+% Bracket ceiling from the BARE ordered fixed point: SAME MF option base plus
+% order=true and J0z (P1-F -- the bracket runs under the caller's MF knobs too).
+sibo = sibase;  sibo.order = true;  sibo.J0z = J0eff;
+sib = invz_single_ion(ion, T, Bvec, sibo);
+if ~(sib.mf_converged && abs(sib.Jexp(3)) > 1e-6), return; end     % bare does not order
+hmax = hfac * abs(sib.hz);
+if isnan(hmin_abs), hmin_abs = 1e-10*hmax; end
+
+% --- Matsubara grid, weights, beta: MIRROR invz_solve_point_ordered's setup block
+% verbatim (wn, wts, beta, eopts from opts -- honors Ecut and EMT options, P1-6).
+Ecut  = getf(opts, 'Ecut', 40);
+eopts = getf(opts, 'emt', struct());
+[wn, wts, beta] = invz_matsubara(T, Ecut);
+
+% Independent h = 0 PM predictor node (round-3 P0-3; doubles as Gate 6b's comparator):
+% ONE node solve at hz_fixed = 0 gives THIS machinery's PM fixed point. Its mass
+%   slope_pred = r(0) + J0eff*G0bare(0) = 1 + Sigma0(0) - J0eff*chi_path(0)   (= crit, SS5)
+% predicts root existence INDEPENDENTLY of any sampled profile value.
+Sigma = [];  K0s = 0;                                % warm-start carriers across nodes
+[r0n, ~, S0pm, K0pm, ~, Gb0, ~, ok0, Sigma, K0s] = eval_node(0, Sigma, K0s);
+prof.predictor_converged = ok0;
+predictor_usable = ok0;
+% Under the default strict rule, a predictor-node convergence failure is NOT one of the three enumerated
+% 'node_failed' triggers (round-5 P2: profile/bisection/final-evaluation), and it is
+% NOT 'unresolved' either (that label presupposes a computed slope_pred). It is its
+% own case: h0(h) = int_0^h r seeds on r(0), so without a converged predictor the
+% cumulative integral (hence F, hence the root search) is categorically undefined --
+% but the per-node grid quantities below remain well-defined direct
+% diagonalizations. The overall verdict is forced to node_failed/NaN.
+if predictor_usable
+    slope_pred = r0n + J0eff*Gb0;
+    prof.Sigma0_pm0 = S0pm;  prof.K0_pm0 = K0pm;  prof.slope0 = slope_pred;
+else
+    slope_pred = NaN;
+end
+
+ratio = hfrac^(1/(nH-1));
+hgrid = hmax * ratio.^((nH-1):-1:0);                 % geometric, clustered at 0 (P1-4)
+prof.hmin_initial = hgrid(1);
+
+[rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s);
+
+if predictor_usable
+    h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end); % first panel seeded with r(0)
+else
+    h0 = nan(1, nH);                                     % undefined without a real r(0)
+end
+F  = h0 - J0eff*mv;
+
+% ADAPTIVE lower extension (round-3 P0-3): predictor-driven, NOT self-referential.
+% slope_pred < 0 predicts an ordered root; extend geometrically downward until a
+% negative F sample appears or the absolute floor is reached.
+n_extend = 0;
+while predictor_usable && slope_pred < 0 && all(F >= 0) && hgrid(1) > hmin_abs
+    n_extend = n_extend + 1;
+    hext = hgrid(1) * ratio.^(3:-1:1);                % three more decades-fraction nodes
+    [re, me, S0e, K0e, De, Gbe, Gse] = deal(nan(1, 3));  ce = false(1, 3);
+    for k = 1:3
+        [re(k), me(k), S0e(k), K0e(k), De(k), Gbe(k), Gse(k), ce(k), Sigma, K0s] = ...
+            eval_node(hext(k), Sigma, K0s);
+    end
+    hgrid = [hext hgrid];  rv = [re rv];  mv = [me mv];  cnv = [ce cnv];
+    S0v = [S0e S0v];  K0v = [K0e K0v];  Dv = [De Dv];  Gbv = [Gbe Gbv];  Gsv = [Gse Gsv];
+    h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end);
+    F  = h0 - J0eff*mv;
+end
+
+if n_extend > 0 && any(F < 0)
+    % RE-DENSIFY (execution amendment 3, 2026-07-22): the extension's sparse geometric
+    % panels feed O(coarse-grid) quadrature error into h0 exactly where F is a small
+    % difference of large terms (measured: 11% root error at Bc_1z - 0.01 on a
+    % deliberately coarse grid vs the fine default). Rebuild the profile at FULL nH
+    % resolution anchored to the discovered bracket scale, so adaptive-path roots match
+    % default-path quality. Cost: one extra nH-sweep, only when extension fired.
+    idx0 = find(F < 0, 1, 'first');
+    hfrac_eff = max(hmin_abs/hmax, 0.25*hgrid(idx0)/hmax);
+    ratio2 = hfrac_eff^(1/(nH-1));
+    hgrid = hmax * ratio2.^((nH-1):-1:0);
+    [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s);
+    h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end);
+    F  = h0 - J0eff*mv;
+    prof.redensified = true;
+end
+prof.n_extend = n_extend;
+
+prof.hgrid = hgrid;  prof.r = rv;  prof.h0 = h0;  prof.m = mv;
+prof.Sigma0 = S0v;   prof.K0 = K0v;  prof.D_uni = Dv;  prof.node_conv = cnv;  prof.F = F;
+prof.G0bare = Gbv;   prof.Gstat = Gsv;
+prof.converged_node_count = nnz(cnv);
+
+if ~predictor_usable             % predictor never produced a usable finite value
+    prof.status = 'node_failed'; % above -- report the honest verdict now that the grid's
+    return;                      % own (convergence-independent) diagnostics are exported;
+end                              % NEVER fall through to the F-based search on NaN data
+if slope_pred < 0 && all(F >= 0)                      % floor hit without a bracket:
+    prof.status = 'unresolved';                       % NEVER silently PM (round-3 P0-3)
+    warning('invz:hmfUnresolved', ...
+        'ordering predicted (slope_pred = %.3g) but no negative F above hmin_abs = %.3g', ...
+        slope_pred, hmin_abs);
+    return;                                           % hmf_star stays NaN; the jensen solver
+end                                                   % must return converged = false here
+if any(~cnv) || any(~isfinite([rv, mv, F]))
+    prof.status = 'node_failed';                      % on node failure -- never 'ok'
+    return;
+end
+prof.status = 'ok';
+s = sign(F);  idx = find(s(1:end-1) < 0 & s(2:end) >= 0, 1, 'last');
+if isempty(idx), return; end                          % no nonzero root: PM side
+
+% --- Root refinement by DIRECT evaluation (P1-4): bisection on F between the
+% bracketing nodes, fresh node solve per iterate, cumulative h0 via local trapezoid
+% panel from the bracket's left node.
+a = hgrid(idx);  b = hgrid(idx+1);  Fa = F(idx);  h0a = h0(idx);  ra = rv(idx);
+for it = 1:12
+    c = 0.5*(a + b);
+    [rc, mc, ~, ~, ~, ~, ~, okc, Sigma, K0s] = eval_node(c, Sigma, K0s);
+    if ~okc
+        prof.status = 'node_failed';  hmf_star = NaN; % TERMINATES the solve -- never a root
+        return;                                       % from a partial bracket
+    end
+    h0c = h0a + 0.5*(ra + rc)*(c - a);
+    Fc  = h0c - J0eff*mc;
+    if sign(Fc) == sign(Fa), a = c; Fa = Fc; h0a = h0c; ra = rc; else, b = c; end
+    if (b - a) < trt*b, break; end
+end
+if (b - a) >= trt*b                                   % round-5 P1-A: tol_root not reached --
+    prof.status = 'unresolved';  hmf_star = NaN;      % a distinct refinement failure
+    warning('invz:hmfUnresolved', 'root bracket not refined to tol_root: (b-a)/b = %.3g', (b-a)/b);
+    return;
+end
+hmf_star = 0.5*(a + b);
+[r_s, m_s, ~, ~, D_s, ~, Gs_s, ok_s] = eval_node(hmf_star, Sigma, K0s);
+if ~ok_s
+    prof.status = 'node_failed';  hmf_star = NaN;  return;
+end
+prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star = Gs_s;
+
+    function [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s)
+    % Behavior-neutral factoring of the per-node nH sweep (execution amendment 3):
+    % evaluate eval_node at every point of hgrid in ascending order, warm-starting
+    % Sigma/K0s across calls. Shared by the initial profile sweep and the re-densify
+    % pass; the extension's 3-node prepends stay inline (unchanged).
+    n = numel(hgrid);
+    [rv, mv, S0v, K0v, Dv, Gbv, Gsv] = deal(nan(1, n));  cnv = false(1, n);
+    for is = 1:n
+        [rv(is), mv(is), S0v(is), K0v(is), Dv(is), Gbv(is), Gsv(is), cnv(is), Sigma, K0s] = ...
+            eval_node(hgrid(is), Sigma, K0s);
+    end
+    end
+
+    function [rk, mk, S0k, K0k, Dk, Gbk, Gsk, ok, Sigma, K0s] = eval_node(hp, Sigma, K0s)
+    % One fixed-field node: si (hz_fixed, NO order), tl, c0/G0, then the ordered
+    % Sigma<->EMT loop WITH the static-sector closure each pass (Interfaces bullet).
+    sio = sibase;  sio.hz_fixed = hp;
+    si = invz_single_ion(ion, T, Bvec, sio);
+    if abs(si.hz - hp) > 1e-12
+        error('invz:hzFixed', 'hz_fixed not held: si.hz = %.6g vs %.6g', si.hz, hp);
+    end
+    tl = invz_twolevel_ordered(ion, T, Bx, hp, struct('Jxx0', Jxx0));
+    mk = si.Jexp(3);
+    c0 = invz_chi0z(si, T, 1i*wn, struct('elastic', true));
+    G0 = -real(squeeze(c0(3,3,:)));
     c0i = invz_chi0z(si, T, 1i*wn(1), struct('elastic', false));   % static inelastic only
     G0inel0 = -real(c0i(3,3,1));                                   % fixed-Hamiltonian slot
-    X = real(c0(:, :, 1));                                         % static chi tensor (chi=-G)
-    switch tmf
-        case 'none'
-            fb = 0;
-        case 'legacy_x'
-            fb = X(3, 1) * (Jxx0 / (1 - Jxx0*X(1, 1))) * X(1, 3);
-        case 'vector_ab'
-            t = [1 2];
-            fb = X(3, t) * (Jxx0 * ((eye(2) - Jxx0*X(t, t)) \ X(t, 3)));
-        otherwise
-            error('invz:transverseMF', 'unknown transverse_mf ''%s''', tmf);
-    end
+    % Path-consistent bare static response -dm/dh along the single-axis
+    % transverse mean-field path.
+    X = real(c0(:, :, 1));                                         % static chi tensor (chi = -G)
+    fb = X(3, 1) * (Jxx0 / (1 - Jxx0*X(1, 1))) * X(1, 3);
     G0bare0 = -(X(3, 3) + fb);
     G0el0   = G0bare0 - G0inel0;                                   % elastic + feedback (SS4a)
-    % --- stage-2c task 1b-ii-B: ONE call to the shared, checker-gated node solver --------
-    % (replaces the old inline cold-init + 7-step loop + post-loop refresh + ad hoc ctol
-    % gate: invz_ordered_node_solve runs that SAME map verbatim and gates acceptance on the
-    % complete residual checker, invz_ordered_residual -- see both files' headers.)
-    node = struct('tl', tl, 'G0', G0, 'g', g, 'wts', wts, 'wn', wn, 'beta', beta, ...
-        'J0eff', J0eff, 'G0inel0', G0inel0, 'G0el0', G0el0, 'G0bare0', G0bare0, ...
-        'eso', eso, 'eopts', eopts, 'Jnu_flat', Jnu_flat, 'Jmom', Jmom);
-    % Jmom (resolved ONCE above) is REQUIRED by invz_ordered_node_solve whenever node.eso
-    % selects a strict scheme ('invz:nodeSolveNode' otherwise); it is threaded into both EMT
-    % leaves there so neither silently re-derives it. Harmless-absent under 'resummed'.
-    sopts = struct('mix_outer', mixo, 'max_outer', maxo, 'tol_outer', tolo, ...
-        'cold_retry', true, 'trace', false, 'cold_acceleration', cold_accel);
-    [state, info] = invz_ordered_node_solve(node, [], sopts);   % COLD: this leg always
-                                                                 % starts from Sigma=0/K0s=0
-    Sigma = state.Sigma;  K = state.K;  lam = state.lam;
-    med = info.med;  med.G(1) = info.so.Gstat;         % elastic static function (P1-D),
-                                                        % not the ordinary Dyson value
-    sg  = invz_sigma_ordered(tl, lam, K, g, beta);     % recompute for pt.alpha/pt.alpha_m --
-                                                        % info does not expose sg
-    converged = info.loop_converged;   % in-loop verdict -- diagnostic only; pt.converged
-    outer     = info.outer_iters;      % below is checker-gated on info.accepted instead
-else
+    g  = real(invz_g(tl, 1i*wn));
+    if isempty(Sigma), Sigma = zeros(size(wn)); end
+    K = zeros(size(wn));  lam = [0; 0; 0];  ok = false;
     for outer = 1:maxo
+        % (1) dynamic sector -- MIRROR invz_solve_point_ordered's emt call verbatim
         eopts.K0 = K;
         med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
         K   = med.K;
-        if ~any(strcmp(med.medium_status, {'ok', 'not_applicable'}))
-            % Mirrors invz_solve_point's PM domain halt verbatim (same two whitelisted strings,
-            % same lam/sg reset, same break into the COMMON export block below). 'bare' is the
-            % DEFAULT ordered_mode and is reachable from invz_solve_auto, so a strict-scheme
-            % reference/closure domain event must halt HERE, before invz_lambdas and
-            % invz_sigma_ordered consume the invalid medium: without this the NaN Sigma feeds
-            % the next iteration's reference, the loop burns max_outer iterations on NaNs, and
-            % the exported medium_status degrades from the TRUE first cause (e.g.
-            % ref_denom_small) to 'nonfinite' -- provenance naming the wrong condition.
-            % INERT under the default 'resummed' scheme, where invz_emt_scalar's whole strict
-            % block is gated off (:73) and medium_status is always 'not_applicable'.
-            % lam/sg are reset (not left at the previous iterate) so the exported point carries
-            % no stale lambda/alpha for a medium that has no solution; the export block then
-            % produces the COMPLETE field set with pt.converged false (med.converged is false
-            % here by construction, K(1)/G(1) = NaN) and pt.medium_status the exact domain
-            % string. lam is 3-long and sg carries alpha_m here -- the ordered leg's shapes.
-            lam = nan(3,1);
-            sg  = struct('Sigma', nan(size(Sigma)), 'alpha', NaN, 'alpha_m', NaN);
-            break;
-        end
+        % (2) static sector (P0-2/P0-A), threaded opts (P1-F):
+        [K0s, ~, sout] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
+                                                 beta, J0eff, G0inel0, G0el0, eso);
+        K(1) = K0s;
+        % (3)-(5) lambdas, ordered Sigma, damped mix -- MIRROR the solver's statements
         lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
         sg  = invz_sigma_ordered(tl, lam, K, g, beta);
-        dS  = invz_finite_max_abs(sg.Sigma, Sigma);
+        dS  = max(abs(sg.Sigma - Sigma));
         Sigma = Sigma + mixo*(sg.Sigma - Sigma);
-        if dS < tolo, converged = true; break; end
+        if dS < tolo && sout.converged, ok = true; break; end
     end
-end
-pt.Sigma0 = Sigma(1);  pt.alpha = sg.alpha;  pt.alpha_m = sg.alpha_m;  pt.lambda = lam;
-pt.K = K;  pt.G = med.G;  pt.Sigma = Sigma;  pt.tl = tl;  pt.si = si;
-pt.chi0cc0 = -G0(1);
-pt.crit = 1 + pt.Sigma0 - J0eff*pt.chi0cc0;
-pt.sumrule_rel = abs(sum(wts.*med.G)/beta + si.JzJz_fluct) / max(abs(si.JzJz_fluct), 1e-12);
-pt.converged = converged && med.converged;
-pt.outer_iters = outer;
-pt.moment_branch = branch;
-% --- static-medium provenance (spec SS4.2): stamped in the COMMON export, so BOTH ordered
-% modes carry the same members. Here the three medium_* values describe the DYNAMIC medium
-% invz_emt_scalar returned; in jensen mode the block below overwrites them with the ordered
-% STATIC sector's own record, which is the sector that actually owns slot 1 there. `medium.ref`
-% is [] under 'resummed' and getf is safe on that, so both numbers read NaN.
-pt.static_medium = sm.scheme;
-pt.Jmom = Jmom;
-ref = getf(getf(med, 'medium', struct()), 'ref', struct());
-pt.medium_status = getf(med, 'medium_status', 'not_applicable');
-pt.medium_denom  = getf(ref, 'denom', NaN);
-pt.medium_margin = getf(ref, 'margin', NaN);   % distance to floor, NOT the denominator
-if oddOn
-    pt.odd = struct('d', d, 'Xp', Xp);         % T1.4 diagnostics (absent when flag off)
-end
-if strcmp(omode, 'jensen')
-    % stage-2c task 1b-ii-B: acceptance = the complete four-block checker verdict, NOT the
-    % old in-loop dS/sout.converged + post-loop staticok/ctol re-gate (both folded away --
-    % info.accepted already IS invz_ordered_residual's res.accepted for this exported state).
-    % final_resid is diagnostic-only from here on: exposed as block C (the derived lam/Sigma
-    % chain from the exported K) -- the EXACT quantity the old final_resid computed
-    % (production's own invz_ordered_residual.m docstring: "this is production's existing
-    % final_resid, named ... here" -- the two must stay byte-equal).
-    pt.final_resid = info.res.blockC.resid;
-    pt.converged = info.accepted;
-    pt.ordered_mode = omode;  pt.hmf = hstar;  pt.hmf_prof = hprof;
-    pt.D_uni = info.so.D_uni;                        % pole observable AT THE FINAL STATE
-                                                      % (checker's own value; algebraically
-                                                      % identical to 1+(J0eff-K(1))*med.G(1))
-    % TWO-TIER EXPORT (spec SS1): pt.converged keeps its existing meaning (info.accepted, the
-    % consistency tier) so no existing consumer shifts meaning under it. Endpoint stability is
-    % a SEPARATE field -- collapsing them would re-mask the ordered phase, because intermediate
-    % path nodes are the unstable Landau interval by construction. The classification itself is
-    % the checker's (res.stability already applied the frozen crit_tol/D_tol/Dq_tol); it is
-    % never rebuilt here from raw > 0 comparisons. The crit agreement term only confirms that
-    % the exported endpoint IS the root the profile accepted.
-    pt.crit_1z = hprof.crit_star;
-    pt.Dq_min = info.res.stability.Dq_min;
-    pt.stable_1z = pt.converged && info.res.stability.pass && ...
-                   isfinite(hprof.crit_star) && ...
-                   abs(hprof.crit_star-info.res.stability.crit) <= ...
-                       getf(opts,'crit_tol',1e-6);
-    pt.omit_mu3 = getf(info.so, 'omit_mu3', NaN);
-    pt.omit_cubic = getf(info.so, 'omit_cubic', NaN);
-    pt.omit_max = getf(info.so, 'omit_max', NaN);
-    % path_omit_max FAILS CLOSED (plan-owner ruling 2026-07-26, mirroring the task-3 omit_max
-    % ruling and DELIBERATELY replacing this brief's isfinite-filtered version): it is a
-    % load-bearing promotion gate (the frozen predicate compares max(omit_max) over the
-    % solved path against omit_promote = 0.10 -- summarized in
-    % invzp_convg_diagnosis.md Section 8.2), so a
-    % corrupted node must never be quietly dropped from the maximum. Inf DOMINATES, NaN POISONS.
-    if isempty(hprof.omit_max)
-        pt.path_omit_max = NaN;
-    elseif any(isnan(hprof.omit_max))
-        pt.path_omit_max = NaN;      % fail closed: a corrupted node
-                                     % must not be silently dropped
-    else
-        pt.path_omit_max = max(hprof.omit_max);   % Inf dominates,
-    end                                           % per the frozen
-                                                  % zero-denominator
-                                                  % convention
-    % The ordered STATIC sector owns slot 1 here, so its own medium record supersedes the
-    % dynamic one stamped in the common block above.
-    ref = getf(getf(info, 'medium', struct()), 'ref', struct());
-    pt.medium_status = getf(info, 'medium_status', 'not_applicable');
-    pt.medium_denom = getf(ref, 'denom', NaN);
-    pt.medium_margin = getf(ref, 'margin', NaN);
-    % CONTRACT (P2-G): pt.crit keeps its historical ordinary-Dyson definition and is NOT
-    % the ordered pole mass below the boundary -- pt.D_uni is (see docstring).
-    if abs(pt.si.hz - hstar) > 1e-12
-        error('invz:hzFixed', 'jensen final state did not hold hmf: %.6g vs %.6g', pt.si.hz, hstar);
+    [K0s, Gsk, so] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
+                                             beta, J0eff, G0inel0, G0el0, eso);
+    ctol = getf(eso, 'resid_tol', 1e-10);              % documented closure tolerance (meV^-1),
+    % matching invz_emt_static_ordered's own default so the outer gate never disagrees
+    % with the inner closure's own converged flag.
+    ok = ok && so.converged && isfinite(so.resid) && so.resid < ctol;
+    % round-5 P1-B: the final refresh must ITSELF converge and close -- an unconverged
+    % refresh makes this node not-ok (callers then mark node_failed), never silent export.
+    % round-4 P1-B: the final refresh runs on the newly mixed Sigma(1), so its closed K0
+    % differs from the seed -- KEEP it, and report the SAME value the returned
+    % Gstat/r/D_uni were computed with (exported below as K0k = K0s).
+    rk = so.r;  S0k = Sigma(1);  K0k = K0s;  Dk = so.D_uni;  Gbk = G0bare0;
     end
-end
 end
 
-% -------------------------------------------------------------------------------------------
-function pt = early_return(m0, si, branch, sm, Jmom)
-%EARLY_RETURN Complete field set for every non-accepted exit (spec: callers never
-% probe a missing member; tl = [] flags "no two-level params were built").
-% The static-medium provenance (spec SS4.2) is stamped HERE, inside the shared builder,
-% rather than repeated as five post-call assignments at each of the four call sites --
-% repeating them is exactly how a member goes missing on one of them. No medium was ever
-% solved on any of these paths, so medium_status is 'not_applicable' and both reference
-% numbers are NaN; a jensen exit that failed for a domain reason still reports it, through
-% pt.hmf_status, which that call site sets.
-pt = struct('m0', m0, 'is_ordered', false, 'converged', false, 'Sigma0', NaN, ...
-            'crit', NaN, 'si', si, 'tl', [], 'moment_branch', branch, ...
-            'static_medium', sm.scheme, 'Jmom', Jmom, ...
-            'medium_status', 'not_applicable', 'medium_denom', NaN, 'medium_margin', NaN);
+function [K0, Gstat, out] = invz_emt_static_ordered(tl, lam, Sigma0, Jnu_flat, K0_seed, beta, J0eff, G0inel0, G0el0, opts)
+%INVZ_EMT_STATIC_ORDERED Static-sector EMT closure for the ordered elastic propagator (SS3, P0-2/P0-A).
+% The elastic G(0) of J 2.28-2.29 breaks the ordinary Dyson structure, so the closed-form
+% direct solve of INVZ_EMT_SCALAR does not apply at w = 0 for m ~= 0. This function solves
+% the scalar fixed point demanded by the EMT definitions (J 2.10-2.11 / HTML 16):
+%   Gstat(K0)  = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G0el0)
+%   G(q,0)     = Gstat ./ (1 + (J(q) - K0).*Gstat)                       (HTML 17 insertion)
+%   closure:   mean_q G(q,0) = Gstat   and   K0 = mean_q(J.*Gq)/mean_q(Gq)
+% by damped iteration on K0. The static weights are the caller's: production passes the
+% FULL-electronuclear split (round-2 P0-A), so at m = 0 (G0el0 -> 0) the fixed point
+% coincides with invz_emt_scalar's direct solve ON THE FULL PROPAGATOR -- the PM solver's
+% own K(0) (gate C1; the load-bearing loop-level identity is Task 3's Gate 6b). lam and
+% Sigma0 are FIXED inputs here; the caller's outer loop refreshes them with the closed K0
+% written into the K vector's w = 0 slot (see invz_hmf_ordered / the jensen solver mode).
+% out: xi/h0/G0bare/Gtil0/r at the closed K0 (from invz_gstat_ordered), D_uni = the uniform
+% static inverse response 1 + (J0eff - K0)*Gstat (pole observable), resid, iters, converged.
+% opts (threaded from the caller as ONE NAMED STRUCT emt_static -- P1-F, never a bare
+% struct() at call sites): resid_tol (default 1e-10, meV^-1 -- the PRIMARY convergence
+% criterion AND the documented closure-residual acceptance threshold callers gate on),
+% tol (default 0 -- an OPTIONAL absolute |dK0| stall floor; 0 means machine-resolution-only,
+% see below), maxit (default 200), mix (default 0.5), warn (default true -- emits the
+% invz:emtStatic non-convergence warning; in-loop sweep callers pass false because they
+% gate on out.converged and would otherwise flood the console). out.converged is measured
+% on the EXPORTED (K0, Gstat, resid) tuple (out.resid < rtol), so it can never disagree
+% with out.resid.
+% Amendment round 1 (controller resolution of the round-2 P0-2 BLOCKED escalation): the
+% original |dK0|-only stopping test under-delivers closure by the map's local conditioning
+% (resid/|dK0| ~ 1.8e5 at the gate-C2 operating point), so the residual itself -- the
+% physical closure quantity -- became the primary convergence test.
+% Amendment round 2 (round 1 was itself defective on two counts, both fixed here): (a) a
+% fixed dK stall floor (1e-12) structurally preempted the residual criterion given the same
+% ~1.8e5 conditioning, so the stall floor is now machine resolution, 4*eps(|K0|) (opts.tol
+% is an optional additional absolute floor, default 0, i.e. inert unless the caller raises
+% it); (b) the residual check now breaks BEFORE any K0 update, so the exported K0 is exactly
+% the one that closed, and out.converged is recomputed post-loop from out.resid so it can
+% never be a half-step out of sync with what was actually exported.
+if nargin < 10, opts = struct(); end
+rtol  = getf(opts, 'resid_tol', 1e-10);  % PRIMARY: closure-residual convergence (meV^-1)
+tol   = getf(opts, 'tol', 0);            % optional ABSOLUTE |dK0| stall floor (0 = machine-only)
+maxit = getf(opts, 'maxit', 200);
+mix   = getf(opts, 'mix', 0.5);
+warn  = getf(opts, 'warn', true);            % emit the invz:emtStatic non-convergence warning
+Jf = Jnu_flat(:);
+K0 = K0_seed;
+for it = 1:maxit
+    Gs = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G0el0);
+    Gq = Gs ./ (1 + (Jf - K0).*Gs);
+    Gbar = mean(Gq);
+    if abs(Gbar - Gs) < rtol, break; end % closed at the CURRENT K0 -- exported as-is
+    K0_new = mean(Jf .* Gq) / Gbar;
+    dK = abs(K0_new - K0);
+    if dK < max(tol, 4*eps(abs(K0)))     % TRUE stall: no representable progress possible
+        break;
+    end
+    K0 = K0 + mix*(K0_new - K0);
+end
+[Gstat, go] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G0el0);
+Gq = Gstat ./ (1 + (Jf - K0).*Gstat);
+out = go;
+out.D_uni = 1 + (J0eff - K0)*Gstat;
+out.resid = abs(mean(Gq) - Gstat);
+out.iters = it;
+out.converged = out.resid < rtol;        % measured on the EXPORTED tuple
+if warn && ~out.converged
+    warning('invz:emtStatic', 'static closure not converged after %d iterations: resid = %.3g', it, out.resid);
+end
 end

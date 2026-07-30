@@ -48,14 +48,14 @@ function P = invz_jq_path(ion, qpath, opts)
 %                         primitive_schema provenance), so callers can verify which
 %                         backend actually produced this P
 %
-%   opts: .dpRng (30), .cache (true)  -- forwarded to invz_jq_modes for the raw sums
+%   opts: .dpRng (30), .cache (false) -- forwarded to invz_jq_modes for the raw sums
 %         (bruteforce only; not forwarded under ewald, see above);
 %         .snapfac (2.5)              -- trust radius = snapfac*2*pi/(dpRng*min ||a_i||),
 %                                        bruteforce only, a documented no-op under ewald;
 %         .dipole, .ewald             -- dipolar backend selection (see above).
 if nargin < 3, opts = struct(); end
 dpRng    = 30;  if isfield(opts,'dpRng'),   dpRng    = opts.dpRng;   end
-useCache = ~isfield(opts,'cache') || opts.cache;
+useCache = isfield(opts,'cache') && opts.cache;
 snapfac  = 2.5; if isfield(opts,'snapfac'), snapfac  = opts.snapfac; end
 C  = invz_const();
 nq = size(qpath, 1);

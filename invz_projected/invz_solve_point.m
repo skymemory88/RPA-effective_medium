@@ -1,6 +1,6 @@
 function pt = invz_solve_point(ion, T, Bx, Jnu_flat, opts)
 %INVZ_SOLVE_POINT Self-consistent 1/z solution at one paramagnetic (T, Bx) point.
-% Bx: scalar (transverse, historical) or [Bx By Bz] vector (T).
+% Bx: scalar transverse field along the crystallographic a axis (T).
 % Outer loop: EMT K (Task 7) <-> lambda_p (Task 8) <-> Sigma, at fixed single-ion input.
 % Inside the ordered phase the paramagnetic EMT fixed point does not exist; outputs may be non-finite and pt.converged false — invz_critical relies on this as the ordered-phase signal. Always check pt.converged.
 %
@@ -38,66 +38,22 @@ function pt = invz_solve_point(ion, T, Bx, Jnu_flat, opts)
 % form is intrinsically static; ODD plan section 4 mitigation). pt.odd gains
 % r_n (plus the smallness diagnostics when computed, and retarded_exact).
 %
-% Tier 2 (T3.3, opt-in on top of opts.odd): opts.odd_tier2 = true closes the
-% Dollberg variable-moments loop AFTER the Tier-1 solve above converges. Outer
-% Tier-2 iteration: C = invz_odd_fieldvar(ion, pt, blocks, T) (the E3
-% internal-field covariance of the CONVERGED point; the Tier-1 pt seeds it) ->
-% [tla, avg] = invz_twolevel_avg(..., C, 'G0', true) (Gauss-Hermite-dressed
-% doublet + disorder-averaged FULL electronuclear cc propagator; the LEAST
-% RIGOROUS step of the ODD plan, see that function's header flag) -> re-run
-% the inner EMT<->Sigma loop with tl = tla, g = invz_g(tla), G0 = avg.G0
-% (previous Sigma as warm seed) -> recompute C, mix with damping 0.5, repeat
-% until max|dC| < opts.tol_tier2 (1e-3, relative) or opts.max_tier2 (8) is
-% hit; non-convergence is masked EXACTLY like the EMT loop (pt.converged
-% false). What Tier 2 swaps and what it does NOT: the dressed doublet enters
-% Sigma (tl, g) and the local propagator (G0, so pt.chi0cc0 and pt.crit use
-% the DRESSED chi0cc0 = avg.chi0cc0 -- that is how variable moments suppress
-% ordering); the LATTICE geometric side (Jnu rebuild from Vcc + deltaJ, the
-% -d on J0eff) stays at the Tier-1 static Xp -- chi_perp is Van Vleck-
-% dominated and is NOT re-dressed (the chi_perp-held-fixed design decision,
-% README 1.9). pt.si stays the BARE single-ion state, and pt.sumrule_rel
-% keeps the bare si.JzJz_fluct reference, so under Tier 2 it additionally
-% carries the (small, O(C)) disorder-dressing of the local weight --
-% diagnostic only. opts.tier2 = struct('ngh', 'avg') forwards to
-% invz_twolevel_avg (quadrature order / 'response' vs 'params' averaging).
-% New pt fields (only when the flag is on): pt.C (final mixed covariance,
-% meV^2; NaN(2) when Tier 1 never converged), pt.tier2_iters, pt.tla (final
-% dressed two-level params; pt.tl == pt.tla on a completed Tier-2 solve),
-% pt.tier2_resid (last relative max|dC|). Requires opts.odd
-% ('invz:oddArgs'); combining with opts.odd_retarded(_exact) also errors
-% 'invz:oddArgs' -- NOT YET VALIDATED: invz_odd_fieldvar assembles the
-% equal-time Scc (E3) from the STATIC mode spectrum with this solve's G/K,
-% and a retarded solve carries per-frequency modes with no validated E3
-% counterpart (the static T2.2 default makes the combination unused).
-%
-% Static medium (spec SS4.2, opt-in): opts.static_medium = 'resummed' (DEFAULT, legacy and
-% numerically bit-identical) | 'strict_1z_dyson_ref' | 'strict_1z_bare_ref' replaces the
-% omega_n = 0 slot of the effective medium with the strict one-shot moment closure;
-% opts.ref_margin (1e-6) is the reference-denominator floor. The scheme is resolved ONCE here
-% by invz_check_static_medium -- the sole authority -- and stamped into opts.emt, so setting
-% it per leg (opts.emt.static_medium) is a CONFLICT ('invz:staticMedium'), never an override.
-% pt ALWAYS carries pt.static_medium (the resolved scheme), pt.Jmom (invz_coupling_moments of
-% THIS point's final coupling spectrum, per column under T2.1 retardation), pt.medium_status,
-% pt.medium_denom and pt.medium_margin (= denom - floor, the DISTANCE TO THE FLOOR, not the
-% denominator); the last three read 'not_applicable'/NaN/NaN under 'resummed'. A strict-scheme
-% reference/closure domain event halts the outer loop at once and returns a NON-CONVERGED
-% point whose pt.medium_status names the exact domain condition, instead of iterating NaNs to
-% max_outer.
 if nargin < 5, opts = struct(); end
+if any(isfield(opts, {'odd_tier2','tier2','tol_tier2','max_tier2'}))
+    error('invz:removedOption', 'The incomplete ODD Tier-2 route has been removed.');
+end
 Ecut  = getf(opts, 'Ecut', 40);
 hyp   = getf(opts, 'hyp', true);
 J0eff = getf(opts, 'J0eff', ion.J0eff);
 Jxx0  = getf(opts, 'Jxx0', ion.Jxx0);
-tmf   = getf(opts, 'transverse_mf', 'legacy_x');
 mixo  = getf(opts, 'mix_outer', 0.7);
 tolo  = getf(opts, 'tol_outer', 1e-8);
 maxo  = getf(opts, 'max_outer', 200);
 eopts = getf(opts, 'emt', struct());
-% Static-medium scheme: resolved ONCE here and stamped into the leg option struct, so
-% invz_emt_scalar's omega = 0 slot and the ordered sector can never run different truncation
-% orders (spec SS4.2). Absent => 'resummed' => numerically identical to the pre-strict path.
-[sm, eopts] = invz_check_static_medium(opts, eopts);
-Bx = invz_field_vec(Bx);                       % scalar -> [Bx 0 0]; 3-vector passes through
+if ~(isnumeric(Bx) && isreal(Bx) && isscalar(Bx) && isfinite(Bx))
+    error('invz:field', 'Bx must be a finite real scalar transverse field.');
+end
+Bvec = [Bx 0 0];
 
 % --- ODD diversion (T1.4): strictly additive and opt-in; everything else in
 % this function is the pre-ODD code path, byte-untouched when the flag is off
@@ -111,21 +67,6 @@ if (oddRet || oddRetEx) && ~oddOn
     error('invz:oddArgs', ['opts.odd_retarded / opts.odd_retarded_exact require ' ...
         'opts.odd = true: retardation modifies the ODD-mediated coupling deltaJ, ' ...
         'which only exists on the ODD path.']);
-end
-odd2On = isfield(opts, 'odd_tier2') && ~isempty(opts.odd_tier2) ...
-    && ~isequal(opts.odd_tier2, false);
-if odd2On && ~oddOn
-    error('invz:oddArgs', ['opts.odd_tier2 requires opts.odd = true: Tier 2 ' ...
-        'dresses the doublet with the ODD internal-field covariance (E3), ' ...
-        'which only exists on the ODD path.']);
-end
-if odd2On && (oddRet || oddRetEx)
-    error('invz:oddArgs', ['opts.odd_tier2 combined with opts.odd_retarded / ' ...
-        'opts.odd_retarded_exact is not yet validated: invz_odd_fieldvar ' ...
-        'assembles the equal-time Scc (E3) from the STATIC mode spectrum with ' ...
-        'this solve''s G/K, and a retarded solve carries per-frequency modes ' ...
-        'with no validated E3 counterpart. Use the static default (the T2.2 ' ...
-        'decision) with Tier 2.']);
 end
 if oddOn
     ob = getf(opts, 'odd_blocks', []);
@@ -141,7 +82,7 @@ if oddOn
     end
     % chi_perp at the SAME single-ion options the solve below resolves (T1.2's
     % same-converged-state requirement); oddXi.si is that state, reused below.
-    [Xp, oddXi] = invz_chiperp(ion, T, Bx, struct('hyp', hyp, 'Jxx0', Jxx0, 'transverse_mf', tmf));
+    [Xp, oddXi] = invz_chiperp(ion, T, Bx, struct('hyp', hyp, 'Jxx0', Jxx0));
     [dJ, d] = invz_odd_deltaJ(ob.Vca, ob.Vcb, Xp);
     nqo = size(ob.Vcc, 3);
     Jnu_odd = invz_odd_modes(ob.Vcc, dJ);      % values-only kernel (shared)
@@ -152,7 +93,8 @@ if oddOn
         % differ in last bits), so the elastic column of the retarded solve
         % is exactly the static spectrum. Degenerate pairs make individual
         % u_nu ambiguous; the first-order error that induces is part of
-        % what the surrogate-vs-exact gate (AbsTol 1e-3 on Sigma0) measures.
+        % what the surrogate-vs-exact gate (AbsTol 1e-3 on Sigma0,
+        % test_invz_odd_retarded) measures.
         for iq = 1:nqo
             M = ob.Vcc(:,:,iq) + dJ(:,:,iq);
             M = (M + M')/2;                    % both terms Hermitian; cleans rounding only
@@ -167,9 +109,7 @@ if oddOn
     % E5 uniform shift, applied HERE exactly once (T1.3 bookkeeping rule: the grid
     % matrices' diagonal already carries -d via E4; J0eff carries the explicit -d;
     % NO other q = 0 handling). Callers pass the UNSHIFTED info.Jcc0 as opts.J0eff.
-    % That unshifted value comes from invz_odd_blocks' infoB.Jcc0 (or the flag-off
-    % invz_jq_modes info.Jcc0) -- NOT from invz_jq_modes' opts.odd path, whose
-    % exported info.Jcc0 is ALREADY shifted by -d.
+    % That unshifted value comes from invz_odd_blocks' infoB.Jcc0.
     J0eff = J0eff - d;
     % --- T2.1 retardation: per-frequency mode spectra Jnu_flat [nq*4, nwn] ---
     if oddRet || oddRetEx
@@ -188,8 +128,8 @@ if oddOn
                     'odd_rn_override must be a finite scalar or [%d,1] vector (the Matsubara grid).', nwn);
             end
         else
-            Xpn = invz_chiperp(ion, T, Bx, struct('hyp', hyp, 'Jxx0', Jxx0, ...
-                'transverse_mf', tmf, 'z', 1i*wn_r));    % [2,2,nwn]
+            Xpn = invz_chiperp(ion, T, Bx, ...
+                struct('hyp', hyp, 'Jxx0', Jxx0, 'z', 1i*wn_r));    % [2,2,nwn]
             xaa = squeeze(Xpn(1,1,:));
             r_n = xaa / xaa(1);                          % r_n(1) = 1 exactly (x/x)
             % Smallness diagnostics justifying the scalar surrogate
@@ -233,26 +173,19 @@ if oddOn
     end
 end
 
-% Coupling moments of THIS point's FINAL spectrum (spec SS4.1), taken only once the ODD branch
-% above has rebuilt Jnu_flat from odd_blocks + deltaJ (and retardation has widened it to
-% [nJ,nwn]) -- taken any earlier they would describe the wrong multiset, or none at all.
-% Threaded into the leg struct so the strict static slot never silently re-derives them.
-Jmom = invz_coupling_moments(Jnu_flat);
-eopts.Jmom = Jmom;                            % matrix moments allowed; PM slot selects column 1
-
 [wn, wts, beta] = invz_matsubara(T, Ecut);
 if oddOn
     % Bit-identical reuse: invz_chiperp built its si with the SAME (ion, T, Bx)
-    % and the SAME (hyp, Jxx0, transverse_mf) options as the call below
-    % (invz_field_vec is idempotent), so this skips one 136-dim diagonalization
+    % and the same (hyp, Jxx0) options as the call below, so this skips one
+    % 136-dimensional diagonalization
     % without changing any result.
     si = oddXi.si;
 else
-si  = invz_single_ion(ion, T, Bx, struct('hyp', hyp, 'Jxx0', Jxx0, 'transverse_mf', tmf));
+si  = invz_single_ion(ion, T, Bvec, struct('hyp', hyp, 'Jxx0', Jxx0));
 end
 c0  = invz_chi0z(si, T, 1i*wn, struct('elastic', true));
 G0  = -real(squeeze(c0(3,3,:)));                 % full (electro)nuclear cc Green function
-tl  = invz_twolevel(ion, T, Bx, struct('Jxx0', Jxx0, 'transverse_mf', tmf));   % electronic two-level params for Sigma
+tl  = invz_twolevel(ion, T, Bx, struct('Jxx0', Jxx0));   % electronic two-level params for Sigma
 g   = real(invz_g(tl, 1i*wn));
 
 % Warm-start seed (finding #6): a converged neighbouring point's Sigma speeds up
@@ -266,20 +199,9 @@ converged = false;
 for outer = 1:maxo
     med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
     K   = med.K;
-    if ~any(strcmp(med.medium_status, {'ok', 'not_applicable'}))
-        % Strict-scheme reference/closure domain event (spec SS4.4): halt BEFORE invz_lambdas
-        % and invz_sigma consume the invalid medium, and do NOT iterate NaNs to max_outer --
-        % a reportable domain outcome must not degrade into an unexplained non-convergence.
-        % lam/sg are reset (not left at the previous iterate) so the exported point carries no
-        % stale value for a medium that has no solution; the export block below then produces
-        % the COMPLETE field set with pt.converged false (med.converged is false here by
-        % construction, K(1)/G(1) = NaN) and pt.medium_status carrying the exact domain string.
-        lam = nan(2,1);  sg = struct('Sigma', nan(size(Sigma)), 'alpha', NaN);
-        break;
-    end
     lam = invz_lambdas(K, g, wts, beta, [1 2]);
     sg  = invz_sigma(tl, lam, K, g, beta);
-    dS  = invz_finite_max_abs(sg.Sigma, Sigma);
+    dS  = max(abs(sg.Sigma - Sigma));
     Sigma = Sigma + mixo*(sg.Sigma - Sigma);
     if dS < tolo, converged = true; break; end
 end
@@ -298,96 +220,5 @@ if oddOn
         fn = fieldnames(odd_ret_diag);         % ab_ratio_max / bb_aa_dev_max
         for k = 1:numel(fn), pt.odd.(fn{k}) = odd_ret_diag.(fn{k}); end
     end
-end
-
-% --- T3.3 Tier-2 outer self-consistency (Dollberg variable moments) ---------
-% Everything below is behind opts.odd_tier2 (odd2On implies oddOn, guarded
-% above); the header paragraph documents the loop design and what is swapped.
-if odd2On
-    % Placeholders so the fields exist on EVERY odd_tier2 output, including the
-    % non-converged ordered-phase signal the critical finders rely on.
-    pt.C = nan(2);  pt.tier2_iters = 0;  pt.tla = [];  pt.tier2_resid = NaN;
-    if pt.converged
-        tol2 = getf(opts, 'tol_tier2', 1e-3);  % relative, on max|dC|
-        max2 = getf(opts, 'max_tier2', 8);
-        mix2 = 0.5;                            % plan-fixed damping on C (T3.3)
-        t2o  = getf(opts, 'tier2', struct());  % invz_twolevel_avg passthrough
-        avo  = struct('wn', wn, 'G0', true, 'Jxx0', Jxx0, 'transverse_mf', tmf);
-        if isfield(t2o, 'ngh'), avo.ngh = t2o.ngh; end
-        if isfield(t2o, 'avg'), avo.avg = t2o.avg; end
-        fvo  = struct('Ecut', Ecut);           % same Matsubara grid as this solve
-        % Seed: the covariance of the CONVERGED Tier-1 point (pt IS Tier 1 here).
-        C = invz_odd_fieldvar(ion, pt, ob, T, fvo);
-        t2conv = false;  t2resid = NaN;  tla = [];  n2 = 0;
-        for it2 = 1:max2
-            n2 = it2;
-            % Dressed doublet + disorder-averaged local propagator at current C.
-            [tla, avg] = invz_twolevel_avg(ion, T, Bx, C, avo);
-            tl = tla;                          % dressed params enter Sigma ...
-            g  = real(invz_g(tla, 1i*wn));     % ... and the two-level response
-            G0 = avg.G0;                       % node-averaged electronuclear cc
-            % Re-run the inner EMT<->Sigma loop (previous Sigma as warm seed).
-            [Sigma, sg, med, lam, innerConv, outer] = local_sigma_loop( ...
-                G0, Sigma, Jnu_flat, eopts, tl, g, wts, beta, mixo, tolo, maxo);
-            pt.Sigma0 = Sigma(1);  pt.alpha = sg.alpha;  pt.lambda = lam;
-            pt.K = med.K;  pt.G = med.G;  pt.Sigma = Sigma;  pt.tl = tl;
-            pt.chi0cc0 = -G0(1);               % DRESSED chi0cc0 (== avg.chi0cc0)
-            pt.crit = 1 + pt.Sigma0 - J0eff*pt.chi0cc0;
-            % Bare-si reference kept on purpose (header note): O(C) offset here.
-            pt.sumrule_rel = abs(sum(wts.*med.G)/beta + si.JzJz_fluct) / si.JzJz_fluct;
-            pt.converged = innerConv && med.converged;
-            pt.outer_iters = outer;
-            if ~pt.converged, break; end       % masked exactly like the EMT loop
-            C_new = invz_odd_fieldvar(ion, pt, ob, T, fvo);
-            % Residual on the UNMIXED step (~2x stricter than the mixed step at mix 0.5).
-            t2resid = max(abs(C_new - C), [], 'all') / max(max(abs(C(:))), 1e-30);
-            C = C + mix2*(C_new - C);          % mixed covariance
-            if t2resid < tol2, t2conv = true; break; end
-        end
-        pt.C = C;  pt.tier2_iters = n2;  pt.tla = tla;  pt.tier2_resid = t2resid;
-        pt.converged = pt.converged && t2conv;
-    end
-end
-
-% --- static-medium provenance (spec SS4.2) -------------------------------------------------
-% Placed at the SINGLE exit of this function, so it is set on every path (converged, EMT
-% non-convergence, and the strict-scheme domain halt above) and always describes the FINAL
-% medium -- the Tier-2 branch replaces `med` when it runs, and a provenance stamp written
-% before it would then describe a superseded solve. `medium.ref` is [] under 'resummed', and
-% getf is safe on that (isfield of a non-struct is false), so both numbers read NaN there.
-pt.static_medium = sm.scheme;
-pt.Jmom = Jmom;
-ref = getf(getf(med, 'medium', struct()), 'ref', struct());
-pt.medium_status = getf(med, 'medium_status', 'not_applicable');
-pt.medium_denom  = getf(ref, 'denom', NaN);
-pt.medium_margin = getf(ref, 'margin', NaN);   % distance to floor, NOT the denominator
-end
-
-function [Sigma, sg, med, lam, converged, outer] = local_sigma_loop( ...
-    G0, Sigma, Jnu_flat, eopts, tl, g, wts, beta, mixo, tolo, maxo)
-%LOCAL_SIGMA_LOOP Verbatim mirror of the main-path EMT <-> Sigma inner loop.
-% Used ONLY by the Tier-2 outer iteration: the main path keeps its own literal
-% copy so the flag-off code stays textually untouched (bit-for-bit
-% non-negotiable). Any change to the loop above MUST be mirrored here.
-converged = false;
-for outer = 1:maxo
-    med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
-    K   = med.K;
-    if ~any(strcmp(med.medium_status, {'ok', 'not_applicable'}))
-        % Mirrors the main loop's domain halt verbatim (this helper is re-entered on EVERY
-        % Tier-2 iteration, so without it a strict-scheme domain event would spin NaNs to
-        % max_outer once per Tier-2 step). This helper returns a TUPLE, not a pt, so it cannot
-        % early-return a point: it stops the wasted iterations and hands back med carrying the
-        % domain status, and the Tier-2 outer loop's existing
-        % `pt.converged = innerConv && med.converged` / `if ~pt.converged, break` already
-        % terminates on it. lam/sg reset for the same reason as the main loop.
-        lam = nan(2,1);  sg = struct('Sigma', nan(size(Sigma)), 'alpha', NaN);
-        break;
-    end
-    lam = invz_lambdas(K, g, wts, beta, [1 2]);
-    sg  = invz_sigma(tl, lam, K, g, beta);
-    dS  = invz_finite_max_abs(sg.Sigma, Sigma);
-    Sigma = Sigma + mixo*(sg.Sigma - Sigma);
-    if dS < tolo, converged = true; break; end
 end
 end

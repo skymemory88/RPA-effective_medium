@@ -37,12 +37,12 @@ function [dJ, d, dinfo] = invz_odd_deltaJ(Vca, Vcb, Xp)
 %     The on-site constant subtracted by E4 multiplies (sigma^z_i)^2 = 1 in
 %     the strict two-level limit -- it is a PURE ENERGY SHIFT with no Tc
 %     content, which is why it is removed from the grid matrices here and
-%     re-applied EXACTLY ONCE as the explicit -d on info.Jcc0 (E5, the
-%     invz_jq_modes opts.odd path). Its PHYSICAL residue -- the internal
+%     re-applied EXACTLY ONCE as the explicit -d on J0eff by the point solver.
+%     Its PHYSICAL residue -- the internal
 %     transverse field renormalizing the two-level parameters (Delta, M^2,
-%     n01) -- is exactly what Tier 2 owns (plan section 1.2). Tier 1 must
-%     never add an on-site deltaJ(ii) term, and Tier 2 must never re-subtract
-%     d: cite (E4)/(E5) and this plan when touching either side.
+%     n01) -- is outside the retained static ODD approximation after removal
+%     of the incomplete variable-moment route. The retained solver must never
+%     add an on-site deltaJ(ii) term or apply d more than once.
 %
 %   OUTPUTS
 %     dJ    [4,4,nq] Hermitian per q: POST-subtraction deltaJ (its diagonal
@@ -58,7 +58,7 @@ function [dJ, d, dinfo] = invz_odd_deltaJ(Vca, Vcb, Xp)
 %       .postsub_diag_bzavg max_s |mean_q dJ(s,s,:)| (E4 exactness, ~ 0)
 %       .dJ_max           max |element| of the PRE-subtraction dJpre (meV)
 %
-%   See also INVZ_ODD_BLOCKS, INVZ_CHIPERP, INVZ_JQ_MODES.
+%   See also INVZ_ODD_BLOCKS, INVZ_CHIPERP, INVZ_ODD_MODES.
 
 % --- input guards (cheap; prevent silent garbage entering E1) ---
 if ~isnumeric(Vca) || ~isnumeric(Vcb) ...

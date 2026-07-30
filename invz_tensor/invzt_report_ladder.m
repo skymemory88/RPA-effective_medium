@@ -88,24 +88,21 @@ else
 end
 L = p(L, '');
 
-% --- beyond-E1 (beyond-Gaussian) share per rung, vs the projected Tier-2 share ---------
-L = p(L, 'beyond-E1 (beyond-Gaussian) dressing share = rf - 1 per rung (vs projected Tier-2 ~%.1f%%):', ...
-    100*m.proj_Tier2_share);
+% --- beyond-E1 (beyond-Gaussian) share per rung ------------------------------------------
+L = p(L, 'beyond-E1 (beyond-Gaussian) dressing share = rf - 1 per rung:');
 for i = 1:nr
     L = p(L, '  %-8s rf-1 = %+.3f  (%+.1f%%)   [rd-1 matched = %+.3f]', ...
         out.rungs{i}, out.rf(i) - 1, 100*(out.rf(i) - 1), out.rd(i) - 1);
 end
 L = p(L, '');
 
-% --- cross-validation comparators + regime note (REPORT, never tune) -------------------
-L = p(L, 'cross-validation (REPORT): projected Tier-1+2 Tc = %.3f K, DeltaTc = %.4f K, Tier-2 share ~%.1f%%.', ...
-    m.proj_Tier1p2_K, m.proj_DeltaTc_K, 100*m.proj_Tier2_share);
+% --- regime note ------------------------------------------------------------------------
 pm = nr > 0 && all(out.crit_oddoff > 0);
 if pm
     L = p(L, ['regime: this point is a STABLE PM anchor (crit(odd-off) > 0, single-root with the ', ...
         'seed continuity), so rf/rd/collapse are the CLEAN emergence numbers -- rf-1 is the ', ...
-        'genuine beyond-E1 transverse-spectator dressing, the tensor analogue of the projected ', ...
-        '~2.8%% Tier-2 share; rd->1 is the matched E1 truncation (transverse dressing collapsed).']);
+        'genuine beyond-E1 transverse-spectator dressing; rd->1 is the matched E1 truncation ', ...
+        '(transverse dressing collapsed).']);
 else
     L = p(L, ['regime: this point sits BELOW the tensor Tc (crit(odd-off) < 0, metastable-PM branch ', ...
         'reached by the Anderson map with seed continuity), so crit_shift_odd is a well-defined ', ...

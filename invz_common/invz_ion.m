@@ -29,7 +29,7 @@ ion.alpha = 1;          % spheroid aspect ratio a/c for ellipsoid_demagn (1 sphe
 % blocks ONCE (invz_odd_blocks), thread opts.odd = true + opts.odd_blocks (and Jnu_flat = [],
 % opts.Tc0 odd-aware) into the solvers/finders; the uniform coupling's explicit -d (E5) is
 % applied exactly once inside the point solvers. LIBRARIES never read ion.odd -- they read
-% opts.odd (invz_jq_modes, invz_solve_point(_ordered), invz_critical_T). Intrinsic-only:
+% opts.odd (invz_solve_point(_ordered), invz_critical_T). Intrinsic-only:
 % the ODD layer requires demag = 0 (invz_odd_blocks errors otherwise).
 ion.odd = 0;            % opt-in ODD switch (0 = off/published; 1 = drivers wire ODD in)
 end

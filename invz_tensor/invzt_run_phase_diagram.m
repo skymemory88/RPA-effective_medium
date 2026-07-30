@@ -198,10 +198,8 @@ if show_projected_anchor
     % against a projected ODD-off anchor (or vice versa) would be misleading.
     anchor_mode = 'off';
     if ~isfield(solve_opts, 'odd') || ~isequal(solve_opts.odd, false), anchor_mode = 'full'; end
-    % Same NOMINAL N and dipole cutoff as this driver's lat -- but NB the
-    % projected engine always builds its own legacy endpoint-inclusive
-    % [-0.5, 0.5] mesh (a different quadrature convention from 'halfopen'),
-    % on a different model with a different ODD treatment: a cross-model
+    % Same nominal N and dipole cutoff as this driver's lattice, but on a
+    % different model with a different ODD treatment: a cross-model
     % COMPARATOR, never the same quantity.
     Tc0_closed = invz_odd_zero_field(ion, struct('mode', anchor_mode, ...
         'grids', {{gridN}}, 'dpRng', dpRng, 'cache', true));
