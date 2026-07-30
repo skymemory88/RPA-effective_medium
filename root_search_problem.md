@@ -547,9 +547,9 @@ should be integrated only after those steps establish a valid branch.
 - Execution journal and exact checkpoint claims:
   [`docs/execution/invzp_convergence_journal.md`](docs/execution/invzp_convergence_journal.md),
   especially Checkpoints 3--6.
-- Resolution-census source and artifact:
-  [`docs/diagnostics/invzp_outer_wp2/invzp_hmf_node_resolution_census.m`](docs/diagnostics/invzp_outer_wp2/invzp_hmf_node_resolution_census.m)
-  and `wp2_hmf_node_resolution_census.mat`.
+- Resolution-census artifact:
+  `docs/diagnostics/invzp_outer_wp2/wp2_hmf_node_resolution_census.mat`.
+  Its checkpointed one-off generator is recoverable from commit `02bc7d3`.
 - 4 T adaptive continuation and endpoint artifacts:
   `docs/diagnostics/invzp_outer_wp2/wp2_4t_adaptive_boundary_continuation.mat`,
   `wp2_4t_adaptive_target_audit.mat`,
