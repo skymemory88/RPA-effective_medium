@@ -273,6 +273,17 @@ claim is made that another admissible coupled root does not exist. The broader
 `docs/execution/invzp_convergence_journal.md` and
 `docs/diagnostics/invzp_outer_wp2/`.
 
+A diagnostic-only 4 T reverse sweep on the unchanged 33-node profile certifies
+nodes 33--29, exactly the five high-\(H_{\rm MF}\) nodes already reached by the
+strict legacy per-node sweep. At node 28, the certified node-29 self-energy
+gives `no_admissible_static_root`; this classification is unchanged over the
+WP1 2049/4097/8193-point and endpoint-margin ladder. Thus reversing the coarse
+node order is not a sufficient repair. The result does not rule out a coupled
+branch between nodes 29 and 28; resolving that question requires bounded
+adaptive field continuation, not another scalar damping value. Machine-readable
+evidence is `wp2_4t_reverse_continuation.mat` and
+`wp2_4t_reverse_boundary_audit.mat`.
+
 ## Work package 3: audit the electronic/electronuclear hybrid
 
 Compare three internally defined calculations at representative healthy and
