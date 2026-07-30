@@ -342,6 +342,13 @@ uncertified. Endpoint linearization is not an all-field repair and must not be
 wired into production. Evidence is `wp2_endpoint_trapezoid_census.mat`; exact
 values and acceptance limits are recorded in the execution journal.
 
+For visual inspection only, `invz_run_spectra.m` now explicitly selects
+`hmf_integral_mode='endpoint_trapezoid_visual'` and allows an unconverged
+finite PM endpoint. The ordered-solver default remains the strict full
+profile. The temporary mode can generate finite 1--4.5 T ordered columns, but
+the 1--3 T roots are demonstrably PM-iteration-path-dependent. No result from
+this mode may update the physical convergence claims above.
+
 ## Work package 3: audit the electronic/electronuclear hybrid
 
 Compare three internally defined calculations at representative healthy and

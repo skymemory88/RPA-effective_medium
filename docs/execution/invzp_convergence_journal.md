@@ -871,3 +871,62 @@ admissible component spanning the integration interval is absent. Further
 progress requires either finding and thermodynamically selecting a low-\(h\)
 coupled component or deriving how equation (45) should be matched across a
 phase/component change.
+
+## 2026-07-30 — Checkpoint 8: temporary production visual-inspection mode
+
+**Authorized temporary wiring.** The two-endpoint approximation is available
+through the explicit ordered-solver option
+`hmf_integral_mode='endpoint_trapezoid_visual'`. The normal solver default
+remains `full_profile`. `invz_run_spectra.m` temporarily enables the visual
+mode and permits a finite unconverged PM last iterate as \(r(0)\), with a
+1000-iteration PM endpoint budget.
+
+The visual branch:
+
+1. independently evaluates the PM lower endpoint
+   \(r_0=1+\Sigma_0^{\rm PM}\);
+2. uses \(h_0^{(2)}(h)=h[r_0+r(h)]/2\);
+3. allows failed interior profile nodes but requires two adjacent converged
+   upper nodes to bracket the coarse root;
+4. applies the same static gates during direct root refinement and final
+   fixed-\(h\) reconstruction; and
+5. exports profile status `ok_endpoint_visual`, result metadata
+   `hmf_integral_mode`, and `visual_only=true`.
+
+The driver emits a runtime warning and labels the plot
+“VISUAL endpoint-Eq.-45 approximation.” Removing the three `hmf_*` fields
+from `solve_opts` restores the strict production path.
+
+**Focused end-to-end result.** With independent per-field PM endpoints, the
+temporary solver returns finite ordered states at 1, 2, 3, 3.5, 4, and 4.5 T:
+
+| \(B_x\) (T) | visual \(h_{\rm MF}\) | PM endpoint source | final outer residual |
+|---:|---:|---|---:|
+| 1.0 | 0.0146384 | unconverged last iterate | \(4.62\times10^{-9}\) |
+| 2.0 | 0.0231908 | unconverged last iterate | \(4.51\times10^{-9}\) |
+| 3.0 | 0.0252772 | unconverged last iterate | \(5.39\times10^{-9}\) |
+| 3.5 | 0.0214252 | converged PM limit | \(4.66\times10^{-9}\) |
+| 4.0 | 0.0165488 | converged PM limit | \(6.34\times10^{-9}\) |
+| 4.5 | 0.00876178 | converged PM limit | \(5.50\times10^{-9}\) |
+
+Every reconstructed upper state has `static_status='ok'`. At 5 T the ordered
+bare bracket is unavailable and the dispatcher accepts the stable PM state.
+A focused spectra-map check at 1, 4, and 5 T returns phases
+`[ordered, ordered, PM]`, finite susceptibility columns, and
+`visual_only=true`.
+
+**Critical caveat.** The 1--3 T roots differ from the preceding endpoint
+census because their unconverged PM last iterates were reached by independent
+per-field runs rather than high-to-low PM continuation. This is direct
+evidence of path dependence, not improved certification. These spectra are
+for visual morphology only and must not vote on phase boundaries, equilibrium
+selection, or quantitative susceptibility.
+
+**Default neutrality and checks.** With no visual option, a direct 4 T solve
+still returns the strict `node_failed` mask,
+`integral_mode='full_profile'`, and the original
+`no_admissible_static_root` predictor status. The maintained static-domain
+suite passes 13/13 checks, the 2049/4097/8193 static resolution ladder passes,
+and the deterministic outer-map regression passes. Code Analyzer reports no
+messages on all three modified files; `git diff --check` passes. Regenerated
+test artifacts were restored after the checks.

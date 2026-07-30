@@ -188,6 +188,13 @@ tolo  = getf(opts, 'tol_outer', 1e-8);
 maxo  = getf(opts, 'max_outer', 200);                % ALIGNED with both solvers' default
 eso   = getf(opts, 'emt_static', struct());          % static-closure opts, threaded (P1-F)
 eso.warn = false;   % node loop gates on so.converged; suppress the per-node console flood
+integral_mode = string(getf(opts, 'hmf_integral_mode', 'full_profile'));
+endpoint_visual = integral_mode == "endpoint_trapezoid_visual";
+if ~(integral_mode == "full_profile" || endpoint_visual)
+    error('invz:hmfIntegralMode', ...
+        'hmf_integral_mode must be ''full_profile'' or ''endpoint_trapezoid_visual''.');
+end
+allow_unconverged_pm = getf(opts, 'hmf_endpoint_allow_unconverged_pm', false);
 
 % Fixed-field nodes do not re-apply the ordering update.
 sibase = struct('hyp', hyp, 'Jxx0', Jxx0);
@@ -202,7 +209,11 @@ prof = struct('hgrid', [], 'r', [], 'h0', [], 'm', [], 'Sigma0', [], 'K0', [], .
               'n_extend', 0, 'hmin_initial', NaN, 'status', 'no_bare_order', ...
               'redensified', false, ...
               'predictor_converged', false, 'converged_node_count', 0, ...
-              'm_star', NaN, 'D_uni_star', NaN, 'r_star', NaN, 'Gstat_star', NaN);
+              'm_star', NaN, 'D_uni_star', NaN, 'r_star', NaN, 'Gstat_star', NaN, ...
+              'integral_mode', char(integral_mode), 'visual_only', endpoint_visual, ...
+              'endpoint_r0', NaN, 'endpoint_r0_source', "not_evaluated", ...
+              'endpoint_pm_converged', false, 'endpoint_pm_iters', NaN, ...
+              'endpoint_pm_crit', NaN);
 hmf_star = NaN;
 
 % Bracket ceiling from the BARE ordered fixed point: SAME MF option base plus
@@ -242,13 +253,53 @@ else
     slope_pred = NaN;
 end
 
+% VISUAL-ONLY two-endpoint approximation requested for inspection:
+%   h0(h) = h*[r_PM(0)+r(h)]/2.
+% At m=0, r_PM(0)=1+Sigma0 exactly. The PM fixed point is evaluated
+% independently so failure of the strict ordered h=0 static closure does not
+% contaminate this endpoint. An unconverged but finite PM last iterate is
+% permitted only behind the explicit visual-only option; it is exported as
+% such and never changes the default full-profile contract.
+endpoint_usable = false;
+endpoint_r0 = NaN;
+if endpoint_visual
+    pmopts = opts;
+    remove = {'odd','odd_blocks','odd_retarded','odd_retarded_exact', ...
+        'odd_rn_override','nH','hmax_fac','hmin_frac','hmin_abs','tol_root', ...
+        'emt_static','hmf_integral_mode','hmf_endpoint_allow_unconverged_pm', ...
+        'hmf_endpoint_pm_max_outer'};
+    for k = 1:numel(remove)
+        if isfield(pmopts,remove{k}), pmopts = rmfield(pmopts,remove{k}); end
+    end
+    pmopts.J0eff = J0eff;
+    pmopts.Jxx0 = Jxx0;
+    pmopts.max_outer = getf(opts,'hmf_endpoint_pm_max_outer',maxo);
+    pm = invz_solve_point(ion,T,Bx,Jnu_flat,pmopts);
+    endpoint_r0 = 1+pm.Sigma0;
+    endpoint_usable = isfinite(endpoint_r0) && ...
+        (pm.converged || allow_unconverged_pm);
+    prof.endpoint_r0 = endpoint_r0;
+    prof.endpoint_pm_converged = pm.converged;
+    prof.endpoint_pm_iters = pm.outer_iters;
+    prof.endpoint_pm_crit = pm.crit;
+    if pm.converged
+        prof.endpoint_r0_source = "converged_pm_limit";
+    elseif endpoint_usable
+        prof.endpoint_r0_source = "unconverged_pm_last_iterate_visual";
+    else
+        prof.endpoint_r0_source = "pm_endpoint_unusable";
+    end
+end
+
 ratio = hfrac^(1/(nH-1));
 hgrid = hmax * ratio.^((nH-1):-1:0);                 % geometric, clustered at 0 (P1-4)
 prof.hmin_initial = hgrid(1);
 
 [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s, stv] = run_sweep(hgrid, Sigma, K0s);
 
-if predictor_usable
+if endpoint_visual && endpoint_usable
+    h0 = 0.5*hgrid.*(endpoint_r0+rv);
+elseif predictor_usable
     h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end); % first panel seeded with r(0)
 else
     h0 = nan(1, nH);                                     % undefined without a real r(0)
@@ -259,7 +310,8 @@ F  = h0 - J0eff*mv;
 % slope_pred < 0 predicts an ordered root; extend geometrically downward until a
 % negative F sample appears or the absolute floor is reached.
 n_extend = 0;
-while predictor_usable && slope_pred < 0 && all(F >= 0) && hgrid(1) > hmin_abs
+while ~endpoint_visual && predictor_usable && slope_pred < 0 && ...
+        all(F >= 0) && hgrid(1) > hmin_abs
     n_extend = n_extend + 1;
     hext = hgrid(1) * ratio.^(3:-1:1);                % three more decades-fraction nodes
     [re, me, S0e, K0e, De, Gbe, Gse] = deal(nan(1, 3));  ce = false(1, 3);
@@ -268,14 +320,14 @@ while predictor_usable && slope_pred < 0 && all(F >= 0) && hgrid(1) > hmin_abs
         [re(k), me(k), S0e(k), K0e(k), De(k), Gbe(k), Gse(k), ce(k), Sigma, K0s, ste(k)] = ...
             eval_node(hext(k), Sigma, K0s);
     end
-    hgrid = [hext hgrid];  rv = [re rv];  mv = [me mv];  cnv = [ce cnv];
-    stv = [ste stv];
-    S0v = [S0e S0v];  K0v = [K0e K0v];  Dv = [De Dv];  Gbv = [Gbe Gbv];  Gsv = [Gse Gsv];
+    hgrid = [hext hgrid];  rv = [re rv];  mv = [me mv];  cnv = [ce cnv]; %#ok<AGROW>
+    stv = [ste stv]; %#ok<AGROW>
+    S0v = [S0e S0v];  K0v = [K0e K0v];  Dv = [De Dv];  Gbv = [Gbe Gbv];  Gsv = [Gse Gsv]; %#ok<AGROW>
     h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end);
     F  = h0 - J0eff*mv;
 end
 
-if n_extend > 0 && any(F < 0)
+if ~endpoint_visual && n_extend > 0 && any(F < 0)
     % RE-DENSIFY (execution amendment 3, 2026-07-22): the extension's sparse geometric
     % panels feed O(coarse-grid) quadrature error into h0 exactly where F is a small
     % difference of large terms (measured: 11% root error at Bc_1z - 0.01 on a
@@ -298,24 +350,40 @@ prof.Sigma0 = S0v;   prof.K0 = K0v;  prof.D_uni = Dv;  prof.node_conv = cnv;  pr
 prof.G0bare = Gbv;   prof.Gstat = Gsv;  prof.static_status = stv;
 prof.converged_node_count = nnz(cnv);
 
-if ~predictor_usable             % predictor never produced a usable finite value
+if endpoint_visual && ~endpoint_usable
+    prof.status = 'endpoint_lower_failed';
+    return;
+elseif ~endpoint_visual && ~predictor_usable % predictor never produced a usable finite value
     prof.status = 'node_failed'; % above -- report the honest verdict now that the grid's
     return;                      % own (convergence-independent) diagnostics are exported;
 end                              % NEVER fall through to the F-based search on NaN data
-if slope_pred < 0 && all(F >= 0)                      % floor hit without a bracket:
+if ~endpoint_visual && slope_pred < 0 && all(F >= 0) % floor hit without a bracket:
     prof.status = 'unresolved';                       % NEVER silently PM (round-3 P0-3)
     warning('invz:hmfUnresolved', ...
         'ordering predicted (slope_pred = %.3g) but no negative F above hmin_abs = %.3g', ...
         slope_pred, hmin_abs);
     return;                                           % hmf_star stays NaN; the jensen solver
 end                                                   % must return converged = false here
-if any(~cnv) || any(~isfinite([rv, mv, F]))
+if ~endpoint_visual && (any(~cnv) || any(~isfinite([rv, mv, F])))
     prof.status = 'node_failed';                      % on node failure -- never 'ok'
     return;
 end
-prof.status = 'ok';
-s = sign(F);  idx = find(s(1:end-1) < 0 & s(2:end) >= 0, 1, 'last');
-if isempty(idx), return; end                          % no nonzero root: PM side
+if endpoint_visual
+    valid = cnv & isfinite(rv) & isfinite(mv) & isfinite(F);
+    pair = valid(1:end-1) & valid(2:end) & ...
+        F(1:end-1) < 0 & F(2:end) >= 0;
+    idx = find(pair,1,'last');
+    prof.status = 'ok_endpoint_visual';
+    if isempty(idx)
+        prof.status = 'endpoint_no_bracket';
+        return;
+    end
+else
+    prof.status = 'ok';
+    s = sign(F);
+    idx = find(s(1:end-1) < 0 & s(2:end) >= 0, 1, 'last');
+    if isempty(idx), return; end                      % no nonzero root: PM side
+end
 
 % --- Root refinement by DIRECT evaluation (P1-4): bisection on F between the
 % bracketing nodes, fresh node solve per iterate, cumulative h0 via local trapezoid
@@ -329,7 +397,11 @@ for it = 1:12
         prof.status = 'node_failed';  hmf_star = NaN; % TERMINATES the solve -- never a root
         return;                                       % from a partial bracket
     end
-    h0c = h0a + 0.5*(ra + rc)*(c - a);
+    if endpoint_visual
+        h0c = 0.5*c*(endpoint_r0+rc);
+    else
+        h0c = h0a + 0.5*(ra + rc)*(c - a);
+    end
     Fc  = h0c - J0eff*mc;
     if sign(Fc) == sign(Fa), a = c; Fa = Fc; h0a = h0c; ra = rc; else, b = c; end
     if (b - a) < trt*b, break; end
