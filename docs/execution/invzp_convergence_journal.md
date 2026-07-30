@@ -1150,3 +1150,44 @@ provenance are appended to
 Artifact assertions, the focused filtered-integral regression, MATLAB Code
 Analyzer on the production driver, and `git diff --check` pass. No one-off
 probe script was created.
+
+## 2026-07-30 — Checkpoint 13: strict production A/B comparison
+
+**Question resolved.** `filtered_no_bracket` is not an integration rule. It is
+the fail-closed status emitted when the filtered residual samples contain no
+pair \(F(h_i)<0\le F(h_{i+1})\) from which bisection can start. Removing that
+return would not create a root; it would leave the refinement indices
+undefined or require an arbitrary root choice. The attempted workaround was
+the enclosing `filtered_profile_visual` mode.
+
+**Temporary production wiring.** To expose the workaround's effect before any
+permanent removal, `invz_run_spectra.m` no longer supplies an
+`hmf_integral_mode` or any filtered/endpoint option. It retains
+`mix_outer=0.15` and `max_outer=3000`. The ordered solver therefore selects
+its strict `full_profile` default and default `nH=33`; the plot title states
+that configuration. The filtered implementation, helper, regression, and
+historical diagnostics remain intact, making the comparison reversible.
+
+**Focused strict result.**
+
+| \(B_x\) (T) | status | predictor | certified profile nodes | result |
+|---:|---|---|---:|---|
+| 1.0 | `node_failed` | failed | 10/33 | masked |
+| 4.0 | `node_failed` | failed | 5/33 | masked |
+| 4.68 | `node_failed` | failed | 4/33 | masked |
+
+The same stronger damping and 3000-iteration outer budget do not produce a
+strict equation-(45) root at any probe. Therefore, disabling the visual mode
+is expected to restore broad ordered-state masking. The result also falsifies
+the hypothesis that `filtered_no_bracket` itself caused the mask: strict mode
+does not execute that branch and fails earlier at its ordered \(h=0\)
+predictor and positive-\(h\) nodes.
+
+**Scope.** This is an A/B production selection change, not a fourth solver
+method, and it does not permanently remove the filtered experiment. The full
+101-field run is left for the requested human visual comparison. Exact
+settings and probe results are stored as `strict_current_settings` in
+`docs/diagnostics/invzp_outer_wp2/wp2_filtered_profile_visual_census.mat`.
+Artifact/configuration assertions, the retained filtered-helper regression,
+MATLAB Code Analyzer on the driver, and `git diff --check` pass. No one-off
+probe script was created.

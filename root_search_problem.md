@@ -438,25 +438,25 @@ This result shows that endpoint finiteness alone is insufficient. Equation
 (45) still lacks a single selected admissible component over the integration
 window, so the coarse values are not certified susceptibility inputs.
 
-**Temporary visual wiring.** The explicit two-endpoint option remains
-available without changing the strict solver default. `invz_run_spectra.m`
-now temporarily selects
-`hmf_integral_mode='filtered_profile_visual'` with 256 positive-\(h\) nodes,
-outer damping 0.15, and an outer budget of 3000 iterations.
-It preserves the independent PM lower endpoint used by the two-node rule,
-removes nonfinite positive-\(h\) values, and integrates the retained sequence.
-In the preceding 65-node, 0.5 T-spaced census, 1--4.5 T produced finite
-reconstructed ordered states while 0.5 T remained rootless. Exact 256-node
-probes converge at 1, 1.5, and 4 T, but 4.68 T remains rootless with status
-`filtered_no_bracket` despite a converged PM anchor and 31 certified retained
-positive-\(h\) nodes. The 1 and 1.5 T roots use unconverged PM anchors. The
-retained positive-\(h\) blocks contain no uncertified nodes in these probes,
-but the lower PM-to-ordered panel still crosses the unavailable component
-interval.
-Moreover, the low-field PM anchors are path dependent, and the retained
-cross-configuration root values move materially as numerical settings change.
-The mode is labelled `visual_only` and is not new evidence for a physical
-integration path.
+**Temporary comparison wiring.** The explicit two-endpoint and filtered
+options remain implemented without changing the strict solver default.
+`invz_run_spectra.m` currently selects neither: for a direct visual comparison
+it supplies only outer damping 0.15 and an outer budget of 3000 iterations.
+The solver therefore uses strict `full_profile` with its default 33
+positive-\(h\) nodes. No PM anchor, node filtering, or gap bridge is active.
+
+Direct strict probes at 1, 4, and 4.68 T all return `node_failed`. Their
+independent ordered \(h=0\) predictors fail, and only 10, 5, and 4 of 33
+profile nodes certify, respectively. Consequently, the strict production
+comparison is expected to mask the ordered columns. This establishes that
+`filtered_no_bracket` was not causing the broad masking: that label merely
+reported the absence of a sign-changing residual pair inside the temporary
+filtered construction.
+
+For historical comparison, the 256-node filtered probes converged at 1, 1.5,
+and 4 T but 4.68 T returned `filtered_no_bracket`; low-field roots used
+unconverged PM anchors. Those modes remain labelled `visual_only` and provide
+no evidence for a physical integration path.
 
 ## Central interpretation
 
