@@ -301,6 +301,22 @@ This remains diagnostic-only. The next bounded packet is one additional 4 T
 coarse gap, node 28 to node 27; whole-profile and production integration remain
 premature.
 
+That next gap reaches a certified component endpoint rather than node 27.
+Adaptive continuation advances only to \(h=0.008042919679\); uniform and
+supremum masses extrapolate to their common zero at
+\(h_c\approx0.0080428632\), while the outer Jacobian remains contractive and
+nonuniform/dynamic margins remain healthy. A below-edge frozen-seed proposal
+has zero roots across the full 3-by-3 static resolution grid. Thus the
+continued high-\(h\) component terminates at the physical
+\(1+J_{\rm sup}x=0\) endpoint and cannot provide the profile down to \(h=0\).
+
+The next WP2 question is no longer step-size tuning. It is whether a
+disconnected admissible coupled component exists below the edge, followed by
+thermodynamic selection and the WP5 integral review. Do not promote the
+adaptive controller to production before those questions are resolved.
+Evidence is `wp2_4t_adaptive_node28_to27.mat` and
+`wp2_4t_adaptive_component_edge_audit.mat`.
+
 ## Work package 3: audit the electronic/electronuclear hybrid
 
 Compare three internally defined calculations at representative healthy and

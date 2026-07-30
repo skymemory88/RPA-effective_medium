@@ -1,16 +1,27 @@
-function result = invzp_4t_adaptive_target_audit()
-%INVZP_4T_ADAPTIVE_TARGET_AUDIT Resolution and branch gates at 4 T node 28.
+function result = invzp_4t_adaptive_target_audit(source_name,output_name)
+%INVZP_4T_ADAPTIVE_TARGET_AUDIT Resolution and branch gates at a 4 T target.
 % Re-evaluates the adaptively continued target root over an independent
 % scan-density/endpoint grid, a finite-difference-step Jacobian ladder, and
 % one halfway-to-root undamped start. No production state is modified.
+if nargin < 1
+    source_name = "wp2_4t_adaptive_boundary_continuation.mat";
+end
+if nargin < 2
+    output_name = "wp2_4t_adaptive_target_audit.mat";
+end
+source_name = string(source_name);
+output_name = string(output_name);
+if ~(isscalar(source_name) && isscalar(output_name))
+    error('invz:adaptiveTargetAudit', ...
+        'source_name and output_name must be scalar strings.');
+end
 here = fileparts(mfilename('fullpath'));
 repo = fileparts(fileparts(fileparts(here)));
 addpath(repo,fullfile(repo,'invz_common'),fullfile(repo,'invz_projected'));
 
 fixture_path = fullfile(repo,'docs','diagnostics','invzp_static_wp1', ...
     'legacy_4T_fixture.mat');
-adaptive_path = fullfile(here, ...
-    'wp2_4t_adaptive_boundary_continuation.mat');
+adaptive_path = fullfile(here,source_name);
 F = load(fixture_path);
 A = load(adaptive_path);
 if ~A.result.summary.target_reached
@@ -114,7 +125,7 @@ result = struct('h',h,'Sigma',Sigma,'resolution',resolution, ...
                         'adaptive_continuation',adaptive_path), ...
     'note',['Target-root numerical and branch-consistency audit only; it ' ...
             'does not evaluate the H_MF integral or select equilibrium.']);
-save(fullfile(here,'wp2_4t_adaptive_target_audit.mat'),'result','-v7');
+save(fullfile(here,output_name),'result','-v7');
 disp(jacobian_ladder);
 fprintf(['target resolution stable=%d, half-start=%s, delta %.3g, ' ...
     'min masses [sup %.6g, Duni %.6g, mesh %.6g]\n'], ...

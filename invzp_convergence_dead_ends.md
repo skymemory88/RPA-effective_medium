@@ -320,6 +320,26 @@ certified component from node 29 to node 28. This confirms the narrower
 rejection above: coarse reversal is insufficient, but continuation itself is
 not falsified and must not be listed as a general dead end.
 
+### Adaptive continuation of the high-\(h\) component as a complete profile
+
+**Status:** Rejected as sufficient.
+
+Below the certified 4 T node-28 root, adaptive continuation approaches a common
+zero of the uniform and supremum masses at
+\(h_c\approx0.0080428632\). The outer map remains contractive and other mesh/
+dynamic margins remain positive, while a retained proposal below the edge has
+no static root over the full scan/margin grid. Shrinking the field step cannot
+carry this physical component through \(1+J_{\rm sup}x=0\).
+
+This does not reject adaptive continuation on other components or field
+regimes. It rejects using the present high-\(h\) component alone to populate
+the full profile or the \(h=0\) predictor. Evidence:
+`docs/diagnostics/invzp_outer_wp2/wp2_4t_adaptive_component_edge_audit.mat`.
+
+**Do not reconsider for this component unless:** the physical-domain contract
+changes for a justified reason or an independent coupled-root search
+establishes another admissible component and a thermodynamic selector.
+
 ### `signed_aitken1` or general extrapolation
 
 **Status:** Rejected as a fix.

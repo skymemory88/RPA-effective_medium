@@ -1,11 +1,18 @@
-function result = invzp_4t_adaptive_boundary_continuation()
-%INVZP_4T_ADAPTIVE_BOUNDARY_CONTINUATION Resolve the node-29 -> node-28 gap.
+function result = invzp_4t_adaptive_boundary_continuation(gap)
+%INVZP_4T_ADAPTIVE_BOUNDARY_CONTINUATION Resolve one configured 4 T gap.
 % Diagnostic only. The controller keeps the deterministic bounded outer map
 % and undamped Picard fixed while adapting only the downward H_MF step:
 % rejected proposals halve the step; accepted proposals grow it by 1.5 up to
 % the remaining target distance. Every accepted root passes the same static,
 % leading-mode, residual, and dynamic-denominator gates as the coarse reverse
 % continuation. No H_MF integral or production output is evaluated.
+% GAP is "29_to_28" (default) or "28_to_27". The second gap starts only from
+% the certified output artifact of the first.
+if nargin < 1, gap = "29_to_28"; end
+gap = string(gap);
+if ~isscalar(gap)
+    error('invz:adaptiveContinuation','gap must be a scalar string.');
+end
 here = fileparts(mfilename('fullpath'));
 repo = fileparts(fileparts(fileparts(here)));
 addpath(repo,fullfile(repo,'invz_common'),fullfile(repo,'invz_projected'));
@@ -16,15 +23,38 @@ reverse_path = fullfile(here,'wp2_4t_reverse_continuation.mat');
 F = load(fixture_path);
 R = load(reverse_path);
 
-start_node = 29;
-target_node = 28;
-h_start = R.result.table.h(start_node);
-h_target = R.result.table.h(target_node);
-Sigma_current = R.result.Sigma_solution(:,start_node);
-if ~(R.result.table.certified(start_node) && ...
-        all(isfinite(Sigma_current)) && h_start > h_target)
+switch gap
+    case "29_to_28"
+        start_node = 29;
+        target_node = 28;
+        h_start = R.result.table.h(start_node);
+        h_target = R.result.table.h(target_node);
+        Sigma_current = R.result.Sigma_solution(:,start_node);
+        start_certified = R.result.table.certified(start_node);
+        start_source = reverse_path;
+        output_path = fullfile(here, ...
+            'wp2_4t_adaptive_boundary_continuation.mat');
+    case "28_to_27"
+        start_node = 28;
+        target_node = 27;
+        prior_path = fullfile(here, ...
+            'wp2_4t_adaptive_boundary_continuation.mat');
+        P = load(prior_path);
+        h_start = P.result.summary.target_h;
+        h_target = R.result.table.h(target_node);
+        Sigma_current = P.result.accepted_Sigma(:,end);
+        start_certified = P.result.summary.target_reached && ...
+            P.result.config.target_node == start_node;
+        start_source = prior_path;
+        output_path = fullfile(here, ...
+            'wp2_4t_adaptive_node28_to27.mat');
+    otherwise
+        error('invz:adaptiveContinuation', ...
+            'unsupported gap %s; use 29_to_28 or 28_to_27.',gap);
+end
+if ~(start_certified && all(isfinite(Sigma_current)) && h_start > h_target)
     error('invz:adaptiveContinuation', ...
-        'the retained reverse-continuation artifact has no certified start.');
+        'the configured start artifact has no certified downward start.');
 end
 
 ion = invz_ion();
@@ -251,15 +281,15 @@ result = struct('table',tab,'summary',summary,'accepted_h',accepted_h, ...
     'accepted_Sigma',accepted_Sigma,'details',{details}, ...
     'start_map',compact_final(start_map),'config', ...
     struct('T',T,'Bx',Bx,'Ecut',Ecut,'start_node',start_node, ...
-           'target_node',target_node,'mapopts',mapopts, ...
+           'target_node',target_node,'gap',gap,'mapopts',mapopts, ...
            'probeopts',probeopts,'controller',controller), ...
     'provenance',struct('fixture',fixture_path, ...
-                        'reverse_continuation',reverse_path), ...
+                        'reverse_continuation',reverse_path, ...
+                        'start_source',start_source), ...
     'note',['Adaptive parameter continuation on one coupled component only. ' ...
             'Rejected proposals are step-size observations within this one ' ...
             'method; success does not select thermodynamic equilibrium.']);
-save(fullfile(here,'wp2_4t_adaptive_boundary_continuation.mat'), ...
-    'result','-v7');
+save(output_path,'result','-v7');
 disp(summary);
 end
 
