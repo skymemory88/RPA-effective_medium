@@ -408,6 +408,36 @@ evidence against a universal mixing-parameter repair.
 It remains possible that another admissible coupled root exists at the 1 T
 node; the Picard result is not an all-roots nonexistence proof.
 
+### 7. Linearizing \(r\) between only the two endpoints
+
+The deliberately coarse replacement
+
+\[
+\int_0^h r(h')\,dh'
+\;\longrightarrow\;
+\frac{h}{2}[r(0)+r(h)]
+\]
+
+was tested at 0.5 T intervals from 0.5 to 9 T. The strict ordered \(h=0\)
+endpoint remains `no_admissible_static_root` at every bare-ordered field.
+
+Using the exact \(m=0\) PM identity \(r(0)=1+\Sigma_0\) when the PM fixed point
+converges gives finite coarse roots at 3.5, 4.0, and 4.5 T:
+
+\[
+h_*^{(2)}=0.02125179,\quad0.01639873,\quad0.00870614.
+\]
+
+The corresponding PM lower endpoints are finite but have uniform masses
+\(-0.47694,-0.23448,-0.05834\). Both ordered nodes bracketing each coarse root
+have positive uniform mass. Thus the approximation obtains a finite number by
+skipping the intervening pole/component boundary. Below 3.5 T the PM lower
+fixed point does not converge; at 0.5 T no ordered upper endpoint is valid.
+
+This result shows that endpoint finiteness alone is insufficient. Equation
+(45) still lacks a single selected admissible component over the integration
+window, so the coarse values are not certified susceptibility inputs.
+
 ## Central interpretation
 
 Equation (45) assumes that, along the integration path:

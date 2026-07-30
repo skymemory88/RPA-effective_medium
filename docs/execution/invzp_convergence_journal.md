@@ -773,3 +773,99 @@ last certified `Sigma`/static carrier (and separately compare a fresh start),
 then re-evaluate only the two 1 T shared-node contradictions. This would test
 the contamination hypothesis without claiming that rollback can cross a
 genuine physical component boundary or select a thermodynamic branch.
+
+## 2026-07-30 — Checkpoint 7: two-endpoint equation-(45) trapezoid
+
+**Cleanup before the packet.** The completed node-resolution generator was
+removed after its compact artifact and documentation were retained. The
+maintained static-domain and outer-map regression tests were preserved, as
+were older diagnostic generators that remain the reproducible definitions of
+referenced artifacts. Cleanup commit: `cbba65f`.
+
+**Proposed approximation.** For every candidate upper endpoint \(h\), replace
+the complete Section-9.3 integral by
+
+\[
+h_0^{(2)}(h)=\frac{h}{2}\,[r_0+r(h)],\qquad
+F^{(2)}(h)=h_0^{(2)}(h)-J_{0,\rm eff}m(h).
+\]
+
+This linearly interpolates \(r\) across the entire integration window and
+uses no interior integrand values. The census used \(B_x=0.5,1.0,\ldots,9.0\)
+T, the production 33-node upper-endpoint profile, outer mix 0.35, 200 ordered
+iterations, 40 meV cutoff, and the unchanged bounded static gates. PM
+continuation was followed transactionally from 9 T downward with a
+1000-iteration diagnostic budget.
+
+Two lower-endpoint definitions were kept distinct:
+
+1. the strict ordered \(h=0\) endpoint currently required by production; and
+2. the exact \(m=0\) PM-limit identity
+   \(r_0=1+\Sigma_0\),
+   \(\widetilde G_0(0)=-\chi_0/(1+\Sigma_0)\), used only when the PM fixed
+   point itself converged.
+
+An unconverged but finite PM last iterate was retained as an explicitly
+uncontrolled comparator and never accepted.
+
+**Coverage result.**
+
+- At every bare-ordered field from 0.5 through 4.5 T, the strict ordered lower
+  endpoint remains `no_admissible_static_root`.
+- At 0.5 T, zero of 33 upper endpoints is admissible.
+- At 1 T, ten upper endpoints are admissible but the two-endpoint residual
+  remains negative through the whole valid block, placing any root above the
+  sampled profile.
+- From 1.5 through 3 T, finite brackets appear only if an unconverged PM last
+  iterate is substituted for \(r_0\).
+- The PM-limit lower endpoint converges at 3.5, 4.0, and 4.5 T and produces
+  linear-interpolated coarse roots:
+
+| \(B_x\) (T) | \(h_*^{(2)}\) | \(r_0\) | \(\widetilde G_0(0)\) | lower uniform mass |
+|---:|---:|---:|---:|---:|
+| 3.5 | 0.02125179 | 1.115808 | -229.9934 | -0.476940 |
+| 4.0 | 0.01639873 | 1.080825 | -192.2376 | -0.234485 |
+| 4.5 | 0.00870614 | 1.067688 | -164.8072 | -0.058336 |
+
+- From 5 through 9 T, the converged PM endpoint has positive uniform mass and
+  is the accepted phase; no ordered equation-(45) integral is needed.
+
+**Endpoint audit.** At 3.5 T the two upper bracket nodes have positive uniform
+masses 0.4490 and 0.5748; at 4 T, 0.3174 and 0.4331; at 4.5 T, 0.1184 and
+0.1866. Their static closures, \(r\), and \(\widetilde G_0\) are finite and
+admissible. The PM-limit lower endpoints are also finite, but their uniform
+masses in the table above are negative.
+
+The finite trapezoid therefore connects an unstable PM endpoint to a distinct
+positive-mass ordered component while skipping the intervening zero of
+\(1+J_{0,\rm eff}\widetilde G_0\). At 4 T this is consistent with the
+independently certified high-\(h\) component endpoint near
+\(h_c=0.0080428632\); the coarse root lies above the endpoint, but its nominal
+integral crosses the unavailable interval below it.
+
+**Conclusion.** The two-endpoint rule does “spit out” finite numbers at
+3.5--4.5 T, but not across the full ordered field range. More importantly,
+those numbers are finite because the approximation jumps over the exact
+static-domain obstruction rather than resolving it. They are useful
+diagnostics of scale only, not certified Jensen roots or susceptibility input.
+No production code or default was changed.
+
+**Trial accounting.** Endpoint-only linearization is one failed
+complete-profile method. Together with the immediately preceding `nH`
+increase, the post-endpoint complete-profile workaround counter is 2
+consecutive failed methods. Unconverged PM-last-iterate brackets are
+observations within this method, not additional trials.
+
+**Evidence and checks.**
+`docs/diagnostics/invzp_outer_wp2/wp2_endpoint_trapezoid_census.mat` retains
+the 18-field table, endpoint states, residual brackets, and frozen options.
+Artifact assertions pass for the strict-lower failures, PM convergence
+partition, upper-endpoint topology, bracket coverage, and endpoint mass signs.
+The one-off generator passes MATLAB Code Analyzer and `git diff --check`.
+
+**Interpretation boundary.** Do not promote this quadrature rule to
+production. Interior smoothness is not the decisive issue: a selected
+admissible component spanning the integration interval is absent. Further
+progress requires either finding and thermodynamically selecting a low-\(h\)
+coupled component or deriving how equation (45) should be matched across a
+phase/component change.
