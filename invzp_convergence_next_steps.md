@@ -419,7 +419,14 @@ components remain open.
    dominant-sector-plus-bare-remainder construction. An implementation change
    is justified only if it preserves healthy fixtures and demonstrably removes
    a conditioning or representation failure; do not replace masked columns by
-   zero susceptibility.
+   zero susceptibility. **Conditioning checkpoint:** the 0.5--2.2 T census
+   falsifies direct small-\(M^2\) arithmetic as the sampled mask cause. Failed
+   predictors have \(M^2=27.55\)--30.04, whereas accepted high-\(h\) nodes
+   include the measured minimum \(M^2=0.0220\). The exact prefactor
+   reassociation changes measured-node arithmetic only at roundoff and the
+   current form becomes nonfinite only at underflow scale. The next part of
+   this packet is therefore the representation comparison, not a production
+   arithmetic rewrite.
 3. **Corrected saturation-anchor feasibility.** Starting from
    \(dH_0/dh=r(h)\), derive the asymptotic condition on
    \(\delta H=H_0-h\). If \(\delta H(\infty)=0\) is justified, test
