@@ -1305,3 +1305,81 @@ healthy 4 T residual and dominant eigenvalue, and
 scan-density/endpoint-margin ladder. Tests that save tracked machine-readable
 results rewrote those artifacts during execution; the byte-level outputs are
 restored rather than included as source changes.
+
+## 2026-07-30 — Checkpoint 17: low-field \(M^2\) conditioning
+
+**Scope.** A strict, observational 33-node census was run at
+\(B_x=0.5,0.8,1.0,1.2,1.5,1.8,2.0,2.2\) T with the same controlled
+`mix_outer=0.35`, `max_outer=200`, `tol_outer=1e-8`, and `Ecut=40` settings
+as the rollback control. It changed no equation or acceptance rule.
+
+**Node ordering.** Every field remains `node_failed` because its independent
+\(h=0\) predictor has `no_admissible_static_root`. Each positive-\(h\)
+profile has one simple status transition: 22--26 rejected low-\(h\) nodes
+followed by 7--11 accepted high-\(h\) nodes. Small \(M^2\) is on the accepted
+side, not the failed side:
+
+- failed \(h=0\) predictors have \(M^2=27.55\)--30.04;
+- the largest \(M^2\) among failed positive-\(h\) nodes is
+  27.55--30.00, depending on field;
+- the certified components extend down to the smallest profile value,
+  \(M^2=0.0220\) at 0.5 T and \(4.235\) at 2.2 T; and
+- accepted uniform masses remain positive, from 0.0421 to 0.997 across the
+  packet.
+
+Thus a physically small response can characterize the polarized, certified
+high-\(h\) component, but it does not trigger the phase mask. The mask arises
+because equation (45) also requires an anchor/path through the rejected
+low-\(h\) region.
+
+**Exact self-energy limit.** Define
+
+\[
+A=\lambda_2-\tfrac12[g_0+\beta(1-n_{01}^2)]\lambda_1,\qquad
+B(z)=\lambda_1-(1-n_{01}^2)K(z).
+\]
+
+For \(M^2>0\), equation (37) is exactly
+
+\[
+\Sigma(z)=-\alpha_m-\frac{2m^2}{n_{01}^2}B(0)g(z)
++\frac{M^2}{n_{01}^2}\{A+B(z)g(z)\}.
+\]
+
+Provided \(n_{01}\ne0\) and \(m,\Delta,\lambda,K\) remain finite, its
+continuous limit is therefore
+
+\[
+\Sigma(z)\xrightarrow[M^2\to0]{}
+-\alpha_m-\frac{2m^2}{n_{01}^2}B(0)g(z),
+\]
+
+which is finite and generally nonzero. In the same limit,
+\(\xi\to1+\tanh(m^2n_{01}^2\beta K_0)\). A consistent projected inelastic
+response would vanish with its \(M^2g(z)\) numerator if the dressed
+denominator remains finite. The production real-axis numerator is instead the
+full electronuclear response, so electronic \(M^2\) alone neither determines
+nor guarantees the final susceptibility.
+
+**Conditioning result.** The largest sampled \(m^2/M^2\) is
+\(1.37\times10^3\), but the direct \(M^2\)-cancelling product differs from the
+stable form by at most \(2.23\times10^{-16}\). A frozen-state ladder confirms
+that the complete current and reassociated self-energies agree within
+\(4.45\times10^{-15}\) while finite. The current expression becomes
+vulnerable to direct-ratio overflow only near
+\(M^2=4.89\times10^{-308}\) for the frozen state (or at \(M^2=0\)); the
+measured minimum is 0.0220. A production arithmetic rewrite is therefore not
+justified as a convergence repair.
+
+**Representation signal.** The electronic projected static weight
+\(M^2g_0\) divided by the full electronuclear inelastic weight is 7.03--9.19
+at the first accepted nodes from 0.5 to 1.0 T and reaches 88.2 on a failed
+node. It is not a bounded sector share. This strengthens, but does not prove,
+the hybrid-representation hypothesis and routes the next packet to a
+controlled dominant-sector-plus-bare-remainder comparison.
+
+**Evidence.** Reproducers and results are
+`docs/diagnostics/invzp_outer_wp2/invzp_low_field_m2_census.m`,
+`wp2_low_field_m2_census.mat`,
+`invzp_m2_asymptotic_check.m`, and
+`wp2_m2_asymptotic_check.mat`. Both scripts pass MATLAB Code Analyzer.

@@ -463,6 +463,41 @@ rigorous precheck.
 The rearrangements are exact and can improve transparency/arithmetic, but the
 measured conditioning is not the failure driver.
 
+### Small-\(M^2\) division as the cause of the 0.5--2.2 T profile failures
+
+**Status:** Falsified in the measured field/node range; the representation
+question remains open.
+
+The proposal predicted that failed low-field nodes would coincide with a
+vanishing \(M^2=|\langle0|J_z|1\rangle|^2\), a large
+\(m^2/M^2\), and loss of the cancellation in
+\((2m^2/M^2)\gamma_0\). The strict 33-node census shows the opposite ordering:
+every failed \(h=0\) predictor has \(M^2=27.55\)--30.04, failed positive-\(h\)
+nodes extend up to \(M^2=27.55\)--30.00, and the certified high-\(h\)
+components contain the smallest measured values,
+\(M^2=0.0220\)--4.235. Even at \(m^2/M^2=1.37\times10^3\), the direct
+prefactor product agrees with its reassociation to
+\(2.23\times10^{-16}\) relative error.
+
+On a frozen healthy state, the present and reassociated full self-energies
+agree within \(4.45\times10^{-15}\) while the present expression remains
+finite. Its direct ratio reaches overflow only at
+\(M^2\approx4.89\times10^{-308}\) in that state (or at exact zero), more than
+300 decades below the measured minimum. Thus the
+reassociation is valid defensive arithmetic but cannot change the sampled
+mask.
+
+Evidence:
+`docs/diagnostics/invzp_outer_wp2/wp2_low_field_m2_census.mat` and
+`wp2_m2_asymptotic_check.mat`.
+
+**Do not reconsider as the sampled convergence cause unless:** a future
+physical node reaches exact zero or an underflow-scale \(M^2\), or a measured
+failure exhibits a large direct-versus-reassociated self-energy discrepancy.
+This rejection does not validate the hybrid representation: the electronic
+two-level weight and full electronuclear response are not a common spectral
+decomposition in the same census.
+
 ## Field-integral and thermodynamic-selection dead ends
 
 ### Anchoring equation (45) at \(h_z=0\) at 0.1 K
