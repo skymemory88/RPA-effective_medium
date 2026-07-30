@@ -342,12 +342,64 @@ uncertified. Endpoint linearization is not an all-field repair and must not be
 wired into production. Evidence is `wp2_endpoint_trapezoid_census.mat`; exact
 values and acceptance limits are recorded in the execution journal.
 
-For visual inspection only, `invz_run_spectra.m` now explicitly selects
-`hmf_integral_mode='endpoint_trapezoid_visual'` and allows an unconverged
-finite PM endpoint. The ordered-solver default remains the strict full
-profile. The temporary mode can generate finite 1--4.5 T ordered columns, but
-the 1--3 T roots are demonstrably PM-iteration-path-dependent. No result from
-this mode may update the physical convergence claims above.
+For visual inspection only, the two-endpoint mode remains available as an
+explicit option, but `invz_run_spectra.m` now selects the more resolved
+`hmf_integral_mode='filtered_profile_visual'` with `nH=65`. It retains the
+same independent PM lower endpoint, removes nonfinite positive-\(h\) nodes,
+and applies a trapezoid to the retained sequence. The ordered-solver default
+remains the strict full profile. This temporary mode generates finite 1--4.5 T
+ordered columns in the focused census, but its PM-to-ordered lower panel
+crosses the unresolved component interval and the 1--3 T PM anchors are
+unconverged and path dependent. No result from either visual mode may update
+the physical convergence claims above.
+
+### Feedback-informed implementation order
+
+The external assessment in `feedback_root_Search_problem.md` and its checked
+evaluation in `feedback_root_search_problem_evaluation.md` refine the
+remaining implementation order as follows.
+
+1. **Pure accepted-state node transitions.** Refactor a fixed-\((B_x,h)\)
+   evaluation to return a candidate result without mutating continuation
+   state. Commit `Sigma` and the static carrier only after every acceptance
+   gate passes. First retest only the contradictory shared 1 T nodes from the
+   33/65/129 census, with a documented fresh-start comparator. Success means
+   that a shared node's verdict and accepted state are independent of rejected
+   nodes earlier in the sweep.
+2. **Corrected saturation-anchor feasibility.** Starting from
+   \(dH_0/dh=r(h)\), derive the asymptotic condition on
+   \(\delta H=H_0-h\). If \(\delta H(\infty)=0\) is justified, test
+
+   \[
+   H_0(h)=h-\int_h^\infty[r(h')-1]\,dh'.
+   \]
+
+   Measure the tail decay on a certified high-\(h\) component and compare the
+   upper and lower anchors where both are admissible. Do not replace \(r-1\)
+   by \(\Sigma_0\) at finite ordered moment unless the elastic correction is
+   explicitly proved absent.
+3. **Reduced simultaneous residual.** Determine whether each nonzero-frequency
+   implicit \(K_n\)--\(\Sigma_n\) relation can be eliminated uniquely, leaving
+   an exactly equivalent residual in
+   \((\lambda_1,\lambda_2,\lambda_3,x)\). The reduction must retain all
+   physical denominator gates and reproduce healthy 4 T fixtures before
+   globalized Newton, multistart, or deflation is attempted.
+4. **Bordered pseudo-arclength continuation.** Once the simultaneous residual
+   is verified, continue in \((h,\lambda,x)\) while recording the smallest
+   singular value of the unbordered Jacobian, the uniform/supremum masses, and
+   lattice/dynamic margins. Use these together to distinguish an ordinary
+   fold from a physical-domain endpoint and to search for disconnected
+   components.
+5. **Representation and lattice audits.** Quantify how the
+   full-electronuclear-\(G_0\)/two-level-vertex hybrid and controlled
+   band-edge/DOS quadrature move the coupled component. The exact directional
+   Gamma value is not a discrete member of the current \(\Phi\) average; its
+   uniform susceptibility gate must not be removed as a mesh correction.
+
+The first item is the lowest-risk algorithmic packet. The second is the
+highest-value alternative construction of equation (45). Items 3--5 require
+their preceding equivalence and branch-selection evidence; none is authorized
+to relax the strict production acceptance contract.
 
 ## Work package 3: audit the electronic/electronuclear hybrid
 
@@ -422,6 +474,36 @@ The \(h_z=0\) endpoint should initially remain a diagnostic boundary condition:
 Reconsider folds and the current “last crossing” rule only on the cleaned
 profile. If more than one admissible ordered root survives, select it using a
 validated free-energy or continuation criterion.
+
+### Temporary filtered-profile visual checkpoint
+
+This experiment does not satisfy the WP5 certification prerequisite. It is
+retained only for empirical morphology inspection.
+
+A literal filtered rule that assigned \(H_0=0\) at the first finite accepted
+positive-\(h\) node produced no root at 1, 2, 3, 3.5, 4, or 4.5 T: every
+retained residual remained negative. That dead anchoring rule was removed.
+
+The active visual rule instead preserves the two-endpoint experiment's
+independent PM value \(r_0=1+\Sigma_0^{\rm PM}\), then inserts every finite
+positive-\(h\) node from a 65-node profile. At the 0.5 T-spaced census:
+
+- 0.5 T remains `filtered_no_bracket`;
+- 1.0--4.5 T return converged final ordered states;
+- all positive-\(h\) nodes that entered those nine sampled quadratures were
+  certified and formed one contiguous retained block; and
+- for the successful 1--4.5 T roots, the only bridged interval was from the PM
+  endpoint at \(h=0\) to the first certified ordered node, whose width was
+  \(0.00607\)--\(0.01153\) meV.
+
+At 4 T the root is stable over `nH=33,65,129`:
+\(0.016026,0.016021,0.015978\) meV. At 1 T it moves materially:
+\(0.028252,0.025673,0.024213\) meV, consistent with the already verified
+rejected-state continuation-path defect. The 65-node mode is therefore a
+useful visual interpolation, not resolution-converged low-field physics.
+Exact census, endpoint provenance, residuals, and dispatcher/default checks
+are retained in
+`docs/diagnostics/invzp_outer_wp2/wp2_filtered_profile_visual_census.mat`.
 
 ## Deliverables and stopping rule
 
