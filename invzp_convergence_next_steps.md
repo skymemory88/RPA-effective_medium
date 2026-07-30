@@ -331,6 +331,20 @@ bounded diagnostic; it must not be confused with proof that a physical branch
 extends to \(h=0\). Evidence is `wp2_hmf_node_resolution_census.mat`, with
 interpretation and exact settings in the execution journal.
 
+The accepted-state rollback is now implemented at every profile transition:
+the \(h=0\) predictor, ordinary sweep, lower extension, and root refinement
+compute candidate \((\Sigma,K_0)\) states but commit them only after the node
+passes all existing gates. The exact 1 T ladder now has zero verdict
+mismatches at every shared node. In particular,
+\(h=0.0062416231096\) and \(0.0077454658051\) meV are accepted at all three
+resolutions with matching \(\Sigma_0\) and \(K_0\); before rollback, each
+failed on the denser path after inheriting a rejected last iterate. This
+verifies the transactional defect and removes it as a source of subsequent
+low-field evidence. It does not make the strict profile complete: the
+predictor still has no admissible root and only 10/33, 20/65, and 39/129
+positive-\(h\) nodes certify. Evidence is
+`wp2_hmf_node_transaction_census.mat`.
+
 A subsequent endpoint-only test replaced equation (45) by
 \(h_0^{(2)}=h[r(0)+r(h)]/2\). The strict ordered \(h=0\) endpoint still fails
 at every bare-ordered field in a 0.5 T census. Substituting a converged PM-limit
@@ -381,8 +395,32 @@ components remain open.
    passes. First retest only the contradictory shared 1 T nodes from the
    33/65/129 census, with a documented fresh-start comparator. Success means
    that a shared node's verdict and accepted state are independent of rejected
-   nodes earlier in the sweep.
-2. **Corrected saturation-anchor feasibility.** Starting from
+   nodes earlier in the sweep. **Completed:** all shared-node verdicts now
+   agree, including both previous contradictions; the strict-profile failure
+   remains and is therefore not attributable solely to rejected-state
+   contamination.
+2. **Low-field small-\(M^2\) asymptotic packet.** Only after item 1 removes
+   rejected-state history, run a bounded \(0.5\)--\(2.2\) T node census. If
+   \(M^2=|\langle0|J_z|1\rangle|^2\) is the vanishing spectral weight, record
+   \(M^2\), \(m^2/M^2\), \(M^2/n_{01}^2\), \(G_0^{\rm inel}\),
+   \(G_0^{\rm el}\), the static \(U/V\) split, uniform mass, root status, and
+   final response weight. The phase mask is decided before real-axis response
+   evaluation, so a small susceptibility is not itself a valid mask reason.
+   Check the exact removable product
+
+   \[
+   \frac{2m^2}{M^2}\gamma_0
+   =\frac{2m^2}{n_{01}^2}
+     [\lambda_1-(1-n_{01}^2)K_0]
+   \]
+
+   and derive the complete \(M^2\to0\) limit before altering arithmetic.
+   Compare the present full-response/two-level-vertex hybrid with a
+   dominant-sector-plus-bare-remainder construction. An implementation change
+   is justified only if it preserves healthy fixtures and demonstrably removes
+   a conditioning or representation failure; do not replace masked columns by
+   zero susceptibility.
+3. **Corrected saturation-anchor feasibility.** Starting from
    \(dH_0/dh=r(h)\), derive the asymptotic condition on
    \(\delta H=H_0-h\). If \(\delta H(\infty)=0\) is justified, test
 
@@ -397,20 +435,20 @@ components remain open.
    constant from the paramagnetic side may be tested as a falsifiable
    diagnostic, but smoothness in \(B_x\) would not by itself certify that the
    same physical constant crosses the transition.
-3. **Reduced simultaneous residual.** Determine whether each nonzero-frequency
+4. **Reduced simultaneous residual.** Determine whether each nonzero-frequency
    implicit \(K_n\)--\(\Sigma_n\) relation can be eliminated uniquely, leaving
    an exactly equivalent residual in
    \((\lambda_1,\lambda_2,\lambda_3,x)\). The reduction must retain all
    physical denominator gates and reproduce healthy 4 T fixtures before
    globalized Newton, multistart, or deflation is attempted.
-4. **Bordered pseudo-arclength continuation.** Once the simultaneous residual
+5. **Bordered pseudo-arclength continuation.** Once the simultaneous residual
    is verified, continue in \((h,\lambda,x)\) while recording the smallest
    singular value of the unbordered Jacobian, the uniform/supremum masses, and
    lattice/dynamic margins. Use these together to distinguish an ordinary
    fold from a physical-domain endpoint and to search for disconnected
    components. Record every uniform-mass crossing on each certified component;
    do not assume the current “last crossing” is unique.
-5. **Representation and lattice audits.** Quantify how the
+6. **Representation and lattice audits.** Quantify how the
    full-electronuclear-\(G_0\)/two-level-vertex hybrid and controlled
    band-edge/DOS quadrature move the coupled component. The exact directional
    Gamma value is not a discrete member of the current \(\Phi\) average; its
@@ -419,7 +457,8 @@ components remain open.
    exponent rather than assuming a generic square-root cusp.
 
 The first item is the lowest-risk algorithmic packet. The second is the
-highest-value alternative construction of equation (45). Items 3--5 require
+targeted entry point for the observed sub-1.8 T regime. The third is the
+highest-value alternative construction of equation (45). Items 4--6 require
 their preceding equivalence and branch-selection evidence; none is authorized
 to relax the strict production acceptance contract.
 
