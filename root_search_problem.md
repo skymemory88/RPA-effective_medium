@@ -599,6 +599,9 @@ should be integrated only after those steps establish a valid branch.
   `wp2_4t_adaptive_component_edge_audit.mat`.
 - Rejected explanations and conditions for reopening them:
   [`invzp_convergence_dead_ends.md`](invzp_convergence_dead_ends.md).
+- External feedback and claim-by-claim evaluation:
+  [`feedback_root_Search_problem.md`](feedback_root_Search_problem.md) and
+  [`feedback_root_search_problem_evaluation.md`](feedback_root_search_problem_evaluation.md).
 
 The machine-readable artifacts contain the full numerical states. This
 document intentionally retains only the decisive values needed to reproduce
