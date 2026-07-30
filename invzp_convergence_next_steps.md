@@ -344,14 +344,15 @@ values and acceptance limits are recorded in the execution journal.
 
 For visual inspection only, the two-endpoint mode remains available as an
 explicit option, but `invz_run_spectra.m` now selects the more resolved
-`hmf_integral_mode='filtered_profile_visual'` with `nH=65`. It retains the
+`hmf_integral_mode='filtered_profile_visual'` with `nH=128`. It retains the
 same independent PM lower endpoint, removes nonfinite positive-\(h\) nodes,
 and applies a trapezoid to the retained sequence. The ordered-solver default
 remains the strict full profile. This temporary mode generates finite 1--4.5 T
-ordered columns in the focused census, but its PM-to-ordered lower panel
-crosses the unresolved component interval and the 1--3 T PM anchors are
-unconverged and path dependent. No result from either visual mode may update
-the physical convergence claims above.
+ordered columns in the 65-node coverage census; exact 128-node probes at 1 and
+4 T also converge. Its PM-to-ordered lower panel crosses the unresolved
+component interval and the 1--3 T PM anchors are unconverged and path
+dependent. No result from either visual mode may update the physical
+convergence claims above.
 
 ### Feedback-informed implementation order
 
@@ -486,7 +487,8 @@ retained residual remained negative. That dead anchoring rule was removed.
 
 The active visual rule instead preserves the two-endpoint experiment's
 independent PM value \(r_0=1+\Sigma_0^{\rm PM}\), then inserts every finite
-positive-\(h\) node from a 65-node profile. At the 0.5 T-spaced census:
+positive-\(h\) node from a geometric profile. In the original 65-node,
+0.5 T-spaced census:
 
 - 0.5 T remains `filtered_no_bracket`;
 - 1.0--4.5 T return converged final ordered states;
@@ -501,6 +503,14 @@ At 4 T the root is stable over `nH=33,65,129`:
 \(0.028252,0.025673,0.024213\) meV, consistent with the already verified
 rejected-state continuation-path defect. The 65-node mode is therefore a
 useful visual interpolation, not resolution-converged low-field physics.
+
+For the next visual round, the production driver was advanced to `nH=128`.
+Exact probes give \(h_{\rm MF}=0.024394\) at 1 T and \(0.015982\) at 4 T,
+using 31 and 18 certified positive-\(h\) nodes respectively. Neither probe
+used a finite uncertified node. This reproduces the neighboring 129-node
+ladder values closely; it does not remove the low-field resolution/path
+dependence. A 256-node production sweep is deferred until the 128-node visual
+result establishes that its approximately doubled cost is informative.
 Exact census, endpoint provenance, residuals, and dispatcher/default checks
 are retained in
 `docs/diagnostics/invzp_outer_wp2/wp2_filtered_profile_visual_census.mat`.

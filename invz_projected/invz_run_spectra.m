@@ -30,8 +30,8 @@ ion = invz_ion();
 %       response) but still see demag through info.Jaa0.
 T = 0.1;                             % K
 useParallel = true;
-outerMix = 0.35;                      % smaller than 0.7: stronger damping;
-outerMax = 200;                     % exploratory budget; acceptance tolerances are unchanged
+outerMix = 0.25;                      % smaller than 0.7: stronger damping;
+outerMax = 2000;                     % exploratory budget; acceptance tolerances are unchanged
 eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency INPUTS (w, wq) AND
                                      % the plotted axes. Computation always runs in meV; the driver
                                      % converts in/out (with 'meV' it is a no-op). eta is ALWAYS in
@@ -83,7 +83,7 @@ switch eUnit
     otherwise, error('invz_run_spectra:eUnit', 'eUnit must be ''meV'' or ''GHz''.');
 end
 
-% TEMPORARY VISUAL-INSPECTION MODE (2026-07-30): evaluate the 65-node ordered
+% TEMPORARY VISUAL-INSPECTION MODE (2026-07-30): evaluate the 128-node ordered
 % profile, keep the same independent PM-limit lower endpoint used by the
 % two-node experiment, discard Inf/NaN positive-h integrand nodes, and apply a
 % trapezoid over the retained sequence. A finite last iterate may enter this
@@ -93,7 +93,7 @@ end
 % Remove the five nH/hmf fields to restore the strict full profile without
 % changing the solver default.
 solve_opts = struct('mix_outer', outerMix, 'max_outer', outerMax, ...
-    'nH',65, ...
+    'nH',128, ...
     'hmf_integral_mode','filtered_profile_visual', ...
     'hmf_filtered_include_unconverged',true, ...
     'hmf_endpoint_allow_unconverged_pm',true, ...
@@ -167,7 +167,7 @@ else
     else
         Splot = S;  Splot.w = S.w * eScale;    % display-only copy; solve above always ran in meV
         figure('Position', [100 100 1150 460]);
-        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z VISUAL filtered 65-node Eq.-45 approximation, T = %.2f K', T), eUnit);
+        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z VISUAL filtered 128-node Eq.-45 approximation, T = %.2f K', T), eUnit);
         ax2 = subplot(1, 2, 2);  invz_plot_spectra_map(ax2, Splot, Splot.chirpa, sprintf('RPA, T = %.2f K', T), eUnit);
     end
 
