@@ -759,9 +759,10 @@ nonlinear-method counter because it did not test a new coupled-root solver.
 No further `nH` values will be tried without new evidence.
 
 **Evidence and checks.**
-`docs/diagnostics/invzp_outer_wp2/invzp_hmf_node_resolution_census.m` and
-`wp2_hmf_node_resolution_census.mat` retain the exact settings, nine summary
-rows, and per-node states. The diagnostic passes MATLAB Code Analyzer and
+`docs/diagnostics/invzp_outer_wp2/wp2_hmf_node_resolution_census.mat` retains
+the exact settings, nine summary rows, and per-node states. Its one-off
+generator was removed after checkpoint closure and remains recoverable from
+commit `02bc7d3`. The generator passed MATLAB Code Analyzer and
 `git diff --check`. Artifact assertions pass for all nine rows, the contiguous
 failure/success topology, exact nested-grid correspondence, invariant shared
 nodes at 2/3 T, and the two shared-node contradictions at 1 T.
