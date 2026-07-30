@@ -83,7 +83,6 @@ lam = [0; 0; 0];
 converged = false;
 med = struct('G', nan(size(wn)), 'converged', false);
 sg = struct('alpha', NaN, 'alpha_m', NaN);
-sout = struct('converged', false);
 for outer = 1:maxo
     eopts.K0 = K;
     med = invz_emt_scalar(G0, Sigma, Jnu_flat, eopts);
@@ -91,6 +90,9 @@ for outer = 1:maxo
 
     [K0s, ~, sout] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), ...
         Jnu_flat, K0s, beta, J0eff, G0inel0, G0el0, eso);
+    if ~sout.converged
+        break; % the outer map is undefined without a certified physical static root
+    end
     K(1) = K0s;
 
     lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
@@ -136,6 +138,7 @@ pt.outer_iters = outer;
 pt.hmf = hstar;
 pt.hmf_prof = hprof;
 pt.D_uni = 1 + (J0eff - K(1))*med.G(1);
+pt.static_status = so.status;
 if oddOn
     pt.odd = struct('d', d, 'Xp', Xp);
 end
@@ -148,7 +151,7 @@ function pt = early_return(si, hprof)
 pt = struct('m0', 0, 'is_ordered', false, 'converged', false, ...
     'Sigma0', NaN, 'crit', NaN, 'si', si, 'tl', [], ...
     'hmf', NaN, 'hmf_prof', hprof, 'hmf_status', hprof.status, ...
-    'D_uni', NaN, 'final_resid', NaN);
+    'D_uni', NaN, 'final_resid', NaN, 'static_status', 'not_evaluated');
 end
 
 function [hmf_star, prof] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, opts)
@@ -192,6 +195,9 @@ hmin_abs = getf(opts, 'hmin_abs', NaN);              % resolved after hmax below
 
 prof = struct('hgrid', [], 'r', [], 'h0', [], 'm', [], 'Sigma0', [], 'K0', [], ...
               'D_uni', [], 'G0bare', [], 'Gstat', [], 'node_conv', [], 'F', [], ...
+              'static_status', strings(1,0), 'predictor_static_status', "not_evaluated", ...
+              'static_status_star', "not_evaluated", ...
+              'refinement_failure_status', "not_evaluated", ...
               'slope0', NaN, 'Sigma0_pm0', NaN, 'K0_pm0', NaN, 'J0eff', J0eff, ...
               'n_extend', 0, 'hmin_initial', NaN, 'status', 'no_bare_order', ...
               'redensified', false, ...
@@ -218,8 +224,9 @@ eopts = getf(opts, 'emt', struct());
 %   slope_pred = r(0) + J0eff*G0bare(0) = 1 + Sigma0(0) - J0eff*chi_path(0)   (= crit, SS5)
 % predicts root existence INDEPENDENTLY of any sampled profile value.
 Sigma = [];  K0s = 0;                                % warm-start carriers across nodes
-[r0n, ~, S0pm, K0pm, ~, Gb0, ~, ok0, Sigma, K0s] = eval_node(0, Sigma, K0s);
+[r0n, ~, S0pm, K0pm, ~, Gb0, ~, ok0, Sigma, K0s, st0] = eval_node(0, Sigma, K0s);
 prof.predictor_converged = ok0;
+prof.predictor_static_status = st0;
 predictor_usable = ok0;
 % Under the default strict rule, a predictor-node convergence failure is NOT one of the three enumerated
 % 'node_failed' triggers (round-5 P2: profile/bisection/final-evaluation), and it is
@@ -239,7 +246,7 @@ ratio = hfrac^(1/(nH-1));
 hgrid = hmax * ratio.^((nH-1):-1:0);                 % geometric, clustered at 0 (P1-4)
 prof.hmin_initial = hgrid(1);
 
-[rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s);
+[rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s, stv] = run_sweep(hgrid, Sigma, K0s);
 
 if predictor_usable
     h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end); % first panel seeded with r(0)
@@ -256,11 +263,13 @@ while predictor_usable && slope_pred < 0 && all(F >= 0) && hgrid(1) > hmin_abs
     n_extend = n_extend + 1;
     hext = hgrid(1) * ratio.^(3:-1:1);                % three more decades-fraction nodes
     [re, me, S0e, K0e, De, Gbe, Gse] = deal(nan(1, 3));  ce = false(1, 3);
+    ste = strings(1,3);
     for k = 1:3
-        [re(k), me(k), S0e(k), K0e(k), De(k), Gbe(k), Gse(k), ce(k), Sigma, K0s] = ...
+        [re(k), me(k), S0e(k), K0e(k), De(k), Gbe(k), Gse(k), ce(k), Sigma, K0s, ste(k)] = ...
             eval_node(hext(k), Sigma, K0s);
     end
     hgrid = [hext hgrid];  rv = [re rv];  mv = [me mv];  cnv = [ce cnv];
+    stv = [ste stv];
     S0v = [S0e S0v];  K0v = [K0e K0v];  Dv = [De Dv];  Gbv = [Gbe Gbv];  Gsv = [Gse Gsv];
     h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end);
     F  = h0 - J0eff*mv;
@@ -277,7 +286,7 @@ if n_extend > 0 && any(F < 0)
     hfrac_eff = max(hmin_abs/hmax, 0.25*hgrid(idx0)/hmax);
     ratio2 = hfrac_eff^(1/(nH-1));
     hgrid = hmax * ratio2.^((nH-1):-1:0);
-    [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s);
+    [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s, stv] = run_sweep(hgrid, Sigma, K0s);
     h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end);
     F  = h0 - J0eff*mv;
     prof.redensified = true;
@@ -286,7 +295,7 @@ prof.n_extend = n_extend;
 
 prof.hgrid = hgrid;  prof.r = rv;  prof.h0 = h0;  prof.m = mv;
 prof.Sigma0 = S0v;   prof.K0 = K0v;  prof.D_uni = Dv;  prof.node_conv = cnv;  prof.F = F;
-prof.G0bare = Gbv;   prof.Gstat = Gsv;
+prof.G0bare = Gbv;   prof.Gstat = Gsv;  prof.static_status = stv;
 prof.converged_node_count = nnz(cnv);
 
 if ~predictor_usable             % predictor never produced a usable finite value
@@ -314,8 +323,9 @@ if isempty(idx), return; end                          % no nonzero root: PM side
 a = hgrid(idx);  b = hgrid(idx+1);  Fa = F(idx);  h0a = h0(idx);  ra = rv(idx);
 for it = 1:12
     c = 0.5*(a + b);
-    [rc, mc, ~, ~, ~, ~, ~, okc, Sigma, K0s] = eval_node(c, Sigma, K0s);
+    [rc, mc, ~, ~, ~, ~, ~, okc, Sigma, K0s, stc] = eval_node(c, Sigma, K0s);
     if ~okc
+        prof.refinement_failure_status = stc;
         prof.status = 'node_failed';  hmf_star = NaN; % TERMINATES the solve -- never a root
         return;                                       % from a partial bracket
     end
@@ -330,26 +340,28 @@ if (b - a) >= trt*b                                   % round-5 P1-A: tol_root n
     return;
 end
 hmf_star = 0.5*(a + b);
-[r_s, m_s, ~, ~, D_s, ~, Gs_s, ok_s] = eval_node(hmf_star, Sigma, K0s);
+[r_s, m_s, ~, ~, D_s, ~, Gs_s, ok_s, ~, ~, st_s] = eval_node(hmf_star, Sigma, K0s);
+prof.static_status_star = st_s;
 if ~ok_s
     prof.status = 'node_failed';  hmf_star = NaN;  return;
 end
 prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star = Gs_s;
 
-    function [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s] = run_sweep(hgrid, Sigma, K0s)
+    function [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s, stv] = run_sweep(hgrid, Sigma, K0s)
     % Behavior-neutral factoring of the per-node nH sweep (execution amendment 3):
     % evaluate eval_node at every point of hgrid in ascending order, warm-starting
     % Sigma/K0s across calls. Shared by the initial profile sweep and the re-densify
     % pass; the extension's 3-node prepends stay inline (unchanged).
     n = numel(hgrid);
     [rv, mv, S0v, K0v, Dv, Gbv, Gsv] = deal(nan(1, n));  cnv = false(1, n);
+    stv = strings(1,n);
     for is = 1:n
-        [rv(is), mv(is), S0v(is), K0v(is), Dv(is), Gbv(is), Gsv(is), cnv(is), Sigma, K0s] = ...
+        [rv(is), mv(is), S0v(is), K0v(is), Dv(is), Gbv(is), Gsv(is), cnv(is), Sigma, K0s, stv(is)] = ...
             eval_node(hgrid(is), Sigma, K0s);
     end
     end
 
-    function [rk, mk, S0k, K0k, Dk, Gbk, Gsk, ok, Sigma, K0s] = eval_node(hp, Sigma, K0s)
+    function [rk, mk, S0k, K0k, Dk, Gbk, Gsk, ok, Sigma, K0s, node_status] = eval_node(hp, Sigma, K0s)
     % One fixed-field node: si (hz_fixed, NO order), tl, c0/G0, then the ordered
     % Sigma<->EMT loop WITH the static-sector closure each pass (Interfaces bullet).
     sio = sibase;  sio.hz_fixed = hp;
@@ -380,6 +392,9 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
         % (2) static sector (P0-2/P0-A), threaded opts (P1-F):
         [K0s, ~, sout] = invz_emt_static_ordered(tl, lam(1:2), Sigma(1), Jnu_flat, K0s, ...
                                                  beta, J0eff, G0inel0, G0el0, eso);
+        if ~sout.converged
+            break; % never propagate a failed/pseudo-root static value into lambdas or Sigma
+        end
         K(1) = K0s;
         % (3)-(5) lambdas, ordered Sigma, damped mix -- MIRROR the solver's statements
         lam = invz_lambdas(K, g, wts, beta, [1 2 3]);
@@ -394,6 +409,13 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
     % matching invz_emt_static_ordered's own default so the outer gate never disagrees
     % with the inner closure's own converged flag.
     ok = ok && so.converged && isfinite(so.resid) && so.resid < ctol;
+    if ~so.converged
+        node_status = string(so.status);
+    elseif ~ok
+        node_status = "outer_iteration_failed";
+    else
+        node_status = "ok";
+    end
     % round-5 P1-B: the final refresh must ITSELF converge and close -- an unconverged
     % refresh makes this node not-ok (callers then mark node_failed), never silent export.
     % round-4 P1-B: the final refresh runs on the newly mixed Sigma(1), so its closed K0
@@ -401,72 +423,4 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
     % Gstat/r/D_uni were computed with (exported below as K0k = K0s).
     rk = so.r;  S0k = Sigma(1);  K0k = K0s;  Dk = so.D_uni;  Gbk = G0bare0;
     end
-end
-
-function [K0, Gstat, out] = invz_emt_static_ordered(tl, lam, Sigma0, Jnu_flat, K0_seed, beta, J0eff, G0inel0, G0el0, opts)
-%INVZ_EMT_STATIC_ORDERED Static-sector EMT closure for the ordered elastic propagator (SS3, P0-2/P0-A).
-% The elastic G(0) of J 2.28-2.29 breaks the ordinary Dyson structure, so the closed-form
-% direct solve of INVZ_EMT_SCALAR does not apply at w = 0 for m ~= 0. This function solves
-% the scalar fixed point demanded by the EMT definitions (J 2.10-2.11 / HTML 16):
-%   Gstat(K0)  = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G0el0)
-%   G(q,0)     = Gstat ./ (1 + (J(q) - K0).*Gstat)                       (HTML 17 insertion)
-%   closure:   mean_q G(q,0) = Gstat   and   K0 = mean_q(J.*Gq)/mean_q(Gq)
-% by damped iteration on K0. The static weights are the caller's: production passes the
-% FULL-electronuclear split (round-2 P0-A), so at m = 0 (G0el0 -> 0) the fixed point
-% coincides with invz_emt_scalar's direct solve ON THE FULL PROPAGATOR -- the PM solver's
-% own K(0) (gate C1; the load-bearing loop-level identity is Task 3's Gate 6b). lam and
-% Sigma0 are FIXED inputs here; the caller's outer loop refreshes them with the closed K0
-% written into the K vector's w = 0 slot (see invz_hmf_ordered / the jensen solver mode).
-% out: xi/h0/G0bare/Gtil0/r at the closed K0 (from invz_gstat_ordered), D_uni = the uniform
-% static inverse response 1 + (J0eff - K0)*Gstat (pole observable), resid, iters, converged.
-% opts (threaded from the caller as ONE NAMED STRUCT emt_static -- P1-F, never a bare
-% struct() at call sites): resid_tol (default 1e-10, meV^-1 -- the PRIMARY convergence
-% criterion AND the documented closure-residual acceptance threshold callers gate on),
-% tol (default 0 -- an OPTIONAL absolute |dK0| stall floor; 0 means machine-resolution-only,
-% see below), maxit (default 200), mix (default 0.5), warn (default true -- emits the
-% invz:emtStatic non-convergence warning; in-loop sweep callers pass false because they
-% gate on out.converged and would otherwise flood the console). out.converged is measured
-% on the EXPORTED (K0, Gstat, resid) tuple (out.resid < rtol), so it can never disagree
-% with out.resid.
-% Amendment round 1 (controller resolution of the round-2 P0-2 BLOCKED escalation): the
-% original |dK0|-only stopping test under-delivers closure by the map's local conditioning
-% (resid/|dK0| ~ 1.8e5 at the gate-C2 operating point), so the residual itself -- the
-% physical closure quantity -- became the primary convergence test.
-% Amendment round 2 (round 1 was itself defective on two counts, both fixed here): (a) a
-% fixed dK stall floor (1e-12) structurally preempted the residual criterion given the same
-% ~1.8e5 conditioning, so the stall floor is now machine resolution, 4*eps(|K0|) (opts.tol
-% is an optional additional absolute floor, default 0, i.e. inert unless the caller raises
-% it); (b) the residual check now breaks BEFORE any K0 update, so the exported K0 is exactly
-% the one that closed, and out.converged is recomputed post-loop from out.resid so it can
-% never be a half-step out of sync with what was actually exported.
-if nargin < 10, opts = struct(); end
-rtol  = getf(opts, 'resid_tol', 1e-10);  % PRIMARY: closure-residual convergence (meV^-1)
-tol   = getf(opts, 'tol', 0);            % optional ABSOLUTE |dK0| stall floor (0 = machine-only)
-maxit = getf(opts, 'maxit', 200);
-mix   = getf(opts, 'mix', 0.5);
-warn  = getf(opts, 'warn', true);            % emit the invz:emtStatic non-convergence warning
-Jf = Jnu_flat(:);
-K0 = K0_seed;
-for it = 1:maxit
-    Gs = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G0el0);
-    Gq = Gs ./ (1 + (Jf - K0).*Gs);
-    Gbar = mean(Gq);
-    if abs(Gbar - Gs) < rtol, break; end % closed at the CURRENT K0 -- exported as-is
-    K0_new = mean(Jf .* Gq) / Gbar;
-    dK = abs(K0_new - K0);
-    if dK < max(tol, 4*eps(abs(K0)))     % TRUE stall: no representable progress possible
-        break;
-    end
-    K0 = K0 + mix*(K0_new - K0);
-end
-[Gstat, go] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G0el0);
-Gq = Gstat ./ (1 + (Jf - K0).*Gstat);
-out = go;
-out.D_uni = 1 + (J0eff - K0)*Gstat;
-out.resid = abs(mean(Gq) - Gstat);
-out.iters = it;
-out.converged = out.resid < rtol;        % measured on the EXPORTED tuple
-if warn && ~out.converged
-    warning('invz:emtStatic', 'static closure not converged after %d iterations: resid = %.3g', it, out.resid);
-end
 end

@@ -1,0 +1,440 @@
+# Projected-spin convergence execution journal
+
+## Scope and recording policy
+
+This journal tracks execution of `invzp_convergence_next_steps.md`. It records
+checkpoints, decisive evidence, exact checks, assumptions, and unresolved risks.
+Raw numerical logs and large diagnostic tables belong in referenced artifacts,
+not here.
+
+## Standing project constraints
+
+These constraints apply across checkpoints, context compactions, and future
+sessions:
+
+1. The ultimate target is a certified projected-spin \(1/z\) susceptibility
+   calculation across \(0<B_x\le 9\) T. The strict zero-field point may be
+   excluded if its special symmetry/domain requires separate treatment.
+2. Nonconvergence need not have a single cause. Classify failures by layer and
+   evidence; do not force a universal repair across physically or
+   algorithmically distinct regimes.
+3. After five consecutive failed trial methods, stop proposing variants and
+   return to the innermost governing mathematical, physical, and algorithmic
+   assumptions. Record the five trials and their rejecting observables before
+   any sixth method is considered.
+4. Pause for human judgment whenever the next action requires an unvalidated
+   physical choice, thermodynamic branch selection, a material scope change, or
+   risk disproportionate to the available evidence. Steady certified progress
+   is preferred to aggressive unsupervised advancement.
+
+## 2026-07-30 — Checkpoint 0: baseline and first work packet
+
+**Repository state.** Branch `invzp-exec-convg-plan`, starting commit `693c518`
+(`chore(invzp): checkpoint reduced convergence baseline`), clean worktree.
+MATLAB R2025a is available at `/Applications/MATLAB_R2025a.app/bin/matlab`.
+
+**Governing sources.**
+
+- `invzp_convergence_next_steps.md`: work package 1 is the immediate task.
+- `invzp_convergence_dead_ends.md`: prior residual-only, strict-medium,
+  principal-value, and unbounded root approaches remain rejected.
+- Production ordered closure:
+  `invz_projected/invz_solve_point_ordered.m` and
+  `invz_common/invz_gstat_ordered.m`.
+- Lattice construction:
+  `invz_projected/invz_bz_couplings.m`,
+  `invz_projected/invz_jq_modes.m`, and
+  `invz_projected/invz_phase1_qgrid.m`.
+
+**Proof obligations for checkpoint 1.**
+
+1. Numerically and structurally audit
+   \(J_{\rm sup}=\max[J_{0,\rm eff},\sup_{q,\nu}J_{q\nu}]\), retaining the
+   uniform/directional-\(\Gamma\) contribution even though production drops
+   exact \(\Gamma\) from the Brillouin-zone average.
+2. Implement the exact production elastic closure as a bounded scalar problem
+   in \(x=\widetilde G_0(0)\), with explicit pole, finite-value, \(\xi\), and
+   uniform-mass gates.
+3. Search the entire configured physical interval for every isolated root
+   found under documented adaptive scan tolerances; never accept a sign change
+   across a detected discontinuity.
+4. Add focused MATLAB tests for algebra, domain rejection, discontinuity
+   rejection, multiple-root enumeration, seed independence, and the roadmap's
+   production fixtures.
+
+**Initial code fact.** The live solver still uses a nested damped iteration on
+\(K_0\) and accepts on closure residual alone. The historical one-shot
+“strict-medium” branch was removed in `693c518` and is rejected by the current
+ledger; it will not be restored.
+
+**Current assumption.** The first implementation will preserve the production
+full-electronuclear \(G_0^{\rm inel}/G_0^{\rm el}\) split and two-level
+\(\xi\) exactly. Representation changes are deferred to work package 3.
+
+**Lattice-supremum audit.** Using the frozen diagnostic configuration
+(`16^3`, half-open, unshifted, `P_drop`, Ewald
+`alpha=0.3,r_cut=16,g_cut=3,boundary=conducting_k0_omitted`):
+
+- `info.Jcc0 = 0.0064216618094169392` meV;
+- `max(Jnu_flat) = 0.0063717257361577892` meV, at mesh
+  \(q=(0,0.0625,0)\);
+- the mesh-to-uniform gap is \(4.993607325915004\times10^{-5}\) meV;
+- a 10,001-point scan of the exact directional nonanalytic form over
+  \(k_z^2\in[0,1]\) has its maximum at \(k_z^2=0\), equal to
+  `info.Jcc0` within \(9\times10^{-19}\) meV.
+
+The directional matrix is `info.Jpath_base_cc` plus a positive-semidefinite
+all-sublattice rank-one term whose coefficient decreases with \(k_z^2\).
+Therefore the in-plane endpoint is the directional top edge, not merely the
+largest sampled direction. For this lattice provenance,
+\(J_{\rm sup}=J_{0,\rm eff}\). The exact \(\Gamma\) point remains absent from
+the Brillouin-zone average but is retained as the domain boundary and uniform
+mass gate.
+
+**Check command.** MATLAB batch construction through `invz_bz_couplings`,
+followed by the directional form exported by `invz_jq_modes`; assertions
+required `directional_max == Jcc0` and `mesh_max <= Jcc0` to \(5\times10^{-13}\)
+meV. Both passed.
+
+**Healthy-state regression fixture.** Before changing the legacy inner solve,
+the full ordered solver was run at \(T=0.1\) K, \(B_x=4\) T with the same
+couplings, `mix_outer=0.3`, `max_outer=500`, `tol_outer=1e-8`, and `Ecut=40`.
+It converged with
+`hmf=0.01577947695662214`, `K0=0.0007415288139413191`,
+`Gstat=-118.0307001345370`, `Sigma0=0.01376361306413017`,
+`D_uni=0.3295699256867276`, and outer residual \(5.27\times10^{-9}\).
+The complete fixture and provenance are retained at
+`docs/diagnostics/invzp_static_wp1/legacy_4T_fixture.mat`. This is a regression
+target, not an admissibility certificate.
+
+**Next action.** Define the bounded solver interface and diagnostics around
+this verified `Jsup`, then add synthetic algebra/domain tests before running
+the production fixtures.
+
+## 2026-07-30 — Checkpoint 1: bounded physical static solver
+
+**Implementation.**
+
+- Added `invz_projected/invz_emt_static_ordered.m`, solving in normalized
+  \(s=-J_{\rm sup}x\in(0,1)\). It exports a root table, explicit search
+  resolution, discontinuity brackets, lattice provenance, and the status
+  vocabulary `ok`, `no_admissible_static_root`,
+  `multiple_admissible_static_roots`, or `static_search_unresolved`.
+- Added `invz_common/invz_bounded_roots.m`. It enumerates all sampled
+  sign-changing intervals and sampled minima of \(|\widehat R|\); a sign
+  bracket is accepted only if a finite point reaches the residual tolerance.
+  This prevents a pole sign change from masquerading as a root.
+- Extracted the former local static solver from
+  `invz_solve_point_ordered.m`. The compatibility `K0_seed` is ignored; more
+  than one admissible root is reported but not arbitrarily selected.
+- Made `invz_gstat_ordered.m` array-capable so the scan calls the production
+  elastic closure itself rather than a replicated formula. Added exact
+  `xi_numer`, `xi_denom`, `U`, and `V` diagnostics.
+- Ordered outer loops now stop before feeding an uncertified static state into
+  \(\lambda\) or \(\Sigma\). Fixed-\(H_{\rm MF}\) profiles retain each node's
+  static status separately from `outer_iteration_failed`.
+
+**Physical gates.** A candidate must have \(x<0\),
+\(1+J_{\rm sup}x>0\), finite \(K_0,U,V,G_{\rm stat}\), nonnegative finite
+\(\xi\) with positive \(\xi\) denominator, negative \(G_{\rm stat}\), closure
+and root residuals at or below \(10^{-10}\), positive uniform mass, and
+positive mesh denominators in both \(x\) and medium coordinates. No unproved
+upper bound on \(\xi\) was introduced.
+
+**Focused tests.**
+
+- `test_invzp_static_domain`: 12/12 checks passed. It covers two-root
+  enumeration, an even-multiplicity root, pole/discontinuity rejection,
+  explicit rejection (but diagnostic retention) of a nonphysical-\(\xi\)
+  mathematical root, \(m\to0\) equivalence with `invz_emt_scalar`, the
+  production `J_sup` audit,
+  bitwise preservation of the legacy scalar `invz_gstat_ordered` arithmetic,
+  healthy 4 T reproduction, exact seed independence, stored 1 T node-9
+  rejection, stored 3 T node-21--27 rejection, and positive accepted margins.
+- `test_invzp_static_domain_resolution`: classifications are unchanged for
+  `(scan_points,endpoint_margin)` equal to `(2049,1e-8)`, `(4097,1e-10)`,
+  and `(8193,1e-12)`. The healthy-root \(x\) spread is
+  \(6.94\times10^{-11}\ {\rm meV}^{-1}\).
+- MATLAB Code Analyzer reports zero messages for both new solvers,
+  `invz_gstat_ordered.m`, and both new tests. `git diff --check` passes.
+
+Machine-readable results are
+`docs/diagnostics/invzp_static_wp1/wp1_static_gate.mat` and
+`wp1_static_resolution_gate.mat`.
+
+**Acceptance results.**
+
+- Healthy frozen 4 T state: one admissible root; relative to the pre-change
+  fixture, \(\Delta K_0=-4.02\times10^{-15}\) meV and
+  \(\Delta G_{\rm stat}=5.67\times10^{-11}\ {\rm meV}^{-1}\). The minimum
+  signed accepted denominator/mass across the toy PM and production 4 T roots
+  is \(0.30304635\).
+- Stored 1 T node 9: unchanged state rejected and no alternative admissible
+  static root found for that frozen outer state.
+- Stored 3 T nodes 21--27: unchanged states rejected and no admissible static
+  root found for any of those seven frozen outer states.
+- \(m=0\) toy limit: agreement with the ordinary scalar medium is
+  \(6.47\times10^{-12}\) in \(K_0\) and \(1.09\times10^{-13}\) in \(G\).
+
+**Integration finding.** Re-running the complete legacy 4 T
+\(H_{\rm MF}\)-integral construction no longer exports an ordered point. The
+predictor and 28/33 profile nodes report `no_admissible_static_root`; only the
+five largest-\(H_{\rm MF}\) nodes report `ok`. This is not a contradiction with
+the healthy frozen endpoint: it confirms that the old field integral crossed
+uncertified frozen outer states. The full result is retained at
+`docs/diagnostics/invzp_static_wp1/new_4T_fullsolve_failed.mat`.
+
+**Interpretation boundary.** A finite-resolution scan cannot prove the absence
+of an arbitrarily narrow root. The scan size, maximum gap, endpoint margin,
+root tolerance, and discontinuity brackets are therefore part of every
+diagnostic. The three-level resolution ladder above is the current numerical
+evidence, not an interval-arithmetic existence proof.
+
+**Next action.** Complete an adversarial WP1 review. If no blocking defect is
+found, update the roadmap checkpoint and begin work package 2 by constructing a
+frozen-node outer-residual evaluator; do not try damping/iteration variants
+before measuring the admissible outer domain and local Jacobian.
+
+### Adversarial review disposition
+
+The bounded frozen-inner solver passed the algebra, domain, resolution, and
+fixture review. The review found a blocking **promotion** issue, not a false
+inner root: the legacy Picard caller starts many profile nodes at an outer state
+with no admissible static root, so the newly strict caller exits immediately.
+Continuing through those states would require using a pseudo-root, NaN, or
+substituted value and is forbidden. Therefore:
+
+- work package 1 is accepted as a frozen-inner checkpoint;
+- the complete ordered production solver is explicitly not promoted;
+- the 4 T end-to-end regression is retained as the entry condition for work
+  package 2; and
+- no damping, iteration-budget, or warm-start trial is allowed until a
+  deterministic admissible outer residual has been defined.
+
+## 2026-07-30 — Checkpoint 2 entry: define the outer residual
+
+At a fixed full self-energy vector \(\Sigma\), the dynamic
+\(K(i\omega_n)\), \(n>0\), is algebraic through `invz_emt_scalar`. The static
+candidate \(K_0(x)\) changes every
+\(\lambda_p=\beta^{-1}\sum_n w_nK_ng_n^p\). Hence
+
+\[
+\lambda_p(K_0)=\lambda_{p,\mathrm{dyn}}
++ \frac{w_0g_0^p}{\beta}K_0
+\]
+
+is affine in \(K_0\). Treating the previous Picard iterate's \(\lambda\) as a
+fixed hidden seed would make \(\mathcal F[\Sigma]\) non-deterministic. The next
+implementation must instead evaluate this affine \(\lambda(K_0(x))\) inside
+the bounded static residual. For each admissible static root it then constructs
+the full \(K\), all three lambdas, and
+`invz_sigma_ordered`, yielding \(\mathcal F[\Sigma]\). If the static solve has
+zero or multiple admissible roots, the outer map is respectively undefined or
+multivalued and must report that status rather than select a branch.
+
+**Next proof obligations.**
+
+1. The affine lambda construction must equal `invz_lambdas` to roundoff for
+   arbitrary test vectors and every static candidate.
+2. Fixed-lambda WP1 behavior must remain unchanged and all existing gates must
+   continue to pass.
+3. A unique-root outer evaluation must reproduce a healthy converged state's
+   self-energy residual.
+4. Former failures must be classified by static-domain status before any
+   Jacobian or accelerator is applied.
+
+### Deterministic outer-map implementation and first measurements
+
+Added `invz_projected/invz_ordered_outer_map.m`. Given \(\Sigma\), it:
+
+1. computes the dynamic medium algebraically;
+2. forms the exact affine coefficients of all three lambdas;
+3. passes \(\lambda_{1,2}(K_0)\) into the bounded static search;
+4. exports no map for zero/multiple admissible static roots; and
+5. for a unique root, reconstructs \(K,\lambda,\Sigma_{\rm map}\) and
+   \(\mathcal R_\Sigma=\Sigma-\Sigma_{\rm map}\).
+
+`test_invzp_outer_map` passes. At the retained healthy 4 T state:
+
+- the deterministic residual is \(5.24748067\times10^{-9}\), versus the legacy
+  final residual \(5.26544204\times10^{-9}\);
+- \(|\Delta K_0|=1.27\times10^{-14}\) meV and the largest lambda change is
+  \(1.02\times10^{-11}\);
+- the affine-lambda identity agrees with a fresh `invz_lambdas` call to
+  \(8.67\times10^{-19}\);
+- the dynamic denominator minimum is \(0.460035161\), with no nonpositive
+  dynamic denominator; and
+- at the same node, the map is also uniquely defined at \(\Sigma=0\), whereas
+  the 4 T \(h_z=0\) predictor is `no_admissible_static_root` at \(\Sigma=0\).
+
+Added the diagnostic-only
+`invz_projected/invz_outer_dominant_eigen.m`. A known diagonal linear map
+returns its dominant eigenvalue 2. At the healthy 4 T state, central-difference
+steps \(10^{-5},3\times10^{-6},10^{-6}\) give
+\(\lambda_{\rm dom}=-0.00877249\), spread \(1.1\times10^{-8}\), with
+eigen-residual about \(5.2\times10^{-6}\). The healthy endpoint is strongly
+contractive; it does not diagnose the low-field-profile failures.
+
+The zero-self-energy domain census
+`docs/diagnostics/invzp_outer_wp2/invzp_outer_zero_census.m` evaluates the 34
+retained profile fields at each of 1 T and 3 T:
+
+- 1 T: the map is defined at 13/34 nodes (node 20 and nodes 22--33);
+- 3 T: the map is defined at 6/34 nodes (nodes 28--33);
+- every other zero-state evaluation reports
+  `no_admissible_static_root`; and
+- among defined zero-state maps, the residual is
+  \(0.00271\)--\(0.393\) at 1 T and \(0.0207\)--\(0.0332\) at 3 T.
+
+This census is only a map-domain slice. Undefined at \(\Sigma=0\) does not
+prove no coupled root; defined with a nonzero residual does not prove a fixed
+point. Results are in `docs/diagnostics/invzp_outer_wp2/`.
+
+All new outer-map, Jacobian, test, and census files have zero MATLAB Code
+Analyzer messages; `git diff --check` passes.
+
+**Next action.** Define a bounded coupled-root search on the admissible outer
+domain for a very small fixture set. Before choosing Newton, Anderson, or
+continuation, determine whether admissible-domain perturbations exist around
+each fixture and whether the local Jacobian is measurable. Do not extrapolate
+the \(\Sigma=0\) census into a coupled-existence claim.
+
+### Small-fixture Jacobians and existence probes
+
+The \(\Sigma=0\) Jacobian measurements at four defined fixtures give:
+
+- 1 T node 20: power iteration does not settle within 40 iterations
+  (\(\lambda\) estimate \(-0.242\), eigen-residual 0.057); no scalar
+  contractivity conclusion.
+- 1 T node 22: \(\lambda_{\rm dom}=0.24833\), eigen-residual
+  \(5.66\times10^{-9}\).
+- 3 T node 28: \(\lambda_{\rm dom}=-0.01632\), eigen-residual
+  \(3.44\times10^{-6}\).
+- 3 T node 33: \(\lambda_{\rm dom}=0.02601\), eigen-residual
+  \(3.39\times10^{-7}\).
+
+Undamped admissible Picard was used only on the three fixtures with a converged
+contractive zero-state Jacobian:
+
+- 3 T node 28: admissible coupled root found in 5 iterations, residual
+  \(1.47\times10^{-9}\), final \(\lambda_{\rm dom}=-0.01495\),
+  \(D_{\rm uni}=0.12155\), dynamic minimum 0.34485.
+- 3 T node 33: admissible coupled root found in 6 iterations, residual
+  \(4.15\times10^{-10}\), final \(\lambda_{\rm dom}=0.02748\),
+  \(D_{\rm uni}=0.79519\), dynamic minimum 0.80930.
+- 1 T node 22: failed method 1. Residual \(0.393\to0.194\), then iteration 3
+  leaves the admissible static domain.
+
+For 1 T node 22, a 41-point line scan along the failed second update shows that
+fractions through 0.525 are admissible and 0.55 is the first sampled
+inadmissible fraction. A targeted mix of 0.5 was therefore tested:
+
+- failed method 2. The residual sequence is
+  \(0.393,0.261,0.203,0.201\), then iteration 5 leaves the domain.
+- At the last admissible state,
+  \(\lambda_{\rm dom}=1.35957\) with eigen-residual
+  \(3.34\times10^{-9}\).
+
+For a real \(\lambda>1\), scalar damping has local factor
+\(1-a+a\lambda>1\) for every \(a>0\). No further damping values will be tried
+on this branch. This new rejecting observable is recorded in
+`invzp_convergence_dead_ends.md`. It does not prove that no different coupled
+root exists.
+
+Evidence:
+`wp2_outer_boundary_jacobians.mat`,
+`wp2_outer_contracting_probes.mat`, and
+`wp2_node22_step_domain.mat` under
+`docs/diagnostics/invzp_outer_wp2/`.
+
+For the two contractive 3 T roots, a halfway-to-root start with mix 1 and a
+zero start with mix 0.5 both converge to the cold/mix-1 result within the
+\(10^{-8}\) outer tolerance (maximum component differences
+\(7.45\times10^{-9}\) and \(6.17\times10^{-9}\)). Mix 0.5 takes 22--24
+iterations instead of 5--6 but does not change the exported branch on these
+fixtures.
+
+**Trial counter for 1 T node 22:** 2 consecutive failed methods
+(undamped Picard; evidence-selected mix 0.5). The next action must not be
+another scalar damping value. A Newton/continuation formulation would be a
+different algorithmic question and still requires explicit domain handling
+and root-completeness limits.
+
+## 2026-07-30 — Checkpoint 2 pause / handoff
+
+**Verified conclusions.**
+
+1. The frozen static solver now enforces the physical \(x\) domain and passes
+   all WP1 fixture, limit, discontinuity, seed, and resolution gates.
+2. The outer map is deterministic in \(\Sigma\); lambda is no longer a hidden
+   prior-iterate state.
+3. Two certified coupled roots exist on the tested 3 T high-\(h\) fixtures
+   (nodes 28 and 33), and their cold/warm and mix-1/mix-0.5 branches agree
+   within tolerance.
+4. The tested 1 T node-22 trajectory encounters a genuine admissible-domain
+   boundary and becomes locally noncontractive before reaching a root. Scalar
+   damping is ruled out for that measured branch, but another coupled root is
+   not ruled out.
+5. The complete 0--9 T susceptibility objective remains unresolved. In
+   particular, the low-\(H_{\rm MF}\) field-integral nodes and the broader
+   1 T/3 T coupled-root census are not certified.
+
+**Adversarial limits / unresolved risks.**
+
+- Root enumeration is finite-resolution, with explicit scan/margin ladders but
+  no interval-arithmetic proof against arbitrarily narrow roots.
+- \(J_{\rm sup}=J_{0,\rm eff}\) is verified for the frozen standard Ewald
+  production configuration. Field-dependent ODD or other coupling
+  configurations require their own directional-supremum audit.
+- The matrix-free dominant eigenvalue does not characterize every
+  non-normal/subdominant direction. Node 20 explicitly failed to yield a
+  settled single mode.
+- No free-energy or thermodynamic selector exists for multiple admissible
+  coupled roots.
+- A domain-aware Newton/continuation method may find a node-22 root, hit a
+  fold/boundary with no root in that component, or find a different component.
+  Choosing and interpreting that search is the next judgment-sensitive step.
+
+**Checks at pause.**
+
+- `test_invzp_static_domain`: 12/12 passed.
+- `test_invzp_static_domain_resolution`: passed.
+- `test_invzp_outer_map`: passed.
+- MATLAB Code Analyzer: zero messages on every new kernel, test, and diagnostic
+  script. The modified legacy ordered driver retains its existing
+  variable-growth advisories in the adaptive profile-extension block.
+- `git diff --check`: passed.
+- At this pause, the checkpoint changes were intentionally uncommitted pending
+  review.
+
+**Recommended next action for human review.** Review the bounded-static
+acceptance contract and the node-22 evidence, then choose whether the next
+bounded packet is (a) a domain-aware Newton--Krylov search at node 22,
+(b) field continuation from the certified 3 T node-28 root toward nodes
+27--21, or (c) a representation audit before further nonlinear solving. Do not
+run another scalar damping trial.
+
+## 2026-07-30 — Checkpoint 2 review and selected diagnostic
+
+**Review outcome.** A visual rerun showed every ordered-state output masked,
+including formerly converged points. This is consistent with the audited
+control flow rather than evidence that every ordered solution disappeared:
+`invz_hmf_ordered` treats the failed \(h_z=0\) predictor as fatal, sweeps the
+profile from low to high \(H_{\rm MF}\), and its legacy per-node iteration
+starts without a certified high-field coupled state. The deterministic outer
+map and the certified high-field roots are not yet used by that production
+driver. Therefore the blanket mask is currently classified as a solver/
+continuation-path symptom; it is not a physical no-order conclusion.
+
+**Authorized bounded experiment.** After locally checkpointing the accepted
+WP1 and partial-WP2 work, run one diagnostic-only 4 T continuation from the
+largest profile \(H_{\rm MF}\) downward. Use the deterministic domain-gated
+outer map, seed only from the immediately preceding certified node, and stop
+at the first undefined map, unresolved/noncontractive Jacobian, or failed
+Picard solve. Do not alter the production driver, reconstruct the
+\(H_{\rm MF}\) integral, choose a thermodynamic branch, or add another damping
+trial in this packet.
+
+**Pre-experiment validation.** The three focused MATLAB tests pass, the WP1
+resolution classification is unchanged, Code Analyzer reports no messages on
+the new kernels/tests/diagnostics, and `git diff --check` passes.

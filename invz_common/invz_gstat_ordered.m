@@ -38,12 +38,27 @@ function [Gstat, out] = invz_gstat_ordered(tl, lam, K0, Sigma0, beta, G0inel0, G
 % out: xi, h0 = beta*(1-n01^2), G0bare, Gtil0, r (per opts.stable_form above -- the H_MF
 %   integrand of J 2.33), and gstat_local_denom = 1 + Sigma0 + K0*G0inel0, the signed local
 %   denominator of the first Gstat term (identical on both branches; exposed for G17/Gate 0).
+% K0 may be scalar (production node evaluation) or an array (bounded-x scan);
+% all returned K0-dependent fields follow its shape.
 m = tl.m;  M2 = tl.M2;  n01 = tl.n01;  g0 = tl.g0;
 h0 = beta*(1 - n01^2);
-xi = (1 + tanh(m^2*n01^2*beta*K0 - M2*beta*lam(1))) / ...
-     (1 + (4*n01^2*K0*g0 + 2*lam(2) + g0*lam(1))*M2/n01^2);
-gstat_local_denom = 1 + Sigma0 + K0*G0inel0;
-Gstat  = G0inel0/gstat_local_denom + xi*G0el0;
+if isvector(lam)
+    lam1 = lam(1);
+    lam2 = lam(2);
+elseif size(lam,1) >= 2 && size(lam,2) == numel(K0)
+    lam1 = reshape(lam(1,:),size(K0));
+    lam2 = reshape(lam(2,:),size(K0));
+else
+    error('invz:gstatLambdaShape', ...
+        'lam must be a vector or a [>=2,numel(K0)] candidate array.');
+end
+xi_numer = 1 + tanh(m^2*n01^2*beta.*K0 - M2*beta.*lam1);
+xi_denom = 1 + (4*n01^2.*K0.*g0 + 2.*lam2 + g0.*lam1)*M2/n01^2;
+xi = xi_numer ./ xi_denom;
+gstat_local_denom = 1 + Sigma0 + K0.*G0inel0;
+U = G0inel0./gstat_local_denom;
+V = xi.*G0el0;
+Gstat  = U + V;
 G0bare = G0inel0 + G0el0;
 if nargin >= 8 && getf(opts, 'stable_form', false)
 % EXACT REASSOCIATION (not a regulariser -- identical value, no broadening, no tolerance):
@@ -55,16 +70,17 @@ if nargin >= 8 && getf(opts, 'stable_form', false)
 % (Gtil0 = Gstat/(1-K0*Gstat); r = G0bare/Gtil0) evaluates Inf/(-Inf) = NaN at the crossing and
 % loses precision approaching it, which would turn a removable singularity into a node failure
 % (spec G17).
-    invGtil0 = 1/Gstat - K0;
-    Gtil0    = 1/invGtil0;
-    r        = G0bare*invGtil0;
+    invGtil0 = 1./Gstat - K0;
+    Gtil0    = 1./invGtil0;
+    r        = G0bare.*invGtil0;
 else
     % G9 compatibility: preserve the historical arithmetic on every existing/resummed call.
-    Gtil0 = Gstat/(1 - K0*Gstat);
-    r     = G0bare/Gtil0;
+    Gtil0 = Gstat./(1 - K0.*Gstat);
+    r     = G0bare./Gtil0;
 end
 % Record the inelastic/elastic split for ordered-closure diagnostics.
 out = struct('xi', xi, 'h0', h0, 'G0bare', G0bare, 'Gtil0', Gtil0, 'r', r, ...
              'gstat_local_denom', gstat_local_denom, ...
-             'G0inel0', G0inel0, 'G0el0', G0el0);
+             'G0inel0', G0inel0, 'G0el0', G0el0, ...
+             'xi_numer', xi_numer, 'xi_denom', xi_denom, 'U', U, 'V', V);
 end
