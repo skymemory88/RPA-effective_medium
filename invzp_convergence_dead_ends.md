@@ -225,6 +225,21 @@ trapezoid only propagates bad node values. The fixed rule should still be
 replaced after the node solver is certified, especially to resolve narrow
 single-ion features.
 
+**2026-07-30 nested-grid check:** increasing only `nH` from 33 to 65 and 129
+at 1, 2, and 3 T leaves all final ordered points masked and leaves the
+independent \(h=0\) predictor failure unchanged. At 2 and 3 T, every shared
+node has an identical verdict; the denser grid only inserts one successful
+half-step below the old sampled boundary. At 1 T, denser grids make two shared
+nodes fail that succeeded on their coarser paths because failed low-\(h\)
+evaluations partially mutate the threaded `Sigma` warm start. Resolution
+therefore neither cures the solver nor has a monotone effect under the current
+state-commit semantics.
+
+**Do not reconsider as a solver fix unless:** node evaluation has first been
+made transactional and the fatal predictor/component-domain issue has been
+resolved independently. Adaptive/error-controlled field resolution remains
+required later for quadrature accuracy and narrow single-ion features.
+
 ### The ordered sum-rule residual is a direct convergence verdict
 
 **Status:** Falsified.
