@@ -26,6 +26,16 @@ disc_ok = isempty(rd) && size(idisc.discontinuity_brackets,1) == 1;
 add_check("reject_discontinuity", double(~disc_ok), 0, ...
     "pole sign change is not returned as a root");
 
+% A sign bracket must be polished to x_tol, not stopped at the first point
+% below resid_tol; downstream equivalent closures can have different local
+% conditioning at an only-marginally polished point.
+root_exact = sqrt(3)/5;
+[rp, ip] = invz_bounded_roots(@(x)1e3*(x-root_exact), ...
+    linspace(0,1,100),struct('resid_tol',1e-6,'x_tol',1e-14));
+polish_err = max(abs([rp-root_exact;ip.root_residual/1e3]));
+add_check("sign_root_polished_to_xtol", polish_err, 1e-12, ...
+    "sign root is refined beyond its acceptance residual");
+
 % m -> 0 identity against the ordinary paramagnetic scalar medium.
 tl0 = struct('m',0,'M2',1,'n01',1,'g0',1);
 Jtoy = [-1;-.25;.5]; Sigma0 = .5; G0i = -.2;

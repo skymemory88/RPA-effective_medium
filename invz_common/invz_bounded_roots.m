@@ -97,6 +97,13 @@ af = abs(fgrid);
 for k = 2:numel(grid)-1
     if ~edge_ok(k-1) || ~edge_ok(k), continue; end
     if ~all(isfinite(fgrid(k-1:k+1))), continue; end
+    % A root already bracketed by either adjacent sign-changing edge is not
+    % a tangency candidate. Re-running fminbnd on |f| can produce a second,
+    % less accurately polished representation of the same simple root.
+    if sign(fgrid(k-1)) ~= sign(fgrid(k)) || ...
+            sign(fgrid(k)) ~= sign(fgrid(k+1))
+        continue;
+    end
     if ~(af(k) <= af(k-1) && af(k) <= af(k+1)), continue; end
     if af(k) <= rtol, continue; end
     tangent_attempts = tangent_attempts + 1;
@@ -170,9 +177,6 @@ info = struct('fgrid', fgrid, 'root_residual', root_resid, ...
             fm = safe_eval(m);
             if ~isfinite(fm), break; end
             if abs(fm) < abs(best_f), best_x = m; best_f = fm; end
-            if abs(fm) <= rtol
-                xr = m; fr = fm; ok = true; return;
-            end
             if sign(fa) ~= sign(fm)
                 b = m; fb = fm; %#ok<NASGU>
             else

@@ -314,6 +314,12 @@ does not make continuation a thermodynamic branch selector. Evidence:
 **Do not reconsider unless:** the field-step geometry or coupled-root method is
 materially changed and the same physical acceptance gates are retained.
 
+**2026-07-30 update:** the required material change was tested. Adaptive
+downward field steps, together with full sign-root polishing, carry the
+certified component from node 29 to node 28. This confirms the narrower
+rejection above: coarse reversal is insufficient, but continuation itself is
+not falsified and must not be listed as a general dead end.
+
 ### `signed_aitken1` or general extrapolation
 
 **Status:** Rejected as a fix.
