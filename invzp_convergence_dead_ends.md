@@ -498,6 +498,58 @@ This rejection does not validate the hybrid representation: the electronic
 two-level weight and full electronuclear response are not a common spectral
 decomposition in the same census.
 
+### Fixed lowest-16 electronuclear vertex plus bare remainder as a low-field
+repair
+
+**Status:** Rejected as a controlled low-field construction at the sampled
+ordered nodes.
+
+The fixed-rank manifold is numerically clean: its 16/17 gap is
+72--143 \(k_BT\), its population mass is one, and the minimum adjacent
+subspace overlap across each last-failed/first-accepted pair is 0.999996.
+Nevertheless, its vertex coverage collapses with longitudinal polarization.
+At 0.5 T the 16-state connected-variance share is 9.86% at the first accepted
+node and 0.521% at the high-\(h\) endpoint; at 1 T the corresponding values
+are 36.6% and 5.41%. Even 96 states remain below 90% variance coverage at
+every non-predictor sample. The full 136 states are required on the tested
+rank ladder.
+
+Thus a 16-state dense vertex would omit most of the fluctuation content that
+generates \(\Sigma\). The loss is smooth spectral redistribution, not a
+selector discontinuity, so altering the fixed-rank rule cannot repair it.
+Evidence:
+`docs/diagnostics/invzp_representation_wp3/wp3_dominant_manifold_census.mat`.
+
+**Do not reconsider unless:** a different subspace is derived from a
+four-point/connected-variance criterion and passes a rank-convergence ladder,
+or a computationally feasible full-space vertex is established.
+
+### A closed electronic two-level representation as the missing low-\(h\)
+path
+
+**Status:** Falsified as an immediate repair under the same bounded outer
+solver; disconnected roots remain an open completeness question.
+
+Using \(G_0=-M^2g-m^2h\) with the same two-level object supplying the vertex
+and ordered static weights removes the electronic/electronuclear mismatch.
+High-to-low continuation over every 33-node grid, with rejected-state rollback
+and fresh fallback, still finds only a high-\(h\) component. Its lowest
+certified nodes are \(h=0.00785,0.01193,0.01740,0.01660\) meV at
+0.5, 1.0, 1.8, and 2.2 T, respectively; all four \(h=0\) predictors have
+`no_admissible_static_root`. The present hybrid actually certifies farther
+down at every field.
+
+This proves that merely making the response/vertex representation consistent
+does not restore the equation-(45) path. It does not prove nonexistence of a
+disconnected root outside the Picard/continuation basin.
+Evidence:
+`docs/diagnostics/invzp_representation_wp3/wp3_closed_twolevel_landmarks.mat`.
+
+**Do not reconsider as a direct repair unless:** a complete coupled-root
+search finds a certified low-\(h\) component in the closed model or an
+acceptance-rule derivation shows that the current physical-domain gate is
+inapplicable to the constrained states required by equation (45).
+
 ## Field-integral and thermodynamic-selection dead ends
 
 ### Anchoring equation (45) at \(h_z=0\) at 0.1 K

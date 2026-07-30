@@ -1383,3 +1383,64 @@ controlled dominant-sector-plus-bare-remainder comparison.
 `wp2_low_field_m2_census.mat`,
 `invzp_m2_asymptotic_check.m`, and
 `wp2_m2_asymptotic_check.mat`. Both scripts pass MATLAB Code Analyzer.
+
+## 2026-07-30 — Checkpoint 18: representation controls stop at component topology
+
+**Fixed-rank prerequisite.** The framework-sanctioned field-adapted
+electronuclear manifold was measured at the predictor, last failed node, first
+accepted node, and high-\(h\) endpoint at 0.5, 1.0, 1.8, and 2.2 T. The
+selection itself is exceptionally clean: the 16/17 gap is 0.618--1.235 meV
+(72--143 \(k_BT\)), retained population mass is one, and the minimum
+last-failed-to-first-accepted subspace overlap is 0.999996. The status boundary
+is not a rank-selector discontinuity.
+
+**Coverage failure.** Static susceptibility share alone is misleading. At
+0.5 T the 16-state static share is 98.0% at the first accepted node but the
+connected-variance share needed by the four-point vertex is only 9.86%; at the
+high-\(h\) endpoint the two shares are 16.1% and 0.521%. At 1 T the endpoint
+shares are 56.5% and 5.41%. A rank ladder
+\(16,24,32,48,64,96,136\) shows that every sampled non-predictor node requires
+the full 136 states to exceed 90% connected-variance coverage. The low-rank
+dense-vertex bridge is therefore not controlled where the susceptibility
+problem is most severe.
+
+**Closed two-level control.** A separate model used one internally consistent
+representation throughout:
+
+\[
+G_0(i\omega_n)=-M^2g(i\omega_n)
+-m^2\beta(1-n_{01}^2)\delta_{n0},
+\]
+
+with the same two-level parameters supplying \(\Sigma\) and the ordered static
+closure. Every 33-node source grid plus \(h=0\) was traversed high-to-low with
+accepted-state rollback and a fresh fallback. The certified closed-model
+components are:
+
+| \(B_x\) (T) | certified nodes including \(h=0\) | lowest certified \(h\) (meV) | production-hybrid positive nodes |
+|---:|---:|---:|---:|
+| 0.5 | 9/34 | 0.00785085 | 11/33 |
+| 1.0 | 7/34 | 0.01192745 | 10/33 |
+| 1.8 | 5/34 | 0.01740279 | 9/33 |
+| 2.2 | 5/34 | 0.01659925 | 7/33 |
+
+All four closed-model \(h=0\) predictors return
+`no_admissible_static_root`. At the failed component edge some
+\(\Sigma=0\) maps remain statically defined, but damped continuation leaves
+the admissible domain; this is solver/domain evidence, not a completeness
+proof against disconnected roots.
+
+**Decision.** The present hybrid is a real quantitative systematic but is not
+sufficient to explain the missing lower path: the internally consistent
+closed model exhibits the same high-\(h\)-component topology and is less
+permissive on these grids. The fixed-16 alternative is not vertex-converged,
+while a full 136-state dense vertex is currently budget-refused. No
+representation change is promoted to production. The next bounded route is
+the corrected upper/saturation anchor and component-topology analysis.
+
+**Evidence.**
+`docs/diagnostics/invzp_representation_wp3/invzp_dominant_manifold_census.m`,
+`wp3_dominant_manifold_census.mat`,
+`invzp_closed_twolevel_landmarks.m`, and
+`wp3_closed_twolevel_landmarks.mat`. Both reproducible diagnostics pass MATLAB
+Code Analyzer.
