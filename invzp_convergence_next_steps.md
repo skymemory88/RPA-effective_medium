@@ -447,7 +447,14 @@ components remain open.
    explicitly proved absent. Transporting or extrapolating an integration
    constant from the paramagnetic side may be tested as a falsifiable
    diagnostic, but smoothness in \(B_x\) would not by itself certify that the
-   same physical constant crosses the transition.
+   same physical constant crosses the transition. **Completed feasibility
+   test:** the closed two-level control has an integrable tail, but the
+   production hybrid does not on a certified 1/4 T window extending to
+   128 times the profile ceiling. Its fitted exponents are 0.593 and 0.811,
+   while the full electronuclear connected variance is still far from
+   saturation. Reaching the finite-Hilbert asymptote would leave the retained
+   multiplet's physical validity. No upper-anchored production root is
+   authorized.
 4. **Reduced simultaneous residual.** Determine whether each nonzero-frequency
    implicit \(K_n\)--\(\Sigma_n\) relation can be eliminated uniquely, leaving
    an exactly equivalent residual in
@@ -575,6 +582,28 @@ The \(h_z=0\) endpoint should initially remain a diagnostic boundary condition:
 Reconsider folds and the current “last crossing” rule only on the cleaned
 profile. If more than one admissible ordered root survives, select it using a
 validated free-energy or continuation criterion.
+
+### Upper-anchor feasibility checkpoint
+
+The exact upper form
+
+\[
+H_0(h)=h-\int_h^\infty[r(h')-1]\,dh'
+\]
+
+requires both \(\delta h(\infty)=0\) and an integrable \(r-1\) tail. The
+production hybrid's certified high-\(h\) continuation fails the latter
+prerequisite over the accessible asymptotic test window: factors 8--128 above
+the ordinary profile ceiling give decay exponents 0.593 at 1 T and 0.811 at
+4 T. The full electronuclear connected variance remains \(O(1)\), showing
+that the retained single-ion space has not saturated. On the identical
+window, a closed two-level response/vertex model gives exponents 1.733 and
+1.568, so the construction is mathematically sound for Jensen's closed model
+but is not transferable to the current hybrid.
+
+No finite upper cutoff may be used as an implicit integration constant. A
+production upper anchor now requires a controlled multilevel asymptotic
+completion, not more tail nodes inside the truncated manifold.
 
 ### Temporary filtered-profile visual checkpoint
 

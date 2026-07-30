@@ -550,6 +550,43 @@ search finds a certified low-\(h\) component in the closed model or an
 acceptance-rule derivation shows that the current physical-domain gate is
 inapplicable to the constrained states required by equation (45).
 
+### Saturation/upper anchoring of equation (45) in the present hybrid
+
+**Status:** Rejected as a controlled production construction with the current
+single-ion representation; valid in the closed two-level control.
+
+Writing \(\delta h=H_0-h\) gives
+
+\[
+\delta h'(h)=r(h)-1,\qquad
+\delta h(h)=-\int_h^\infty[r(s)-1]\,ds
+\]
+
+only if \(\delta h(\infty)=0\), the tail is integrable, and the same certified
+representation reaches its asymptotic regime. High-to-low continuation
+certifies every tested node from the production profile ceiling to 128 times
+that field. Over factors 8--128, however, the production hybrid has
+\(|r-1|\sim h^{-0.593}\) at 1 T and \(h^{-0.811}\) at 4 T; full
+electronuclear connected variance decays only as \(h^{-0.176}\) and
+\(h^{-0.166}\). Later-window fits remain below one.
+
+The matched closed two-level control on the identical nodes has integrable
+tails, with exponents 1.733 and 1.568 for \(r-1\). Thus the upper anchor is a
+valid closed-theory idea, but the production hybrid does not reach that
+asymptote before longitudinal fields probe large portions of the truncated
+crystal-field manifold. Extending until eventual finite-Hilbert saturation
+would require fields at which omitted higher multiplets invalidate the
+representation.
+
+Evidence:
+`docs/diagnostics/invzp_integral_wp5/wp5_saturation_tail_census.mat`.
+
+**Do not reconsider for production unless:** a multilevel completion or
+controlled analytic tail proves \(r-1\in L^1\) and
+\(\delta h(\infty)=0\) within the model's validity, including omitted
+multiplets. A finite-cutoff upper anchor is an arbitrary integration constant,
+not a substitute.
+
 ## Field-integral and thermodynamic-selection dead ends
 
 ### Anchoring equation (45) at \(h_z=0\) at 0.1 K
