@@ -240,6 +240,29 @@ made transactional and the fatal predictor/component-domain issue has been
 resolved independently. Adaptive/error-controlled field resolution remains
 required later for quadrature accuracy and narrow single-ion features.
 
+### Two-endpoint linearization of equation (45) supplies the ordered profile
+
+**Status:** Rejected as a complete-profile method.
+
+Replacing the field integral by
+
+\[
+h_0^{(2)}(h)=\tfrac12h\,[r(0)+r(h)]
+\]
+
+does not make the strict ordered \(h=0\) endpoint admissible. On a 0.5 T
+census, a converged PM-limit substitution yields finite coarse roots only at
+3.5, 4.0, and 4.5 T. Each substituted lower endpoint has negative uniform
+mass, whereas both ordered upper bracket endpoints have positive mass. The
+finite trapezoid thus bridges a static pole/component boundary rather than
+integrating a physical selected component. Below 3.5 T the PM lower endpoint
+does not converge; at 0.5 T no upper endpoint is admissible.
+
+**Do not reconsider as physical susceptibility input unless:** a
+thermodynamically justified matching rule across components is derived.
+Endpoint trapezoids may remain diagnostic scale estimates after both endpoint
+states are explicitly labelled.
+
 ### The ordered sum-rule residual is a direct convergence verdict
 
 **Status:** Falsified.

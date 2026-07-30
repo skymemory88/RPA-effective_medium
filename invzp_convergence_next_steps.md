@@ -331,6 +331,17 @@ bounded diagnostic; it must not be confused with proof that a physical branch
 extends to \(h=0\). Evidence is `wp2_hmf_node_resolution_census.mat`, with
 interpretation and exact settings in the execution journal.
 
+A subsequent endpoint-only test replaced equation (45) by
+\(h_0^{(2)}=h[r(0)+r(h)]/2\). The strict ordered \(h=0\) endpoint still fails
+at every bare-ordered field in a 0.5 T census. Substituting a converged PM-limit
+endpoint produces finite coarse roots only at 3.5, 4.0, and 4.5 T. In all
+three cases the lower PM endpoint has negative uniform mass while both upper
+bracket endpoints have positive mass. The trapezoid therefore jumps across a
+static pole/component boundary; below 3.5 T even the PM lower fixed point is
+uncertified. Endpoint linearization is not an all-field repair and must not be
+wired into production. Evidence is `wp2_endpoint_trapezoid_census.mat`; exact
+values and acceptance limits are recorded in the execution journal.
+
 ## Work package 3: audit the electronic/electronuclear hybrid
 
 Compare three internally defined calculations at representative healthy and
