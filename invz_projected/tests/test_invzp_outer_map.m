@@ -59,6 +59,32 @@ linear_jacobian = invz_outer_dominant_eigen(linear_map,zeros(3,1), ...
 if ~(linear_jacobian.converged && abs(linear_jacobian.lambda-2) < 1e-8)
     error('invz:testOuterMap','matrix-free Jacobian failed the known linear map.');
 end
+
+% Power iteration need not settle on a leading complex pair. Verify that the
+% Arnoldi diagnostic recovers the radius of a known real rotation map.
+rho = 0.8;
+theta = 0.37;
+R = rho*[cos(theta) -sin(theta); sin(theta) cos(theta)];
+Arot = blkdiag(R,zeros(4));
+rotation_map = @(s) struct('status','ok','defined',true, ...
+    'Sigma_map',Arot*s(:)+(1:6).');
+rotation_arnoldi = invz_outer_arnoldi_diagnostic( ...
+    rotation_map,zeros(6,1), ...
+    struct('n_eigs',4,'fd_step',1e-6,'tol',1e-8,'maxit',100));
+if ~(rotation_arnoldi.converged && ...
+        abs(rotation_arnoldi.spectral_radius-rho) < 1e-8 && ...
+        nnz(rotation_arnoldi.active_mode_mask) == 2 && ...
+        rotation_arnoldi.max_active_residual < 1e-8)
+    error('invz:testOuterMap', ...
+        'Arnoldi diagnostic failed the known complex-pair rotation map.');
+end
+boundary_arnoldi = invz_outer_arnoldi_diagnostic( ...
+    @bounded_test_map,zeros(6,1), ...
+    struct('n_eigs',2,'fd_step',1e-6,'tol',1e-8,'maxit',20));
+if ~strcmp(boundary_arnoldi.status,'domain_boundary')
+    error('invz:testOuterMap', ...
+        'Arnoldi diagnostic did not stop at a synthetic map-domain boundary.');
+end
 jac_opts = struct('emt_static',opts.emt_static);
 mapfun = @(s) invz_ordered_outer_map(s,ctx4,jac_opts);
 healthy_jacobian = invz_outer_dominant_eigen(mapfun,F.pt.Sigma, ...
@@ -73,6 +99,8 @@ results.healthy = healthy;
 results.zero_at_healthy_node = zero_at_healthy_node;
 results.predictor = predictor;
 results.linear_jacobian = linear_jacobian;
+results.rotation_arnoldi = rotation_arnoldi;
+results.boundary_arnoldi = boundary_arnoldi;
 results.healthy_jacobian = healthy_jacobian;
 results.regression = struct('residual_delta',resid_delta,'K0_delta',K0_delta, ...
     'lambda_delta',lambda_delta);
@@ -98,4 +126,14 @@ G0e = -(X(3,3)+feedback)-G0i;
 g = real(invz_g(tl,1i*wn));
 ctx = struct('G0',G0,'g',g,'tl',tl,'wts',wts,'beta',beta, ...
     'Jnu_flat',J,'J0eff',info.Jcc0,'G0inel0',G0i,'G0el0',G0e);
+end
+
+function out = bounded_test_map(Sigma)
+defined = norm(Sigma,inf) <= 1e-9;
+if defined
+    out = struct('status','ok','defined',true,'Sigma_map',0.2*Sigma(:));
+else
+    out = struct('status','synthetic_boundary','defined',false, ...
+        'Sigma_map',nan(size(Sigma(:))));
+end
 end

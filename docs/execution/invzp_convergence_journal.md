@@ -438,3 +438,76 @@ trial in this packet.
 **Pre-experiment validation.** The three focused MATLAB tests pass, the WP1
 resolution classification is unchanged, Code Analyzer reports no messages on
 the new kernels/tests/diagnostics, and `git diff --check` passes.
+
+## 2026-07-30 — Checkpoint 3: coarse-grid 4 T reverse continuation
+
+**Implementation boundary.** Starting from clean commit `1e238a3`, the
+diagnostic `invzp_4t_reverse_continuation.m` traverses the retained 33-node
+4 T profile from largest to smallest \(H_{\rm MF}\). Each node is seeded only
+by the immediately higher certified node. A node must pass a unique bounded
+static map, a resolved leading-mode screen with spectral radius below one,
+undamped domain-gated Picard, outer residual \(10^{-8}\), positive uniform/
+mesh/supremum masses, and positive dynamic denominators. The production
+driver and \(H_{\rm MF}\) integral are untouched.
+
+**Linear-diagnostic correction.** At node 32, real power iteration cycled and
+did not settle although its Rayleigh estimates remained small. A matrix-free
+nonsymmetric Arnoldi diagnostic was added and first tested on a known real
+rotation map: it recovered a complex-pair spectral radius of 0.8 with maximum
+active-mode eigen-residual \(1.5\times10^{-10}\). At node 32, finite-difference
+steps \(10^{-5},3\times10^{-6},10^{-6}\) all resolve
+\[
+\lambda=0.0013664\mathbin{\pm}0.0038831i,\qquad
+\rho=0.00411649 .
+\]
+Four additional returned modes are numerical null modes of order \(10^{-12}\);
+they are excluded from relative-residual acceptance because a relative
+eigen-residual is ill-conditioned at zero. This corrected a diagnostic false
+stop, not a nonlinear solver failure.
+
+**Continuation result.**
+
+- Nodes 33 through 29 are certified in 4--6 undamped Picard iterations, with
+  final residuals \(3.40\times10^{-10}\) to \(4.77\times10^{-9}\).
+- These are exactly the same five high-\(H_{\rm MF}\) nodes that the strict
+  legacy sweep already reached; the reverse sweep newly certifies zero coarse
+  nodes.
+- Across the five roots, the minimum uniform mass is 0.09770, minimum
+  supremum mass 0.08162, minimum mesh-\(x\) mass 0.08877, minimum
+  medium-coordinate mesh mass 0.10624, and minimum dynamic absolute
+  denominator 0.34805. No nonpositive dynamic denominator occurs.
+- Transferring the certified node-29 \(\Sigma\) directly to node 28 makes the
+  bounded static map `no_admissible_static_root`, so the diagnostic stops as
+  specified.
+
+The node-28 frozen-seed classification is unchanged at
+`(scan_points,endpoint_margin)` equal to `(2049,1e-8)`, `(4097,1e-10)`, and
+`(8193,1e-12)`: zero mathematical roots, zero admissible roots, zero unresolved
+minima, zero discontinuity brackets, and minimum sampled
+\(|\widehat R|=3.2582\). Evidence is in
+`wp2_4t_reverse_continuation.mat` and
+`wp2_4t_reverse_boundary_audit.mat` under
+`docs/diagnostics/invzp_outer_wp2/`.
+
+**Conclusion and limit.** Reversing the unchanged coarse profile grid is not
+a sufficient solver repair. The blanket production mask remains a
+control-flow/predictor symptom, but this experiment also shows that a single
+coarse transfer does not carry the certified component below node 29. It does
+not establish whether the coupled branch ends between nodes 29 and 28, crosses
+a fold/domain boundary, or can be followed with smaller field steps.
+
+**Trial accounting.** The 4 T coarse reverse-continuation counter is 1 failed
+method (failed to extend coverage). The 1 T node-22 counter remains 2 failed
+methods and is not incremented by this different fixture. The rejected power
+iteration was a corrected measurement defect, not a nonlinear trial.
+
+**Checks at checkpoint.** All three focused MATLAB tests pass; the Arnoldi
+test includes a complex pair with a four-dimensional nullspace and a separate
+synthetic domain-boundary stop. Code Analyzer reports zero messages on every
+new/modified kernel, test, and diagnostic script. `git diff --check` passes.
+
+**Next bounded option.** If another unsupervised experiment is authorized,
+bracket the 4 T boundary with adaptive downward field steps from node 29 while
+keeping the same deterministic map and undamped acceptance contract. Stop at
+the first reproducible loss of the coupled component; do not infer
+thermodynamic equilibrium from continuation.

@@ -294,6 +294,26 @@ Warm starts alter the basin, not the fixed-point set. Historical coexistence
 scans found multiple polished zeros, and continuation/smoothness supplied no
 thermodynamic selector.
 
+### Reversing the unchanged coarse profile grid as the solver repair
+
+**Status:** Rejected as sufficient.
+
+At 4 T, deterministic high-to-low continuation on the retained 33-node
+geometric grid certifies only nodes 33--29, exactly the five high-field nodes
+already reached by the strict legacy sweep. The certified node-29 self-energy
+has no bounded static root when transferred directly to node 28. That
+classification is stable over the 2049/4097/8193-point static scan ladder, with
+zero unresolved minima or discontinuity brackets.
+
+This rejects only reversal of the unchanged coarse grid as a repair. It does
+not prove that the coupled component terminates between nodes 29 and 28, and it
+does not make continuation a thermodynamic branch selector. Evidence:
+`docs/diagnostics/invzp_outer_wp2/wp2_4t_reverse_continuation.mat` and
+`wp2_4t_reverse_boundary_audit.mat`.
+
+**Do not reconsider unless:** the field-step geometry or coupled-root method is
+materially changed and the same physical acceptance gates are retained.
+
 ### `signed_aitken1` or general extrapolation
 
 **Status:** Rejected as a fix.
