@@ -1099,3 +1099,54 @@ the new cost again.
 `docs/diagnostics/invzp_outer_wp2/wp2_filtered_profile_visual_census.mat`.
 MATLAB Code Analyzer and `git diff --check` pass. This is a resolution change
 within the existing third visual workaround, not a fourth trial method.
+
+## 2026-07-30 — Checkpoint 12: 256-node visual production escalation
+
+**Human observation motivating the change.** With the 128-node visual profile,
+`mix_outer=0.15`, and `max_outer=3000`, visual inspection found physically
+sensible ordered output almost everywhere. A sliver at 4.68 T remained
+masked, and data below about 1.8 T remained masked or physically implausible.
+This observation concerns morphology only; it does not relax any acceptance
+or certification requirement.
+
+**Bounded production change.** The intentional uncommitted damping/budget
+settings were retained, and `invz_run_spectra.m` was advanced from 128 to 256
+positive-\(h\) profile nodes. The mode remains
+`filtered_profile_visual`; filtering, PM-anchor policy, final-state gates, and
+the strict solver default are unchanged. The plot title and source warning
+identify the visual-only construction.
+
+**Exact focused probes.**
+
+| \(B_x\) (T) | status | \(h_{\rm MF}\) (meV) | used nodes | first retained \(h\) | PM endpoint | final residual |
+|---:|---|---:|---:|---:|---|---:|
+| 1.0 | `ok_filtered_profile_visual` | 0.041949 | 61 | 0.008574 | unconverged | \(8.15\times10^{-9}\) |
+| 1.5 | `ok_filtered_profile_visual` | 0.037035 | 74 | 0.005862 | unconverged | \(7.25\times10^{-9}\) |
+| 4.0 | `ok_filtered_profile_visual` | 0.015695 | 35 | 0.009456 | converged | \(7.56\times10^{-9}\) |
+| 4.68 | `filtered_no_bracket` | -- | 31 | 0.005575 | converged | -- |
+
+Every retained positive-\(h\) node in these probes was certified. Thus the
+4.68 T mask survives node doubling and is not caused by one retained
+uncertified or nonfinite sample. At low field, numerical convergence of the
+final ordered state still rests on an explicitly unconverged PM anchor and a
+straight lower bridge, so the finite result is not evidence of a valid
+equation-(45) path.
+
+**Comparison limit.** The stored exact 128-node probes used
+`mix_outer=0.25`, `max_outer=2000`, whereas this table uses 0.15 and 3000.
+Consequently, the 1 T change from 0.024394 to 0.041949 meV is a
+cross-configuration difference, not an isolated resolution effect. A
+same-settings ladder would be required before attributing it to `nH`.
+
+**Cost and trial accounting.** Per-field elapsed times were 102--158 seconds,
+so a 101-field visual sweep is intentionally left to the requested human
+production run. This is another resolution setting inside the third visual
+workaround, not a fourth method. The complete-profile failure counter remains
+3.
+
+**Retained evidence.** The `production256` table and current production
+provenance are appended to
+`docs/diagnostics/invzp_outer_wp2/wp2_filtered_profile_visual_census.mat`.
+Artifact assertions, the focused filtered-integral regression, MATLAB Code
+Analyzer on the production driver, and `git diff --check` pass. No one-off
+probe script was created.
