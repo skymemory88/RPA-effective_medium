@@ -360,10 +360,25 @@ The external assessment in `feedback_root_Search_problem.md` and its checked
 evaluation in `feedback_root_search_problem_evaluation.md` refine the
 remaining implementation order as follows.
 
+On every differentiable certified component, retain the exact diagnostic
+
+\[
+F'(h)=r(h)\,[1+J_{0,\mathrm{eff}}\widetilde G_0(h)].
+\]
+
+Thus a uniform-mass zero is a stationary point of \(F\) on that component.
+The 4 T high-\(h\) component is strongly supported to end at such a
+spinodal-like stability boundary while the reduced outer map remains
+contractive. Do not extend that conclusion through an uncertified interval,
+assume one uniform-mass crossing, or infer that every low-\(h\) failure belongs
+to the same component. Electronuclear nonmonotonicity and disconnected coupled
+components remain open.
+
 1. **Pure accepted-state node transitions.** Refactor a fixed-\((B_x,h)\)
-   evaluation to return a candidate result without mutating continuation
-   state. Commit `Sigma` and the static carrier only after every acceptance
-   gate passes. First retest only the contradictory shared 1 T nodes from the
+   evaluation into a pure function of its physical inputs and explicit seed.
+   It must return a candidate state without mutating caller-owned continuation
+   data. Commit `Sigma` and the static carrier only after every acceptance gate
+   passes. First retest only the contradictory shared 1 T nodes from the
    33/65/129 census, with a documented fresh-start comparator. Success means
    that a shared node's verdict and accepted state are independent of rejected
    nodes earlier in the sweep.
@@ -378,7 +393,10 @@ remaining implementation order as follows.
    Measure the tail decay on a certified high-\(h\) component and compare the
    upper and lower anchors where both are admissible. Do not replace \(r-1\)
    by \(\Sigma_0\) at finite ordered moment unless the elastic correction is
-   explicitly proved absent.
+   explicitly proved absent. Transporting or extrapolating an integration
+   constant from the paramagnetic side may be tested as a falsifiable
+   diagnostic, but smoothness in \(B_x\) would not by itself certify that the
+   same physical constant crosses the transition.
 3. **Reduced simultaneous residual.** Determine whether each nonzero-frequency
    implicit \(K_n\)--\(\Sigma_n\) relation can be eliminated uniquely, leaving
    an exactly equivalent residual in
@@ -390,12 +408,15 @@ remaining implementation order as follows.
    singular value of the unbordered Jacobian, the uniform/supremum masses, and
    lattice/dynamic margins. Use these together to distinguish an ordinary
    fold from a physical-domain endpoint and to search for disconnected
-   components.
+   components. Record every uniform-mass crossing on each certified component;
+   do not assume the current “last crossing” is unique.
 5. **Representation and lattice audits.** Quantify how the
    full-electronuclear-\(G_0\)/two-level-vertex hybrid and controlled
    band-edge/DOS quadrature move the coupled component. The exact directional
    Gamma value is not a discrete member of the current \(\Phi\) average; its
    uniform susceptibility gate must not be removed as a mesh correction.
+   Resolve the anisotropic \(q\to0\) density of states and measure its edge
+   exponent rather than assuming a generic square-root cusp.
 
 The first item is the lowest-risk algorithmic packet. The second is the
 highest-value alternative construction of equation (45). Items 3--5 require
@@ -461,7 +482,10 @@ in-band static pole as a physical ordered state.
 Construct equation (45) only from certified node values. Replace the fixed
 33-node trapezoidal rule with error-controlled quadrature once the node solver
 is deterministic. The quadrature must adapt around narrow but continuous
-single-ion features such as the node-18 electronuclear peak.
+single-ion features such as the node-18 electronuclear peak. An embedded ODE
+integrator is a candidate only after branch selection and anchoring are fixed;
+an endpoint coordinate such as \(h=h_c+t^2\) requires a measured square-root
+edge and must not be assumed beforehand.
 
 The \(h_z=0\) endpoint should initially remain a diagnostic boundary condition:
 
