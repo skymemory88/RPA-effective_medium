@@ -930,3 +930,50 @@ suite passes 13/13 checks, the 2049/4097/8193 static resolution ladder passes,
 and the deterministic outer-map regression passes. Code Analyzer reports no
 messages on all three modified files; `git diff --check` passes. Regenerated
 test artifacts were restored after the checks.
+
+## 2026-07-30 — Checkpoint 9: external root-problem feedback review
+
+**Input and retained evaluation.** User-supplied feedback is retained
+unchanged in `feedback_root_Search_problem.md`. The claim-by-claim assessment,
+derivations, implementation correspondence, and prioritized follow-ups are in
+`feedback_root_search_problem_evaluation.md`.
+
+**Verified useful result.** On any differentiable certified component,
+
+\[
+F'(h)=r(h)\,[1+J_{0,\rm eff}\widetilde G_0(h)].
+\]
+
+Thus the uniform-mass zero is a stationary point of the Section-9.3 residual
+on that component. Combined with the 4 T continuation result, this strongly
+supports a physical-domain endpoint of the followed high-\(h\) component
+rather than loss of Picard contractivity.
+
+**Interpretation boundary.** This identity does not prove that every
+low-\(h\) failure is one connected unstable branch, exclude disconnected
+coupled roots, establish the sign of \(F'\) where no branch was certified, or
+prove uniqueness of a nonzero equation-(45) root. The 1 T shared-node
+contradictions remain contaminated by rejected-state carryover.
+
+**Two material corrections to the feedback.**
+
+1. A saturation anchor, if its asymptotic condition is derived, has exact tail
+   integrand \(r-1\):
+   \(H_0(h)=h-\int_h^\infty[r(h')-1]\,dh'\).
+   Replacing this by \(\Sigma_0\) is not generally valid in the finite-moment
+   ordered elastic sector.
+2. The exact-\(\Gamma\) channel is not added to the code's lattice
+   \(\Phi(x)\) average with any discrete weight. The Gamma-dropped mesh defines
+   \(\Phi\); \(J_{0,\rm eff}\) separately defines the uniform stability
+   condition. The mesh/uniform gap is about 0.778%, not 0.08%. Refining the
+   lattice DOS may improve \(\Phi\), but cannot by itself justify removing the
+   uniform-mode gate.
+
+**Next actions held for human review.** The lowest-risk algorithmic packet is
+pure/transactional node evaluation at the two contradictory 1 T shared nodes.
+The highest-value physical proposal is a derivation plus cheap high-\(h\)
+feasibility test of the corrected saturation anchor. A four-scalar residual
+and bordered pseudo-arclength continuation are promising only after exact
+elimination/equivalence is derived and reproduced on healthy fixtures.
+Feedback review is not counted as another trial method; the consecutive
+complete-profile workaround counter remains 2.
