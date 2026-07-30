@@ -317,6 +317,20 @@ adaptive controller to production before those questions are resolved.
 Evidence is `wp2_4t_adaptive_node28_to27.mat` and
 `wp2_4t_adaptive_component_edge_audit.mat`.
 
+A production-path resolution ladder at 1, 2, and 3 T subsequently changed only
+`nH=33,65,129`. All nine final points remain masked because the separately
+evaluated \(h=0\) predictor has no admissible static root. At 2 and 3 T, every
+shared nested-grid node has the same verdict; 129 nodes merely locate the
+success boundary one inserted half-step lower. At 1 T, the same shared field
+node can succeed on a coarser path and fail on a denser path. The retained
+self-energy shows that failed low-to-high nodes partially mutate the warm-start
+carrier before a later static failure. Thus `nH` is not a repair, and the
+production profile has an additional transactional-state defect. A rollback/
+fresh-start comparison at only the contradictory shared nodes is the next
+bounded diagnostic; it must not be confused with proof that a physical branch
+extends to \(h=0\). Evidence is `wp2_hmf_node_resolution_census.mat`, with
+interpretation and exact settings in the execution journal.
+
 ## Work package 3: audit the electronic/electronuclear hybrid
 
 Compare three internally defined calculations at representative healthy and

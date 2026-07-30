@@ -695,3 +695,80 @@ review the underlying ordered construction:
    requires one physical component to extend continuously to \(h=0\).
 
 Do not wire adaptive continuation into production yet.
+
+## 2026-07-30 — Checkpoint 6: production \(H_{\rm MF}\)-node resolution at 1--3 T
+
+**Bounded experiment.** The production ordered-point solver was run directly
+at \(B_x=1,2,3\) T with only `nH` changed from 33 to 65 and 129. Temperature,
+couplings, the geometric field range, outer mix 0.35, 200-iteration budget,
+\(10^{-8}\) outer tolerance, 40 meV cutoff, and the bounded static acceptance
+contract were held fixed. No production default or control flow changed.
+
+All nine points remain nonconverged and masked. In every case the independent
+\(h=0\) predictor is `no_admissible_static_root`; changing `nH` cannot affect
+that separately evaluated node. Profile-node coverage is:
+
+| \(B_x\) (T) | 33 nodes | 65 nodes | 129 nodes | first converged \(h\), 33/65/129 |
+|---:|---:|---:|---:|---:|
+| 1 | 10/33 | 17/65 | 31/129 | 0.00624162 / 0.00774547 / 0.00862825 |
+| 2 | 8/33 | 15/65 | 30/129 | 0.00891140 / 0.00891140 / 0.00844323 |
+| 3 | 6/33 | 11/65 | 22/129 | 0.0115294 / 0.0115294 / 0.0109237 |
+
+At all nine settings, every failed profile node is in one contiguous low-\(h\)
+block and every converged node is in the complementary high-\(h\) block. All
+failed static classifications are `no_admissible_static_root`; there are no
+multiple-root, unresolved-search, or outer-iteration-only statuses.
+
+**Nested-grid adversarial check.** The 33-node grid is the odd-index subset of
+the 65-node grid, and the 65-node grid is the odd-index subset of the 129-node
+grid, to at most \(1.04\times10^{-17}\) in \(h\). At 2 and 3 T, every shared
+node retains exactly the same convergence verdict. The 129-node first-success
+value is lower by the factor 0.9474635, exactly one inserted geometric
+half-step. This is finer localization of the same sampled transition, not
+evidence that increased resolution restores a missing component.
+
+At 1 T, increased resolution is actively history-dependent:
+
+- \(h=0.00624162311\) succeeds on the 33-node path with
+  \(\Sigma_0=-0.292673\), but fails on the 65-node path with
+  \(\Sigma_0=-0.821288\);
+- \(h=0.00774546581\) succeeds on the 65-node path with
+  \(\Sigma_0=-0.176826\), but fails on the 129-node path with
+  \(\Sigma_0=-0.861066\).
+
+These are identical shared field nodes, not interpolation differences. The
+bounded static solve itself ignores `K0_seed`, while production `eval_node`
+threads its mutable `Sigma` carrier across every low-to-high node. A node can
+update `Sigma` during early outer iterations and later exit with
+`no_admissible_static_root`; that partially updated state is still returned
+and becomes the next node's warm start. The shared-node mismatch is therefore
+strong evidence of failed-node state contamination. A direct transactional
+rollback comparison remains to be performed before calling this mechanism
+uniquely causal.
+
+**Conclusion.** Increasing `nH` is not a convergence repair. It leaves the
+fatal predictor unchanged, yields only one-step boundary localization at 2
+and 3 T, and worsens the observed 1 T boundary through path-history
+dependence. This reinforces the user's solver-level diagnosis and identifies
+failure-state commit semantics as a separate algorithmic defect from the
+physical static-component endpoint already certified at 4 T.
+
+**Trial accounting.** The production node-resolution ladder is one failed
+profile-level method. It does not increment the earlier 1 T node-22
+nonlinear-method counter because it did not test a new coupled-root solver.
+No further `nH` values will be tried without new evidence.
+
+**Evidence and checks.**
+`docs/diagnostics/invzp_outer_wp2/invzp_hmf_node_resolution_census.m` and
+`wp2_hmf_node_resolution_census.mat` retain the exact settings, nine summary
+rows, and per-node states. The diagnostic passes MATLAB Code Analyzer and
+`git diff --check`. Artifact assertions pass for all nine rows, the contiguous
+failure/success topology, exact nested-grid correspondence, invariant shared
+nodes at 2/3 T, and the two shared-node contradictions at 1 T.
+
+**Next bounded option for human review.** Before changing production, make the
+diagnostic node transition transactional: on any rejected node, restore the
+last certified `Sigma`/static carrier (and separately compare a fresh start),
+then re-evaluate only the two 1 T shared-node contradictions. This would test
+the contamination hypothesis without claiming that rollback can cross a
+genuine physical component boundary or select a thermodynamic branch.
