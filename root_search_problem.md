@@ -438,14 +438,19 @@ This result shows that endpoint finiteness alone is insufficient. Equation
 (45) still lacks a single selected admissible component over the integration
 window, so the coarse values are not certified susceptibility inputs.
 
-**Temporary visual wiring.** An explicit
-`hmf_integral_mode='endpoint_trapezoid_visual'` option now implements this
-approximation without changing the strict solver default.
-`invz_run_spectra.m` temporarily enables it and may use a finite unconverged
-PM last iterate. This produces finite reconstructed ordered states at
-1--4.5 T for morphology inspection, but the 1--3 T roots change when the PM
-iteration path changes. The mode is labelled `visual_only` and is not new
-evidence for a physical integration path.
+**Temporary visual wiring.** The explicit two-endpoint option remains
+available without changing the strict solver default. `invz_run_spectra.m`
+now temporarily selects
+`hmf_integral_mode='filtered_profile_visual'` with 65 positive-\(h\) nodes.
+It preserves the independent PM lower endpoint used by the two-node rule,
+removes nonfinite positive-\(h\) values, and integrates the retained sequence.
+In a 0.5 T-spaced census, 1--4.5 T produce finite reconstructed ordered states
+while 0.5 T remains rootless. The retained positive-\(h\) blocks were
+contiguous and certified at those sampled fields, but the lower
+PM-to-ordered panel still crosses the unavailable component interval.
+Moreover, the 1--3 T PM anchors are unconverged and path dependent, and the
+1 T root shifts materially over 33/65/129 nodes. The mode is labelled
+`visual_only` and is not new evidence for a physical integration path.
 
 ## Central interpretation
 
@@ -592,6 +597,9 @@ should be integrated only after those steps establish a valid branch.
 - Endpoint-trapezoid artifact:
   `docs/diagnostics/invzp_outer_wp2/wp2_endpoint_trapezoid_census.mat`.
   Its checkpointed one-off generator is recoverable from commit `540ebbe`.
+- Filtered-profile visual census, resolution ladder, spectra check, and strict
+  comparator:
+  `docs/diagnostics/invzp_outer_wp2/wp2_filtered_profile_visual_census.mat`.
 - 4 T adaptive continuation and endpoint artifacts:
   `docs/diagnostics/invzp_outer_wp2/wp2_4t_adaptive_boundary_continuation.mat`,
   `wp2_4t_adaptive_target_audit.mat`,

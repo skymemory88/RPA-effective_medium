@@ -263,6 +263,24 @@ thermodynamically justified matching rule across components is derived.
 Endpoint trapezoids may remain diagnostic scale estimates after both endpoint
 states are explicitly labelled.
 
+### Dropping the unresolved lower interval from a filtered profile
+
+**Status:** Falsified as a finite-root construction.
+
+After removing rejected or nonfinite nodes from a 65-node positive-\(h\)
+profile, the literal rule \(H_0(h_{\rm first})=0\) was tested at
+1, 2, 3, 3.5, 4, and 4.5 T. Every retained equation-(45) residual remained
+negative; no nonzero root was bracketed. The first retained node was already
+at \(h=0.00764\)--\(0.01153\) meV, so omitting the lower positive contribution
+to \(H_0\) is numerically load-bearing. At 4 T, admitting finite last iterates
+from rejected nodes added no samples because their \(r\) values were also
+nonfinite.
+
+**Do not retry unless:** a physical integration constant or a justified model
+for the missing lower interval is derived. The temporary PM-anchored filtered
+profile can produce visual roots, but it bridges the unresolved component
+interval and is not evidence that dropping that interval is correct.
+
 ### The ordered sum-rule residual is a direct convergence verdict
 
 **Status:** Falsified.

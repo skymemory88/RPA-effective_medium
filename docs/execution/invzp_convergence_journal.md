@@ -977,3 +977,94 @@ and bordered pseudo-arclength continuation are promising only after exact
 elimination/equivalence is derived and reproduced on healthy fixtures.
 Feedback review is not counted as another trial method; the consecutive
 complete-profile workaround counter remains 2.
+
+## 2026-07-30 — Checkpoint 10: filtered multi-node visual integral
+
+**Plan update.** `invzp_convergence_next_steps.md` now records the agreed
+implementation order: pure accepted-state node transitions; a corrected
+saturation-anchor feasibility derivation using \(r-1\); exact reduction of a
+simultaneous residual if possible; bordered pseudo-arclength continuation; and
+then representation/lattice audits. None relaxes the strict acceptance
+contract.
+
+**Rejected literal anchor.** The first implementation removed rejected or
+nonfinite 65-node profile values and assigned \(H_0=0\) at the first retained
+positive-\(h\) node. It returned `filtered_no_bracket` at 1, 2, 3, 3.5, 4,
+and 4.5 T. The first retained node lay at
+\(h=0.00764\)--\(0.01153\) meV and every retained residual remained negative.
+At 4 T, permitting finite values from rejected nodes added no samples because
+their \(r\) values were nonfinite. This dead anchor was removed from
+production and recorded in `invzp_convergence_dead_ends.md`.
+
+**Active visual construction.** The retained temporary mode is
+`hmf_integral_mode='filtered_profile_visual'`. The driver sets `nH=65`,
+evaluates the same independent PM endpoint used by the two-node experiment,
+removes nonfinite positive-\(h\) nodes, and integrates the retained sequence.
+A finite uncertified last iterate is permitted to enter only behind
+`hmf_filtered_include_unconverged=true`; its count is exported. Root
+refinement and the final susceptibility state must still converge. The
+profile records the used-node mask, PM provenance, lower bridge width,
+interior bridge count and widths, root-bracket indices, and whether the
+bracket itself spans omitted nodes.
+
+**Coverage census.** With independent per-field PM endpoints:
+
+| \(B_x\) (T) | visual \(h_{\rm MF}\) | used positive-\(h\) nodes | PM endpoint |
+|---:|---:|---:|---|
+| 0.5 | no bracket | 2 | unconverged |
+| 1.0 | 0.025673 | 17 | unconverged |
+| 1.5 | 0.033570 | 19 | unconverged |
+| 2.0 | 0.029772 | 15 | unconverged |
+| 2.5 | 0.028069 | 13 | unconverged |
+| 3.0 | 0.025625 | 11 | unconverged |
+| 3.5 | 0.021095 | 10 | converged |
+| 4.0 | 0.016021 | 9 | converged |
+| 4.5 | 0.0086876 | 8 | converged |
+
+All positive-\(h\) nodes used at these sampled fields were certified:
+`filtered_unconverged_used_count=0`. Each retained block was contiguous, each
+root bracket used adjacent retained nodes, and there were no interior bridge
+panels. For the successful 1--4.5 T roots, the sole uncontrolled panel
+connects the PM \(h=0\) endpoint to the first ordered node, over widths
+\(0.00607\)--\(0.01153\) meV. Final accepted outer residuals are
+\(4.56\times10^{-9}\)--\(6.23\times10^{-9}\).
+At 0.5 T, the independent PM last iterate gives the pathological
+\(r_0=-13.908\) and no bracket.
+
+**Resolution behavior.**
+
+| \(B_x\) | `nH=33` | `nH=65` | `nH=129` |
+|---:|---:|---:|---:|
+| 1 T | 0.028252 | 0.025673 | 0.024213 |
+| 4 T | 0.016026 | 0.016021 | 0.015978 |
+
+The 4 T visual root is resolution-stable on this ladder. The material 1 T
+drift, accompanied by an upward-moving first retained node, is consistent with
+the known failed-state continuation contamination and prevents a low-field
+resolution claim.
+
+**End-to-end and default checks.** A focused spectra map at 1, 4, and 5 T
+returns phases `[ordered, ordered, PM]`, finite susceptibility columns,
+`hmf_integral_mode='filtered_profile_visual'`, and `visual_only=true`. A
+strict 4 T solve still returns `node_failed`, a NaN molecular field,
+`full_profile`, `visual_only=false`, and
+`predictor_static_status='no_admissible_static_root'`. The accepted 5 T PM
+dispatch followed a warning from its separate bare ordered probe that mean
+field had not met its tolerance after 800 iterations
+(\(|dmf|=1.28\times10^{-7}\) meV).
+
+**Checks and retained evidence.** The pure filtering/bridge helper has a
+focused synthetic regression. MATLAB Code Analyzer reports zero messages on
+all five touched MATLAB files. The bounded-static suite passes 13/13 checks,
+the 2049/4097/8193 resolution suite passes, the deterministic outer-map test
+passes, and `git diff --check` passes. Regenerated maintained-test MAT files
+were restored. The compact census, resolution ladder, spectra-map result, and
+strict-default comparator are in
+`docs/diagnostics/invzp_outer_wp2/wp2_filtered_profile_visual_census.mat`.
+
+**Interpretation and trial accounting.** This mode is suitable only for the
+requested visual morphology check. It has more information than the two-node
+rule, but its lower panel still crosses an unresolved stability/component
+interval and its 1--3 T anchor remains iteration-path dependent. It is the
+third consecutive complete-profile workaround that fails the certification
+objective; the project-wide five-failure review trigger has not yet fired.
