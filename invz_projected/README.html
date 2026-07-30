@@ -1,514 +1,227 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>invz — 1/z Effective-Medium Expansion for LiHoF4 · User Manual</title>
-<script>
-window.MathJax = {
-  tex: {
-    inlineMath: [['\\(', '\\)']],
-    displayMath: [['$$', '$$']],
-    tags: 'none',
-    macros: {
-      Jc: "{\\mathcal J}",
-      wn: "{i\\omega_n}",
-      half: "{\\tfrac12}"
-    }
-  }
-};
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiHoF4 projected-spin 1/z code</title>
 <style>
-  :root{
-    --ink:#1c1a17; --paper:#fdfcf9; --rule:#d8d3c8;
-    --derived:#1e6b45; --derived-bg:#f0f7f2;
-    --quoted:#9a5b00; --quoted-bg:#fbf4e8;
-    --caution:#8a1f1f; --caution-bg:#fbeeee;
-    --accent:#26456b; --accent-bg:#eef2f8;
-    --code-bg:#f4f2ec;
-  }
-  html{font-size:17px;}
-  body{
-    font-family: Charter, "Bitstream Charter", "Palatino Linotype", Palatino, Georgia, serif;
-    color:var(--ink); background:var(--paper);
-    margin:0; line-height:1.55;
-  }
-  .wrap{max-width:860px; margin:0 auto; padding:2.4rem 1.4rem 5rem;}
-  h1{font-size:1.9rem; line-height:1.2; margin:0 0 .3rem; letter-spacing:-.01em;}
-  h1 .sub{display:block; font-size:1.02rem; font-weight:400; color:#5b554c; margin-top:.35rem; letter-spacing:0;}
-  h2{font-size:1.35rem; margin:2.4rem 0 .7rem; padding-bottom:.25rem; border-bottom:2px solid var(--rule); color:var(--accent);}
-  h3{font-size:1.08rem; margin:1.5rem 0 .4rem; color:var(--ink);}
-  p{margin:.6rem 0;}
-  a{color:var(--accent);}
-  code, kbd, .mono{font-family:"SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; font-size:.86em;}
-  code{background:var(--code-bg); padding:.08em .35em; border-radius:4px;}
-  pre{background:var(--code-bg); border:1px solid var(--rule); border-radius:8px; padding:.8rem 1rem; overflow-x:auto; font-size:.82rem; line-height:1.45;}
-  pre code{background:none; padding:0;}
-  table{border-collapse:collapse; width:100%; margin:1rem 0; font-size:.9rem;}
-  th,td{border:1px solid var(--rule); padding:.4rem .6rem; text-align:left; vertical-align:top; overflow-wrap:anywhere;}
-  table.ref-table th:nth-child(1), table.ref-table td:nth-child(1){white-space:nowrap; width:1%;}
-  table.ref-table th:nth-child(2), table.ref-table td:nth-child(2){width:34%;}
-  th{background:var(--accent-bg); color:var(--accent); font-weight:600;}
-  tbody tr:nth-child(even){background:#faf8f3;}
-  .lead{font-size:1.06rem; color:#3a352d;}
-  .callout{border-left:4px solid var(--accent); background:var(--accent-bg); padding:.6rem .9rem; border-radius:0 6px 6px 0; margin:1rem 0;}
-  .callout.caution{border-color:var(--caution); background:var(--caution-bg);}
-  .callout.note{border-color:var(--derived); background:var(--derived-bg);}
-  .callout .tag{font-variant:small-caps; font-weight:700; letter-spacing:.03em; font-size:.82rem; margin-right:.4rem;}
-  .callout.caution .tag{color:var(--caution);}
-  .callout.note .tag{color:var(--derived);}
-  .callout.plain .tag{color:var(--accent);}
-  figure{margin:1.4rem 0; text-align:center;}
-  figcaption{font-size:.85rem; color:#5b554c; margin-top:.5rem;}
-  .fc-band{fill:var(--accent-bg); stroke:var(--accent); stroke-width:1.3;}
-  .fc-band.loop{fill:var(--derived-bg); stroke:var(--derived);}
-  .fc-band.io{fill:#f3efe6; stroke:#a99a7d;}
-  .fc-title{font:600 13px "SF Mono",Menlo,monospace; fill:var(--accent);}
-  .fc-loop .fc-title{fill:var(--derived);}
-  .fc-fn{font:600 12.5px "SF Mono",Menlo,monospace; fill:var(--derived);}
-  .fc-note{font:12px Charter, Georgia, serif; fill:#3a352d;}
-  .fc-arrow{stroke:#8a806e; stroke-width:1.6; marker-end:url(#ah);}
-  .muted{color:#7a7264;}
-  ul.tight{margin:.4rem 0; padding-left:1.3rem;}
-  ul.tight li{margin:.25rem 0;}
-  .eqlabel{color:var(--muted); font-size:.8rem;}
-  hr{border:none; border-top:1px solid var(--rule); margin:2rem 0;}
+body { max-width: 980px; margin: 2rem auto; padding: 0 1.2rem; color: #202124;
+       font: 16px/1.55 system-ui, sans-serif; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+pre { padding: 1rem; overflow-x: auto; background: #f5f6f7; border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: .45rem .6rem; border: 1px solid #ccd0d5; text-align: left; }
+.note { padding: .8rem 1rem; background: #eef5ff; border-left: 4px solid #3976c5; }
+.warn { padding: .8rem 1rem; background: #fff5df; border-left: 4px solid #c68118; }
 </style>
 </head>
 <body>
-<div class="wrap">
+<h1>Projected-spin 1/z calculation for LiHoF<sub>4</sub></h1>
 
-<h1>The <code>invz</code> module
-  <span class="sub">1/z effective-medium expansion for the dipolar Ising ferromagnet LiHoF<sub>4</sub> — user manual &amp; mathematical reference</span>
-</h1>
+<p>This directory contains the scalar, projected-spin calculation. It retains
+three production streams: the phase boundary, uniform spectra, and q-path
+spectra. ODD corrections are retained. Audit drivers, cached results, field-angle
+experiments, and the alternative bare ordered route were removed in the July
+2026 reduction.</p>
 
-<p class="lead">This module computes the magnetic susceptibility of LiHoF<sub>4</sub> <em>one order beyond mean-field/RPA</em>, by resumming the leading 1/<em>z</em> single-ion self-energy self-consistently with a scalar effective-medium lattice sum. The equations cover both phases and, where the ordered state is accepted, produce the real-frequency response <span class="mono">&chi;&Prime;<sub>cc</sub>(q,&omega;)</span> and its soft mode through the transverse-field transition. Ordered-state availability is presently field-window dependent; read the operational status below before interpreting a broad sweep. The implementation follows Rønnow <em>et al.</em>, PRB <strong>75</strong>, 054426 (2007) ("R 2007"), which applies Jensen's high-density expansion (J. Jensen, PRB <strong>49</strong>, 11833 (1994)) to this material.</p>
+<div class="note"><strong>Ordered-state rule.</strong> There is one ordered
+calculation: the Jensen-consistent static closure and
+H<sub>MF</sub>&harr;H relation. If that state is unavailable, the code masks the
+point; it never substitutes a bare mean-field moment.</div>
 
-<div class="callout note"><span class="tag">Scope</span>Paramagnetic and ferromagnetic equations; scalar (cc-channel) self-energy — &sect;1.7 explains how the full 3&times;3 dipolar tensor reduces to this single channel; transverse field <span class="mono">B&parallel;a</span> by default, or rotated within the transverse plane via the validated <code>phi_ab</code> knob (&sect;1.8). The default ordered calculation is the Jensen-consistent <code>ordered_1z='jensen'</code> route, including the static closure and \(H_{\rm MF}\!\leftrightarrow H\) relation (framework SS9.2&ndash;9.3, J 2.26&ndash;2.33). It is accepted near the QCP but remains incomplete at some moderate/deep ordered fields. The old bare-order-parameter route is retained only as the explicitly labelled <code>'bare'</code> diagnostic. The full symbolic derivation is <a href="../jensen_1z_framework.html"><code>jensen_1z_framework.html</code></a>. This page is the working manual; see <a href="#scope">Scope &amp; limitations</a> for deliberate exclusions.</div>
+<h2>Run the calculation</h2>
 
-<div class="callout caution" id="operational-status"><span class="tag">Operational status — read before running</span> The currently verified <strong>finite-\(16^3\) visual regression</strong> is \(T=0.10\) K, \(\mathbf q=[0,0,0]\), \(B=4.60\)&ndash;\(4.90\) T, 61 fields, 0&ndash;6 GHz: 19 Jensen-ordered and 42 stable-paramagnetic columns, no masked/non-finite peak columns, with \(B_c^{1/z}=4.6925\) T bracketed by 4.690&ndash;4.695 T. A later \(12^3\)&ndash;\(24^3\) state-only gate found that the contiguous accepted ordered width scales approximately as \(N^{-1.08}\) and \(B_c^{1/z}\) moves by 0.02067 T; this window is therefore suitable for visual inspection and regression, but its ordered width and critical field are not grid-converged quantitative results. Favorably, at ten fields aligned by each grid's own \(B_c(N)\), all 40 susceptibility columns are finite and the soft-mode peak curve varies by only 0.38&ndash;0.53%; the mode shape is robust, while its absolute field alignment is not yet converged. Any broader range selected in the interactive driver is exploratory and is not certified column by column. Moderate/deep ordered failures arise while constructing and selecting a self-consistent state; once a state is accepted, the real-axis susceptibility evaluation is healthy. A masked column is therefore intentional provenance, not permission to substitute the bare state or an experimental continuation root. More Picard iterations, heavier damping, broader peaks, or a nearby field seed have not supplied the missing branch-selection principle. See the <a href="../invzp_convg_diagnosis.md#10-retained-diagnostic-artifacts">diagnosis and retained-artifact index</a> for the full grid ladder, response comparison, and edge-pair trace.</div>
-
-<h2 id="reviewer-map">0 · Reader map for review</h2>
-<ol>
-  <li>Read <a href="../jensen_1z_framework.html"><code>jensen_1z_framework.html</code></a> for the equations and approximation hierarchy.</li>
-  <li>Use this README for the module/data flow, driver controls, returned provenance fields, and the verified QCP run.</li>
-  <li>Read <a href="../invzp_convg_diagnosis.md"><code>invzp_convg_diagnosis.md</code></a> for the measured numerical mechanism: multiple roots and folds, the finite-grid QCP sliver, a formerly false nested audit veto, and the distinction between equation closure and physical branch selection.</li>
-  <li>Read <a href="../invzp_convg_fix.md"><code>invzp_convg_fix.md</code></a> for the recommended stationary-functional replacement, rejected shortcuts, proof obligations, and implementation gates.</li>
-</ol>
-<p>A useful review should preserve three constraints: the accepted QCP window must remain reproducible; incomplete ordered columns must fail closed; and a small nonlinear residual alone must not authorize a thermodynamic branch. The former smooth-\(r(h)\) proposal is retained only as diagnostic branch-topology code; it is explicitly rejected as a thermodynamic selector in the diagnosis and formal-fix documents.</p>
-<p class="muted">Some later sections retain historical path labels such as <code>docs/SESSION-...</code> and <code>docs/ODD-LOG.md</code> solely to identify the campaign that produced a quoted number. Those superseded files are recoverable from Git history; the current operational conclusions are consolidated in this README and the two handoff documents above.</p>
-
-<h2 id="physics">1 · Physical picture &amp; mathematical foundations</h2>
-
-<p>LiHoF<sub>4</sub> is an Ising dipolar ferromagnet. Each Ho<sup>3+</sup> ion has a crystal-field ground <em>doublet</em> (an effective two-level system along the <em>c</em> axis) that is split by a transverse field into a gap \(\Delta\), and a strongly hybridized <sup>165</sup>Ho nuclear spin (\(I=7/2\)). At the temperatures of interest the electronic and nuclear states are treated together as one larger single-ion Hilbert space (17 electronic × 8 nuclear = 136 states). The magnetic transition is driven by the <em>cc</em> (longitudinal) component of the dipolar + exchange coupling \(\Jc_\nu(\mathbf q)\).</p>
-
-<p>The theory has four moving parts, evaluated in the order below.</p>
-
-<h3>1.1 Single-ion two-level response</h3>
-<p>The dominant electronic doublet contributes a two-level response \(g\), with occupation difference \(n_{01}\) and static value \(g_0\):</p>
-$$g(z) = \frac{2\,n_{01}\,\Delta}{\Delta^{2}-z^{2}}, \qquad n_{01}=\tanh\frac{\Delta}{2k_BT}, \qquad g_0\equiv g(0)=\frac{2n_{01}}{\Delta}.$$
-<p>The bare local (cc) Green function is \(G_0=-\chi_0^{cc}\). In the pure two-level limit \(G_0=-M^{2}g\), where \(M^2=|\langle0|J_z|1\rangle|^{2}\) is the transition matrix element; in the code, \(G_0\) is the <em>full</em> electronuclear \(-\chi_0^{cc}\) (so hyperfine enhancement enters non-perturbatively), while the doublet parameters \((\Delta,M^{2},n_{01},g_0)\) set the self-energy.</p>
-
-<h3>1.2 Effective medium — the lattice sum</h3>
-<p>The self-consistent effective-medium coupling \(K(\wn)\) is the fixed point of (R 2007 eqs 7–9; \(\langle\cdot\rangle=\frac1N\sum_{\mathbf q,\nu}\) over the Brillouin zone and the four cc sublattice branches):</p>
-$$G=\frac{G_0}{1+\Sigma+K\,G_0}, \qquad G_{\mathbf q}=\frac{G}{1+(\Jc_\nu-K)\,G}, \qquad K=\Big\langle\frac{\Jc_\nu\,G_{\mathbf q}}{G}\Big\rangle.$$
-<p>At fixed \(\Sigma\) this is <em>not</em> iterated: substituting \(G\) into \(G_{\mathbf q}\) cancels \(K\) (\(G_{\mathbf q}=G_0/(1+\Sigma+\Jc_\nu G_0)\)), leaving a <em>linear</em> equation for \(K\) that <code>invz_emt_scalar</code> solves in closed form,</p>
-$$K=\frac{A\,(1+\Sigma)}{1-A\,G_0}, \qquad A=\Big\langle\frac{\Jc_\nu}{1+\Sigma+\Jc_\nu\,G_0}\Big\rangle, \qquad G=\frac{G_0}{1+\Sigma+K\,G_0}.$$
-<p>So each medium solve is one direct evaluation per \(\Sigma\) (no inner fixed-point loop; frequencies may be blocked via <code>opts.freq_block</code> to bound peak memory), and at the true fixed point \(\langle G_{\mathbf q}\rangle=G\) exactly (the <code>med.closure</code> diagnostic is then machine-zero). A vanishing denominator \(1-A\,G_0\to0\) is the ordered-side instability where the paramagnetic medium ceases to exist; \(K\)/\(G\) go non-finite and <code>med.converged=false</code> reports it. Only the outer \(K\!\leftrightarrow\!\Sigma\) coupling (below) is iterated.</p>
-
-<h3>1.3 The 1/z self-energy</h3>
-<p>The Matsubara moments of \(K\) weighted by powers of \(g\),</p>
-$$\lambda_p=\frac1\beta\sum_n K(\wn)\,g(\wn)^{p},$$
-<p>fix the self-energy \(\Sigma=\alpha+\gamma\,g\) (Jensen; HTML eqs 21–27 / J 2.17–2.19):</p>
-$$\alpha=\frac{M^{2}}{n_{01}^{2}}\Big[\lambda_2-\half\big(g_0+\beta(1-n_{01}^{2})\big)\lambda_1\Big], \qquad
-\gamma=\frac{M^{2}}{n_{01}^{2}}\Big[\lambda_1-(1-n_{01}^{2})\,K\Big].$$
-<p>Equations 1.2 and 1.3 are coupled (\(K\) depends on \(\Sigma\), \(\Sigma\) depends on \(K\)); <code>invz_solve_point</code> iterates them to a fixed point at each \((T,B_x)\).</p>
-
-<h3>1.4 Renormalized susceptibility &amp; criticality</h3>
-<p>On the real axis the self-energy divides the whole cc component, and the observable is a mode RPA over the coupling branches (HTML eqs 22–23, 29–30 / J 2.15–2.16, 2.18, 2.20, 2.30):</p>
-$$\Sigma(\omega)=\alpha+\frac{M^{2}}{n_{01}^{2}}\big[\lambda_1-(1-n_{01}^{2})K(\omega)\big]\,g(\omega+i\eta),\qquad
-\tilde\chi_0=\frac{\chi_0^{cc}}{1+\Sigma},\qquad
-\chi(\mathbf q,\omega)=\frac{\tilde\chi_0}{1-\Jc_\nu(\mathbf q)\,\tilde\chi_0}.$$
-<p>The paramagnetic instability (phase boundary) is where the uniform mode diverges,</p>
-$$\Jc(0)\,\chi_0^{cc}(0)=1+\Sigma(0)\qquad\Longleftrightarrow\qquad \texttt{crit}\equiv 1+\Sigma(0)-\Jc(0)\,\chi_0^{cc}(0)=0,$$
-<p>and exactly at zero field the critical self-energy has the closed form (R 2007 eq 10)</p>
-$$\Sigma_c(0)=\frac1N\sum_{\mathbf q}\frac{\Jc_{\mathbf q}}{\Jc(0)-\Jc_{\mathbf q}}.$$
-
-<h3 id="critical-search">1.4.1 &nbsp;How the projected branch locates the critical point</h3>
-<p><strong>The boundary finder follows the static paramagnetic mass; it does not search for the brightest real-frequency peak and it does not use the ordered-state dispatcher.</strong> At every trial \((T,B)\), <code>invz_crit_at</code> calls the strict-paramagnetic <code>invz_solve_point</code> and returns the scalar mass above together with a validity vote. A point votes only when the full EMT&hArr;&Sigma; solve converged and <code>crit</code> is finite. The sign convention is:</p>
-<ul class="tight">
-  <li><code>crit &gt; 0</code>: stable paramagnet;</li>
-  <li><code>crit = 0</code>: the 1/z critical boundary;</li>
-  <li><code>crit &lt; 0</code>: the continued paramagnetic state is unstable (ordered side);</li>
-  <li>non-converged or non-finite: no phase vote. Critical slowing down must not be mistaken for a sign change.</li>
-</ul>
-
-<p><strong>Critical field at fixed temperature &mdash; <code>invz_critical</code>.</strong> The upper end of <code>opts.window</code> must first be a converged paramagnet. The finder then scans downward in field (default step 0.20&nbsp;T), retaining the last converged <code>crit &gt; 0</code> point until it finds a converged <code>crit &le; 0</code> point. Non-converged samples are skipped: the code searches several steps farther down for a trustworthy vote, so a small failure island cannot create a false transition. A clean sign-changing pair is refined by safeguarded regula falsi (<code>invz_refine_crossing</code>, default field tolerance 0.02&nbsp;T); a failed interpolation is retried at the midpoint. If no converged ordered-side point can be recovered, the explicitly warned <code>para_edge</code> fallback bisects only the predicate “converged stable paramagnet” and returns the lower edge of paramagnetic convergence. That fallback is an edge estimate, not a clean root of <code>crit = 0</code>.</p>
-
-<p><strong>Critical temperature at fixed field &mdash; <code>invz_critical_T</code>.</strong> Near \(T_c(0)\) the phase boundary is nearly parallel to the field axis, so a fixed-\(T\) field cut is ill-conditioned. The temperature finder instead samples an adaptive \(T\) window, discards all invalid samples, selects the highest-temperature converged crossing from <code>crit &lt; 0</code> to <code>crit &gt; 0</code>, and refines it to the default 0.005&nbsp;K tolerance. Its initial window is anchored at the zero-field \(T_c\), spans 0.5&nbsp;K by default, and slides up or down if all valid samples lie on one side. Unlike the field finder it has no <code>para_edge</code> fallback: failure to obtain a converged sign bracket raises <code>invz:bracket</code>.</p>
-
-<p><strong>Zero-field endpoint &mdash; <code>invz_critical_T0field</code>.</strong> Here the closed-form \(\Sigma_c(0)\) above is inserted into \(\Jc(0)\chi_0^{cc}(0,T)=1+\Sigma_c(T)\), and the temperature root is bisected directly. The name means “critical <em>temperature</em> at zero field”; it does not mean the critical field at \(T=0\). The field-driven quantum critical point is approached in practice by running <code>invz_critical</code> on a sufficiently low finite-temperature cut.</p>
-
-<div class="callout note"><span class="tag">Boundary versus spectrum</span><code>invz_critical</code>/<code>invz_critical_T</code> are the solver-grade paramagnetic-side boundary finders. A mask edge, phase-label change, colormap maximum, or sweep midpoint in a spectra calculation is only a display/dispatch diagnostic; it is not a replacement for the static <code>crit = 0</code> search. Setting \(\Sigma=0\) instead gives the separate MF/RPA condition \(1-\Jc(0)\chi_0^{cc}(0)=0\), not the 1/z boundary.</div>
-
-<h3>1.5 &nbsp;Ferromagnetic phase (m &ne; 0)</h3>
-<p>Below \(B_c\) a spontaneous longitudinal moment \(m_0=\langle J_z\rangle\) develops: <code>invz_single_ion</code> (opts.order) solves the extra ordering mean field \(h_z=\Jc_{cc}(0)\langle J_z\rangle\) for its symmetry-broken branch. Spectral weight rotates from the transition matrix element into the diagonal moment, \(M^2+m^2=M_0^2\) fixed, and the self-energy gains an elastic correction (framework SS9.2, J 2.26&ndash;2.27):</p>
-$$\begin{aligned}
-\Sigma(\wn)&=(\alpha-\alpha_m)+\Big[\gamma(\wn)-\tfrac{2m^2}{M^2}\gamma(0)\Big]g(\wn), \\[.3em]
-\alpha_m&=\frac{m^2}{n_{01}^2}\Big[\lambda_2-g_0\lambda_1+\tfrac{4}{g_0}\lambda_3-(1-n_{01}^2)\big(1+\tfrac12\beta\Delta\,n_{01}\big)K(0)g_0\Big].
-\end{aligned}$$
-<p>This reduces to the paramagnetic \(\Sigma=\alpha+\gamma g\) exactly at \(m=0\). The elastic weight \(h(0)=\beta(1-n_{01}^2)\) is exponentially small at low \(T\) (\(n_{01}\to1\)), so the \(\xi\,h\) static correction (framework SS9.2, J 2.28) approaches the ordinary Dyson form and \(\alpha_m\approx m^2[\lambda_2-g_0\lambda_1+(4/g_0)\lambda_3]\). On an accepted QCP-connected Jensen branch the mode softens toward \(B_c\) from below and hardens in the ordered phase; the verified window is stated in <a href="#operational-status">Operational status</a>. This physical expectation is not a claim that every lower-field auxiliary-field path currently has an admissible endpoint.</p>
-<div class="callout caution"><span class="tag">Two ordered modes</span> The default <code>ordered_1z='jensen'</code> calculation solves the static closure and \(H_{\rm MF}\!\leftrightarrow H\) relation and accepts only a closure-consistent endpoint. It closes continuously to the stable PM branch in the verified QCP window, but some lower-field paths remain masked because the self-consistent equations have multiple roots/folds and no accepted path has yet been selected. <code>ordered_1z='bare'</code> reproduces the retired Option-A diagnostic: its moment onsets at the bare mean-field boundary and it must never silently replace a failed Jensen column.</div>
-
-<h3>1.6 &nbsp;Uniform-mode coupling &amp; sample shape</h3>
-<p>Ordering is driven by the <em>uniform</em> (\(\mathbf q\!=\!0\)) cc coupling \(\Jc(0)\), which carries the intrinsic dipole lattice sum, the exchange \(4\Jc_{12}\), and the Lorentz cavity term — <strong>always</strong> present, not a shape-dependent toggle:</p>
-$$\texttt{info.Jcc0}=\Jc_{\rm dip}^{cc}(0)+4\Jc_{12}+\underbrace{\frac{4\pi}{3V_c}\,g_{\rm fac}}_{\text{Lorentz cavity}}.$$
-<p>The sample shape — <code>ion.demag</code> and the spheroid aspect ratio <code>ion.alpha</code> (<code>ellipsoid_demagn</code>) — does <strong>not</strong> enter this expression at all: per R 2007, the demagnetizing field cancels from the critical condition (ordering occurs at \(\mathbf q\to0^+\), not strict \(\mathbf q=0\)), so <code>info.Jcc0</code>, the branch array <code>Jnu</code>, and the ordering-channel contribution to criticality are demag-<strong>invariant</strong>; \(T_c(B=0)\) is <em>exactly</em> demag-invariant for the same reason (the transverse moment vanishes at \(B=0\)). <code>invz_jq_modes</code> instead exports the shape dependence separately, in exactly the two places it can physically act:</p>
-<ul class="tight">
-  <li><strong><code>info.Jshape_cc</code></strong> — the strict-\(\mathbf q=0\) <em>observable</em> correction (the shape-dependent share that an earlier version of this code folded directly into \(\Jc(0)\), now split out so the critical coupling stays untouched). Applied only in <code>invz_chi_realaxis</code>, as \(\chi_{\rm meas}=\chi/(1+\texttt{Jshape\_cc}\,\chi)\) — algebraically identical to a shifted-pole form \(\tilde\chi_t/\big(1-(\texttt{Jcc0}-\texttt{Jshape\_cc})\tilde\chi_t\big)\), just written so the demag-invariant pole \(\texttt{Jcc0}\) is never itself shape-dependent. The strict-\(\mathbf q=0\) soft mode saturates at \(1/\texttt{Jshape\_cc}\) instead of diverging; a finite-\(q\) probe (§4, <code>invz_spectra_qpath</code>) never applies this term (the \(q\to0^+\) limit is the intrinsic one).</li>
-  <li><strong><code>info.Jaa0</code></strong> — the demag-<em>aware</em> transverse (\(aa\)) coupling, <code>Jaa0_dipole(ion.demag,ion.alpha)</code> \(+\,4\Jc_{12}\) (same lattice-sum machinery as <code>Jcc0_dipole</code>, run on the \(aa\) tensor block; see <code>invz_jq_modes</code> for the exact per-component formula). This is now wired all the way into the transverse mean field — passed as <code>opts.Jxx0</code> to <code>invz_single_ion</code>, <code>invz_twolevel</code>/<code>invz_twolevel_ordered</code> and <code>invz_chi_realaxis</code> — the one channel through which \(B_c(T)\) <em>vs. applied field</em> can still shift with sample shape (the internal-vs-applied transverse-field relation), even though the ordering criticality itself is shape-blind.</li>
-</ul>
-<p>Because <code>invz_jq_modes</code> is the single source for <code>info.Jcc0</code>, <code>info.Jshape_cc</code> and <code>info.Jaa0</code>, and all three are threaded consistently through the mean field, the RPA denominator and the 1/z criticality, setting the shape (or any coupling parameter) propagates everywhere it is physically allowed to act — and nowhere else.</p>
-<div class="callout note"><span class="tag">Demag semantics (canonical)</span>
-<ol class="tight">
-  <li><code>info.Jcc0</code>, <code>Jnu</code>, and the ordering-channel contribution to criticality are demag-invariant.</li>
-  <li>\(T_c(B=0)\) is exactly demag-invariant (the transverse moment vanishes there).</li>
-  <li>\(B_c(T)\) vs. <strong>applied</strong> transverse field can shift through the demag-aware <code>info.Jaa0</code> (internal-vs-applied field relation).</li>
-  <li><em>q</em>-path calculations omit the strict-uniform <code>Jshape_cc</code> transform (finite-<em>q</em> probe = intrinsic) but can still change through <code>info.Jaa0</code>.</li>
-</ol>
-Per Rønnow <em>et al.</em> 2007 (who note this contradicts a suggestion of Chakraborty <em>et al.</em>). Never write "\(B_c\) and \(T_c\) are demag-invariant" unqualified — only the zero-field, ordering-channel piece is.
-</div>
-<div class="callout plain"><span class="tag">Cache contract</span> The current <code>invz_jq_modes</code> cache schema is <code>invz_jq_modes/v5</code> with <code>jq5_&lt;backend&gt;_*.mat</code> filenames and exact structured-metadata validation. Missing, legacy, malformed, or context-mismatched entries are recomputed rather than reused. Cache files are disposable accelerators; the repository may intentionally contain an empty <code>invz_projected/cache/</code>.</div>
-
-<h3 id="tensor">1.7 &nbsp;The 3&times;3 dipolar tensor vs. the scalar 1/z theory</h3>
-<p>The dipole&ndash;dipole coupling is a full Cartesian tensor \(\Jc_{\alpha\beta}(\mathbf q)\), \(\alpha,\beta\in\{a,b,c\}\) — in the code a <code>[3,3,4,4]</code> array over sublattice pairs from <code>MF_dipole</code> — so all three spin components participate in the interaction, whereas Jensen's HoF<sub>3</sub> theory is written for a scalar coupling in a single channel (\(J_xJ_x\) in his notation). This is not a discrepancy between the two materials that had to be worked around: HoF<sub>3</sub> is <em>also</em> dipole-coupled (it is in Jensen's title), and in both cases the scalar \(\Jc(\mathbf q)\) of the 1/z machinery is the projection of the same 3&times;3 tensor onto the one component that has matrix elements inside the low-energy two-level subspace. The channel is selected by the single-ion level scheme, not by the interaction. In LiHoF<sub>4</sub> the &Gamma;<sub>3,4</sub> ground doublet carries only the \(c\)-axis component of \(\mathbf J\), so the fluctuation operator in the two-site Green function is \(\tilde J_z\) alone — R 2007 eq. 5 expands \(G(ij,\tau)=-\langle T_\tau\,\tilde J_{iz}(\tau_1)\,\tilde J_{jz}(\tau_2)\rangle\) — and the only tensor block that can attach an interaction line to those fluctuations at <em>both</em> ends is \(\Jc_{cc}(\mathbf q)\). That is the <code>dip(3,3,:,:)</code> extraction in <code>invz_jq_modes</code>, whose 4&times;4 sublattice block is then diagonalized into the four scalar branches \(\Jc_\nu(\mathbf q)\), matching R 2007 eqs. 7&ndash;9, where \(\Jc(\mathbf q)\) is defined as the eigenvalues of the 4&times;4 (cc) coupling matrix.</p>
-<p>The remaining tensor components are <strong>not discarded</strong> — each enters through the channel where it can act, and the neglected remainders are bounded by R 2007's own estimates:</p>
-<ul class="tight">
-  <li><strong>\(\Jc_{aa}\) &rarr; static transverse mean field.</strong> The \(aa\) block generates \(h_x=\Jc_{aa}(0)\langle J_x\rangle\), solved self-consistently in <code>invz_single_ion</code> (default <code>ion.Jxx0</code> \(=\Jc^{aa}_{D\cdot D}(0)+4\Jc_{12}=3.512\) &mu;eV at <code>demag=0</code>; demag-aware calculations pass the shape-corrected <code>info.Jaa0</code> instead, as <code>opts.Jxx0</code> — §1.6), which renormalizes the doublet parameters \(\Delta\) and \(M^2\) at every \((T,B_x)\). Only its 1/z <em>fluctuation</em> corrections are dropped: the internal transverse field is &sim;5% of the applied field at the largest fields, so renormalizing the transverse moment "should be of no importance" (R 2007 Sec. II B).</li>
-  <li><strong>Off-diagonal blocks &amp; higher crystal-field levels &rarr; bare susceptibility only.</strong> \(\Jc_{ac},\Jc_{bc},\dots\) multiply operators with no matrix elements inside the doublet (statically they act like internally generated transverse fields, R 2007 Sec. I); dynamically they reach the cc channel only via doublet&harr;higher-level transitions (first excited CF level at 11 K). Those transitions <em>are</em> included in the module's \(G_0=-\chi_0^{cc}\), which is the full 136-state electronuclear susceptibility (<code>invz_chi0z</code>; the <code>c0(3,3,:)</code> component in <code>invz_solve_point</code>), but they are excluded from \(\Sigma\), which is built from the two-level sector. R 2007 bounds their share of \(\chi_0^{cc}(0)\) at &lt;1% at zero frequency at maximum field — "the singlet&ndash;singlet determination of the renormalization effects is acceptable".</li>
-  <li><strong>Renormalize the dominant channel only.</strong> Dividing just \(\chi_0^{cc}\) by \(1+\Sigma\) is Jensen's own prescription for realistic level schemes (J 1994 Sec. III; <code>jensen_1z_framework.html</code> &sect;10): the 1/z renormalization applies to the susceptibility components deriving from the dominant two-level transition; the weak transitions stay at their bare/RPA values.</li>
-</ul>
-<p>What genuinely stays outside the scalar theory is full-tensor <em>mode mixing</em> — an RPA in which \(\Jc_{ac}(\mathbf q)\) hybridizes the cc soft mode with the gapped transverse excitons at general \(\mathbf q\). That is the "tensor observables" item of <a href="#scope">&sect;8</a> (hook: <code>MF_RPA_Yikai.m</code>); for the ordering instability, the soft mode, and \(\chi_{cc}\) it enters at the same &lt;1% weak-transition level quoted above.</p>
-
-<div class="callout plain"><span class="tag">Conventions</span> \(\chi=-G\); ferromagnetic \(\Jc>0\); energies in meV; bosonic Matsubara \(\omega_n=2\pi n/\beta\), \(n\ge0\), with weights \([1,2,2,\dots]\). \(\Sigma(0)\) is <em>not</em> monotonic on cooling: it rises from its high-\(T\) decay, peaks near \(k_BT\sim\Delta\), and saturates to a finite zero-point value.</div>
-
-<h3 id="vecmf">1.8 &nbsp;In-plane field rotation &amp; the vector transverse mean field</h3>
-<p>&sect;1.7 established \(h_x=\Jc_{aa}(0)\langle J_x\rangle\) as the transverse channel for a field fixed along the crystal \(a\) axis. Rotating the field <em>within</em> the transverse plane (azimuth \(\phi_{ab}\), \(a\to b\)) exposes a second transverse mean field, \(h_y=\Jc_{aa}(0)\langle J_y\rangle\), that the single-axis code path never solved. <code>invz_single_ion</code>'s <code>opts.transverse_mf</code> selects how it is handled: <code>'legacy_x'</code> (default, unchanged) pins \(h_y\equiv0\) regardless of the field direction; <code>'none'</code> forces both channels to zero (a bare CF+Zeeman control); <code>'vector_ab'</code> solves \(h_x\) and \(h_y\) self-consistently. <code>'vector_ab'</code> is not an optional refinement for a rotated field — it is required: the non-axial crystal-field term \(B_{64}^s\) breaks the mirror symmetry that would otherwise force \(\langle J_y\rangle=0\), so \(\langle J_y\rangle\neq0\) even for a field applied purely along \(a\) (\(\phi_{ab}=0\); see the \(\chi_0^{yz}\) group-theory result in <code>docs/SESSION-2026-07-16-field-angle.md</code>, "Round 1"). Forcing \(h_y=0\) for an azimuthally rotated field therefore does not merely approximate a small effect, it breaks the crystal's four-fold (\(C_4\)) symmetry outright: the doublet splitting develops up to a <strong>17 &mu;eV a/b asymmetry at 4 T</strong> under <code>legacy_x</code> that is absent under <code>none</code>/<code>vector_ab</code> (the guard in <code>invz_spectra_map</code>/<code>invz_spectra_qpath</code> cites this figure directly). <code>invz_run_ip_scan.m</code>'s angular scans make the violation visible quantitatively via <code>invz_c4fit</code>'s C4/C8 harmonic decomposition: <code>none</code> and <code>vector_ab</code> both show a stable principal-axis angle (within &sim;1.5&deg; of each other at every field) while <code>legacy_x</code>'s principal axis swings by tens of degrees, including a sign flip, between field magnitudes (<code>docs/SESSION-2026-07-16-inplane-rotation.md</code>).</p>
-<div class="callout caution"><span class="tag">Never cross-compare MF models</span> <code>vector_ab</code> shifts even the <code>phi_ab&nbsp;=&nbsp;0</code> result relative to <code>legacy_x</code> at the <em>same</em> nominal field (&sim;0.04 &mu;eV at 4 T, growing at lower field) — a real physical difference between the two mean-field models (whether \(\langle J_y\rangle\) is allowed to respond to \(B_{64}^s\)), not a rotation effect. Do not compare a <code>legacy_x</code> run against a <code>vector_ab</code> run as if only the angle had changed.</div>
-<p>The driver-facing knob is <code>phi_ab</code> (&sect;4); it is validated independently of the &sect;1.6/&sect;4 <code>theta_c</code> out-of-plane tilt knob, at <code>theta_c=0</code>, over the full tested angle range &mdash; see <a href="#scope">&sect;8</a> for the supported range and the combined-tilt exclusion.</p>
-
-<h3 id="odd">1.9 &nbsp;Off-diagonal dipolar (ODD) mediated coupling &mdash; Tier 1 &amp; Tier 2</h3>
-<p>&sect;1.7 dismissed the off-diagonal blocks \(\Jc^{ca},\Jc^{cb}\) as acting only "like internally generated transverse fields" &mdash; true at the mean-field level, but at second order they mediate an extra <em>pairwise</em> cc coupling: ion \(i\)'s \(c\)-fluctuation polarizes an intermediate ion's transverse moment (through \(\Jc^{c\alpha}\)), which couples back to ion \(j\)'s \(c\)-fluctuation (through \(\Jc^{\alpha c}\)). This is Dollberg&ndash;Schechter's three-spin ODD term (DS2023, arXiv:2308.10095) resummed into a static, \(\chi_\perp\)-mediated coupling \(\delta\Jc^{cc}(\mathbf q)\). It is a strictly additive, opt-in Tier-1 extension: with the flag off it is bit-for-bit the published scalar theory.</p>
-<p>The off-diagonal dipolar blocks are the same \([3,3,4,4]\) tensor as &sect;1.7, projected onto the \(c\alpha\) rows (<code>invz_odd_blocks</code>):</p>
-$$\Jc^{c\alpha}(\mathbf q)_{ss'}=-g_{\rm fac}\,\mathrm{dip}(3,\alpha,s,s'),\qquad \alpha\in\{a,b\}.\tag{E1a}$$
-<p>Contracting a pair of them through the transverse single-ion susceptibility \(\chi_\perp\) &mdash; the symmetrized \((a,b)\) block of the full 136-state electronuclear \(\chi_0\) (<code>invz_chiperp</code>; Van&nbsp;Vleck-dominated, \(\chi_{aa}=\chi_{bb}\approx17.6\) meV<sup>&minus;1</sup> at 1.53 K, \(B_x=0\)) &mdash; gives the mediated coupling per \(\mathbf q\):</p>
-$$\delta\Jc^{cc}_{\rm pre}(\mathbf q)=\sum_{\alpha\beta\in\{a,b\}}\Jc^{c\alpha}(\mathbf q)\,[\chi_\perp]_{\alpha\beta}\,\Jc^{\beta c}(\mathbf q)\;\succeq\;0.\tag{E1}$$
-<p>Because \(\chi_\perp\succ0\), \(\delta\Jc_{\rm pre}\) is positive-semidefinite (mediated interactions lower energy) and vanishes at \(\mathbf q\to0\) on-axis (\(C_2\)-about-\(c\)). Enforcing the no-self-interaction constraint \(\delta\Jc(ii)=0\) subtracts the BZ-average of each sublattice diagonal (<code>invz_odd_deltaJ</code>):</p>
-$$\delta\Jc_{ss}(\mathbf q)\leftarrow\delta\Jc_{ss}(\mathbf q)-\tfrac1{N_q}\sum_{\mathbf q'}\delta\Jc_{ss}(\mathbf q'),\qquad d\equiv\tfrac1{N_q}\sum_{\mathbf q'}\big[\delta\Jc_{\rm pre}\big]_{ss}(\mathbf q')\;(>0,\ \text{equal on all four sublattices}).\tag{E4, E5}$$
-<p>The finite-\(q\) grid matrices \(\Jc_{cc}(\mathbf q)+\delta\Jc(\mathbf q)\) carry the post-subtraction coupling (already \(-d\) on the diagonal), and the uniform coupling takes the explicit reduction \(\Jc(0)\to\Jc(0)-d\) &mdash; the single line that carries the mean-field DS2023 mechanism into the mean field, the RPA denominator and the 1/z criticality at once (&sect;1.6 single-sourcing). Measured \(d(T_c)=0.48\) &mu;eV, a 7.5% reduction of \(\Jc^{cc}_{D\cdot D}(0)=6.42\) &mu;eV &mdash; in the DS2023-consistent 0.3&ndash;0.5 &mu;eV band.</p>
-<p>The zero-field criticality condition (E2) keeps its form but is now <strong>\(T\)-dependent</strong> with ODD on, because \(\chi_\perp(T)\) enters \(\delta\Jc\) and hence both \(\Jc(0;T)\) and \(\Sigma_c(0;T)\): \(T_c(0)\) is the root of</p>
-$$\Jc(0;T)\,\chi_0^{cc}(0;T)=1+\Sigma_c(0;T),\qquad \Sigma_c(0;T)=\Sigma_c\big(\Jc(0)-d(T),\,\Jc_\nu[\Jc_{cc}+\delta\Jc(T)]\big)\ \text{(R2007 eq.\,10).}\tag{E2}$$
-<p>(<code>invz_critical_T0field</code> now accepts \(\Sigma_c\) and \(\Jc(0)\) as function-of-\(T\) handles; \(\chi_\perp(T)\) is nearly flat so the bisection converges unchanged.) The full measurement engine is <code>invz_odd_zero_field</code>.</p>
-<div class="callout note"><span class="tag">&chi;<sub>&perp;</sub> held fixed (design decision)</span> \(\chi_\perp\) is Van&nbsp;Vleck-dominated and insensitive to the cc order parameter and to \(K\); it is computed <strong>once</strong> per \((T,B_x)\) <em>before</em> the EMT&hArr;&Sigma; self-consistency loop, never iterated inside it (<code>invz_chiperp</code> does not route through <code>invz_twolevel</code> &mdash; it must stay regular across the ~10 K CF gap, where the two-level object is not). The internal-field parameter renormalization that the on-site \(-d\) would otherwise double-count is Tier&nbsp;2 (the field covariance (E3), <code>invz_odd_fieldvar</code> &mdash; implemented behind <code>opts.odd_tier2</code>, below); full-tensor ODD mode-mixing stays deferred to Tier&nbsp;3 (&sect;8).</div>
-<p><strong>Flag surface.</strong> Libraries read <code>opts.odd</code>; drivers read <code>ion.odd</code> (default 0, mirroring <code>ion.demag</code>; intrinsic-only, requires <code>demag=0</code>). A point solve turns ODD on with <code>opts.odd=true</code> + <code>opts.odd_blocks=struct('Vca',&hellip;,'Vcb',&hellip;,'Vcc',&hellip;,'Jcc0',&lt;unshifted&gt;)</code> (blocks precomputed once by the caller &mdash; no disk reads inside solver loops) and <code>Jnu_flat=[]</code> (the branches are rebuilt from the blocks + \(\delta\Jc(T,B_x)\)); the \(-d\) shift on <code>J0eff</code> is applied exactly once, inside the solver.</p>
-<div class="callout plain"><span class="tag">Measured &Delta;T<sub>c</sub>(0)</span> Governing condition/&Sigma;-space split (Richardson 12&sup3;/24&sup3;): \(T_c(0)\) <strong>1.743 K &rarr; 1.509 K</strong> with Tier-1 ODD (\(\Delta T_c=0.234\) K, 13.4%), \(\Sigma_c(0)\) rising 0.298 &rarr; 0.389. That closes essentially the whole &asymp;0.21 K "missing suppression" of the no-ODD 1/z baseline vs experiment (1.53 K) &mdash; but the DS2023 comparison is qualitative only (their 3-state MF gives ~5%; spin-&frac12; MC \(T_c=1.6295\) K; different CF treatment, Gaussian-vs-non-Gaussian statistics; <strong>never</strong> import their 0.805 longitudinal rescaling or perturbative hyperfine). Report, don't tune. Full split, closure defect, and the \(B_c(T)\) attenuation table: <code>docs/ODD-LOG.md</code> &sect;T1.5.</div>
-<div class="callout note"><span class="tag">Retardation (T2) &mdash; measured, static frozen as default</span> The static \(\chi_\perp(0)\) in (E1) is an adiabatic approximation; the retarded variant \(\delta\Jc(\mathbf q,i\omega_n)\) is implemented behind <code>opts.odd_retarded</code> (scalar surrogate \(\chi_\perp(i\omega_n)\approx r_n\chi_\perp(0)\), exact in the \(\delta\Jc\) matrix, first-order in the mode spectrum; <code>invz_emt_scalar</code> accepts per-frequency spectra <code>[nq&middot;4, n&omega;]</code>). Despite substantial retardation in the channels themselves (\(r_1=0.68\) at 1.53 K), the T2.2 decision measurement found the boundary shift <strong>negligible</strong>: \(|\Delta T_c|\approx0.02\) mK at the 2 T proxy and \(\Delta B_c(1.2\,\mathrm K)=0\) to crossing tolerance &mdash; criticality lives in the elastic \(n=0\) sector where \(r_1=1\) exactly and \(\chi_\perp(0)\) is exact (\(T_c(0)\) is retardation-invariant by construction). Per the plan's 10 mK rule the <strong>static form stays the default</strong>; the retarded path remains available behind the flag (exact per-\((\mathbf q,n)\) cross-check behind <code>opts.odd_retarded_exact</code>). Numbers, \(r_n\) profile, surrogate error (\(2\times10^{-11}\) on \(\Sigma_0\)): <code>docs/ODD-LOG.md</code> &sect;T2.</div>
-
-<p><strong>Tier 2 &mdash; variable moments (Dollberg), opt-in on top of Tier 1.</strong> The same ODD blocks make every ion see a fluctuating <em>internal</em> transverse field \(h_i^\alpha=\sum_j \Jc^{\alpha c}_{ij}\,\delta J^c_j\). Tier 1 keeps the doublet parameters \((\Delta,M^2,n_{01})\) at their applied-field values; Tier 2 lets the internal fields re-dress them (DS2023's "variable moments"). At a <em>converged</em> Tier-1 point the field covariance is the E3 contraction of the equal-time cc structure factor over the BZ (<code>invz_odd_fieldvar</code>, meV<sup>2</sup>; \(h_{\rm eq}=\sqrt{\max\mathrm{eig}\,C}/(g_L\mu_B)\approx0.3\) T, same order as Dollberg's \(\sim\)0.4 T distribution width), and the doublet is re-dressed by a quenched Gaussian average over \((h_a,h_b)\sim N(0,C)\) on a Gauss&ndash;Hermite grid (<code>invz_twolevel_avg</code>): node fields enter as pure field shifts, and the node-averaged response \(\bar g(i\omega_n)\) plus the node-averaged FULL electronuclear \(\bar G_0\) are re-compressed into effective two-level parameters (\(\Delta_{\rm eff}\ge\Delta\), level repulsion) by matching \(\bar g(0)\) and the \(\omega_n^{-2}\) tail exactly. <code>invz_solve_point</code> with <code>opts.odd_tier2=true</code> (requires <code>opts.odd</code>) iterates this to self-consistency: the converged Tier-1 solve seeds \(C\) &rarr; dressed \((\Delta_{\rm eff},\dots)\) and \(\bar G_0\) re-enter the inner EMT&hArr;&Sigma; loop (warm-started) &rarr; \(C\) is re-evaluated and mixed (damping 0.5) until \(\max|\delta C|&lt;10^{-3}\) relative (cap <code>opts.max_tier2</code> = 8; non-convergence masked exactly like the EMT loop; new fields <code>pt.C/tier2_iters/tla/tier2_resid</code>). The criticality condition then carries the <em>dressed</em> local propagator, \(\mathrm{crit}=1+\Sigma_0-\Jc(0)\,\bar\chi_0^{cc}(0)\) &mdash; that is how variable moments suppress ordering. The lattice geometric side (the \(\delta\Jc\) rebuild and the \(-d\) shift) stays at the Tier-1 static \(\chi_\perp\) (the &chi;<sub>&perp;</sub>-held-fixed callout above; Van&nbsp;Vleck, insensitive); combining with <code>opts.odd_retarded</code> errors (<code>invz:oddArgs</code>) &mdash; the E3 assembly uses the static mode spectrum and has no validated retarded counterpart (the static T2.2 default makes that combination unused).</p>
-<div class="callout note"><span class="tag">Least rigorous step (flagged)</span> The Tier-2 dressing is a <em>quenched-Gaussian, static</em> treatment: thermal/quantum internal-field fluctuations are frozen into a classical distribution and the averaged response is re-compressed into a single pole (<code>invz_twolevel_avg</code>, whose header carries the same flag). Averaging the <em>response</em> and averaging the <em>parameters</em> are inequivalent &mdash; the default averages \(g(i\omega_n)\) node-by-node (the disorder-averaged propagator; parameter averaging stays behind <code>opts.tier2.avg='params'</code>), with the measured inequivalence \(\Delta_{\rm eff}=0.153888\) (response) vs \(0.152857\) (params) meV at the T3.2 fixture. Treat Tier-2 numbers accordingly: <code>docs/ODD-LOG.md</code> &sect;T3.2&ndash;T3.4.</div>
-<div class="callout plain"><span class="tag">Measured (T3.3/T3.4)</span> PM gate (1.80 K, 0.05 T): <strong>2 outer iterations</strong>, crit 0.09127 &rarr; 0.09468 (suppression), \(\Delta\) 1.30&times;10<sup>&minus;4</sup> &rarr; 1.18&times;10<sup>&minus;2</sup> meV (the internal field, not the 0.05 T applied field, sets the dressed splitting), \(C_{aa}=4.57\times10^{-4}\) meV<sup>2</sup>. Combined boundary at the 0.5 T proxy (PM-side crit-extrapolation estimator, common 1/30 K grid): \(T_c^*\) <strong>1.701 (off) &rarr; 1.487 (+Tier 1) &rarr; 1.480 K (+Tier 1+2)</strong> &mdash; split <strong>97.2% : 2.8%</strong>, i.e. Tier 2 adds ~6 mK on top of Tier 1's ~0.21 K. IR safety: approaching \(B_c\)(1.2 K) from above, \(\|C\|\) stays flat to 0.2% while crit falls 3&times; (the ODD blocks vanish at \(\mathbf q\to0\): the softening uniform mode never feeds \(C\)). Small \(B_x\) (T3.4): at exactly \(B=0\) the solve still throws <code>invz:degenerateDoublet</code> &mdash; deliberately: the bare Tier-1 two-level scaffold needs a finite doublet, so zero field stays with the closed-form route (<code>invz_odd_zero_field</code>) and 0.05 T is the practical proxy; and since \(\Delta_{\rm eff}\approx11\)&ndash;\(12\ \mu\)eV is only ~3&times; the hyperfine scale \(A\approx3.4\ \mu\)eV, zero-field Tier-2 numbers remain <em>directional</em>, not quantitative. Report, don't tune: <code>docs/ODD-LOG.md</code> &sect;T3.3/T3.4.</div>
-
-<h3 id="odd-lit">1.9.1 &nbsp;Relation to the reference literature &mdash; implementation in spirit, not in algorithm</h3>
-<p>The point of including ODD is that the reference literature (Dollberg, Andresen &amp; Schechter, PRB <b>105</b>, L180413 (2022); Dollberg &amp; Schechter, arXiv:2308.10095 &mdash; &ldquo;DS2023&rdquo;) holds that its inclusion fixes the phase boundary at high temperature. This module deliberately does <em>not</em> copy the literature algorithm &mdash; only the physics principle: if the authors are right, the correct phase boundary should <em>naturally emerge</em> from the otherwise-unchanged 1/z machinery, which is the best available test of our understanding of the underlying physics &mdash; particularly because the 1/z expansion method is fundamentally different from the reference framework. The physics-level treatment, including two analytic results this framing produced (the uniform-shift theorem and the naive-MF inconsistency), is <a href="../jensen_1z_framework.html#s11"><code>jensen_1z_framework.html</code> &sect;11</a>.</p>
-<p><strong>How the principle enters (renormalized inputs, unchanged machinery).</strong> The transverse \((a,b)\) response of Ho<sup>3+</sup> is Van&nbsp;Vleck (first excited CF level &asymp;10.8 K, \(\gg k_BT\) at the transition), and the ODD blocks vanish at \(\mathbf q=0\) by the \(C_2\)-about-\(c\) site symmetry &mdash; no mean-field effect; ODD acts only through fluctuations. Integrating out that fast transverse channel at Gaussian level yields exactly <strong>two renormalized inputs</strong>: the mediated pair coupling \(\delta\Jc^{cc}(\mathbf q)\) with its self-site subtraction (E1/E4/E5, Tier&nbsp;1 &mdash; the corrected mode spectrum feeds \(\Sigma_c\), the shifted \(\Jc(0)-d\) feeds \(\Jc(0)\chi_0=1+\Sigma\)) and the internal-field covariance (E3, Tier&nbsp;2 &mdash; quenched-Gaussian re-dressing of the doublet parameters). No formula in the EMT/&Sigma; layer changes. Both mediators are the module's <em>own</em> objects: \(\chi_\perp\) is the full 136-state electronuclear transverse susceptibility (17.64 meV<sup>&minus;1</sup> at 1.53 K &mdash; not the 3-state \(2\rho^2/\Delta\approx11\) of the reference model), and the Tier-2 covariance is contracted from the module's own converged 1/z equal-time structure factor. Retardation was <em>tested, not assumed</em> (the T2 callout above: 0.022 mK \(\ll\) the 10 mK threshold; criticality lives in the elastic \(n=0\) sector where the static \(\chi_\perp\) is exact).</p>
-<p><strong>Deliberately not imported</strong> (the algorithm level of DS2023):</p>
-<ul class="tight">
-  <li>no Schrieffer&ndash;Wolff effective spin-&frac12; projection, no 3-state truncation &mdash; the single ion and \(\chi_\perp\) stay the full 136-state electronuclear problem, hyperfine exact, non-perturbative;</li>
-  <li>no Monte Carlo;</li>
-  <li>no 0.805 longitudinal rescaling &mdash; in the 1/z framework the \(c\)-axis fluctuation renormalization is \(\Sigma\)'s job; importing the factor would double-count fluctuations;</li>
-  <li>no perturbative temperature-dependent hyperfine renormalization.</li>
-</ul>
-<p>DS2023 numbers are used in exactly two ways: (a) their convention-free geometric lattice sums (Suppl.&nbsp;Table&nbsp;I) as <em>unit guards</em>, verified independently by Parseval/real-space identities (ODD-LOG &sect;T1.1); (b) their MF/MC results as <em>qualitative comparators</em> &mdash; reported against, never tuned to.</p>
-<div class="callout note"><span class="tag">The emergent-boundary test</span> With zero imported fitting factors: \(\Delta T_c(0)=0.2341\pm0.001\) K against the &asymp;0.21 K high-\(T\) discrepancy &mdash; \(T_c(0)\): 1.743 &rarr; <strong>1.509 K</strong> vs experiment 1.53 K, a 21 mK <em>overshoot</em>, stated plainly; \(\Delta\Sigma_c(0)=+0.091\); and the \(B_c(T)\) suppression attenuates toward high field (\(\chi_\perp\) stiffens as the doublet splits), consistent with the DS2023 crossover &asymp;3.5 T. Numbers: <code>docs/ODD-LOG.md</code> &sect;T1.5/&sect;V4.</div>
-<div class="callout caution"><span class="tag">Caveats</span> The Gaussian (adiabatic) elimination of the transverse channel <em>is</em> the controlled approximation; its rigorous completion is the full-tensor route (<code>odd_implementation_plan.html</code> Appendix&nbsp;A; implementation plan <code>docs/superpowers/plans/2026-07-17-invz-tensor-full.md</code>, superseding the deferred 2026-07-16 draft), whose Gaussian truncation must reproduce Tier&nbsp;1 and whose static-Gaussian limit of the mixed cumulants must recover Tier&nbsp;2 &mdash; the designed future cross-validation (never stack the two routes). The Tier-2 quenched-Gaussian dressing remains the least rigorous step (flagged above; keep it flagged). And the right claim is that <em>the mechanism naturally closes the gap within the approximation's expected fidelity</em> &mdash; not exact agreement: the &plusmn;1 mK bar is grid-only, and the Gaussian-channel systematic is unquantified until the tensor route exists.</div>
-
-<h2 id="flow">2 · Data flow &amp; call structure</h2>
-
-<h3>2.1 &nbsp;Driver call structure — what you run, and what it calls</h3>
-<p>The two scripts you run are the <strong>drivers</strong>; everything below them is called to carry out the task. Both fan into one shared <em>solver core</em>, and the only phase-dependent fork is the paramagnet / ferromagnet solve pair — every other function is shared between the phases.</p>
-<figure>
-<svg viewBox="0 0 740 432" width="100%" role="img" aria-label="invz driver call structure" style="max-width:740px;">
-  <defs>
-    <marker id="ahcs" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
-      <path d="M0,0 L8,4 L0,8 Z" fill="#8a806e"/>
-    </marker>
-  </defs>
-
-  <!-- Tier 1: drivers -->
-  <rect class="fc-band" x="30" y="10" width="320" height="48" rx="7"/>
-  <text class="fc-title" x="48" y="30">DRIVER &middot; spectra</text>
-  <text class="fc-fn" x="48" y="49">invz_run_spectra</text>
-  <rect class="fc-band" x="390" y="10" width="320" height="48" rx="7"/>
-  <text class="fc-title" x="408" y="30">DRIVER &middot; phase boundary</text>
-  <text class="fc-fn" x="408" y="49">invz_run_phase_diagram</text>
-  <line class="fc-arrow" style="marker-end:url(#ahcs)" x1="190" y1="58" x2="190" y2="80"/>
-  <line class="fc-arrow" style="marker-end:url(#ahcs)" x1="550" y1="58" x2="550" y2="80"/>
-
-  <!-- Tier 2: orchestration -->
-  <rect class="fc-band" x="30" y="82" width="320" height="60" rx="7"/>
-  <text class="fc-fn" x="48" y="101">invz_spectra_map</text>
-  <text class="fc-note" x="48" y="119">sweep fields; per field FM/PM &rarr; build &chi;&Prime;(&omega;)</text>
-  <text class="fc-note" x="48" y="135">then invz_chi_realaxis &middot; invz_plot_spectra_map</text>
-  <rect class="fc-band" x="390" y="82" width="320" height="60" rx="7"/>
-  <text class="fc-fn" x="408" y="101">invz_critical (&middot;_T)</text>
-  <text class="fc-note" x="408" y="119">bisect B&#8339; at fixed T &middot; T at fixed B&#8339;</text>
-  <text class="fc-note" x="408" y="135">+ invz_critical_T0field &middot; invz_sigma_crit</text>
-  <line class="fc-arrow" style="marker-end:url(#ahcs)" x1="190" y1="142" x2="190" y2="164"/>
-  <line class="fc-arrow" style="marker-end:url(#ahcs)" x1="550" y1="142" x2="550" y2="164"/>
-
-  <!-- Tier 3: per-point solve (phase fork) -->
-  <rect class="fc-band loop" x="30" y="166" width="680" height="66" rx="7"/>
-  <text class="fc-title fc-loop" x="48" y="186" style="fill:#1e6b45">PER-POINT SOLVE &mdash; by phase: FM below B&#8347;, PM above</text>
-  <rect x="48" y="194" width="300" height="30" rx="5" style="fill:#fdfcf9;stroke:#1e6b45;stroke-width:1.2"/>
-  <text class="fc-fn" x="64" y="213">invz_solve_point  (PM)</text>
-  <rect x="392" y="194" width="300" height="30" rx="5" style="fill:#fdfcf9;stroke:#1e6b45;stroke-width:1.2"/>
-  <text class="fc-fn" x="408" y="213">invz_solve_point_ordered  (FM)</text>
-  <line class="fc-arrow" style="marker-end:url(#ahcs)" x1="370" y1="232" x2="370" y2="254"/>
-
-  <!-- Tier 4: solver core -->
-  <rect class="fc-band" x="30" y="256" width="680" height="72" rx="7"/>
-  <text class="fc-title" x="48" y="276">SOLVER CORE &mdash; both branches call these</text>
-  <text class="fc-fn" x="48" y="296">invz_single_ion &middot; invz_chi0z &middot; invz_twolevel / _ordered &middot; invz_g &middot; invz_matsubara</text>
-  <text class="fc-fn" x="48" y="316">invz_emt_scalar &middot; invz_lambdas &middot; invz_sigma / _ordered</text>
-  <line class="fc-arrow" style="marker-end:url(#ahcs)" x1="370" y1="328" x2="370" y2="350"/>
-
-  <!-- Tier 5: inputs / lattice -->
-  <rect class="fc-band io" x="30" y="352" width="680" height="70" rx="7"/>
-  <text class="fc-title" x="48" y="372" style="fill:#7a6a48">INPUTS &amp; LATTICE &mdash; built once, fed into every solve</text>
-  <text class="fc-fn" x="48" y="392">invz_ion &middot; invz_const &middot; stevens_ops</text>
-  <text class="fc-fn" x="48" y="412">invz_jq_modes &#8592; qVec_generator &middot; MF_dipole &middot; exchange &middot; ellipsoid_demagn</text>
-</svg>
-<figcaption>What the user runs (top) and the functions each driver calls to carry out the task. Calls flow downward; the two <code>invz_solve_point[_ordered]</code> boxes are the only phase-dependent fork.</figcaption>
-</figure>
-
-<h3>2.2 &nbsp;Data flow through the layers</h3>
-<p>Each layer consumes only the outputs of the layers above it. The self-consistent point solve (layer 6) is the loop that ties the effective medium (4) to the self-energy (5).</p>
-
-<figure>
-<svg viewBox="0 0 720 616" width="100%" role="img" aria-label="invz module data-flow chart" style="max-width:720px;">
-  <defs>
-    <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
-      <path d="M0,0 L8,4 L0,8 Z" fill="#8a806e"/>
-    </marker>
-  </defs>
-
-  <!-- band 1: inputs -->
-  <rect class="fc-band io" x="40" y="8" width="640" height="50" rx="7"/>
-  <text class="fc-title" x="58" y="30">1 · INPUTS</text>
-  <text class="fc-fn" x="58" y="48">invz_ion · invz_const · stevens_ops</text>
-  <text class="fc-note" x="360" y="48">CF / exchange / lattice parameters (R 2007 Table I)</text>
-  <line class="fc-arrow" x1="360" y1="58" x2="360" y2="74"/>
-
-  <!-- band 2: single-ion -->
-  <rect class="fc-band" x="40" y="76" width="640" height="58" rx="7"/>
-  <text class="fc-title" x="58" y="98">2 · SINGLE-ION RESPONSE</text>
-  <text class="fc-fn" x="58" y="116">invz_single_ion &#8594; invz_chi0z</text>
-  <text class="fc-note" x="330" y="116">&#967;&#8320;(z) &#8658; G&#8320; = &#8722;&#967;&#8320;&#7580;&#7580;  (136-state exact diag + transverse MF)</text>
-  <text class="fc-fn" x="58" y="130">invz_twolevel &#8594; invz_g</text>
-  <text class="fc-note" x="330" y="130">doublet (&#916;, M&#178;, n&#8320;&#8321;, g&#8320;) &#8658; g(z)</text>
-  <line class="fc-arrow" x1="360" y1="134" x2="360" y2="150"/>
-
-  <!-- band 3: coupling -->
-  <rect class="fc-band io" x="40" y="152" width="640" height="50" rx="7"/>
-  <text class="fc-title" x="58" y="174">3 · LATTICE COUPLING</text>
-  <text class="fc-fn" x="58" y="192">invz_jq_modes</text>
-  <text class="fc-note" x="330" y="192">&#119973;&#8341;(q) branches &amp; &#119973;(0)  [dipole + exchange, 4&#215;4 cc]</text>
-  <line class="fc-arrow" x1="360" y1="202" x2="360" y2="218"/>
-
-  <!-- band 4: EMT -->
-  <rect class="fc-band" x="40" y="220" width="640" height="50" rx="7"/>
-  <text class="fc-title" x="58" y="242">4 · EFFECTIVE MEDIUM</text>
-  <text class="fc-fn" x="58" y="260">invz_emt_scalar</text>
-  <text class="fc-note" x="330" y="260">K(i&#969;&#8345;) fixed point  (Dyson G, cavity G&#7549;)</text>
-  <line class="fc-arrow" x1="360" y1="270" x2="360" y2="286"/>
-
-  <!-- band 5: self-energy -->
-  <rect class="fc-band" x="40" y="288" width="640" height="50" rx="7"/>
-  <text class="fc-title" x="58" y="310">5 · SELF-ENERGY</text>
-  <text class="fc-fn" x="58" y="328">invz_lambdas &#8594; invz_sigma</text>
-  <text class="fc-note" x="330" y="328">&#955;&#8345; moments &#8658; &#931; = &#945; + &#947;g</text>
-  <line class="fc-arrow" x1="360" y1="338" x2="360" y2="354"/>
-
-  <!-- band 6: self-consistent point (loop) -->
-  <rect class="fc-band loop fc-loop" x="40" y="356" width="640" height="52" rx="7"/>
-  <text class="fc-title" x="58" y="379">6 · SELF-CONSISTENT POINT &#8635;</text>
-  <text class="fc-fn" x="58" y="398">invz_solve_point (&middot;_ordered)</text>
-  <text class="fc-note" x="360" y="398">outer loop [4]&#8646;[5], (T,B&#8339;) &#8658; pt  (PM / FM branches)</text>
-  <line class="fc-arrow" x1="360" y1="408" x2="360" y2="424"/>
-
-  <!-- band 7: observables -->
-  <rect class="fc-band" x="40" y="426" width="640" height="58" rx="7"/>
-  <text class="fc-title" x="58" y="448">7 · OBSERVABLES</text>
-  <text class="fc-fn" x="58" y="467">invz_chi_realaxis</text>
-  <text class="fc-note" x="220" y="467">&#967;(q,&#969;)</text>
-  <text class="fc-fn" x="300" y="467">invz_critical</text>
-  <text class="fc-note" x="440" y="467">B&#8347;(T)</text>
-  <text class="fc-fn" x="500" y="467">invz_spectra_map</text>
-  <text class="fc-note" x="500" y="481">&#967;&#8243;(&#969;, B)</text>
-  <text class="fc-note" x="58" y="481">also: invz_sigma_crit / invz_critical_T0field (closed-form B=0)</text>
-  <line class="fc-arrow" x1="360" y1="484" x2="360" y2="500"/>
-
-  <!-- band 8: drivers -->
-  <rect class="fc-band io" x="40" y="502" width="640" height="50" rx="7"/>
-  <text class="fc-title" x="58" y="524">8 · DRIVERS</text>
-  <text class="fc-fn" x="58" y="542">invz_run_phase_diagram · invz_run_spectra</text>
-  <text class="fc-note" x="430" y="542">interactive scripts (figures)</text>
-</svg>
-<figcaption>Dependency direction is strictly top-to-bottom. Layer 6 (<code>invz_solve_point</code>) is the only consumer of the point struct <code>pt</code>; layer 7 turns it into observables.</figcaption>
-</figure>
-
-<h2 id="quickstart">3 · Quick start</h2>
-
-<div class="callout plain"><span class="tag">Prerequisites</span> MATLAB (developed on R2025a). Repo-root <code>MF_dipole.m</code>, <code>exchange.m</code>, <code>qVec_generator.m</code> (tracked) are the only external dependencies. The Parallel Computing Toolbox is <em>optional</em> — the drivers use it if present and run serially otherwise.</div>
-
-<p>From the repository root (the path contains spaces — quote it):</p>
-<pre><code>% field-vs-frequency susceptibility / extracted mode
-run invz_projected/invz_run_spectra.m
-
-% the full phase boundary, two regimes  (parallel over all boundary points)
-run invz_projected/invz_run_phase_diagram.m</code></pre>
-
-<div class="callout note"><span class="tag">Verified QCP visual check</span> Before running, set <code>T=0.10</code>, <code>fields=linspace(4.60,4.90,61)</code>, <code>eUnit='GHz'</code>, <code>w=(0:0.01:6).'</code>, <code>eta=5e-5</code> meV, <code>theta_c=0</code>, <code>phi_ab=0</code>, <code>qpath=[]</code>, and <code>showPeaks=true</code>. This is the retained finite-<code>16^3</code> regression anchor described in <a href="#operational-status">Operational status</a>, not a grid-converged critical-field determination. The current 3&ndash;6 T interactive setting is useful for exploration, but masked lower-field ordered columns are expected and its full 101-column range has not been certified.</div>
-
-<p>Same driver, ferromagnetic-mode q-path view — set <code>qpath</code> non-empty near the top of <code>invz_run_spectra.m</code> (cf. R 2007 Fig. 3):</p>
-<pre><code>qh = linspace(1, 2, 51).';  qpath = [qh zeros(numel(qh), 2)];   % (1,0,0) -> (2,0,0)
-Bq = [3.6 4.24 6.0];                 % T; several fields -> E_peak(q) dispersion overlay
-wq = (0:0.004:0.85).';               % meV; 0.85 avoids clipping the R2007 Fig. 3 branch
-dispScale = 1.15;                    % R 2007 scale their calculated energies by 1.15 (Fig. 3)</code></pre>
-<div class="callout note"><span class="tag">Physical mode, not neutron intensity</span> By default <code>invz_spectra_qpath</code> follows the <em>uniform ferromagnetic-mode</em> coupling \(J(\mathbf q)=v^{\mathsf T}\Jc_{cc}(\mathbf q)v\), \(v=[1\,1\,1\,1]/2\) (<code>invz_jq_path</code> <code>P.Juni</code>) — the same effective coupling <code>MF_RPA_Yikai.m</code> uses, and the physical single mode under the "all four Ho sublattices equivalent" mean-field/RPA approximation both codes make. Along \((1,0,0)\to(2,0,0)\) it reproduces R 2007 Fig. 3's monotonic softening end to end (this module: 1/z 0.54&rarr;0.23 meV, RPA 0.53&rarr;0.21 meV; &times;1.15 scaling &rarr; &sim;0.61&rarr;0.24 meV vs. the paper's &sim;0.6&rarr;0.2 meV). <strong>Do not</strong> pass <code>opts.branch = 4</code> ("max eigenvalue") expecting the same curve: away from &Gamma; the uniform mode stops being an eigenvector of the 4&times;4 cc block, so the four sorted branches cross, and the largest-eigenvalue branch selects a <em>different physical sublattice combination</em> on each side of the crossing — for this path it mirrors the dispersion about \(h=1.5\). <code>opts.branch = 1..4</code> remains available as an exploratory sorted-eigenvalue view (branch <em>index</em>, not a mode identity tracked through crossings) but is not the R 2007 Fig. 3 comparison. It is still <strong>not</strong> a neutron cross-section either way — there is no eigenvector / structure-factor / polarization / magnetic-form-factor weighting — and it inherits three open issues from the rest of the module (§8): closed-grid BZ quadrature bias, possible negative spectral weight from the real-axis continuation, and the bare mean-field FM/PM handoff (<code>invz_solve_auto</code>). The direction-aware &Gamma;-limit guard (<code>invz_jq_path</code>) covers &Gamma;-<strong>equivalent</strong> points only — near non-&Gamma;-equivalent integer points (e.g. \((1,0,0)\), zero structure factor) the coupling keeps truncated-sum quality.</div>
-
-<p>Programmatic use of the core solve:</p>
-<pre><code>ion = invz_ion();
-[qv,~,~] = qVec_generator(ion.a,'mode','grid','grid',[16 16 16],'range',[-0.5 0.5]);
-qv = qv(any(abs(qv)>1e-12,2),:);
-[Jnu,info] = invz_jq_modes(ion, qv, struct('dpRng',30,'cache',true));
-pt  = invz_solve_point(ion, 0.31, 4.5, Jnu(:), struct('J0eff',info.Jcc0));   % one (T,Bx)
-out = invz_chi_realaxis(ion, 0.31, 4.5, pt, (0.01:0.005:0.7)', struct('Jsel',info.Jcc0));
-plot(out.chi_cc_q(1,:));   % chi(q=0, omega)</code></pre>
-
-<h2 id="drivers">4 · Driver scripts</h2>
-
-<h3><code>invz_run_spectra.m</code> — susceptibility spectra</h3>
-<p>Computes \(\chi''_{cc}(\omega)\) at the uniform mode versus transverse field at fixed \(T\), and <strong>chooses its view automatically from the number of fields</strong>:</p>
-<ul class="tight">
-  <li><strong>Few fields</strong> (<code>numel(fields) &le; sliceMax</code>, default 8) → 1-D line-slice overlay, 1/z solid vs bare-RPA dashed, one colour per field (cf. R 2007 Fig. 2).</li>
-  <li><strong>Many fields</strong> → 2-D field-vs-frequency <em>colormap</em>: \(B_x\) on x, \(\omega\) on y, \(\log_{10}\chi''\) in colour, with 1/z and RPA panels side by side (cf. Kovačević 2016 Fig. 3d).</li>
-</ul>
-<p>Edit the block at the top of the file: <code>T</code>, <code>fields</code> (e.g. <code>[3.6 4.2 4.8 5.4 6.0]</code> for slices, <code>linspace(0,6,61)</code> for a map), <code>w</code>, <code>eta</code>, <code>sliceMax</code>, and <code>useParallel</code>; set <code>ion.demag</code>/<code>ion.alpha</code> just after <code>invz_ion()</code> for a sample-shape correction (§1.6). <code>eta</code> is the real-axis Lorentzian half-width — a <em>display</em> broadening, not physical damping (the model's intrinsic linewidth is negligible at these temperatures), so keep it \(\gtrsim\) the <code>w</code> spacing or the peaks alias. The heavy result <code>S</code> replots for free via <code>invz_plot_spectra_map(gca, S, S.chiz, '1/z')</code>.</p>
-<div class="callout note"><span class="tag">Both phases, conditional ordered availability</span> RPA and 1/z are distinct approximations and their boundaries are not forced to agree. <code>S.phase</code> records the ordered-first auto state used for the \(\Sigma=0\) overlay (1 = moment-form, 2 = PM, 0 = no solution); <code>S.Bc_auto</code> is therefore a dispatch diagnostic, not a certified RPA critical field. <code>S.phase_1z</code> records the actual 1/z state: 2 for a stable PM point, 1 only where an accepted Jensen ordered endpoint exists, and 0 where the requested 1/z state is unavailable. In the finite-<code>16^3</code> QCP regression window the ordered moment and <code>S.D_ord</code> close continuously to the PM branch, but the accepted ordered width shrinks with coupling-grid refinement. At some moderate/deep ordered fields, the Jensen path remains incomplete and <code>S.chiz</code>, <code>S.Epeak</code>, and related outputs are deliberately <code>NaN</code>; the code does not silently substitute <code>ordered_1z='bare'</code>. Inspect <code>S.phase_1z_reason</code>, <code>S.ordered_diag_reason</code>, <code>S.stability_1z</code>, <code>S.pm_probe_status</code>, <code>S.suspect</code>, and the boundary-status fields before interpreting a map. See the <a href="../invzp_convg_diagnosis.md">diagnosis</a> for the branch mechanism and the <a href="../invzp_convg_fix.md">fix plan</a> for the current authorization boundary.</div>
-<p><code>theta_c</code> (deg) tilts the swept field out of the transverse <em>ab</em>-plane toward <em>c</em>, modelling experimental field misalignment: the direction is fixed across the sweep and the x-axis stays the field magnitude \(|B|\) (the longitudinal component is \(|B|\sin\theta_c\)). Longitudinal fields route the solve through the moment-form self-energy instead of the strict paramagnet (<code>invz_solve_auto</code>'s longitudinal branch, <code>opts.forced_moment</code>, sign-aware branch seeding) — the sharp quantum phase transition becomes a rounded crossover, and <code>S.phase&nbsp;=&nbsp;1</code> means "moment-form" for either reason (spontaneous FM below \(B_c\) <em>or</em> field-induced under a tilt). <strong>Scalar-stage validity:</strong> \(\Sigma\) dresses the <em>cc</em> channel only, exact at \(\theta_c=0\); the &Sigma;=0 scalar-vs-tensor cross-channel reference (<code>invz_chi_tensor_ref</code> / <code>invz_run_tensor_ref</code>) measures the supported range as <code>theta_c &le; 5&deg;</code> under the driver's own peak observables — mode position agreeing to a few &mu;eV and peak amplitude to &le;10% at every tested field; the raw and tilt-differenced spectral-L2 lineshape metrics are reported diagnostics only, and lineshape fidelity is explicitly <strong>not</strong> claimed (see <code>docs/SESSION-2026-07-16-field-angle.md</code>). Full-tensor propagation is deferred (design spec &sect;8); azimuthal (in-plane) rotation is covered separately by <code>phi_ab</code>, next.</p>
-<p><code>phi_ab</code> (deg) rotates the swept field <em>within</em> the transverse <em>ab</em>-plane, \(a\to b\), independently of <code>theta_c</code> above: <code>dhat = [cosd(theta_c)*cosd(phi_ab), cosd(theta_c)*sind(phi_ab), sind(theta_c)]</code>. A nonzero <code>phi_ab</code> <strong>requires</strong> <code>transverse_mf = 'vector_ab'</code> (next paragraph; <code>'none'</code> also passes, as a bare CF+Zeeman diagnostic) — the driver raises <code>invz:transverseMF</code> rather than silently returning a \(C_4\)-broken result under <code>legacy_x</code> (&sect;1.8). <code>phi_ab = -11&deg;</code> reproduces the experimentally calibrated external-stack geometry (<code>ion.cfRot(Ho) = -11&deg;</code>): the sign is pinned against the external <code>cf.m</code> coefficient-rotation convention by <code>test_invz_cfrot_equiv</code> — coefficient rotation by \(r\) matches field rotation by the <strong>same</strong> \(+r\), not the naively expected opposite sign. <code>invz_run_ip_scan.m</code> measures the supported range: at <code>theta_c = 0</code>, every tested angle (<code>phi_ab &isin; {0,5,11,15,30,45,60,75,79,90}&deg;</code>, <code>79&deg;</code> being the C4-equivalent mirror of the production angle <code>-11&deg;</code>) and field (<code>{2, 4.95, 6}</code> T) passes the same peak-observable gate as the <code>theta_c</code> reference above (worst case <code>eps_amp&nbsp;=&nbsp;2.66%</code>, <code>dE_peak&nbsp;=&nbsp;7.9&nbsp;&mu;eV</code>; full table in <code>docs/SESSION-2026-07-16-inplane-rotation.md</code>). <strong>Combined <code>theta_c&nbsp;&ne;&nbsp;0</code> AND <code>phi_ab&nbsp;&ne;&nbsp;0</code> is unvalidated</strong> — the two knobs were measured on separate one-dimensional slices, never simultaneously; see <a href="#scope">&sect;8</a>.</p>
-<p><code>transverse_mf</code> (<code>'legacy_x'</code> default | <code>'none'</code> | <code>'vector_ab'</code>) selects the transverse mean-field model passed to every single-ion solve in the driver (threaded via <code>opts.solve_opts.transverse_mf</code>); see &sect;1.8 for what each mode does and why <code>legacy_x</code> is \(C_4\)-inconsistent for a rotated field.</p>
-<p>Setting <code>qpath</code> (an <code>[nq&times;3]</code> r.l.u. array) switches the same driver to the ferromagnetic-mode q-path view (<code>invz_spectra_qpath</code> / <code>invz_plot_spectra_qpath</code>) at fixed field(s) <code>Bq</code>: a single field renders 1/z + RPA path-vs-frequency colormaps with a censored peak overlay; several fields (R 2007 Fig. 3 uses <code>Bq = [3.6 4.24 6.0]</code> T) render an \(E_{\rm peak}(q)\) dispersion overlay instead, one colour per field. The dispersion defaults to the uniform FM-mode coupling (<code>opts.branch = 0</code>), the physical mode that reproduces Fig. 3's monotonic \((1,0,0)\to(2,0,0)\) softening; <code>wq</code> sets the frequency grid — widen past its default 0.85 meV if peaks clip at the top edge, since the peak picker <em>censors</em> (never interpolates over) a boundary maximum; <code>dispScale</code> rescales the plotted dispersion only (R 2007 scale their calculated energies by 1.15 to match experiment, Fig. 3). See <a href="#quickstart">Quick start</a> for a worked snippet and the physical-vs-exploratory-branch caveat.</p>
-
-<h3><code>invz_run_phase_diagram.m</code> — phase boundary \(B_c(T)\)</h3>
-<p>Traces the R 2007 Fig. 1 paramagnetic-side boundary in <strong>two regimes</strong>: the critical <em>field</em> \(B_c(T)\) is found at each temperature in <code>Ts</code> by a downward coarse field scan followed by safeguarded root refinement (<code>invz_critical</code>, vertical cuts), while the critical <em>temperature</em> \(T_c(B)\) is found at each field in <code>Bs</code> by an adaptive temperature grid plus the same refinement (<code>invz_critical_T</code>, horizontal cuts). Both use only converged, finite values of the static mass <code>pt.crit</code>; see <a href="#critical-search">&sect;1.4.1</a> for the complete algorithm and fallback semantics. The horizontal cuts own the high-\(T\) end, where the boundary runs nearly parallel to the field axis and a fixed-\(T\) cut crosses it at a glancing angle (brackets fail, tiny \(T\) errors give huge \(B_c\) errors). Unless <code>opts.window</code> is supplied explicitly, each \(T_c(B)\) search uses a self-adapting window anchored at the zero-field \(T_c\), rather than a fixed driver-wide interval. Very small fields remain difficult because the nearly degenerate doublet leaves too few converged PM-side samples; the short segment to \(B=0\) is represented by the closed-form zero-field \(T_c\) endpoint. Full single-core run ≈ 2–3 h; see the next section for the parallel speedup.</p>
-
-<h2 id="parallel">5 · Parallelism</h2>
-<p>Independent fixed-\(T\) and fixed-\(B\) boundary jobs can be distributed over a parallel pool; the coarse scan and safeguarded refinement <em>within</em> one <code>invz_critical</code> or <code>invz_critical_T</code> call remain serial because each new bracket depends on the preceding EMT verdict.</p>
 <table>
-<thead><tr><th>Driver</th><th>Parallel axis</th><th>How to enable</th></tr></thead>
+<thead><tr><th>Entry point</th><th>Purpose</th><th>User-facing knobs</th></tr></thead>
 <tbody>
-<tr><td><code>invz_run_phase_diagram</code></td><td>boundary points (one flat <code>parfor</code> over the <code>Ts</code> and <code>Bs</code> jobs)</td><td><code>useParallel = true</code> (default)</td></tr>
-<tr><td><code>invz_spectra_map</code> / <code>invz_run_spectra</code></td><td>field (<code>parfor</code> over <code>fields</code>)</td><td><code>opts.parallel = true</code> / <code>useParallel = true</code></td></tr>
-</tbody>
-</table>
-<p>Both use <code>parfor&nbsp;(k = 1:n, nWorkers)</code> with <code>nWorkers = 0</code> forcing a serial run — so the same code runs with or without the Parallel Computing Toolbox, and falls back to serial automatically when it is absent. A local pool is auto-created on first use (~10–30 s once). The \(\Jc(q)\) lattice sum is computed once up front, so workers do no disk I/O and never contend on <code>invz_projected/cache/</code>. Progress lines interleave across workers — expected. With an 8-worker pool the phase boundary drops from ~2–3 h to roughly 20–30 min.</p>
-<div class="callout caution"><span class="tag">Do not tune away ordered masks</span> A marginal PM point can legitimately be masked at a boundary. The non-uniform ordered failures discussed here are different: measured multiple roots and fixed-\(h\) folds make convergence depend on basin and path, and a nearby seed can land on another valid algebraic root. Raising <code>max_outer</code>, damping more heavily, or widening tolerances has not supplied physical branch selection and must not be used as the production remedy. Keep the mask and consult the diagnosis/fix plan.</div>
-
-<h2 id="reference">6 · Function reference</h2>
-<table class="ref-table">
-<thead><tr><th>Function</th><th>Signature</th><th>Produces</th></tr></thead>
-<tbody>
-<tr><td><code>invz_ion</code></td><td><code>ion = invz_ion()</code></td><td>LiHoF4 CF/exchange/lattice parameters (R 2007 Table I); shape defaults <code>demag=0</code>, <code>alpha=1</code></td></tr>
-<tr><td><code>invz_field_vec</code></td><td><code>B = invz_field_vec(B)</code></td><td>normalizes a scalar or 3-vector field argument to a <code>[Bx By Bz]</code> row (T); every solver boundary in the module calls this once, so a scalar and an explicit <code>[Bx 0 0]</code> are always equivalent</td></tr>
-<tr><td><code>invz_single_ion</code></td><td><code>si = invz_single_ion(ion,T,B,opts)</code></td><td><code>si.E,V,P,Mx,My,Mz,Jexp,hx,JzJz_fluct</code></td></tr>
-<tr><td><code>invz_chi0z</code></td><td><code>chi = invz_chi0z(si,T,z,opts)</code></td><td><code>[3,3,nz]</code> single-ion tensor \(\chi_0\) at complex <code>z</code></td></tr>
-<tr><td><code>invz_twolevel</code></td><td><code>tl = invz_twolevel(ion,T,Bx)</code></td><td><code>tl.Delta,M2,m,n01,g0</code> (doublet params)</td></tr>
-<tr><td><code>invz_twolevel_ordered</code></td><td><code>tl = invz_twolevel_ordered(ion,T,Bx,hz)</code></td><td>ordered doublet params (m&ne;0) with fixed longitudinal MF <code>hz</code>; adds <code>tl.h0</code>; moved to <code>invz_common/</code> 2026-07-19 (one source of truth — <code>invz_tensor</code> depends on it too)</td></tr>
-<tr><td><code>invz_g</code></td><td><code>g = invz_g(tl,z)</code></td><td>two-level response \(g(z)\)</td></tr>
-<tr><td><code>invz_jq_modes</code></td><td><code>[Jnu,info,Juni] = invz_jq_modes(ion,qvec,opts)</code></td><td><code>Jnu [nq,4]</code> cc branch eigenvalues (demag-invariant); <code>info.Jcc0</code> (uniform mode, Lorentz cavity only, demag-invariant), <code>info.Jshape_cc</code> (strict-uniform demag observable correction), <code>info.Jaa0</code> (demag-aware transverse channel); <code>Juni [nq,1]</code> uniform ferromagnetic-mode projection \(v^{\mathsf T}\Jc_{cc}(q)v\) — the <strong>physical</strong> single-mode dispersion (§1.6/§4), <code>Juni(0)==info.Jcc0</code>, bounded above by <code>max(Jnu,[],2)</code> but not equal to it away from &Gamma;</td></tr>
-<tr><td><code>invz_jq_path</code></td><td><code>P = invz_jq_path(ion,qpath,opts)</code></td><td><code>P.Juni [nq,1]</code> uniform FM-mode coupling along a q-path (the physical dispersion — prefer this over any <code>Jnu</code> column); <code>P.Jnu [nq,4]</code> sorted branch couplings (exploratory only), both with a direction-aware &Gamma;-limit guard that snaps near-&Gamma; points to the exact directional long-wavelength limit; <code>P.snapped,s,s_cart,ksnap</code></td></tr>
-<tr><td><code>invz_sigma_crit</code></td><td><code>Sc = invz_sigma_crit(J0,Jnu_flat)</code></td><td>closed-form critical self-energy \(\Sigma_c(0)\)</td></tr>
-<tr><td><code>invz_critical_T0field</code></td><td><code>Tc = invz_critical_T0field(ion,Sc,J0eff)</code></td><td>zero-field \(T_c\)</td></tr>
-<tr><td><code>invz_emt_scalar</code></td><td><code>med = invz_emt_scalar(G0,Sigma,Jnu_flat,opts)</code></td><td><code>med.G,K,closure,converged</code></td></tr>
-<tr><td><code>invz_lambdas</code></td><td><code>lam = invz_lambdas(K,g,wts,beta,plist)</code></td><td>moments \(\lambda_p\)</td></tr>
-<tr><td><code>invz_sigma</code></td><td><code>sig = invz_sigma(tl,lam,K,g,beta)</code></td><td><code>sig.alpha,gamma,Sigma</code></td></tr>
-<tr><td><code>invz_sigma_ordered</code></td><td><code>sig = invz_sigma_ordered(tl,lam,K,g,beta)</code></td><td>ordered self-energy (framework SS9.2, J 2.26&ndash;2.27); needs <code>lam=[&lambda;1;&lambda;2;&lambda;3]</code>; adds <code>sig.alpha_m</code>; moved to <code>invz_common/</code> 2026-07-19 (one source of truth — <code>invz_tensor</code> depends on it too)</td></tr>
-<tr><td><code>invz_solve_point</code></td><td><code>pt = invz_solve_point(ion,T,Bx,Jnu_flat,opts)</code></td><td><code>pt.alpha,lambda,K,Sigma,tl,Sigma0,crit,converged</code></td></tr>
-<tr><td><code>invz_solve_point_ordered</code></td><td><code>pt = invz_solve_point_ordered(ion,T,Bx,Jnu_flat,opts)</code></td><td>ferromagnetic-phase solve; adds <code>pt.m0,is_ordered,alpha_m,si</code> (<code>is_ordered=false</code> &rarr; use the paramagnetic solve)</td></tr>
-<tr><td><code>invz_solve_auto</code></td><td><code>[pt,phase,di] = invz_solve_auto(ion,T,Bx,Jnu_flat,opts)</code></td><td>ordered-first solve at one <code>(T,Bx)</code>: tries <code>invz_solve_point_ordered</code>, falls back to <code>invz_solve_point</code>; <code>phase</code> 1=FM/2=PM/0=none; only <code>invz:*</code> exceptions are absorbed (returned in <code>di.ordered_err/para_err</code>), anything else rethrows</td></tr>
-<tr><td><code>invz_critical</code></td><td><code>bx = invz_critical(ion,T,Jnu_flat,opts)</code></td><td>critical field \(B_c(T)\): downward converged-point scan, non-convergence handling and safeguarded refinement of <code>pt.crit = 0</code> (&sect;1.4.1)</td></tr>
-<tr><td><code>invz_critical_T</code></td><td><code>tc = invz_critical_T(ion,Bx,Jnu_flat,opts)</code></td><td>critical temperature \(T_c(B)\): adaptive converged-point temperature grid and safeguarded refinement (near-vertical part of the boundary; &sect;1.4.1)</td></tr>
-<tr><td><code>invz_chi_realaxis</code></td><td><code>out = invz_chi_realaxis(ion,T,Bx,pt,w,opts)</code></td><td><code>out.Sigma_w,chi0cc_w,chi_cc_q[nJsel,nw]</code></td></tr>
-<tr><td><code>invz_spectra_map</code></td><td><code>S = invz_spectra_map(ion,T,fields,w,opts)</code></td><td><code>S.chiz,chirpa [nw&times;nB]</code> maps; <code>S.Sigma0,phase,phase_1z,crit_pm,suspect,Bc_auto,Bc_1z,m_1z,D_ord</code>; <code>opts.ordered_1z = 'jensen'</code> (default) &#124; <code>'bare'</code></td></tr>
-<tr><td><code>invz_plot_spectra_map</code></td><td><code>invz_plot_spectra_map(ax,S,chi,ttl)</code></td><td>renders one \(\chi''(\omega,B)\) colormap panel</td></tr>
-<tr><td><code>invz_spectra_qpath</code></td><td><code>S = invz_spectra_qpath(ion,T,B,qpath,w,opts)</code></td><td><code>S.chiz,chirpa [nw,nq]</code> along a q-path at fixed <code>(T,B)</code>, dispersion set by the uniform FM-mode coupling by default (<code>opts.branch=0</code>; <code>opts.branch=1..4</code> = exploratory sorted branch); censored, parabolic-refined <code>S.Epeak,Epeak_rpa</code> (excludes the hyperfine pole via <code>opts.peak_wmin</code>)</td></tr>
-<tr><td><code>invz_plot_spectra_qpath</code></td><td><code>invz_plot_spectra_qpath(ax,S,chi,Epeak,ttl,eUnit)</code></td><td>renders one branch \(\chi''(q,\omega)\) colormap panel with the censored peak dispersion overlaid</td></tr>
-<tr><td><code>invz_chi_tensor_ref</code></td><td><code>R = invz_chi_tensor_ref(ion,T,Bvec,w,opts)</code></td><td>&Sigma;=0 reference at one <code>(T,Bvec)</code>: ONE single-ion state and bare \(\chi_0\) propagated two ways, scalar cc-only vs. full 3&times;3 tensor inversion; <code>R.eps_spec/eps_amp/dE_peak</code> quantify the cross-channel error the scalar pipeline omits under a c-axis tilt (sets the <code>theta_c</code> supported range, &sect;4)</td></tr>
-<tr><td><code>invz_run_tensor_ref</code></td><td><code>run invz_run_tensor_ref.m</code></td><td>measurement driver: prints the &theta;/|B| table of <code>invz_chi_tensor_ref</code> metrics that sets the supported tilt range (logged in <code>docs/SESSION-2026-07-16-field-angle.md</code>)</td></tr>
-<tr><td><code>invz_c4fit</code></td><td><code>[A,phi0,resid] = invz_c4fit(phi_deg,y)</code></td><td>least-squares C4 harmonic fit \(y=A_1+A_2\cos4\phi+A_3\sin4\phi+A_4\cos8\phi\); <code>phi0</code> (deg) = principal-axis angle \(\mathrm{atan2d}(A_3,A_2)/4\); <code>resid</code> = worst-case pointwise residual (not RMS)</td></tr>
-<tr><td><code>invz_run_ip_scan</code></td><td><code>run invz_run_ip_scan.m</code></td><td>in-plane rotation measurement driver, two sections: (A) single-ion angular scans over <code>transverse_mf &isin; {none,legacy_x,vector_ab}</code> — C4/C8 harmonic content and principal-axis angle via <code>invz_c4fit</code>, exposing <code>legacy_x</code>'s \(C_4\) violation directly (&sect;1.8); (B) &Sigma;=0 scalar-vs-tensor comparison (<code>invz_chi_tensor_ref</code>, <code>transverse_mf='vector_ab'</code>) over <code>phi_ab</code>, setting the supported in-plane angle range (logged in <code>docs/SESSION-2026-07-16-inplane-rotation.md</code>)</td></tr>
-<tr><td><code>invz_cfrot</code></td><td><code>ion = invz_cfrot(ion,r_deg)</code></td><td>rotate the m=4 crystal-field coefficient pairs by <code>r_deg</code> about \(c\) (external <code>cf.m</code> 'coefficient' convention; the rotated ion gains <code>ion.B44s</code>, honoured by <code>invz_single_ion</code>). Rotated-CF-with-fixed-field is the exact equivalent of the <code>phi_ab = +r</code> field-rotation route under <code>'vector_ab'</code> — verified end-to-end to \(|\Delta\chi''|\lesssim10^{-9}\) by <code>test_invz_cfrot_equiv</code>; use whichever frame matches the experiment's bookkeeping</td></tr>
-<tr><td><code>invz_odd_blocks</code></td><td><code>[Vca,Vcb,Vcc,info]=invz_odd_blocks(ion,qvec,opts)</code></td><td>geometric off-diagonal dipolar (ODD) blocks \(\Jc^{ca},\Jc^{cb}\) (E1a) plus the cc block \(\Jc_{cc}\) that <code>invz_jq_modes</code> eigendecomposes, cached under the <code>odd1_</code> namespace; <code>info.Jcc0/Jaa0</code> (&sect;1.9)</td></tr>
-<tr><td><code>invz_chiperp</code></td><td><code>[Xp,info]=invz_chiperp(ion,T,B,opts)</code></td><td>\(2\times2\) transverse \((a,b)\) single-ion susceptibility (meV<sup>&minus;1</sup>), the symmetrized block of \(\chi_0\); Van&nbsp;Vleck-dominated, evaluated once per \((T,B_x)\) (&sect;1.9)</td></tr>
-<tr><td><code>invz_odd_deltaJ</code></td><td><code>[dJ,d,dinfo]=invz_odd_deltaJ(Vca,Vcb,Xp)</code></td><td>ODD-mediated coupling \(\delta\Jc^{cc}(\mathbf q)\) (E1) with the self-site subtraction (E4) and the uniform reduction \(d\) (E5); <code>dinfo</code> diagnostics computed only when requested</td></tr>
-<tr><td><code>invz_odd_modes</code></td><td><code>[Jnu,Juni]=invz_odd_modes(Vcc,dJ)</code></td><td>shared VALUES-ONLY mode-assembly kernel: sorted real eigenvalues <code>Jnu [nq,4]</code> of the Hermitized \(\Jc_{cc}(\mathbf q)\;[+\,\delta\Jc(\mathbf q)]\) (<code>dJ</code> may be <code>[]</code>), optional uniform FM-mode projection <code>Juni</code>; single source for the solvers, <code>invz_jq_modes</code>' odd path and <code>invz_odd_zero_field</code> (eigen<em>vector</em> sites stay separate for last-bit identity, &sect;1.9)</td></tr>
-<tr><td><code>invz_odd_zero_field</code></td><td><code>[Tc,out]=invz_odd_zero_field(ion,opts)</code></td><td>zero-field \(T_c(0)\) with/without ODD (Richardson over grids); <code>out.split</code> is the governing condition/&Sigma;-space MF/fluctuation decomposition (&sect;1.9; <code>docs/ODD-LOG.md</code> &sect;T1.5)</td></tr>
-<tr><td><code>invz_odd_fieldvar</code></td><td><code>[C,info]=invz_odd_fieldvar(ion,pt,S,T,opts)</code></td><td>Tier-2 internal transverse-field covariance \(C\) (E3, meV<sup>2</sup>) at a CONVERGED ODD point solve, from the equal-time cc structure factor of the converged EMT propagator; <code>info.heq_T</code> is the equivalent field scale (&sect;1.9)</td></tr>
-<tr><td><code>invz_twolevel_avg</code></td><td><code>[tla,avg]=invz_twolevel_avg(ion,T,Bx,C,opts)</code></td><td>Gauss&ndash;Hermite quenched-Gaussian dressing of the doublet over \(N(0,C)\) internal fields: effective \((\Delta,M^2,n_{01})\) fit to the node-averaged response, plus (opt-in <code>opts.G0</code>) the disorder-averaged electronuclear \(\bar G_0\) &mdash; the plan's flagged least rigorous step (&sect;1.9)</td></tr>
+<tr><td><code>invz_run_phase_diagram.m</code></td>
+    <td>Independent B<sub>c</sub>(T) and T<sub>c</sub>(B) cuts</td>
+    <td><code>Ts</code>, <code>Bs</code>, <code>useODD</code>,
+        <code>gridN</code>, <code>dipoleBackend</code>,
+        <code>useParallel</code></td></tr>
+<tr><td><code>invz_run_spectra.m</code></td>
+    <td>Uniform field sweep or fixed-field q-path spectra</td>
+    <td><code>T</code>, <code>fields</code>, <code>w</code>,
+        <code>qpath</code>, <code>Bq</code>, <code>wq</code>,
+        <code>gridN</code>, <code>dipoleBackend</code>, plotting and solver
+        budgets</td></tr>
 </tbody>
 </table>
 
-<h2 id="tests">7 · Tests &amp; published benchmarks</h2>
-<div class="callout plain"><span class="tag">Current verification policy</span> The historical unit-test tree is absent. Do not run the stale <code>runtests('invz_projected/tests')</code> command. When a change needs a guard, build a fresh focused script outside the production tree (normally under <code>/tmp</code>), freeze its inputs/oracle before changing the implementation, and retain only scientifically useful records under <code>docs/diagnostics/</code>. The current artifact index is in the <a href="../invzp_convg_diagnosis.md#10-retained-diagnostic-artifacts">diagnosis</a>; historical suites and their old pass counts remain available in Git history but are not a current executable gate.</div>
-<p>The first required observable regression is the exact finite-<code>16^3</code>, 61-field QCP configuration in <a href="#operational-status">Operational status</a>. A quantitative QCP claim additionally requires coupling-grid convergence of the boundary, accepted-state support, and pole/peak curve. Solver/continuation changes require the coupled A&ndash;D residual audit, branch-direction and independent-seed agreement where applicable, and grid/cutoff checks specified in the <a href="../invzp_convg_fix.md">fix plan</a>. The published/value benchmarks below remain useful independent anchors, but this table is documentation rather than a claim that an in-tree test currently asserts every row.</p>
-<table>
-<thead><tr><th>Quantity</th><th>Published</th><th>This module</th><th>Source</th></tr></thead>
-<tbody>
-<tr><td>\(\Sigma_c\), fcc nearest-neighbour (Watson integral)</td><td>0.3447</td><td>0.3447 (Richardson 40³/80³)</td><td>R 2007, below eq. (10)</td></tr>
-<tr><td>\(\Sigma_c(0)\), LiHoF4, H=0</td><td>0.3004</td><td>0.2980 (Richardson 12³/24³)</td><td>R 2007 eq. (10)</td></tr>
-<tr><td>\(\Jc_{D\cdot D}^{cc}(0)\)</td><td>6.821 μeV</td><td>6.821–6.824 μeV</td><td>R 2007 eq. (4)</td></tr>
-<tr><td>\(\Jc_{D\cdot D}^{aa}(0)\)</td><td>3.912 μeV</td><td>3.910–3.912 μeV</td><td>R 2007 eq. (4)</td></tr>
-<tr><td>\(T_c(H=0)\)</td><td>1.74 K</td><td>≈1.74 K (MF: 2.26 K)</td><td>R 2007</td></tr>
-<tr><td>\(H_c(0.31\,\mathrm K)\)</td><td>42.4–43 kOe</td><td>within [4.0, 4.6] T</td><td>R 2007 Fig. 1/2</td></tr>
-<tr><td>\(\Sigma(0)\) at that boundary</td><td>0.0932</td><td>0.0932 ± 0.02</td><td>R 2007</td></tr>
-<tr><td>Soft-mode minimum, \(H\!\approx\!H_c\)</td><td>≈0.19 meV (calc.)</td><td>0.22 meV</td><td>R 2007 Fig. 2</td></tr>
-<tr><td>CF level scheme (K)</td><td>0*, 11, 32, 72, 84</td><td>0*, 10.8, 32.2, 72.0, 83.6</td><td>R 2007 Table II</td></tr>
-<tr><td>\(g_\parallel\)</td><td>13.78</td><td>13.78</td><td>—</td></tr>
-<tr><td>\(T_c(0)\), 1/z + Tier-1 ODD <em>(opt-in, &sect;1.9)</em></td><td>exp &asymp;1.53 K</td><td>1.509 K (Richardson 12³/24³; ODD off: 1.743 K)</td><td>archived ODD campaign; Git history</td></tr>
-</tbody>
-</table>
-<p>The opt-in <strong>ODD</strong> headline anchors are \(T_c(0)=1.50937\) K, \(\Sigma_c(0)=0.38880\), and \(d=0.483\ \mu\)eV. They were measured with the now-archived ODD campaign and should be re-guarded with a fresh focused script before changes to that route. The ODD result remains directional/qualitative versus DS2023 (their 3-state MF gives &sim;5&percnt;): report it, do not rescale the model to it.</p>
+<p>Both drivers add this directory, the repository root, and
+<code>invz_common</code> to the MATLAB path. Run them from the MATLAB editor or
+with <code>run(...)</code>. Persistent coupling caches are off by default, and
+the repository cache directory contains only <code>.gitignore</code>.</p>
 
-<h2 id="scope">8 · Scope &amp; limitations</h2>
-<div class="callout caution"><span class="tag">Operational qualifier</span> “In scope” below means the equations and code path exist. It does not mean that every ordered field currently yields an accepted Jensen state. The finite-<code>16^3</code> QCP window is ready for visual regression, not a grid-converged quantitative claim; broad low-field ordered coverage remains open and fails closed as described in <a href="#operational-status">Operational status</a>.</div>
-<p><strong>In scope:</strong> both phases — single-ion response, the scalar (cc-channel) 1/z self-energy and effective-medium lattice sum, the paramagnetic-side boundary, the real-axis cc-susceptibility \(\chi(\mathbf q,\nu,\omega)\), and the ferromagnetic phase via the spontaneous-moment mean field + elastic-sector self-energy (\(\alpha_m\), \(\lambda_3\); framework SS9.2, J 2.26&ndash;2.27), giving the soft mode on both sides of the transition; the uniform-mode coupling always carries the Lorentz cavity term (demag-invariant), plus an optional sample-shape correction split into the two channels where it can physically act — the strict-uniform observable term <code>info.Jshape_cc</code> and the demag-aware transverse coupling <code>info.Jaa0</code> (§1.6) — consistently shared by the mean field, RPA and 1/z; and a q-path susceptibility (<code>invz_spectra_qpath</code>) whose default dispersion is the physical uniform ferromagnetic-mode coupling \(v^{\mathsf T}\Jc_{cc}(q)v\), reproducing R 2007 Fig. 3's monotonic softening end to end (not a neutron-intensity calculation; see the Quick-start caveat) — an exploratory sorted-eigenvalue branch (<code>opts.branch=1..4</code>) remains available but is not the Fig. 3 comparison; and, <strong>at the scalar stage, two independent field-rotation knobs</strong> in <code>invz_run_spectra</code>: an out-of-plane c-axis tilt <code>theta_c</code> that routes a longitudinal field component through the moment-form self-energy (<code>invz_solve_auto</code>'s <code>forced_moment</code> branch), turning the sharp transition into a rounded crossover — tensor-referenced valid for <code>theta_c &le; 5&deg;</code> on peak observables (design spec <code>2026-07-16-invz-field-angle-design.md</code>; measurement in <code>docs/SESSION-2026-07-16-field-angle.md</code>) — and an in-plane <code>ab</code>-azimuth rotation <code>phi_ab</code> (&sect;1.8), requiring <code>transverse_mf = 'vector_ab'</code> for a \(C_4\)-consistent transverse mean field, tensor-referenced valid at <code>theta_c = 0</code> across every tested angle (0&ndash;90&deg;, in 5&deg; steps plus 11&deg; and 79&deg;) and field (2&ndash;6 T) under the same peak-observable gate (<code>invz_run_ip_scan</code>; measurement in <code>docs/SESSION-2026-07-16-inplane-rotation.md</code>); <code>phi_ab = -11&deg;</code> is pinned (<code>test_invz_cfrot_equiv</code>) to reproduce the experimentally calibrated external-stack geometry <code>ion.cfRot(Ho) = -11&deg;</code> (its C4-equivalent mirror point, <code>phi_ab = 79&deg;</code>, is included in the tested set). The two knobs are validated only <strong>separately</strong> — see the exclusion below. Finally, as an opt-in <strong>Tier-1</strong> extension (<code>opts.odd</code>/<code>ion.odd</code>, &sect;1.9): the off-diagonal dipolar (ODD) mediated coupling \(\delta\Jc^{cc}\) — a static, <em>Gaussian</em> (\(\chi_\perp\)-mediated) reduction-plus-\(q\)-structuring of the cc coupling that lowers \(T_c(0)\) by 0.234 K — with the closed-form \(\Sigma_c(0)\) now \(T\)-dependent (through \(\chi_\perp(T)\)) when the flag is on. On top of it, the <strong>Tier-2</strong> internal-field single-ion parameter renormalization (field covariance (E3) &rarr; Gauss&ndash;Hermite-dressed doublet, <code>opts.odd_tier2</code>, &sect;1.9) is in scope as a second opt-in stage &mdash; measured to add ~3% of the combined ~0.22 K suppression at the 0.5 T proxy, via a quenched-Gaussian dressing that is the plan's flagged least rigorous step; any full-tensor ODD mode-mixing (Tier 3) is out of scope (below).</p>
-<p><strong>Out of scope / future work:</strong></p>
-<ul class="tight">
-  <li><strong>Complete ordered-field availability and thermodynamic branch selection</strong> — the Jensen \(H_\mathrm{MF}\!\leftrightarrow H\) relation, elastic static closure, and path free-energy endpoint are implemented, but multiple algebraic roots/folds leave some moderate/deep ordered fields without an authorized branch. No experimental continuation state is dispatched to spectra. Full thermodynamic identities and a common stationary functional remain future work.</li>
-  <li><strong>Tensor observables</strong> — the full 3×3 / 4-sublattice RPA (neutron cross-sections, transverse components) lives in <code>MF_RPA_Yikai.m</code>; <code>invz_jq_modes</code>'s per-sublattice \(\Jc_{cc}(q)\) matrix is the hook point. See <a href="#tensor">&sect;1.7</a> for why the scalar cc reduction is quantitatively safe for the ordering channel (the neglected tensor mode-mixing enters below the 1% level).</li>
-  <li><strong>ODD Tier&nbsp;3</strong> (&sect;1.9) — the implemented ODD coupling is Tier&nbsp;1 (static, Gaussian, \(\chi_\perp\)-mediated) plus the Tier-2 internal-field <em>single-ion parameter</em> re-dressing (field covariance (E3) &rarr; \(\Delta,M^2,n_{01}\); <code>opts.odd_tier2</code>). A full-tensor ODD mode-mixing RPA (ODD lines hybridizing the cc soft mode with the transverse excitons) is Tier&nbsp;3 — deferred. Because \(\chi_\perp\) is held fixed (Gaussian) and the Tier-2 dressing is a quenched-Gaussian single-pole recompression, the zero-field \(T_c\) shift remains a directional/qualitative result vs DS2023, not a rescaled quantitative match.</li>
-  <li><strong>Combined c-tilt + in-plane rotation, and full-tensor propagation</strong> — <code>theta_c</code> (out-of-plane, <em>ac</em>-plane tilt) and <code>phi_ab</code> (in-plane, <em>ab</em>-plane rotation, &sect;1.8) are each tensor-referenced valid on their own one-dimensional slice (<code>theta_c &le; 5&deg;</code> at <code>phi_ab = 0</code>; every tested <code>phi_ab</code> at <code>theta_c = 0</code>) but <strong>never together</strong> — running the driver with both knobs nonzero is unvalidated and out of scope until a dedicated two-angle measurement is done (design spec &sect;8, amendment 3). Arbitrary-tilt fidelity beyond either validated range would need full-tensor 1/z propagation (rigorous tensor-RPA "A0" against the full 3×3 \(\chi_0\), or the projected "A1" bridge) superseding the scalar cc routing used here; also deferred.</li>
-  <li><strong>Thermodynamics</strong> — free energy, \(\delta U\), heat capacity (HTML eqs 34&ndash;35 / J 2.21&ndash;2.22; eq 44 = framework SS9.4, J 2.34). Note \(\delta U(T\!\to\!0)\neq0\) (zero-point shift).</li>
-  <li><strong>Ewald as the default backend</strong> — an opt-in Ewald backend is implemented and useful for lattice-sum validation, but the default remains the legacy brute-force backend. Both exhibit the ordered branch problem, so switching backends is not a convergence remedy.</li>
+<h2>Production architecture</h2>
+
+<pre>
+invz_run_phase_diagram
+  ODD off:
+    invz_bz_couplings
+      invz_phase1_qgrid
+      invz_jq_modes
+  ODD on:
+    invz_phase1_qgrid
+    invz_odd_blocks
+    invz_odd_zero_field (reuses the same blocks)
+  invz_critical / invz_critical_T
+    invz_crit_at
+      invz_solve_point
+
+invz_run_spectra
+  invz_spectra_map
+    invz_bz_couplings
+    invz_solve_auto
+      invz_solve_point_ordered
+        local H_MF inversion + static EMT closure
+      invz_solve_point
+    invz_chi_realaxis
+    invz_zero_sigma_overlay
+
+  invz_spectra_qpath
+    same BZ medium solve
+    invz_jq_path
+    invz_chi_realaxis
+</pre>
+
+<p>The ordered solver owns its H<sub>MF</sub> inversion and static EMT closure
+as local functions in <code>invz_solve_point_ordered.m</code>. They are
+implementation stages, not separate public entry points.</p>
+
+<p>The local response and Hamiltonian construction live in
+<code>invz_common</code>. The projected branch deliberately uses a scalar
+longitudinal (cc) propagator; it does not duplicate the full-tensor branch.</p>
+
+<h3>Current operational status</h3>
+
+<p>The phase-boundary stream is retained as the working result stream. The
+active debugging target is the spectra stream: the Jensen ordered closure does
+not converge over every requested ordered-field column. Such columns are
+reported as <code>phase=0</code> and remain <code>NaN</code>; this is the
+failure to diagnose, not a plotting or cache convention. No fallback state is
+inserted.</p>
+
+<h3>State selection</h3>
+
+<p><code>invz_solve_auto</code> first tries the Jensen ordered solution. It
+accepts a paramagnetic solution only when it is converged and locally stable
+(<code>crit &gt; 0</code>). Its phase labels are:</p>
+
+<ul>
+<li><code>1</code>: accepted Jensen ordered state;</li>
+<li><code>2</code>: accepted stable paramagnet;</li>
+<li><code>0</code>: no accepted state; spectra are masked.</li>
 </ul>
-<div class="callout caution"><span class="tag">Small-B<sub>x</sub> caveat</span> Near zero field the doublet splitting \(\Delta\) can drop below the <sup>165</sup>Ho hyperfine scale (\(A\approx3.36\) μeV). There the two-level determination of \(\Sigma\) over-suppresses \(T_c\) (mirroring R 2007's own comparison with quantum Monte Carlo). Results near the degenerate-doublet limit are directional only — which is why <code>invz_twolevel</code> errors (<code>invz:degenerateDoublet</code>) rather than returning a value for \(\Delta<10^{-4}\) meV.</div>
 
-<hr>
-<p class="muted" style="font-size:.85rem;">Minimum review set: <a href="../jensen_1z_framework.html"><code>jensen_1z_framework.html</code></a> (protected derivation), this README (code/driver contract), <a href="../invzp_convg_diagnosis.md"><code>invzp_convg_diagnosis.md</code></a> (code state, measured mechanism, and retained-artifact index), and <a href="../invzp_convg_fix.md"><code>invzp_convg_fix.md</code></a> (formal replacement and gates). Superseded development material remains available in Git history.</p>
+<p>The RPA response has an independent bare-mean-field phase selector owned by
+<code>invz_chi_realaxis</code>: the PM mass
+<code>1-Jcc0*chi0cc0</code> selects the branch, and below its zero the ordered
+state solves <code>hz=Jcc0*&lt;Jz&gt;</code>. The RPA state therefore changes phase
+at its own critical field rather than reusing the state selected by the 1/z
+solver. The field map exports <code>phase_rpa</code>,
+<code>rpa_mass_pm</code>, and <code>Bc_rpa</code> separately.</p>
 
-</div>
+<h3>ODD path</h3>
+
+<p><code>useODD=false</code> selects the original scalar cc model.
+<code>useODD=true</code> constructs the off-diagonal dipolar blocks once with
+<code>invz_odd_blocks</code>, rebuilds the longitudinal modes with
+<code>invz_odd_deltaJ</code>/<code>invz_odd_modes</code>, and applies the
+uniform <code>-d</code> shift once inside the point solver. The incomplete
+variable-moment Tier-2 route has been removed. <code>useODD</code> is exposed
+by the phase-boundary driver; the spectra driver currently runs the ordinary
+non-ODD projected model.</p>
+
+<p>The retained production ODD path is static. Low-level
+<code>odd_retarded</code>/<code>odd_retarded_exact</code> options remain
+isolated cross-checks and are not selected by either production driver.</p>
+
+<div class="warn"><strong>Backend constraint.</strong> The retained ODD geometry
+is currently built by the brute-force real-space dipolar sum. Therefore Ewald
+cannot be the sole global implementation unless ODD geometry is first ported and
+validated. The ordinary non-ODD coupling builder supports both backends.</div>
+
+<h2>Coupling contract</h2>
+
+<p>The drivers use a zero-offset half-open cubic grid and drop the complete
+Gamma row. <code>gridN</code> is the only quadrature control: 16 is a debugging
+resolution, while reported phase-boundary values require rerunning a declared
+grid ladder or calling <code>invz_odd_zero_field</code> with multiple grid
+sizes for its linear-in-1/N endpoint extrapolation.</p>
+
+<p><code>dipoleBackend='ewald'</code> is the production default, with fixed
+controls <code>alpha=0.3</code>, <code>r_cut=16</code>,
+<code>g_cut=3</code>, and <code>boundary='conducting_k0_omitted'</code>.
+<code>'bruteforce'</code> is retained as a mathematically transparent debugging
+reference; <code>dpRng</code> controls its real-space cutoff. ODD geometry
+currently uses the brute-force construction internally regardless of the
+ordinary backend setting.</p>
+
+<h2>q-path meaning</h2>
+
+<p>The production q-path observable uses the uniform ferromagnetic projection
+J(q)=v<sup>T</sup>J<sub>cc</sub>(q)v, with
+v=(1,1,1,1)/2. This is the single-mode dispersion used by the projected
+mean-field/RPA approximation. <code>invz_jq_path</code> supplies the directional
+long-wavelength limit at Gamma-equivalent points. The optional sorted
+eigenvalue branches remain exploratory: their index is not a tracked physical
+mode through crossings.</p>
+
+<h2>Deliberately removed</h2>
+
+<ul>
+<li><code>ordered_1z='bare'</code>, forced-moment dispatch, ordered-route
+selection, and diagnostic recovery heuristics;</li>
+<li>field tilt, in-plane rotation, tensor-reference, C4-fit, and field-angle
+scan plumbing in this projected branch;</li>
+<li>static-domain scans, trace/report scripts, convergence experiment drivers,
+and obsolete solver wrappers;</li>
+<li>the incomplete ODD variable-moment Tier-2 route and its Gaussian-dressing
+helpers;</li>
+<li>the isolated strict-functional prototypes and previous convergence
+diagnostic/execution trees;</li>
+<li>checked-in/generated cache data and the duplicate ODD diversion in
+<code>invz_jq_modes</code>.</li>
+</ul>
+
+<p>The validated in-plane <code>vector_ab</code> implementation remains in
+<code>invz_common/invz_single_ion.m</code> because the full-tensor branch uses
+it. Its projected-branch results and restoration instructions are retained in
+<a href="../docs/invz_projected_field_orientation_recovery.md"><code>docs/invz_projected_field_orientation_recovery.md</code></a>.</p>
+
+<h2>Core result contracts</h2>
+
+<table>
+<thead><tr><th>Function</th><th>Key result</th></tr></thead>
+<tbody>
+<tr><td><code>invz_spectra_map</code></td>
+    <td><code>chiz</code>, <code>chirpa</code>, <code>Sigma0</code>,
+        <code>phase</code>, <code>moment</code>, <code>D_ord</code>,
+        <code>Bc</code>, and peak energies</td></tr>
+<tr><td><code>invz_spectra_qpath</code></td>
+    <td>the same two spectra along q, selected <code>Jq</code>, path coordinate,
+        snap mask, phase, and peak energies</td></tr>
+<tr><td><code>invz_solve_point</code></td>
+    <td>paramagnetic EMT/self-energy state; static ODD when requested</td></tr>
+<tr><td><code>invz_solve_point_ordered</code></td>
+    <td>Jensen ordered state with moment, static self-energy, uniform
+        denominator, and H<sub>MF</sub> diagnostics</td></tr>
+<tr><td><code>invz_odd_zero_field</code></td>
+    <td>Static-ODD or ODD-off T<sub>c</sub>(0), optionally over two or more
+        grid sizes; accepts precomputed ODD blocks for the single-grid case</td></tr>
+</tbody>
+</table>
+
+<h2>Scope</h2>
+
+<p>In scope: scalar cc-channel projected 1/z phase boundaries and spectra,
+Jensen ferromagnetic closure, q-path dispersion, hyperfine structure, the
+&Sigma;=0 overlay, sample-shape handling already present in the scalar theory,
+and static ODD.</p>
+
+<p>Out of scope: arbitrary field orientation in the projected branch,
+full-tensor propagation, neutron form factors/intensities, ODD variable-moment
+or full-tensor mode mixing, and silent fallback to approximate ordered states.</p>
 </body>
 </html>

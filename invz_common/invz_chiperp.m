@@ -13,7 +13,7 @@ function [Xp, info] = invz_chiperp(ion, T, B, opts)
 %     z             (0)            scalar OR vector of complex frequencies. A
 %                                  vector returns Xp [2,2,nz] (symmetrized and
 %                                  real-parted per slice) -- the retardation form
-%                                  consumed by Tier 2 (z = 1i*wn). At z = i*wn the
+%                                  used by the optional retarded ODD path. At z = i*wn the
 %                                  elastic term is dropped automatically by chi0z's
 %                                  |z| < ztol gating; wn = 0 keeps it.
 %

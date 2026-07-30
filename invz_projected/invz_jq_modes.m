@@ -16,25 +16,12 @@ function [Jnu, info, Juni, Jcc_pages] = invz_jq_modes(ion, qvec, opts)
 % It is nargout-gated: ordinary one- through three-output calls retain the
 % existing cache/control path and do not allocate the pages.  A fourth-output
 % request intentionally recomputes rather than accepting an eigenvalue-only
-% cache hit.  The opt-in ODD path does not yet expose this output.
+% cache hit.
 %
 % The demagnetizing/shape term is excluded from Jnu/info.Jcc0 (cancels in the
 % critical condition per Ronnow, PRB 75, 054426 (2007)); exported separately
 % as info.Jshape_cc and inside info.Jaa0. dpRng=30 is the production default
 % (grid-convergence checked against R2007 targets to <0.3%).
-%
-% ODD extension (T1.3, opt-in): opts.odd = false (default) | struct('Xp', [2x2])
-% with Xp the real symmetric transverse susceptibility block from invz_chiperp
-% (meV^-1). With opts.odd a struct, the cc matrices gain the ODD-mediated
-% coupling deltaJ(q) (invz_odd_deltaJ, E1 + self-site subtraction E4) built
-% from the cached geometric blocks (invz_odd_blocks, odd1_ namespace), and
-% info.Jcc0 carries the explicit uniform shift -d (E5) -- the single line that
-% feeds the DS2023 mean-field mechanism into the MF, the RPA denominator and
-% the 1/z criticality. Diagnostics land in info.odd (see jq_modes_odd below).
-% With opts.odd false/absent the default path below runs untouched (bitwise
-% regression-gated); the ODD path never reads or writes the jq4_/jq5_ cache.
-% opts.odd remains brute-force-only: an active ODD request combined with the
-% Ewald dipolar backend (below) is rejected before either diversion runs.
 %
 % Dipolar backend (Step-5 Task 2, opt-in; parameters frozen 2026-07-24; operative
 % contract retained here):
@@ -78,32 +65,12 @@ function [Jnu, info, Juni, Jcc_pages] = invz_jq_modes(ion, qvec, opts)
 % cache is untouched.
 if nargin < 3, opts = struct(); end
 dpRng = 30;  if isfield(opts,'dpRng'), dpRng = opts.dpRng; end
-useCache = ~isfield(opts,'cache') || opts.cache;
+useCache = isfield(opts,'cache') && opts.cache;
 wantJccPages = nargout >= 4;
 Jcc_pages = [];
 
-% --- Backend dispatch (Step-5 Task 2): resolved/validated BEFORE the ODD
-% diversion below, by design. ---
+% --- Backend dispatch. ---
 [backend, eopts] = local_resolve_dipole_backend(opts);
-
-activeOdd = isfield(opts, 'odd') && ~isempty(opts.odd) && ~isequal(opts.odd, false);
-if strcmp(backend, 'ewald') && activeOdd
-    error('invz:jqModesOddEwald', ['the ODD extension (opts.odd) is not supported together with ' ...
-        'the Ewald dipolar backend (opts.dipole=''ewald''); opts.odd must be false/absent when ' ...
-        'requesting Ewald. The ODD path remains brute-force-only.']);
-end
-
-% --- ODD diversion (T1.3): strictly additive and opt-in. Everything below this
-% block is the pre-ODD code path, byte-untouched (regression test
-% test_jq_modes_odd_off_bitwise gates isequaln on all three outputs).
-if activeOdd
-    if wantJccPages
-        error('invz:jqModesOddMatrices', ...
-            'The optional q-resolved Jcc_pages output is not implemented for opts.odd.');
-    end
-    [Jnu, info, Juni] = jq_modes_odd(ion, qvec, opts, dpRng, useCache);
-    return
-end
 C = invz_const();
 % Lorentz cavity (+4pi/(3Vc)) is always added at the uniform mode (mandatory
 % split term, not a toggle) for the BRUTE-FORCE backend. Demagnetization
@@ -404,95 +371,4 @@ if ~isequal(sort(reshape(fieldnames(S.info), [], 1)), reqInfoFields)
     return   % malformed/legacy info field set
 end
 ok = true;
-end
-
-function [Jnu, info, Juni] = jq_modes_odd(ion, qvec, opts, dpRng, useCache)
-%JQ_MODES_ODD opts.odd branch of invz_jq_modes (T1.3; E1/E4/E5).
-% Rebuilds the cc channel as M(q) = Vcc(q) + deltaJ(q) from the geometric ODD
-% blocks (invz_odd_blocks; odd1_ cache when useCache) and the supplied
-% transverse susceptibility Xp = opts.odd.Xp, then eigendecomposes per q
-% exactly as the default path does (same sort(real(eig(.))) and uniform-mode
-% Juni = v'*M*v). NEVER reads or writes the jq4_/jq5_ cache: the ODD Jnu depend
-% on Xp, which is not part of that key; the heavy geometric blocks are cached
-% under odd1_ by invz_odd_blocks itself. Always brute-force (Ewald+ODD is
-% rejected before this function is ever reached -- see the dispatch above).
-%
-% info mirrors the default path field-for-field:
-%   Jcc0            = infoB.Jcc0 - d  <- THE single line that carries the
-%                     MF-level DS2023 mechanism into the mean field, the RPA
-%                     denominator and the 1/z criticality. Bookkeeping (plan
-%                     T1.3): the grid matrices carry the POST-subtraction
-%                     deltaJ -- whose diagonal already contains -d (E4) --
-%                     and Jcc0 carries the explicit -d (E5); there is NO
-%                     other q = 0 handling anywhere.
-%   Jcc0_dipole, Jaa0_dipole, Jaa0, dpRng: from invz_odd_blocks' Gamma info
-%                     block, bit-identical to the default path at demag = 0
-%                     (T1.1 parity test). info.lorz rides along (extra,
-%                     harmless).
-%   Jshape_cc       = 0: the ODD layer is intrinsic-only (demag == 0 enforced
-%                     below), and the default path's 4*dm_cc is 0 at demag = 0.
-%   geomD/geomX     : invz_odd_blocks does not export the primed geometry, so
-%                     it is rebuilt here once (~0.16 s at dpRng 30; MF_dipole's
-%                     documented reuse form is bit-identical either way) to
-%                     keep the info contract whole for callers (invz_jq_path
-%                     reads info.geomD for its Gamma-limit rebuild).
-%   odd             = struct(d, dJ_mean_diag [4,1] pre-subtraction diagonal
-%                     means, dJ_max, uniform_residual, Xp). uniform_residual =
-%                     max |PRE-subtraction deltaJ| element on the smallest-|q|
-%                     (r.l.u.) non-Gamma shell of qvec (E1 recomputed exactly
-%                     on that shell) -- report-only; on-axis c* shells sit at
-%                     machine zero, near-a* shells carry the linear-in-q ODD
-%                     residual, and tilted rays keep a
-%                     direction-dependent macroscopic term, so never gate
-%                     small-q decay off-axis.
-odd = opts.odd;
-if ~isstruct(odd) || ~isfield(odd, 'Xp')
-    error('invz:oddXp', ['opts.odd must be false (default) or a struct with a ' ...
-        'field Xp = [2x2] real symmetric chi_perp block (invz_chiperp); got %s.'], ...
-        class(odd));
-end
-Xp = odd.Xp;
-if ~isnumeric(Xp) || ~isequal(size(Xp), [2 2]) || ~isreal(Xp) ...
-        || ~all(isfinite(Xp(:))) || ~issymmetric(Xp)
-    error('invz:oddXp', ['opts.odd.Xp must be a [2 2] real symmetric finite ' ...
-        'matrix (meV^-1, invz_chiperp output).']);
-end
-demag = 0;
-if isfield(ion,'demag')  && ~isempty(ion.demag),  demag = ion.demag;  end
-if isfield(opts,'demag') && ~isempty(opts.demag), demag = opts.demag; end
-if demag ~= 0
-    error('invz:oddDemag', ['the ODD path of invz_jq_modes is intrinsic-only ' ...
-        '(demag must be 0; got %g). Demag handling stays on the default path/' ...
-        'invz_chi_realaxis (R2007: shape term cancels from the critical ' ...
-        'condition).'], demag);
-end
-[Vca, Vcb, Vcc, infoB] = invz_odd_blocks(ion, qvec, ...
-    struct('dpRng', dpRng, 'cache', useCache));
-[dJ, d, dinfo] = invz_odd_deltaJ(Vca, Vcb, Xp);
-nq   = size(qvec, 1);
-[Jnu, Juni] = invz_odd_modes(Vcc, dJ);   % shared values-only kernel + uniform projection
-info = infoB;
-info.Jcc0 = infoB.Jcc0 - d;      % E5 explicit uniform shift (see header block)
-info.Jshape_cc = 0;              % demag == 0 enforced above (intrinsic-only)
-% Primed q-independent geometry, mirroring the default path's info contract:
-[~, ~, info.geomD] = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
-[~,    info.geomX] = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau);
-% uniform_residual: E1 recomputed exactly on the smallest-|q| non-Gamma shell.
-qn = sqrt(sum(qvec.^2, 2));
-for iq = 1:nq
-    if invz_is_gamma_equiv(qvec(iq,:), ion.tau), qn(iq) = Inf; end
-end
-qmin = min(qn);
-if isfinite(qmin)
-    ur = 0;
-    for iq = reshape(find(qn <= qmin*(1 + 1e-9)), 1, [])
-        A = Vca(:,:,iq);  B = Vcb(:,:,iq);
-        P = Xp(1,1)*(A*A') + Xp(1,2)*(A*B') + Xp(2,1)*(B*A') + Xp(2,2)*(B*B');
-        ur = max(ur, max(abs(P(:))));
-    end
-else
-    ur = NaN;                    % all-Gamma grid: no finite-q shell to measure
-end
-info.odd = struct('d', d, 'dJ_mean_diag', dinfo.d_per_sublattice, ...
-    'dJ_max', dinfo.dJ_max, 'uniform_residual', ur, 'Xp', Xp);
 end

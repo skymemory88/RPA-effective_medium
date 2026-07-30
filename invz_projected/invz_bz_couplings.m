@@ -6,7 +6,7 @@ function [Jnu, info, Jaa0, detail] = invz_bz_couplings(ion, opts)
 % drivers so the grid and coupling evaluation are defined in exactly one place.
 %   opts.grid  ([16 16 16])  BZ q-grid
 %   opts.dpRng (30)          real-space dipole cutoff
-%   opts.cache (true)        invz_jq_modes file cache
+%   opts.cache (false)       optional invz_jq_modes file cache
 %
 % Optional fourth output DETAIL exposes the q-resolved data required by
 % nonlocal skeleton diagnostics: qvec, normalized row weights, Hermitian
@@ -48,7 +48,7 @@ wantDetail = nargout >= 4;
 detail = [];
 grid  = getf(opts, 'grid', [16 16 16]);
 dpRng = getf(opts, 'dpRng', 30);
-cache = getf(opts, 'cache', true);
+cache = getf(opts, 'cache', false);
 
 useNewGrid = isfield(opts, 'gridConvention') || isfield(opts, 'gridOffset') || isfield(opts, 'gammaPolicy');
 gridInfo = [];

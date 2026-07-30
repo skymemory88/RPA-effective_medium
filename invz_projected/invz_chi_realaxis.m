@@ -1,6 +1,6 @@
 function out = invz_chi_realaxis(ion, T, Bx, pt, w, opts)
 %INVZ_CHI_REALAXIS 1/z-renormalized cc susceptibility on the real axis.
-% Bx: scalar (transverse, historical) or [Bx By Bz] vector (T).
+% Bx: scalar transverse field along the crystallographic a axis (T).
 % Paramagnet (HTML eqs 22-23, 29-30):
 %   Sigma(w) = alpha + (M2/n01^2)[lambda1 - (1-n01^2)K(w)] g(w)
 % Ordered phase (pt.is_ordered = true; HTML eq 37), with gamma(w) as above:
@@ -12,20 +12,36 @@ function out = invz_chi_realaxis(ion, T, Bx, pt, w, opts)
 % alpha_m, lambda1, K(0) come from the converged Matsubara solve (pt).
 %
 % opts.Jxx0   (ion.Jxx0)  transverse MF coupling for the internally built single-ion state.
-% opts.transverse_mf ('legacy_x') MF model forwarded to the internally built single-ion state.
 % opts.hyp    (true)      hyperfine manifold; must match the Matsubara medium's Hilbert space.
 % opts.Jshape (0)         strict-uniform demag correction (info.Jshape_cc), applied to chi_cc_q;
 %                         leave 0 for finite-q (intrinsic) paths.
 % opts.chi0cc_w           precomputed chi0_cc(w) on this exact grid; when supplied, skips the
 %                         single-ion diagonalization so a field point can share it across evaluations.
+% opts.bare_rpa (false)   build an INDEPENDENT bare-MF state for a Sigma=0 RPA response:
+%                         the PM mass 1-J0eff*chi0cc(0) selects the PM/ordered branch, and
+%                         the ordered branch solves hz=J0eff*<Jz>. Requires scalar opts.J0eff.
+%                         The selector is local to this response owner so projected spectra
+%                         cannot accidentally reuse a 1/z-selected state for their RPA leg.
 if nargin < 6, opts = struct(); end
+if ~(isnumeric(Bx) && isreal(Bx) && isscalar(Bx) && isfinite(Bx))
+    error('invz:field', 'Bx must be a finite real scalar transverse field.');
+end
+Bvec = [Bx 0 0];
 eta    = getf(opts, 'eta', 5e-3);
 npass  = getf(opts, 'npass', 3);
 Jsel   = getf(opts, 'Jsel', ion.J0eff);
 Jxx0   = getf(opts, 'Jxx0', ion.Jxx0);
-tmf    = getf(opts, 'transverse_mf', 'legacy_x');
 Jshape = getf(opts, 'Jshape', 0);
 hyp    = getf(opts, 'hyp', true);
+bareRpa = getf(opts, 'bare_rpa', false);
+if bareRpa
+    if isfield(opts, 'chi0cc_w') && ~isempty(opts.chi0cc_w)
+        error('invz:rpaStateReuse', ...
+            'opts.bare_rpa cannot reuse chi0cc_w from another (e.g. 1/z-selected) state.');
+    end
+    [pt, rpaPhase, rpaMassPm] = bare_rpa_point(ion, T, Bx, opts);
+    opts.si = pt.si;                                  % override any 1/z-state carrier
+end
 ordered = isfield(pt,'is_ordered') && pt.is_ordered;
 
 z  = w(:) + 1i*eta;
@@ -37,7 +53,7 @@ else
     elseif ordered && isfield(pt,'si') && ~isempty(pt.si)
         si = pt.si;                                % ordered eigenstates from the solve
     else
-        si = invz_single_ion(ion, T, invz_field_vec(Bx), struct('hyp', hyp, 'Jxx0', Jxx0, 'transverse_mf', tmf));   % paramagnet
+        si = invz_single_ion(ion, T, Bvec, struct('hyp', hyp, 'Jxx0', Jxx0));
     end
     c0 = invz_chi0z(si, T, z, struct('elastic', false));
     G0 = -squeeze(c0(3,3,:));
@@ -77,6 +93,10 @@ if Jshape ~= 0
     out.chi_cc_q = out.chi_cc_q ./ (1 + Jshape*out.chi_cc_q);
 end
 out.Jshape = Jshape;
+if bareRpa
+    out.phase_rpa = rpaPhase;                         % 1 = bare-MF ordered, 2 = stable PM
+    out.rpa_mass_pm = rpaMassPm;                      % PM-side diagnostic at this field
+end
 end
 
 function Sw = realaxis_sigma(pt, tl, pref, Kw, K0, g, ordered)
@@ -88,4 +108,99 @@ if ordered
 else
     Sw = pt.alpha + gamma_w .* g;
 end
+end
+
+function [pt, phase, massPm] = bare_rpa_point(ion, T, Bx, opts)
+%BARE_RPA_POINT Independent bare-MF state selected by the RPA theory's own static mass.
+% This deliberately does not inspect a 1/z point or phase label. The PM state decides which
+% side of the bare transition the field occupies; only the ordered side pays for the
+% longitudinal MF solve. The same uniform scalar J0eff is used for that solve and for the
+% Gamma RPA denominator; q-path callers may additionally supply dispersive finite-q Jsel.
+J0eff = getf(opts, 'J0eff', []);
+if ~(isnumeric(J0eff) && isreal(J0eff) && isscalar(J0eff) && isfinite(J0eff))
+    error('invz:rpaJ0eff', 'opts.bare_rpa requires a finite real scalar opts.J0eff.');
+end
+Jxx0 = getf(opts, 'Jxx0', ion.Jxx0);
+hyp   = getf(opts, 'hyp', true);
+Bvec  = [Bx 0 0];
+
+pmOpts = struct('hyp', hyp, 'Jxx0', Jxx0);
+siPm = invz_single_ion(ion, T, Bvec, pmOpts);
+if ~siPm.mf_converged
+    error('invz:rpaMFNotConverged', ...
+        'Bare-RPA transverse PM mean field did not converge at B = %.12g T.', Bx);
+end
+cstat = invz_chi0z(siPm, T, 0, struct('elastic', true));
+chi0cc0 = real(cstat(3,3,1));
+massPm = 1 - J0eff*chi0cc0;
+if ~isfinite(massPm)
+    error('invz:rpaMass', 'Bare-RPA PM mass is non-finite at B = %.12g T.', Bx);
+end
+
+if massPm < 0
+    si = solve_bare_ordered(ion, T, Bx, J0eff, Jxx0, hyp);
+    tl = invz_twolevel_ordered(ion, T, Bx, si.hz, struct('Jxx0', Jxx0));
+    phase = 1;
+else
+    si = siPm;
+    tl = invz_twolevel(ion, T, Bx, struct('Jxx0', Jxx0));
+    phase = 2;
+end
+
+pt = struct('alpha', 0, 'alpha_m', 0, 'lambda', [0; 0; 0], ...
+    'K', [], 'tl', tl, 'si', si, 'is_ordered', phase == 1);
+end
+
+function si = solve_bare_ordered(ion, T, Bx, J0eff, Jxx0, hyp)
+%SOLVE_BARE_ORDERED Bracketed nonzero root of hz-J0eff*<Jz>(hz)=0.
+% Direct fixed-point iteration becomes critically slow as the ordered moment vanishes.
+% Fixed-hz single-ion evaluations retain the exact same MF equation but let fzero approach
+% the nonzero root from a sign bracket without ever converging to the trivial hz=0 root.
+hhi = 1.05*abs(J0eff)*ion.J;
+[fhi, ~] = bare_mf_residual(hhi, ion, T, Bx, J0eff, Jxx0, hyp);
+if ~(isfinite(fhi) && fhi > 0)
+    error('invz:rpaMFBracket', ...
+        'Could not establish the upper bare-MF bracket at B = %.12g T.', Bx);
+end
+
+b = hhi;
+fb = fhi;
+bracketed = false;
+for k = 1:80
+    a = 0.5*b;
+    [fa, ~] = bare_mf_residual(a, ion, T, Bx, J0eff, Jxx0, hyp);
+    if isfinite(fa) && fa < 0
+        bracketed = true;
+        break;
+    end
+    b = a;
+    fb = fa;
+end
+if ~bracketed || ~(isfinite(fb) && fb >= 0)
+    error('invz:rpaMFBracket', ...
+        ['PM mass predicts bare order at B = %.12g T, but the nonzero ' ...
+         'hz=J0eff*<Jz> root could not be bracketed.'], Bx);
+end
+
+rootOpts = optimset('Display', 'off', 'TolX', 1e-12);
+hz = fzero(@(h) bare_mf_residual(h, ion, T, Bx, J0eff, Jxx0, hyp), ...
+    [a b], rootOpts);
+[froot, si] = bare_mf_residual(hz, ion, T, Bx, J0eff, Jxx0, hyp);
+if ~(isfinite(froot) && abs(froot) < 1e-10)
+    error('invz:rpaMFNotConverged', ...
+        'Bare-RPA ordered root residual is %.6g meV at B = %.12g T.', froot, Bx);
+end
+si.rpa_mf_residual = froot;
+end
+
+function [f, si] = bare_mf_residual(hz, ion, T, Bx, J0eff, Jxx0, hyp)
+%BARE_MF_RESIDUAL Fixed-longitudinal-field evaluation of the bare MF equation.
+si = invz_single_ion(ion, T, [Bx 0 0], ...
+    struct('hyp', hyp, 'Jxx0', Jxx0, 'hz_fixed', hz));
+if ~si.mf_converged
+    error('invz:rpaMFNotConverged', ...
+        'Bare-RPA fixed-hz transverse mean field failed at B = %.12g T, hz = %.6g meV.', ...
+        Bx, hz);
+end
+f = hz - J0eff*si.Jexp(3);
 end

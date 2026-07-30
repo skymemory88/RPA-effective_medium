@@ -6,7 +6,6 @@
 %       numel(fields) <= sliceMax  ->  1D line-slice overlay          cf. R 2007 Fig 2
 %       numel(fields) >  sliceMax  ->  2D field-vs-frequency colormap cf. R 2007 Fig 2 / Kovacevic Fig 3d
 %     showPeaks = true also plots S.Epeak/S.Epeak_rpa vs field (invz_peak_energy).
-%     theta_c (deg) tilts the swept field toward c to model misalignment; see the knob comment for validity.
 %   qpath = [nq x 3] r.l.u. -- FM-mode q-path view at fixed field(s) Bq (invz_spectra_qpath;
 %     see its header for caveats), reproducing R 2007 Fig 3 TRENDS:
 %       numel(Bq) == 1  ->  2D path-vs-frequency colormaps with censored peak overlay
@@ -30,15 +29,9 @@ ion = invz_ion();
 %       instead of diverging); q-path spectra omit that transform (finite-q = intrinsic
 %       response) but still see demag through info.Jaa0.
 T = 0.1;                             % K
-% Experimental ordered-field continuation requested for visual inspection. qcp_down executes
-% the increasing `fields` table from high to low, starts cold, and after the first accepted
-% Jensen-ordered column carries its residual-accepted predictor Sigma/K0 state downward.
-% Physical-field continuation is necessarily serial; set fieldContinuation='none' and
-% useParallel=true to restore independent parfor columns.
-fieldContinuation = 'none';      % 'qcp_down' (experimental) | 'none' (independent fields)
-useParallel = true;                 % qcp_down forces serial execution
-outerMix = 0.4;                      % smaller than 0.7: stronger damping;
-outerMax = 5000;                     % exploratory budget; acceptance tolerances are unchanged
+useParallel = true;
+outerMix = 0.35;                      % smaller than 0.7: stronger damping;
+outerMax = 200;                     % exploratory budget; acceptance tolerances are unchanged
 eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency INPUTS (w, wq) AND
                                      % the plotted axes. Computation always runs in meV; the driver
                                      % converts in/out (with 'meV' it is a no-op). eta is ALWAYS in
@@ -47,7 +40,7 @@ eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency 
 % Exploratory broad view containing the projected 1/z transition.  The retained
 % finite-16^3 regression is the narrower linspace(4.60,4.90,61) subset; this
 % 3--6 T view is expected to contain masked ordered columns and is not all-column certified.
-fields = linspace(3.5, 5, 61);
+fields = linspace(0, 9, 101);
 % fields = linspace(0, 9.0, 101);        % OPTIONAL full-range survey (low-field failures are secondary)
 % fields = [3.6 4.2 4.8 5.4 6.0];       % few -> line slices instead of a colormap
 w = (0:0.01:6).';                    % eUnit -- field-sweep frequency grid
@@ -56,35 +49,6 @@ eta = 5e-5;                          % real-axis Lorentzian HWHM, ALWAYS in meV 
                                      % sub-6-GHz hyperfine lines); keep eta above the w/wq step
                                      % (converted to meV: step/eScale) or the peaks alias.
 sliceMax = 6;                         % field count at/below which the line-slice view is used
-theta_c = 0.0;                         % deg -- tilt of the field OUT of the transverse ab-plane
-                                     % toward c (the Ising axis): models experimental field
-                                     % misalignment. The direction is FIXED across the sweep;
-                                     % x-axes stay the total magnitude |B| (the longitudinal
-                                     % component is |B|*sind(theta_c)). theta_c = 0 reproduces
-                                     % the pure transverse benchmark exactly. Convention matches
-                                     % LiReF4_MF_Yikai theta at phi = 0 (spec 2026-07-16).
-                                     % SCALAR-STAGE VALIDITY: Sigma dresses the cc channel only;
-                                     % exact at theta_c = 0, uncontrolled O(theta^2) cross-
-                                     % channel error beyond the tensor-referenced small-tilt
-                                     % range (invz_run_tensor_ref); a longitudinal component
-                                     % turns the sharp transition into a rounded crossover.
-                                     % Full-tensor propagation: deferred (invz_tensor/). phi_ab: implemented below.
-phi_ab = 0.0;                        % deg -- IN-PLANE rotation of the swept field, a -> b.
-                                     % phi_ab = -11 deg reproduces the production experimental
-                                     % geometry (external stack ion.cfRot(Ho) = -11 deg; SAME
-                                     % sign: cfRot = -11 deg <=> phi_ab = -11 deg, the
-                                     % equivalence invz_cfrot documents).
-                                     % Nonzero phi_ab REQUIRES transverse_mf = 'vector_ab'
-                                     % below ('none' also passes, as a bare CF+Zeeman
-                                     % diagnostic; the library errors only under
-                                     % 'legacy_x', by design).
-                                     % NOTE: vector_ab shifts even phi_ab = 0 results
-                                     % slightly (~0.04 ueV at 4 T; grows at low field) --
-                                     % never compare legacy_x and vector_ab runs as if only
-                                     % the angle differed. Combined theta_c AND phi_ab is
-                                     % NOT validated (tilt bound was measured under legacy_x).
-transverse_mf = 'legacy_x';         % 'legacy_x' | 'none' | 'vector_ab'
-
 showPeaks = false;                     % true -> ALSO line-plot chi''_cc peak energy vs field
                                      % (S.Epeak/S.Epeak_rpa, cf. the q-path E_peak(q) stream)
 
@@ -105,12 +69,12 @@ wq = (0:0.02:6).';                 % eUnit -- q-path frequency grid (0-6 GHz ~ 0
 dispScale = 1;                       % dispersion display scale factor; R 2007 scales the
                                      % calculated energies by 1.15 to match experiment (Fig 3)
 
-% ---- dipole backend (Step-5 opt-in; the defaults reproduce the legacy bruteforce/legacy-grid path) ----
-dipoleBackend  = 'bruteforce';       % 'bruteforce' (default) | 'ewald' -- lattice dipolar-sum backend
-ewaldOpts      = struct();           % Ewald controls {alpha,r_cut,g_cut,boundary}; used only when dipoleBackend = 'ewald'
-gridConvention = '';                 % '' (legacy BZ grid) | 'halfopen' -- opt-in half-open BZ quadrature (new grid route)
-gridOffset     = [];                 % [] (none) | [oh ok ol] logical -- BZ sub-offset (new grid route only)
-gammaPolicy    = '';                 % '' | 'P_complete' | 'P_drop' -- Gamma-row policy (new grid route only)
+% ---- coupling ---------------------------------------------------------------
+gridN = 16;                           % debug resolution; use a grid ladder for reported boundaries
+dipoleBackend = 'ewald';             % 'ewald' (production) | 'bruteforce' (debug reference)
+dpRng = 30;                          % brute-force cutoff; ignored by Ewald
+ewaldOpts = struct('alpha', 0.3, 'r_cut', 16, 'g_cut', 3, ...
+    'boundary', 'conducting_k0_omitted');
 
 C = invz_const();
 switch eUnit
@@ -119,33 +83,17 @@ switch eUnit
     otherwise, error('invz_run_spectra:eUnit', 'eUnit must be ''meV'' or ''GHz''.');
 end
 
-if phi_ab ~= 0 && strcmp(transverse_mf, 'legacy_x')
-    error('invz_run_spectra:transverseMF', ...
-        ['phi_ab = %.3g deg needs the vector transverse mean field: set the transverse_mf ' ...
-         'knob above to ''vector_ab'' (or ''none'' for a bare CF+Zeeman diagnostic). ' ...
-         'legacy_x is x-only and C4-inconsistent for rotated fields.'], phi_ab);
-end
-dhat = [cosd(theta_c)*cosd(phi_ab), cosd(theta_c)*sind(phi_ab), sind(theta_c)];  % unit field direction
-tiltStr = '';
-if theta_c ~= 0, tiltStr = sprintf(', \\theta_c = %.2g\\circ', theta_c); end
-if phi_ab  ~= 0, tiltStr = [tiltStr sprintf(', \\phi_{ab} = %.2g\\circ', phi_ab)]; end
-if ~strcmp(transverse_mf, 'legacy_x'), tiltStr = [tiltStr sprintf(', %s', transverse_mf)]; end
+solve_opts = struct('mix_outer', outerMix, 'max_outer', outerMax);
 
-solve_opts = struct('transverse_mf', transverse_mf, ...
-                    'mix_outer', outerMix, 'max_outer', outerMax); % merged into spectra calls
-
-% Coupling backend/grid options (Step-5 opt-in): always pass the explicit backend; add the Ewald
-% controls and each grid-policy field only when selected, so the defaults above reproduce the legacy
-% bruteforce/legacy-grid path exactly. Merged into every spectra_map/spectra_qpath call below.
-coupling_opts = struct('dipole', dipoleBackend);
-if strcmp(dipoleBackend, 'ewald'),  coupling_opts.ewald          = ewaldOpts;      end
-if ~isempty(gridConvention),        coupling_opts.gridConvention = gridConvention;  end
-if ~isempty(gridOffset),            coupling_opts.gridOffset     = gridOffset;      end
-if ~isempty(gammaPolicy),           coupling_opts.gammaPolicy    = gammaPolicy;     end
+% The quadrature convention is fixed; backend and resolution remain explicit.
+coupling_opts = struct('grid', [gridN gridN gridN], 'dpRng', dpRng, ...
+    'cache', false, 'dipole', dipoleBackend, ...
+    'gridConvention', 'halfopen', 'gridOffset', [0 0 0], ...
+    'gammaPolicy', 'P_drop');
+if strcmp(dipoleBackend, 'ewald'), coupling_opts.ewald = ewaldOpts; end
 qpOpts  = coupling_opts;  qpOpts.eta = eta;  qpOpts.solve_opts = solve_opts;
 mapOpts = coupling_opts;  mapOpts.parallel = useParallel;  mapOpts.eta = eta;
-mapOpts.field_dir = dhat;  mapOpts.solve_opts = solve_opts;
-mapOpts.field_continuation = fieldContinuation;
+mapOpts.solve_opts = solve_opts;
 
 % w and wq are given in eUnit; solves run in meV, so convert on the way in (eScale is the
 % meV->eUnit factor) and scale returned grids (S.w, Epeak) back up by eScale for plotting.
@@ -156,20 +104,20 @@ wqMeV  = wq  / eScale;
 if ~isempty(qpath)
     % ---------------- FM-mode q-path view at fixed field(s) ----------------
     if isscalar(Bq)
-        S = invz_spectra_qpath(ion, T, Bq*dhat, qpath, wqMeV, qpOpts);
+        S = invz_spectra_qpath(ion, T, Bq, qpath, wqMeV, qpOpts);
         Splot = S;   % display-only copy; the solve above always ran in meV
         Splot.w = S.w*eScale;  Splot.Epeak = S.Epeak*eScale;  Splot.Epeak_rpa = S.Epeak_rpa*eScale;
         figure('Position', [100 100 1150 460]);
         ax1 = subplot(1, 2, 1);
         invz_plot_spectra_qpath(ax1, Splot, Splot.chiz, Splot.Epeak, ...
-            sprintf('1/z FM-mode \\chi''''_{cc}, T = %.2f K, B = %.2f T%s', T, Bq, tiltStr), eUnit);
+            sprintf('1/z FM-mode \\chi''''_{cc}, T = %.2f K, B = %.2f T', T, Bq), eUnit);
         ax2 = subplot(1, 2, 2);
         invz_plot_spectra_qpath(ax2, Splot, Splot.chirpa, Splot.Epeak_rpa, ...
-            sprintf('RPA FM-mode \\chi''''_{cc}, T = %.2f K, B = %.2f T%s', T, Bq, tiltStr), eUnit);
+            sprintf('RPA FM-mode \\chi''''_{cc}, T = %.2f K, B = %.2f T', T, Bq), eUnit);
     else
         figure; hold on;  co = lines(numel(Bq));
         for k = 1:numel(Bq)
-            Sk = invz_spectra_qpath(ion, T, Bq(k)*dhat, qpath, wqMeV, qpOpts);
+            Sk = invz_spectra_qpath(ion, T, Bq(k), qpath, wqMeV, qpOpts);
             plot(Sk.x, Sk.Epeak*eScale*dispScale,     '-',  'Color', co(k, :), ...
                  'DisplayName', sprintf('1/z, %.2f T', Bq(k)));
             plot(Sk.x, Sk.Epeak_rpa*eScale*dispScale, '--', 'Color', co(k, :), ...
@@ -177,7 +125,7 @@ if ~isempty(qpath)
         end
         xlabel(Sk.xlab);
         ylabel(strrep(eLabel, '\omega', 'E_{peak}'));
-        title(sprintf('FM-mode dispersion, T = %.2f K, dispScale = %.2f%s', T, dispScale, tiltStr));
+        title(sprintf('FM-mode dispersion, T = %.2f K, dispScale = %.2f', T, dispScale));
         legend show;
         % cf. R 2007 Fig 3 TRENDS: the x-axis shows the actual varying Miller component
         % (h = 1..2 for the (1,0,0)->(2,0,0) path); their theory lines are the calculated
@@ -188,12 +136,9 @@ else
     % ---------------- field-sweep views at the uniform mode ----------------
     S = invz_spectra_map(ion, T, fields, wMeV, mapOpts);
 
-    fprintf('Bc_auto (bare-MF dispatch; RPA proxy only where the ordered EMT converged) ~ %s T | Bc_1z (renormalized) ~ %s T  (sweep midpoints; masked/suspect columns widen the bracket)\n', ...
-            num2str(S.Bc_auto), num2str(S.Bc_1z));
-    if any(S.suspect)
-        fprintf('WARNING: %d suspect column(s) (auto-PM with crit <= 0 -- spurious below-Bc PM points; masked): |B| = %s T\n', ...
-                nnz(S.suspect), mat2str(S.fields(S.suspect), 3));
-    end
+    fprintf(['Bc_1z (sweep midpoint; use invz_critical for refinement) ~ %s T | ' ...
+             'Bc_RPA (independent bare-MF/RPA dispatch) ~ %s T\n'], ...
+            num2str(S.Bc_1z), num2str(S.Bc_rpa));
 
     if numel(fields) <= sliceMax
         figure; hold on;  co = lines(numel(fields));
@@ -201,12 +146,12 @@ else
             plot(w, S.chiz(:, k),   '-',  'Color', co(k, :), 'DisplayName', sprintf('1/z, %.2f T', fields(k)));
             plot(w, S.chirpa(:, k), '--', 'Color', co(k, :), 'DisplayName', sprintf('RPA, %.2f T', fields(k)));
         end
-        xlabel(eLabel);  ylabel('\chi''''_{cc}');  title(sprintf('T = %.2f K%s', T, tiltStr));  legend show;
+        xlabel(eLabel);  ylabel('\chi''''_{cc}');  title(sprintf('T = %.2f K', T));  legend show;
     else
         Splot = S;  Splot.w = S.w * eScale;    % display-only copy; solve above always ran in meV
         figure('Position', [100 100 1150 460]);
-        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z (own phase; Stage-2 ordered below B_c^{1/z}), T = %.2f K%s', T, tiltStr), eUnit);
-        ax2 = subplot(1, 2, 2);  invz_plot_spectra_map(ax2, Splot, Splot.chirpa, sprintf('RPA, T = %.2f K%s', T, tiltStr), eUnit);
+        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z (Jensen ordered below B_c), T = %.2f K', T), eUnit);
+        ax2 = subplot(1, 2, 2);  invz_plot_spectra_map(ax2, Splot, Splot.chirpa, sprintf('RPA, T = %.2f K', T), eUnit);
     end
 
     if showPeaks
@@ -216,10 +161,10 @@ else
         plot(S.fields, S.Epeak_rpa*eScale, '--', 'DisplayName', 'RPA');
         xlabel('|B| (T)');
         ylabel(strrep(eLabel, '\omega', 'E_{peak}'));
-        title(sprintf('\\chi''''_{cc} peak energy vs field, T = %.2f K%s', T, tiltStr));
+        title(sprintf('\\chi''''_{cc} peak energy vs field, T = %.2f K', T));
         legend show;
-        if isfinite(S.Bc_auto), xline(S.Bc_auto, '--', 'B_c^{auto}', 'HandleVisibility', 'off'); end
-        if isfinite(S.Bc_1z),   xline(S.Bc_1z,   ':',  'B_c^{1/z}', 'HandleVisibility', 'off'); end
+        if isfinite(S.Bc_1z), xline(S.Bc_1z, ':', 'B_c^{1/z}', 'HandleVisibility', 'off'); end
+        if isfinite(S.Bc_rpa), xline(S.Bc_rpa, '--', 'B_c^{RPA}', 'HandleVisibility', 'off'); end
         % Gaps are CENSORED peaks (invz_peak_energy: boundary max or non-positive/non-finite
         % column) -- same convention as the q-path E_peak(q) stream, do not interpolate over them.
     end
