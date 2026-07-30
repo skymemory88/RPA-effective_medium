@@ -272,6 +272,20 @@ residual convergence can terminate on inadmissible pseudo-roots. Damping may be
 chosen for speed only after root existence and admissibility are independently
 established.
 
+The bounded outer-map remeasurement at the 1 T node-22 fixture supplies a
+physical-domain counterexample. The dominant map eigenvalue changes from
+approximately \(0.248\) at \(\Sigma=0\) to \(1.360\) at the last admissible
+state of a mixed trajectory. Undamped Picard leaves the admissible domain on
+iteration 3; mixing by 0.5 leaves it on iteration 5 after the residual stalls
+near 0.20. For a real \(\lambda>1\), the damped eigenvalue
+\(1-a+a\lambda\) exceeds one for every \(a>0\). No scalar damping ladder can
+converge locally onto that branch. Evidence:
+`docs/diagnostics/invzp_outer_wp2/wp2_node22_step_domain.mat`.
+
+**Do not reconsider for this branch unless:** a different admissible coupled
+root is first established, or a new Jacobian measurement contradicts the
+\(\lambda>1\) result.
+
 ### Warm continuation as existence or equilibrium proof
 
 **Status:** Rejected.

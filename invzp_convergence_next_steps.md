@@ -165,7 +165,45 @@ nonlinear elastic terms.
    the mesh and in the uniform mode.
 6. Demonstrate seed independence of the inner static result.
 
-This work package is the immediate next implementation step.
+### Execution checkpoint (2026-07-30)
+
+The bounded physical-\(x\) inner solver is implemented in
+`invz_projected/invz_emt_static_ordered.m`, with generic finite-resolution root
+enumeration in `invz_common/invz_bounded_roots.m`. It searches every configured
+sign-change interval and sampled \(|\widehat R|\) minimum, reports
+discontinuities separately, records all requested exact elastic diagnostics,
+and does not export an arbitrary branch when more than one admissible root
+survives. `K0_seed` is compatibility-only and has no effect.
+
+The focused gates in `invz_projected/tests/` pass:
+
+- the verified production lattice has
+  \(J_{\rm sup}=J_{0,\rm eff}=0.006421661809416939\) meV, while the
+  \(16^3\) Gamma-dropped mesh maximum is
+  \(0.006371725736157789\) meV;
+- the frozen healthy 4 T state has one admissible root and reproduces the
+  former state to \(|\Delta K_0|=4.02\times10^{-15}\) meV and
+  \(|\Delta G_{\rm stat}|=5.67\times10^{-11}\ {\rm meV}^{-1}\);
+- the unchanged stored 1 T node-9 state and 3 T nodes 21--27 are rejected;
+  no alternative admissible static root is found at any of those frozen outer
+  states;
+- the \(m\to0\) result agrees with the ordinary paramagnetic scalar medium;
+- accepted roots have positive mesh and uniform margins and are exactly seed
+  independent; and
+- classifications are unchanged over 2049, 4097, and 8193 scan points while
+  the normalized endpoint margin is reduced from \(10^{-8}\) to \(10^{-12}\).
+
+Machine-readable results and exact provenance are retained under
+`docs/diagnostics/invzp_static_wp1/`; the compact execution record is
+`docs/execution/invzp_convergence_journal.md`.
+
+This completes the frozen-inner acceptance contract, but it does **not**
+promote the full ordered susceptibility solver. With failed static values no
+longer propagated, the legacy full 4 T field-profile run has no admissible
+predictor root and only 5/33 admissible sampled nodes. Whether other coupled
+outer roots exist is now a work-package-2 question. Until that classification
+and the later field-integral rebuild are complete, the affected ordered output
+must remain masked rather than restored through the old iteration.
 
 ## Work package 2: classify the outer self-energy problem
 
@@ -204,6 +242,36 @@ budget is not evidence of existence.
 - Damping changes convergence speed, not the exported branch.
 - All outer roots pass the static-domain, uniform-mass, dynamic-denominator,
   fixed-point-residual, and finite-value gates.
+
+### Execution checkpoint (2026-07-30, partial)
+
+`invz_projected/invz_ordered_outer_map.m` now defines
+\(\mathcal F[\Sigma]\) without a hidden previous-iterate lambda. At fixed
+\(\Sigma\), the dynamic \(K_{n>0}\) is algebraic and
+\(\lambda_p(K_0)=\lambda_{p,\rm dyn}+w_0g_0^pK_0/\beta\) is evaluated inside
+the bounded static search. Zero or multiple admissible static roots make the
+outer map undefined or multivalued; no residual is exported in those cases.
+
+Initial results are deliberately limited:
+
+- the healthy 4 T state reproduces the former outer residual and has
+  \(\lambda_{\rm dom}=-0.00877249\), stable over a finite-difference-step
+  ladder;
+- at \(\Sigma=0\), the map is defined at 13/34 retained 1 T profile nodes and
+  6/34 retained 3 T nodes. This is a domain slice, not a coupled-root census;
+- admissible coupled roots are found at 3 T nodes 28 and 33. They pass static,
+  uniform, dynamic, finite-value, and outer-residual gates. Cold/halfway starts
+  and mixes 1/0.5 agree within the \(10^{-8}\) outer tolerance;
+- 1 T node 22 does not converge under admissible Picard. Undamped and
+  evidence-selected mix 0.5 trajectories leave the static domain. At the last
+  admissible mixed state, \(\lambda_{\rm dom}=1.35957\), so no positive scalar
+  damping can make that local branch contractive.
+
+Node 22 is therefore a measured noncontractive/domain-boundary case, but no
+claim is made that another admissible coupled root does not exist. The broader
+1 T/3 T coupled-root census remains open. Evidence and trial counters are in
+`docs/execution/invzp_convergence_journal.md` and
+`docs/diagnostics/invzp_outer_wp2/`.
 
 ## Work package 3: audit the electronic/electronuclear hybrid
 
