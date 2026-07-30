@@ -441,13 +441,15 @@ window, so the coarse values are not certified susceptibility inputs.
 **Temporary visual wiring.** The explicit two-endpoint option remains
 available without changing the strict solver default. `invz_run_spectra.m`
 now temporarily selects
-`hmf_integral_mode='filtered_profile_visual'` with 65 positive-\(h\) nodes.
+`hmf_integral_mode='filtered_profile_visual'` with 128 positive-\(h\) nodes.
 It preserves the independent PM lower endpoint used by the two-node rule,
 removes nonfinite positive-\(h\) values, and integrates the retained sequence.
-In a 0.5 T-spaced census, 1--4.5 T produce finite reconstructed ordered states
-while 0.5 T remains rootless. The retained positive-\(h\) blocks were
-contiguous and certified at those sampled fields, but the lower
-PM-to-ordered panel still crosses the unavailable component interval.
+In the preceding 65-node, 0.5 T-spaced census, 1--4.5 T produced finite
+reconstructed ordered states while 0.5 T remained rootless. Exact 128-node
+probes at 1 and 4 T also converge and reproduce the neighboring 129-node
+results. The retained positive-\(h\) blocks were contiguous and certified at
+those sampled fields, but the lower PM-to-ordered panel still crosses the
+unavailable component interval.
 Moreover, the 1--3 T PM anchors are unconverged and path dependent, and the
 1 T root shifts materially over 33/65/129 nodes. The mode is labelled
 `visual_only` and is not new evidence for a physical integration path.

@@ -1068,3 +1068,34 @@ rule, but its lower panel still crosses an unresolved stability/component
 interval and its 1--3 T anchor remains iteration-path dependent. It is the
 third consecutive complete-profile workaround that fails the certification
 objective; the project-wide five-failure review trigger has not yet fired.
+
+## 2026-07-30 — Checkpoint 11: 128-node visual production escalation
+
+**Bounded change.** Following encouraging visual inspection of the 65-node
+filtered-profile mode, `invz_run_spectra.m` now sets `nH=128`. No solver
+equation, filtering rule, PM-anchor policy, acceptance gate, or strict default
+changed. The plot label explicitly reports 128 nodes.
+
+**Exact focused checks.**
+
+| \(B_x\) | \(h_{\rm MF}\) | used positive-\(h\) nodes | first retained \(h\) | PM endpoint | final residual |
+|---:|---:|---:|---:|---|---:|
+| 1 T | 0.024394 | 31 | 0.008519 | unconverged | \(6.01\times10^{-9}\) |
+| 4 T | 0.015982 | 18 | 0.009421 | converged | \(4.86\times10^{-9}\) |
+
+Both final ordered states converge, both use zero uncertified positive-\(h\)
+quadrature nodes, and both agree closely with the prior `nH=129` probes
+(0.024213 and 0.015978). This verifies the driver setting but does not cure the
+documented 1 T resolution/path dependence or certify the lower PM-to-ordered
+bridge.
+
+**Cost decision.** The full driver contains 101 transverse-field points.
+Moving from 65 to 128 nodes approximately doubles its ordered-profile work.
+A 256-node full visual sweep is deferred until human inspection shows that the
+128-node morphology adds useful information; it would approximately double
+the new cost again.
+
+**Evidence and checks.** The exact 128-node table was appended to
+`docs/diagnostics/invzp_outer_wp2/wp2_filtered_profile_visual_census.mat`.
+MATLAB Code Analyzer and `git diff --check` pass. This is a resolution change
+within the existing third visual workaround, not a fourth trial method.
