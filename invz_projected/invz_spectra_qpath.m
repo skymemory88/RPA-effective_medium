@@ -73,6 +73,12 @@ snapfac = getf(opts, 'snapfac', 2.5);
 wmin    = getf(opts, 'peak_wmin', 0.05);
 
 sxtra = getf(opts, 'solve_opts', struct());
+if strcmp(getf(sxtra,'hmf_integral_mode','full_profile'), ...
+        'missing_area_ensemble')
+    error('invz:missingAreaQPath', ...
+        ['missing_area_ensemble propagates uncertainty through ' ...
+         'invz_spectra_map only; q-path ensemble output is not implemented.']);
+end
 invz_check_solve_opts(sxtra);
 if ~(isnumeric(B) && isreal(B) && isscalar(B) && isfinite(B) && B >= 0)
     error('invz:field', 'B must be a finite nonnegative scalar transverse field.');

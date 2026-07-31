@@ -10,29 +10,40 @@ body { max-width: 980px; margin: 2rem auto; padding: 0 1.2rem; color: #202124;
 code, pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 pre { padding: 1rem; overflow-x: auto; background: #f5f6f7; border-radius: 6px; }
 table { border-collapse: collapse; width: 100%; }
-th, td { padding: .45rem .6rem; border: 1px solid #ccd0d5; text-align: left; }
+th, td { padding: .45rem .6rem; border: 1px solid #ccd0d5; text-align: left;
+         vertical-align: top; }
 .note { padding: .8rem 1rem; background: #eef5ff; border-left: 4px solid #3976c5; }
+.ok { padding: .8rem 1rem; background: #eaf7ed; border-left: 4px solid #2e7d45; }
 .warn { padding: .8rem 1rem; background: #fff5df; border-left: 4px solid #c68118; }
 </style>
 </head>
 <body>
 <h1>Projected-spin 1/z calculation for LiHoF<sub>4</sub></h1>
 
-<p>This directory contains the scalar, projected-spin calculation. It retains
-three production streams: the phase boundary, uniform spectra, and q-path
-spectra. ODD corrections are retained. Audit drivers, cached results, field-angle
-experiments, and the alternative bare ordered route were removed in the July
-2026 reduction.</p>
+<p>This directory contains the scalar projected-spin calculation for phase
+boundaries, uniform spectra, and q-path spectra. The ordered state uses the
+Jensen-consistent static closure and H<sub>MF</sub>&harr;H relation. ODD
+corrections remain available for the phase-boundary stream.</p>
 
-<div class="note"><strong>Ordered-state rule.</strong> There is one ordered
-calculation: the Jensen-consistent static closure and
-H<sub>MF</sub>&harr;H relation. If that state is unavailable, the code masks the
-point; it never substitutes a bare mean-field moment.</div>
+<div class="ok"><strong>Current production status.</strong> At
+<code>T=0.1 K</code>, the factor-one missing-area member produces a smooth,
+finite susceptibility over the complete 101-point
+<code>linspace(0,9,101)</code> field sweep. Exact zero and the final
+ordered-side 4.68 T sample are handled by explicit fail-closed policies. The
+driver currently uses <code>missingAreaFactors = 1.0</code>; the wider
+three-factor sensitivity ensemble remains available as a diagnostic. The
+result is a labeled controlled approximation; strict
+<code>full_profile</code> remains available and unchanged.</div>
+
+<div class="note"><strong>No silent fallback.</strong> A field is emitted only
+from an accepted Jensen ordered state or an accepted stable paramagnet. The
+missing-area and retry paths are explicit options with exported provenance;
+they never substitute a bare mean-field moment.</div>
 
 <h2>Run the calculation</h2>
 
 <table>
-<thead><tr><th>Entry point</th><th>Purpose</th><th>User-facing knobs</th></tr></thead>
+<thead><tr><th>Entry point</th><th>Purpose</th><th>Main knobs</th></tr></thead>
 <tbody>
 <tr><td><code>invz_run_phase_diagram.m</code></td>
     <td>Independent B<sub>c</sub>(T) and T<sub>c</sub>(B) cuts</td>
@@ -42,153 +53,170 @@ point; it never substitutes a bare mean-field moment.</div>
 <tr><td><code>invz_run_spectra.m</code></td>
     <td>Uniform field sweep or fixed-field q-path spectra</td>
     <td><code>T</code>, <code>fields</code>, <code>w</code>,
-        <code>qpath</code>, <code>Bq</code>, <code>wq</code>,
-        <code>gridN</code>, <code>dipoleBackend</code>, plotting and solver
-        budgets</td></tr>
+        <code>useMissingAreaApproximation</code>, area factors and profile
+        nodes, retry switches, <code>qpath</code>, <code>Bq</code>,
+        <code>gridN</code>, and plotting options</td></tr>
 </tbody>
 </table>
 
 <p>Both drivers add this directory, the repository root, and
 <code>invz_common</code> to the MATLAB path. Run them from the MATLAB editor or
-with <code>run(...)</code>. Persistent coupling caches are off by default, and
-the repository cache directory contains only <code>.gitignore</code>.</p>
+with <code>run(...)</code>. Persistent coupling caches are off by default.</p>
+
+<h2>Spectra modes</h2>
+
+<table>
+<thead><tr><th>Mode</th><th>Contract</th><th>Current use</th></tr></thead>
+<tbody>
+<tr><td><code>full_profile</code></td>
+    <td>Requires a valid exact endpoint and every ordered profile node. Any
+        required failure masks the field.</td>
+    <td>Option-free strict library default and regression oracle.</td></tr>
+<tr><td><code>missing_area_approx</code></td>
+    <td>Scalar member using one declared completion of the unresolved lower
+        integral and only the contiguous certified high-H<sub>MF</sub>
+        component.</td>
+    <td>Internal member mode.</td></tr>
+<tr><td><code>missing_area_ensemble</code></td>
+    <td>Evaluates every declared area factor independently, exports the central
+        member and finite sensitivity ranges only where all members exist.</td>
+    <td>Engine used by the uniform production driver, currently with the
+        singleton factor list <code>[1.0]</code>.</td></tr>
+</tbody>
+</table>
+
+<h3>Meaning of the missing-area factor</h3>
+
+<p>If the certified component begins at <i>h</i><sub>e</sub>, the unresolved
+lower contribution is represented as</p>
+
+<pre>A_f = f h_e r(h_e)
+H_0(h) = A_f + integral_{h_e}^{h} r(s) ds</pre>
+
+<p>For the declared linear completion,
+<code>r(0)/r(h_e) = 2*f - 1</code>. The tested sensitivity factors
+<code>[0.75 1 1.5]</code> therefore represent endpoint ratios
+<code>[0.5 1 2]</code>. Factor 1 is the current production member. The driver
+keeps the wider list as a commented diagnostic option because only factor one
+passes the 4.68 T boundary contract. These are shape-sensitivity assumptions,
+not probabilities, fitted material constants, or confidence limits.</p>
+
+<h3>Exact zero field</h3>
+
+<p>The electronic doublet is degenerate at exact zero, so its numerical basis
+can make a basis-dependent transition weight exactly zero. The solver rejects
+the unresolved two-level endpoint without committing it, evaluates the
+certified positive-H<sub>MF</sub> suffix, and uses algebra in which the removable
+<code>M2</code> cancellation is performed before numerical evaluation. The
+exact-zero missing-area spectrum is finite and continuous to
+<code>1e-6 T</code>. Strict <code>full_profile</code> still masks that endpoint.</p>
+
+<h3>Frozen field retries</h3>
+
+<p>Both retry policies operate on an immutable cold pass. A recovered point is
+output-only and can never seed another recovery.</p>
+
+<ul>
+<li><strong>Two-sided adjacent retry:</strong> an interior cold mask is solved
+    independently from accepted ordered fields on both sides. Both results
+    must pass the original gates and agree. This recovers the 0.36 and 0.45 T
+    holes on the audited grid.</li>
+<li><strong>Ordered-boundary retry:</strong> the last cold
+    <code>phase==0</code> point below an accepted PM field may use two untouched
+    lower ordered sources. It additionally requires an independently
+    converged negative PM mass, one matching unbridged component,
+    <code>D_uni</code> and <code>Fprime</code> margins, the original residual and
+    physical-mass gates, and a finite real-axis spectrum. Cold
+    <code>phase==2</code> points are never eligible.</li>
+</ul>
+
+<p>On the current 101-point grid, the boundary retry recovers the factor-one
+4.68 T state from the frozen 4.50 and 4.59 T states. In the separate
+three-factor diagnostic, factors 0.75 and 1.5 do not satisfy the full retry
+contract there. The production driver therefore emits the supported central
+spectrum without presenting a complete three-member interval.</p>
 
 <h2>Production architecture</h2>
 
 <pre>
 invz_run_phase_diagram
-  ODD off:
-    invz_bz_couplings
-      invz_phase1_qgrid
-      invz_jq_modes
-  ODD on:
-    invz_phase1_qgrid
-    invz_odd_blocks
-    invz_odd_zero_field (reuses the same blocks)
+  invz_bz_couplings / ODD construction
   invz_critical / invz_critical_T
     invz_crit_at
       invz_solve_point
 
 invz_run_spectra
   invz_spectra_map
-    invz_bz_couplings
+    missing-area ensemble: one independent member map per factor
+      immutable cold pass
+      optional two-sided adjacent retry
+      optional ordered-boundary retry
     invz_solve_auto
       invz_solve_point_ordered
-        local H_MF inversion + static EMT closure
+        transactional fixed-h node sweep
+        bounded static EMT closure
+        H_MF integral and root refinement
       invz_solve_point
     invz_chi_realaxis
-    invz_zero_sigma_overlay
 
   invz_spectra_qpath
-    same BZ medium solve
+    strict ordered/PM state selection
     invz_jq_path
     invz_chi_realaxis
 </pre>
 
 <p>The ordered solver owns its H<sub>MF</sub> inversion and static EMT closure
-as local functions in <code>invz_solve_point_ordered.m</code>. They are
-implementation stages, not separate public entry points.</p>
+as local implementation stages in <code>invz_solve_point_ordered.m</code>.
+Failed candidates never overwrite the last accepted continuation state.</p>
 
-<p>The local response and Hamiltonian construction live in
-<code>invz_common</code>. The projected branch deliberately uses a scalar
-longitudinal (cc) propagator; it does not duplicate the full-tensor branch.</p>
+<div class="warn"><strong>q-path restriction.</strong> The missing-area
+ensemble is implemented for uniform field maps, not q paths. Set
+<code>useMissingAreaApproximation=false</code> before requesting a q-path.
+The driver fails explicitly if both are requested.</div>
 
-<h3>Current operational status</h3>
+<h2>State and phase selection</h2>
 
-<p>The phase-boundary stream is retained as the working result stream. The
-active debugging target is the spectra stream: the Jensen ordered closure does
-not converge over every requested ordered-field column. Such columns are
-reported as <code>phase=0</code> and remain <code>NaN</code>; this is the
-failure to diagnose, not a plotting or cache convention. No fallback state is
-inserted.</p>
-
-<h3>State selection</h3>
-
-<p><code>invz_solve_auto</code> first tries the Jensen ordered solution. It
-accepts a paramagnetic solution only when it is converged and locally stable
-(<code>crit &gt; 0</code>). Its phase labels are:</p>
+<p><code>invz_solve_auto</code> first tries the Jensen ordered state. It accepts
+a paramagnet only when that solve is converged and locally stable
+(<code>crit &gt; 0</code>):</p>
 
 <ul>
-<li><code>1</code>: accepted Jensen ordered state;</li>
-<li><code>2</code>: accepted stable paramagnet;</li>
-<li><code>0</code>: no accepted state; spectra are masked.</li>
+<li><code>phase=1</code>: accepted Jensen ordered state;</li>
+<li><code>phase=2</code>: accepted stable paramagnet;</li>
+<li><code>phase=0</code>: no accepted state; the spectrum is masked unless an
+    enabled retry subsequently satisfies its complete contract.</li>
 </ul>
 
-<p>The RPA response has an independent bare-mean-field phase selector owned by
-<code>invz_chi_realaxis</code>: the PM mass
-<code>1-Jcc0*chi0cc0</code> selects the branch, and below its zero the ordered
-state solves <code>hz=Jcc0*&lt;Jz&gt;</code>. The RPA state therefore changes phase
-at its own critical field rather than reusing the state selected by the 1/z
-solver. The field map exports <code>phase_rpa</code>,
-<code>rpa_mass_pm</code>, and <code>Bc_rpa</code> separately.</p>
+<p>The RPA response has its own bare-mean-field phase selector in
+<code>invz_chi_realaxis</code>. It exports <code>phase_rpa</code>,
+<code>rpa_mass_pm</code>, and <code>Bc_rpa</code> separately and does not reuse
+the 1/z-selected phase.</p>
 
-<h3>ODD path</h3>
-
-<p><code>useODD=false</code> selects the original scalar cc model.
-<code>useODD=true</code> constructs the off-diagonal dipolar blocks once with
-<code>invz_odd_blocks</code>, rebuilds the longitudinal modes with
-<code>invz_odd_deltaJ</code>/<code>invz_odd_modes</code>, and applies the
-uniform <code>-d</code> shift once inside the point solver. The incomplete
-variable-moment Tier-2 route has been removed. <code>useODD</code> is exposed
-by the phase-boundary driver; the spectra driver currently runs the ordinary
-non-ODD projected model.</p>
-
-<p>The retained production ODD path is static. Low-level
-<code>odd_retarded</code>/<code>odd_retarded_exact</code> options remain
-isolated cross-checks and are not selected by either production driver.</p>
-
-<div class="warn"><strong>Backend constraint.</strong> The retained ODD geometry
-is currently built by the brute-force real-space dipolar sum. Therefore Ewald
-cannot be the sole global implementation unless ODD geometry is first ported and
-validated. The ordinary non-ODD coupling builder supports both backends.</div>
-
-<h2>Coupling contract</h2>
+<h2>Coupling and ODD contract</h2>
 
 <p>The drivers use a zero-offset half-open cubic grid and drop the complete
-Gamma row. <code>gridN</code> is the only quadrature control: 16 is a debugging
-resolution, while reported phase-boundary values require rerunning a declared
-grid ladder or calling <code>invz_odd_zero_field</code> with multiple grid
-sizes for its linear-in-1/N endpoint extrapolation.</p>
+Gamma row. <code>gridN</code> is the quadrature control. Reported
+phase-boundary values require a declared grid ladder or the endpoint
+extrapolation provided by <code>invz_odd_zero_field</code>.</p>
 
-<p><code>dipoleBackend='ewald'</code> is the production default, with fixed
-controls <code>alpha=0.3</code>, <code>r_cut=16</code>,
-<code>g_cut=3</code>, and <code>boundary='conducting_k0_omitted'</code>.
-<code>'bruteforce'</code> is retained as a mathematically transparent debugging
-reference; <code>dpRng</code> controls its real-space cutoff. ODD geometry
-currently uses the brute-force construction internally regardless of the
-ordinary backend setting.</p>
+<p><code>dipoleBackend='ewald'</code> is the ordinary production default, with
+fixed Ewald controls in the driver. <code>'bruteforce'</code> remains a
+transparent reference. The retained ODD geometry is currently built by the
+brute-force real-space sum, so Ewald cannot be the sole implementation until
+that geometry is ported and validated.</p>
+
+<p><code>useODD=false</code> selects the original scalar cc model.
+<code>useODD=true</code> constructs the off-diagonal dipolar blocks once and
+applies the retained static ODD correction. The incomplete variable-moment
+Tier-2 route remains out of production.</p>
 
 <h2>q-path meaning</h2>
 
-<p>The production q-path observable uses the uniform ferromagnetic projection
-J(q)=v<sup>T</sup>J<sub>cc</sub>(q)v, with
-v=(1,1,1,1)/2. This is the single-mode dispersion used by the projected
-mean-field/RPA approximation. <code>invz_jq_path</code> supplies the directional
-long-wavelength limit at Gamma-equivalent points. The optional sorted
-eigenvalue branches remain exploratory: their index is not a tracked physical
-mode through crossings.</p>
-
-<h2>Deliberately removed</h2>
-
-<ul>
-<li><code>ordered_1z='bare'</code>, forced-moment dispatch, ordered-route
-selection, and diagnostic recovery heuristics;</li>
-<li>field tilt, in-plane rotation, tensor-reference, C4-fit, and field-angle
-scan plumbing in this projected branch;</li>
-<li>static-domain scans, trace/report scripts, convergence experiment drivers,
-and obsolete solver wrappers;</li>
-<li>the incomplete ODD variable-moment Tier-2 route and its Gaussian-dressing
-helpers;</li>
-<li>the isolated strict-functional prototypes and previous convergence
-diagnostic/execution trees;</li>
-<li>checked-in/generated cache data and the duplicate ODD diversion in
-<code>invz_jq_modes</code>.</li>
-</ul>
-
-<p>The validated in-plane <code>vector_ab</code> implementation remains in
-<code>invz_common/invz_single_ion.m</code> because the full-tensor branch uses
-it. Its projected-branch results and restoration instructions are retained in
-<a href="../docs/invz_projected_field_orientation_recovery.md"><code>docs/invz_projected_field_orientation_recovery.md</code></a>.</p>
+<p>The q-path observable uses the uniform ferromagnetic projection
+J(q)=v<sup>T</sup>J<sub>cc</sub>(q)v with v=(1,1,1,1)/2. This is the
+single-mode dispersion of the projected mean-field/RPA approximation.
+Optional sorted eigenvalue branches are exploratory and are not tracked
+physical modes through crossings.</p>
 
 <h2>Core result contracts</h2>
 
@@ -196,32 +224,48 @@ it. Its projected-branch results and restoration instructions are retained in
 <thead><tr><th>Function</th><th>Key result</th></tr></thead>
 <tbody>
 <tr><td><code>invz_spectra_map</code></td>
-    <td><code>chiz</code>, <code>chirpa</code>, <code>Sigma0</code>,
-        <code>phase</code>, <code>moment</code>, <code>D_ord</code>,
-        <code>Bc</code>, and peak energies</td></tr>
+    <td><code>chiz</code>, <code>chirpa</code>, phase labels,
+        <code>Sigma0</code>, moment, <code>D_ord</code>, H<sub>MF</sub>,
+        boundaries, peaks, <code>adjacent_retry</code>, and
+        <code>ordered_boundary_retry</code></td></tr>
+<tr><td><code>S.approximation_ensemble</code></td>
+    <td>member phases and spectra, completeness flags, finite intervals,
+        missing areas, component edges, and per-member retry provenance</td></tr>
 <tr><td><code>invz_spectra_qpath</code></td>
-    <td>the same two spectra along q, selected <code>Jq</code>, path coordinate,
-        snap mask, phase, and peak energies</td></tr>
-<tr><td><code>invz_solve_point</code></td>
-    <td>paramagnetic EMT/self-energy state; static ODD when requested</td></tr>
+    <td>the two spectra along q, selected <code>Jq</code>, path coordinate,
+        phase labels, and peak energies</td></tr>
 <tr><td><code>invz_solve_point_ordered</code></td>
-    <td>Jensen ordered state with moment, static self-energy, uniform
-        denominator, and H<sub>MF</sub> diagnostics</td></tr>
-<tr><td><code>invz_odd_zero_field</code></td>
-    <td>Static-ODD or ODD-off T<sub>c</sub>(0), optionally over two or more
-        grid sizes; accepts precomputed ODD blocks for the single-grid case</td></tr>
+    <td>accepted Jensen ordered state plus complete profile, component,
+        missing-area, root, residual, and stability diagnostics</td></tr>
+<tr><td><code>invz_solve_point</code></td>
+    <td>paramagnetic EMT/self-energy state and PM mass</td></tr>
 </tbody>
 </table>
 
-<h2>Scope</h2>
+<h2>Interpretation and remaining limitation</h2>
+
+<p>The completed central susceptibility is a controlled numerical result on
+one declared branch. It is not an exact thermodynamic selection proof. The
+production hybrid combines the full electronuclear bare response with an
+electronic two-level vertex, and no same-ion stationary free-energy functional
+has been derived for that hybrid. This limitation is separate from the former
+masking problem and should not be described as its numerical root cause.</p>
+
+<h2>Evidence and scope</h2>
+
+<p>The final diagnosis is in
+<a href="../converg_diagnosis.md"><code>converg_diagnosis.md</code></a>.
+The mathematical interpretation is in
+<a href="../thermodynamic_check_theory.html"><code>thermodynamic_check_theory.html</code></a>.
+Reproducible missing-area, zero-field, retry, resolution, and high-field
+artifacts are indexed by
+<a href="../docs/diagnostics/invzp_approximation_wp6/README.md"><code>docs/diagnostics/invzp_approximation_wp6/README.md</code></a>.</p>
 
 <p>In scope: scalar cc-channel projected 1/z phase boundaries and spectra,
-Jensen ferromagnetic closure, q-path dispersion, hyperfine structure, the
-&Sigma;=0 overlay, sample-shape handling already present in the scalar theory,
-and static ODD.</p>
-
-<p>Out of scope: arbitrary field orientation in the projected branch,
-full-tensor propagation, neutron form factors/intensities, ODD variable-moment
-or full-tensor mode mixing, and silent fallback to approximate ordered states.</p>
+Jensen ferromagnetic closure, hyperfine structure, uniform and q-path
+responses, the &Sigma;=0 overlay, retained sample-shape handling, and static
+ODD. Out of scope: arbitrary projected-branch field orientation, full-tensor
+propagation, neutron form factors, ODD variable-moment/full-tensor mixing, and
+silent fallback to an uncertified ordered state.</p>
 </body>
 </html>

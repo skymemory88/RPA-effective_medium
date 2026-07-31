@@ -104,7 +104,16 @@ function Sw = realaxis_sigma(pt, tl, pref, Kw, K0, g, ordered)
 gamma_w = pref*(pt.lambda(1) - (1 - tl.n01^2)*Kw);
 if ordered
     gamma0 = pref*(pt.lambda(1) - (1 - tl.n01^2)*K0);
-    Sw = (pt.alpha - pt.alpha_m) + (gamma_w - (2*tl.m^2/tl.M2)*gamma0) .* g;
+    if tl.M2 == 0
+        % Exact M2 cancellation in (2*m^2/M2)*gamma(0). Restrict the
+        % reassociation to the exact endpoint so positive-M2 spectra keep
+        % their historical arithmetic bit-for-bit.
+        Q0 = (2*tl.m^2/tl.n01^2) * ...
+            (pt.lambda(1) - (1-tl.n01^2)*K0);
+    else
+        Q0 = (2*tl.m^2/tl.M2)*gamma0;
+    end
+    Sw = (pt.alpha - pt.alpha_m) + (gamma_w - Q0) .* g;
 else
     Sw = pt.alpha + gamma_w .* g;
 end

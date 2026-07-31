@@ -6,7 +6,7 @@ This is the compact memory of failed hypotheses, invalid acceptance rules, and
 attempted fixes for the ordered projected-spin \(1/z\) calculation. Consult it
 before proposing a new convergence repair.
 
-Entries are current through 2026-07-30. They summarize measurements formerly
+Entries are current through 2026-07-31. They summarize measurements formerly
 spread across the deleted convergence diagnosis, blind-plan, execution diary,
 and review notes. The tracked historical diagnosis, plan, and diary remain
 recoverable from Git at commit `635bfaf`; the two untracked review notes were
@@ -338,9 +338,39 @@ near 0.20. For a real \(\lambda>1\), the damped eigenvalue
 converge locally onto that branch. Evidence:
 `docs/diagnostics/invzp_outer_wp2/wp2_node22_step_domain.mat`.
 
+The later exact component audit makes this mechanism explicit. At
+\(h=0.006\) meV, the original outer map has dominant eigenvalue 0.4173036 on
+the low-\(s\) sheet and 2.6434068 on the return sheet; at the saddle-node it
+is 0.9999998. Scalar damping can slow or stabilize the contractive sheet but
+cannot turn the high-\(s\) sheet into a locally attractive fixed point.
+Evidence: `docs/diagnostics/invzp_outer_wp2/wp2_fold_sheet_stability_audit.mat`.
+
 **Do not reconsider for this branch unless:** a different admissible coupled
 root is first established, or a new Jacobian measurement contradicts the
 \(\lambda>1\) result.
+
+### Smaller fixed-\(h\) steps through the 1 T node-22 failure
+
+**Status:** Rejected for the known component.
+
+Exact pseudo-arclength continuation now follows the accepted 1 T component
+through a regular saddle-node at
+\((h,s)=(0.0054789314231\ {\rm meV},0.6565777265)\). All physical masses are
+positive there; the continuation then returns to increasing \(h\) and
+approaches the \(s=1\) static boundary. Node 22 is at
+\(h=0.004053\) meV, below the minimum field attained by this component.
+Refining the fixed-\(h\) grid can approach the fold but cannot cross it.
+
+This does not reject pseudo-arclength continuation itself, which was the
+method that exposed the topology, and it does not exclude a disconnected
+low-\(h\) component. Evidence:
+`docs/diagnostics/invzp_outer_wp2/wp2_reduced_pseudoarclength_1t.mat`,
+`wp2_reduced_fold_refinement.mat`, and
+`wp2_pseudoarclength_original_equations_audit.mat`.
+
+**Do not reconsider as a path to \(h=0\) unless:** a different component is
+first established. Smaller steps remain useful only for resolving observables
+near the fold.
 
 ### Warm continuation as existence or equilibrium proof
 
@@ -348,7 +378,68 @@ root is first established, or a new Jacobian measurement contradicts the
 
 Warm starts alter the basin, not the fixed-point set. Historical coexistence
 scans found multiple polished zeros, and continuation/smoothness supplied no
-thermodynamic selector.
+thermodynamic selector. This warning is now concrete: the original
+740-component equations have two admissible roots at \(h=0.006\) meV,
+\(s=0.412077554837\) and \(0.809166172289\). A warm start can choose a sheet;
+it cannot establish which sheet equation (45) requires.
+
+### Blanket node-count, damping, or iteration escalation for the high-field sliver
+
+**Status:** Rejected as a fix.
+
+On the current 111-point field grid, the masked sample is
+\(B_x=4.66363636364\) T. The cold factor-one solve has a certified component,
+but its area-factor support is only 0.806818--0.991798 at 129 nodes. At 257
+nodes it is 0.80139--0.99289. Changing `mix_outer` from 0.25 to 0.15 and
+`max_outer` from 1000 to 3000 leaves the 129-node support unchanged. Factor one
+therefore has no bracket for algebraic reasons; more iterations cannot make
+that particular residual cross zero.
+
+**Legitimate use:** nested node ladders remain resolution checks after a branch
+and area prescription have been selected. They are not a blanket unmasking
+mechanism.
+
+### Retuning the missing-area factor solely to remove the high-field mask
+
+**Status:** Rejected as a selection rule; retained as a sensitivity diagnostic.
+
+At 4.663636 T, cold factors 0.85, 0.90, and 0.95 all converge, and factor 0.90
+changes by \(9.59\times10^{-5}\) meV between 129 and 257 nodes. This proves that
+the accepted equations remain numerically reachable for missing areas inside
+the measured support window. It does not identify the physical missing area.
+Choosing 0.90 because it fills a plotted column would hide the existing model
+uncertainty and contradict the ensemble contract.
+
+**Do not promote unless:** an overlap calculation, independent theory, or
+holdout-calibrated data selects the area prescription before inspecting the
+target column.
+
+### One-sided ordered warm seeding as an automatic boundary repair
+
+**Status:** Blanket repair rejected; a narrowly gated factor-one boundary
+retry is now authorized by new evidence.
+
+Accepted factor-one states at 4.5 and 4.581818 T independently seed the same
+descending-profile root at 4.663636 T and 4.68 T. At the former, both give
+\(h_{\rm MF}=0.0043136\) meV with a maximum self-energy difference
+\(2.04\times10^{-10}\); at 4.68 T both give 0.0036183 meV. This is new evidence
+that cold ascending continuation was missing a reproducible numerical branch.
+The former analytic-derivative sign conflict was a diagnostic error: it used
+`Gstat` where the exact identity requires `Gtilde0`. Corrected derivatives and
+narrow secants agree. Direct long jumps still become seed-sensitive at 4.70 T,
+but two independent histories advanced by accepted intermediate states agree
+at 129 and 257 nodes through 4.7188 T. This new evidence identifies the old
+4.70/4.71 result as a continuation-distance failure rather than an observed
+branch endpoint.
+
+The implemented production exception is not blanket warm seeding. It applies
+only to a frozen cold `phase==0` point above every accepted ordered cold point
+and below an accepted PM point; uses two untouched lower ordered sources; runs
+an independent converged negative-PM-mass gate; and requires matching component,
+root, self-energy, and edge results with explicit positive \(D_{\rm uni}\) and
+\(F'\) margins. A cold `phase==2` point and every recovered state remain
+ineligible. Reconsider broader one-sided seeding only with equally explicit
+branch-selection and resolution evidence.
 
 ### Reversing the unchanged coarse profile grid as the solver repair
 
@@ -413,6 +504,20 @@ zero nodes at both tested damping values: 11/34 remained 11/34 and 10/34
 remained 10/34. Exact reciprocal arithmetic is still preferable near that local
 pole, but it does not resolve lattice-pole admissibility.
 
+The exact four-variable residual confirms the distinction. On the
+moment-closed 1 T \(h=0\) branch, the raw
+\(\Phi-G_{\rm stat}\) residual changes sign at the local pole, while the
+algebraically equivalent pole-cancelled residual
+\(x-\widetilde G_0\) remains positive from 1158.87 to
+2210.77 meV\(^{-1}\). The pole sign change is not a coupled root.
+Evidence:
+`docs/diagnostics/invzp_outer_wp2/wp2_reduced_endpoint_profile.mat`.
+
+An independent 740-component original-equation sweep confirms the same
+identity to \(9.09\times10^{-13}\) and refines the dense sampled range to
+1158.79--2210.78 meV\(^{-1}\). Evidence:
+`docs/diagnostics/invzp_outer_wp2/wp2_original_equations_audit.mat`.
+
 ### Backtracking line search or step limiter
 
 **Status:** Falsified.
@@ -429,6 +534,24 @@ Newton can recover or tightly polish some residual roots. It does not enforce
 the physical \(x\) interval, establish completeness, choose equilibrium, or
 exclude a discontinuity. It may be used only inside the complete acceptance
 contract.
+
+At the previously noncontractive 1 T node 22, two bounded normalized
+least-squares starts from the last admissible trajectory state reach nearly
+the same admissible interior state but retain scaled residual
+\(4.05\times10^{-2}\) after the documented iteration budget. This does not
+exclude another root, but it falsifies the expectation that merely changing
+the local nonlinear solver immediately recovers the missing node.
+Evidence:
+`docs/diagnostics/invzp_outer_wp2/wp2_reduced_node22_search.mat`.
+
+Centrally differenced scaled Newton from both candidates also retains
+\(4.053\times10^{-2}\), with reciprocal Jacobian condition estimates
+\(2.92\times10^{-6}\) and \(5.86\times10^{-7}\); full Newton directions
+encounter undefined states. A separate global surrogate/pattern search finds
+no lower root basin. These are local and budgeted failures, not root
+nonexistence proofs. Evidence:
+`docs/diagnostics/invzp_outer_wp2/wp2_node22_scaled_fsolve_audit.mat` and
+`docs/diagnostics/invzp_outer_wp2/wp2_reduced_global_audit.mat`.
 
 ### Real-axis broadening
 
@@ -498,6 +621,13 @@ This rejection does not validate the hybrid representation: the electronic
 two-level weight and full electronuclear response are not a common spectral
 decomposition in the same census.
 
+The recorded reconsideration condition has now occurred at the exact-zero
+endpoint: the physical Ising-limit matrix element is zero (numerically
+\(3.82\times10^{-28}\) in the retained eigensystem). Production therefore uses
+the exact reassociation only when `M2 == 0`; every positive-\(M^2\) call retains
+the historical arithmetic bit-for-bit. This endpoint hygiene does not reopen
+small \(M^2\) as the cause of the 0.5--2.2 T failures.
+
 ### Fixed lowest-16 electronuclear vertex plus bare remainder as a low-field
 repair
 
@@ -544,6 +674,22 @@ does not restore the equation-(45) path. It does not prove nonexistence of a
 disconnected root outside the Picard/continuation basin.
 Evidence:
 `docs/diagnostics/invzp_representation_wp3/wp3_closed_twolevel_landmarks.mat`.
+
+The exact reduced ray control gives a compatible but more specific failure:
+at 1 T and \(h=0\), \(\lambda=0\) is outside the closed model's dynamic
+physical domain. Along the ray to the rigorous componentwise moment upper
+bound, defined states begin at 0.7125 of that bound, where all three moment
+residuals point back toward smaller, undefined values. No simultaneous root
+occurs on the tested ray; off-ray roots remain open. Evidence:
+`docs/diagnostics/invzp_representation_wp3/wp3_reduced_representation_profile.mat`.
+
+An additional 320-evaluation off-ray surrogate/pattern search, seeded with six
+feasible-ray points, ends at a nonadmissible candidate with
+\(\|R_{\rm scaled}\|_\infty=0.399\). No rejected trial contains a multiple or
+unresolved scalar dynamic root. This strengthens the rejection as an immediate
+repair but remains a budgeted, not interval-complete, root search. Evidence:
+`docs/diagnostics/invzp_representation_wp3/wp3_closed_global_audit.mat` and
+`docs/diagnostics/invzp_outer_wp2/wp2_global_trial_status_audit.mat`.
 
 **Do not reconsider as a direct repair unless:** a complete coupled-root
 search finds a certified low-\(h\) component in the closed model or an
@@ -598,6 +744,21 @@ At the 1 T predictor,
 \(\Sigma_0>16.8\). The endpoint is far outside the working domain. Use a
 boundary-exact linearized closure and inward comparison where both routes are
 valid; do not spend solver effort trying to force this anchor.
+
+### Reusing the legacy PM-endpoint visual modes as controlled area members
+
+**Status:** Rejected.
+
+The two-endpoint and filtered-profile visual modes depend on a PM endpoint
+that is unconverged and path-dependent over much of the ordered field range;
+the filtered version may also bridge rejected interior nodes. They are not
+members of the resumed controlled ensemble and must not be relabeled as such.
+
+The resumed mode instead declares \(A\) explicitly from positive completion
+shapes at the lower edge of one terminal contiguous certified component. It
+uses no PM endpoint, no rejected-node value, and no interior bridge. This is
+still an approximation and its Picard-attracting branch label is not an
+equilibrium selector.
 
 ### Choosing the last crossing, nearest previous root, or smoothest \(r(h)\)
 
@@ -680,6 +841,123 @@ These are not dead ends, but they must not be advertised as known fixes:
 
 They belong to the representation audit after the physical static solver is in
 place.
+
+### Direct common-anchor coupling free-energy ranking of both 1 T sheets
+
+**Status:** Unavailable for the return sheet; the method is not globally
+falsified.
+
+At \(h=0.006\) meV, the historical low-\(s\) sheet continues regularly under
+\(J^{cc}\mapsto\rho J^{cc}\) to the zero-coupling anchor. The return sheet
+instead reaches the uniform stability boundary at
+\(\rho_*=0.7721813\), with its mesh and dynamic masses still positive. Hence
+integrating \(\langle H_1(\rho)\rangle/\rho\) from zero gives a candidate
+potential only for the low sheet; assigning the same integration constant to
+the return sheet would be arbitrary.
+
+Reopen a two-sheet coupling comparison only if a derived constrained
+functional supplies a legitimate continuation or matching condition through
+the uniform boundary. A finite cutoff, analytic extrapolation past the gate,
+or branch jump without that derivation is not such a condition.
+
+### Treating inner Picard nonconvergence as absence of an exact root
+
+**Status:** Falsified on the 0.8--1.1 T diagnostic sections.
+
+The original full-\(\Sigma\) fixed-\(s\) scan lost contraction above
+\(s=0.75\), 0.8, and 0.9 at 0.8, 0.9, and 1.1 T and therefore reported only
+the low root. Exact four-variable cross-field correction, seeded from the
+independently certified 1.2 T high root, instead finds admissible high roots at
+\[
+(B_x,s)=(0.8,0.786705254),\ (0.9,0.818288188),\
+(1.1,0.927870087).
+\]
+Their largest reduced and legacy-outer residuals are
+\(1.51\times10^{-10}\) and \(3.25\times10^{-10}\). Thus failure of the
+iteration is an attraction/contraction result, not a root-existence test.
+
+This does not invalidate a one-root conclusion wherever the full-\(\Sigma\)
+map converges over the complete sampled \(s\) interval. At 2.5--2.9 T that
+interval was independently extended to \(s=0.999999\), and constrained
+full-residual multistart found no second high root. Even there, retain the
+finite-search qualification rather than claiming an interval uniqueness
+theorem.
+
+Evidence:
+`docs/diagnostics/invzp_outer_wp2/wp2_multifield_crossfield_continuation.mat`
+and
+`docs/diagnostics/invzp_outer_wp2/wp2_highfield_exact_section_audit.mat`.
+
+### Treating Jensen equation (46) as an exact potential for the production hybrid
+
+**Status:** Rejected without a new functional derivation.
+
+Jensen's ordered proof uses the moment, \(G_0\), elastic factor, and cumulant
+vertex generated by one two-level ion. Production deliberately mixes the
+136-state electronuclear moment/\(G_0\) with an electronic two-level
+\(\Sigma\) and \(\xi\). The full moment derivative agrees with its own
+\(-G_0\) to \(2.57\times10^{-7}\), so this is not a differentiation bug. The
+two producers are materially different:
+\(G_{0,\rm full}/G_{0,\rm twolevel}=0.147\)--0.889 and their moments differ
+by 0.095--1.326 over the sampled fields. At exact hybrid roots, substituting
+the Jensen-consistent two-level static weights changes \(G_{\rm stat}\) by
+18.9% up to a factor 178.
+
+The fold-anchored field integral is therefore a reproducible scalar diagnostic
+of the hybrid equations, but its thermodynamic/free-energy label is not
+established. Reopen promotion only after deriving a multilevel connected
+four-point vertex or a mixed stationary functional whose variations reproduce
+the actual full-\(G_0\)/two-level-vertex closure. Numerical quadrature
+agreement within the same hybrid is not that derivation.
+
+Evidence:
+`docs/diagnostics/invzp_outer_wp2/wp2_hybrid_functional_consistency_audit.mat`.
+
+### Using \(r(1+J_{0,\rm eff}G_{\rm stat})\) as the equation-(45) derivative
+
+**Status:** Falsified algebraically and numerically.
+
+For
+\(F(h)=A+\int r\,dh-J_{0,\rm eff}m(h)\), the constrained single-ion identity
+is \(dm/dh=-G_0^{\rm bare}\), while
+\(r=G_0^{\rm bare}/\widetilde G_0\). Therefore
+
+\[
+F'=r+J_{0,\rm eff}G_0^{\rm bare}
+  =r(1+J_{0,\rm eff}\widetilde G_0),
+\]
+
+not \(r(1+J_{0,\rm eff}G_{\rm stat})\). At 4.663636 and 4.68 T the incorrect
+substitution gives -0.23491 and -0.25941, whereas the exact values are
++0.028518 and +0.020014. Narrow fixed-\(h\) secants agree with the exact values
+within \(1.24\times10^{-5}\) relative, and direct finite differences verify
+\(dm/dh=-G_0^{\rm bare}\) within \(2.45\times10^{-8}\) relative.
+
+Reconsider replacing \(\widetilde G_0\) by \(G_{\rm stat}\) only in a limit
+where \(K_0G_{\rm stat}=0\) is proved, so the two quantities are equal. Evidence
+is `docs/diagnostics/invzp_approximation_wp6/wp6_highfield_derivative_section_audit.mat`.
+
+### Treating the exact-zero constructor exception as evidence of a non-unique
+ordered limit
+
+**Status:** Falsified for the opt-in missing-area endpoint.
+
+The electronic splitting at \(h=0\) falls below the retained two-level domain
+floor for \(B\lesssim0.044\) T and is \(1.78\times10^{-14}\) meV at exact zero.
+That predictor is not used by the missing-area quadrature. Once it is rejected
+transactionally instead of throwing, a 19-point ladder reaches the same
+certified positive-\(h\) component at every field down to zero. The electronic
+doublet projector, its invariant static weight, the full-ion variance, and the
+full-ion path susceptibility are continuous; exact-zero and \(10^{-6}\) T
+spectra agree within \(1.27\times10^{-12}\) absolute.
+
+This does not validate a strict complete path through \(h=0\): strict mode
+retains `node_failed` with predictor status `twolevel_domain_invalid`. Reopen a
+non-unique-limit claim only if basis-invariant final-state or spectral
+observables disagree on a smaller-field ladder or depend on an arbitrary basis
+or epsilon. Evidence is
+`docs/diagnostics/invzp_approximation_wp6/wp6_zero_field_limit_ladder.mat` and
+`wp6_zero_field_ensemble_validation.mat`.
 
 ## Update rule
 

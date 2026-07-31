@@ -48,7 +48,7 @@ mzsd = 1.0;         if order && B(3) < 0, mzsd = -1.0; end
                     % below the transition; spec 2026-07-16, review finding 2)
 if isfield(opts,'mz_seed'), mzsd = opts.mz_seed; end
 mix  = 1.0;         if isfield(opts,'mf_mix'), mix = opts.mf_mix; elseif order, mix = 0.6; end
-maxit = 200;        if isfield(opts,'mf_maxit'), maxit = opts.mf_maxit; elseif order, maxit = 800; end
+maxit = 200;        if isfield(opts,'mf_maxit'), maxit = opts.mf_maxit; elseif order, maxit = 1200; end
 C   = invz_const();
 oJ  = stevens_ops(ion.J);
 B44s = 0;  if isfield(ion,'B44s'), B44s = ion.B44s; end   % optional sine partner of B44
