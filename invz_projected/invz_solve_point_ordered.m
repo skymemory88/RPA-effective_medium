@@ -9,10 +9,26 @@ function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 % ODD (opt-in): opts.odd=true requires opts.odd_blocks with Vca/Vcb/Vcc/Jcc0
 % from invz_odd_blocks and Jnu_flat=[]. The temperature/field-dependent modes
 % and uniform -d shift are rebuilt here.
+%
+% Controlled approximation (opt-in):
+%   opts.hmf_integral_mode = 'missing_area_approx'
+%   opts.hmf_missing_area_factor = scalar >= 0.5
+% uses only the terminal contiguous certified high-h component and sets
+% A=factor*h_e*r(h_e).  The supported branch is explicitly the
+% Picard-attracting contiguous high-h component.  This is an approximation,
+% not a thermodynamic branch selector.  The default remains 'full_profile'.
+%
+% Diagnostic continuation (opt-in, no default effect):
+%   opts.hmf_profile_state_seed = struct('Sigma',...,'lambda',...,'K0',...)
+%   opts.hmf_profile_sweep_direction = 'descending'
+% initializes the ordered iteration from a previously accepted state and
+% evaluates the profile from high to low h. Every acceptance gate remains
+% binding; a seed is never accepted as a result.
 if nargin < 5, opts = struct(); end
 if any(isfield(opts, {'odd_tier2','tier2','tol_tier2','max_tier2'}))
     error('invz:removedOption', 'The incomplete ODD Tier-2 route has been removed.');
 end
+
 if ~(isnumeric(Bx) && isreal(Bx) && isscalar(Bx) && isfinite(Bx))
     error('invz:field', 'Bx must be a finite real scalar transverse field.');
 end
@@ -44,6 +60,7 @@ if oddOn
 end
 
 [wn, wts, beta] = invz_matsubara(T, Ecut);
+[state_seed, state_seeded] = ordered_profile_state_seed(opts,numel(wn));
 
 hopts = opts;
 hopts.J0eff = J0eff;
@@ -80,6 +97,11 @@ Sigma = zeros(size(wn));
 K = zeros(size(wn));
 K0s = 0;
 lam = [0; 0; 0];
+if state_seeded
+    Sigma = state_seed.Sigma;
+    K0s = state_seed.K0;
+    lam = state_seed.lambda;
+end
 converged = false;
 med = struct('G', nan(size(wn)), 'converged', false);
 sg = struct('alpha', NaN, 'alpha_m', NaN);
@@ -137,6 +159,9 @@ pt.converged = converged && med.converged && staticok && final_resid < tolo;
 pt.outer_iters = outer;
 pt.hmf = hstar;
 pt.hmf_prof = hprof;
+pt.hmf_status = hprof.status;
+pt.production_approximation = hprof.production_approximation;
+pt.approximation_only = hprof.approximation_only;
 pt.D_uni = 1 + (J0eff - K(1))*med.G(1);
 pt.static_status = so.status;
 if oddOn
@@ -151,6 +176,8 @@ function pt = early_return(si, hprof)
 pt = struct('m0', 0, 'is_ordered', false, 'converged', false, ...
     'Sigma0', NaN, 'crit', NaN, 'si', si, 'tl', [], ...
     'hmf', NaN, 'hmf_prof', hprof, 'hmf_status', hprof.status, ...
+    'production_approximation',hprof.production_approximation, ...
+    'approximation_only',hprof.approximation_only, ...
     'D_uni', NaN, 'final_resid', NaN, 'static_status', 'not_evaluated');
 end
 
@@ -191,12 +218,37 @@ eso.warn = false;   % node loop gates on so.converged; suppress the per-node con
 integral_mode = string(getf(opts, 'hmf_integral_mode', 'full_profile'));
 endpoint_visual = integral_mode == "endpoint_trapezoid_visual";
 filtered_visual = integral_mode == "filtered_profile_visual";
+missing_area_approx = integral_mode == "missing_area_approx";
 strict_profile = integral_mode == "full_profile";
 visual_only = endpoint_visual || filtered_visual;
-if ~(strict_profile || endpoint_visual || filtered_visual)
+approximation_only = visual_only || missing_area_approx;
+if ~(strict_profile || endpoint_visual || filtered_visual || missing_area_approx)
     error('invz:hmfIntegralMode', ...
         ['hmf_integral_mode must be ''full_profile'', ' ...
-         '''endpoint_trapezoid_visual'', or ''filtered_profile_visual''.']);
+         '''missing_area_approx'', ''endpoint_trapezoid_visual'', or ' ...
+         '''filtered_profile_visual''.']);
+end
+missing_area_factor = getf(opts,'hmf_missing_area_factor',NaN);
+approximation_branch = string(getf(opts,'hmf_approx_branch', ...
+    'picard_attracting_contiguous_high_h_component'));
+supported_approximation_branch = ...
+    "picard_attracting_contiguous_high_h_component";
+if missing_area_approx
+    if ~(isnumeric(missing_area_factor) && isreal(missing_area_factor) && ...
+            isscalar(missing_area_factor) && isfinite(missing_area_factor) && ...
+            missing_area_factor >= 0.5)
+        error('invz:hmfMissingAreaFactor', ...
+            ['missing_area_approx requires hmf_missing_area_factor to be ' ...
+             'a finite scalar >= 0.5 for a nonnegative linear completion.']);
+    end
+    if approximation_branch ~= supported_approximation_branch
+        error('invz:hmfApproxBranch', ...
+            ['The only implemented approximation branch is ' ...
+             '''picard_attracting_contiguous_high_h_component''.']);
+    end
+else
+    missing_area_factor = NaN;
+    approximation_branch = "not_applicable";
 end
 filtered_anchor_label = "not_applicable";
 if filtered_visual, filtered_anchor_label = "pm_endpoint"; end
@@ -229,6 +281,13 @@ prof = struct('hgrid', [], 'r', [], 'h0', [], 'm', [], 'Sigma0', [], 'K0', [], .
               'predictor_converged', false, 'converged_node_count', 0, ...
               'm_star', NaN, 'D_uni_star', NaN, 'r_star', NaN, 'Gstat_star', NaN, ...
               'integral_mode', char(integral_mode), 'visual_only', visual_only, ...
+              'approximation_only',approximation_only, ...
+              'production_approximation',missing_area_approx, ...
+              'missing_area_factor',missing_area_factor, ...
+              'missing_area',NaN,'missing_area_model',"not_applicable", ...
+              'missing_area_integral',struct(), ...
+              'approximation_branch',char(approximation_branch), ...
+              'branch_selection_status',"not_thermodynamically_selected", ...
               'endpoint_r0', NaN, 'endpoint_r0_source', "not_evaluated", ...
               'endpoint_pm_converged', false, 'endpoint_pm_iters', NaN, ...
               'endpoint_pm_crit', NaN, 'filtered_integral', struct(), ...
@@ -236,6 +295,7 @@ prof = struct('hgrid', [], 'r', [], 'h0', [], 'm', [], 'Sigma0', [], 'K0', [], .
               'filtered_include_unconverged', filtered_include_unconverged, ...
               'filtered_unconverged_used_count', 0, ...
               'root_bracket_indices', [NaN NaN], ...
+              'root_bracket_count',0, ...
               'root_bracket_bridged', false);
 hmf_star = NaN;
 
@@ -252,12 +312,35 @@ if isnan(hmin_abs), hmin_abs = 1e-10*hmax; end
 Ecut  = getf(opts, 'Ecut', 40);
 eopts = getf(opts, 'emt', struct());
 [wn, wts, beta] = invz_matsubara(T, Ecut);
+[profile_state_seed, profile_state_seeded] = ...
+    ordered_profile_state_seed(opts,numel(wn));
+profile_sweep_direction = string(getf(opts, ...
+    'hmf_profile_sweep_direction','ascending'));
+if ~isscalar(profile_sweep_direction) || ...
+        ~ismember(profile_sweep_direction,["ascending" "descending"])
+    error('invz:hmfProfileSweepDirection', ...
+        'hmf_profile_sweep_direction must be ''ascending'' or ''descending''.');
+end
+if profile_sweep_direction == "descending" && ~profile_state_seeded
+    error('invz:hmfProfileStateSeed', ...
+        'A descending profile sweep requires hmf_profile_state_seed.');
+end
+profile_lambda_seed = zeros(3,1);
+if profile_state_seeded
+    profile_lambda_seed = profile_state_seed.lambda;
+end
+prof.profile_state_seeded = profile_state_seeded;
+prof.profile_sweep_direction = char(profile_sweep_direction);
 
 % Independent h = 0 PM predictor node (round-3 P0-3; doubles as Gate 6b's comparator):
 % ONE node solve at hz_fixed = 0 gives THIS machinery's PM fixed point. Its mass
 %   slope_pred = r(0) + J0eff*G0bare(0) = 1 + Sigma0(0) - J0eff*chi_path(0)   (= crit, SS5)
 % predicts root existence INDEPENDENTLY of any sampled profile value.
 Sigma = [];  K0s = 0;                                % last accepted node state
+if profile_state_seeded
+    Sigma = profile_state_seed.Sigma;
+    K0s = profile_state_seed.K0;
+end
 [r0n, ~, S0pm, K0pm, ~, Gb0, ~, ok0, Sigma_candidate, K0_candidate, st0] = ...
     eval_node(0, Sigma, K0s);
 if ok0
@@ -297,7 +380,8 @@ if needs_pm_endpoint
     remove = {'odd','odd_blocks','odd_retarded','odd_retarded_exact', ...
         'odd_rn_override','nH','hmax_fac','hmin_frac','hmin_abs','tol_root', ...
         'emt_static','hmf_integral_mode','hmf_endpoint_allow_unconverged_pm', ...
-        'hmf_endpoint_pm_max_outer','hmf_filtered_include_unconverged'};
+        'hmf_endpoint_pm_max_outer','hmf_filtered_include_unconverged', ...
+        'hmf_missing_area_factor','hmf_approx_branch'};
     for k = 1:numel(remove)
         if isfield(pmopts,remove{k}), pmopts = rmfield(pmopts,remove{k}); end
     end
@@ -347,6 +431,26 @@ elseif filtered_visual
     prof.filtered_integral = filtered_meta;
     prof.filtered_unconverged_used_count = ...
         nnz(filtered_meta.used_mask & ~cnv);
+elseif missing_area_approx
+    integral_eligible = cnv & isfinite(rv) & isfinite(mv);
+    [~, component_meta] = invz_missing_area_integral( ...
+        hgrid,rv,integral_eligible,1);
+    if component_meta.node_count >= 2 && ...
+            component_meta.component_edge > 0 && component_meta.edge_r > 0
+        missing_area = missing_area_factor* ...
+            component_meta.component_edge*component_meta.edge_r;
+        [h0, missing_meta] = invz_missing_area_integral( ...
+            hgrid,rv,integral_eligible,missing_area);
+        missing_meta.branch_selector = approximation_branch;
+        prof.missing_area = missing_area;
+        prof.missing_area_model = "linear_completion_shape_factor";
+    else
+        h0 = nan(size(hgrid));
+        missing_meta = component_meta;
+        missing_meta.missing_area = NaN;
+        missing_meta.branch_selector = approximation_branch;
+    end
+    prof.missing_area_integral = missing_meta;
 elseif predictor_usable
     h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end); % first panel seeded with r(0)
 else
@@ -411,6 +515,12 @@ elseif filtered_visual && ~endpoint_usable
 elseif filtered_visual && prof.filtered_integral.node_count < 2
     prof.status = 'filtered_too_few_nodes';
     return;
+elseif missing_area_approx && prof.missing_area_integral.node_count < 2
+    prof.status = 'missing_area_no_certified_component';
+    return;
+elseif missing_area_approx && ~isfinite(prof.missing_area)
+    prof.status = 'missing_area_invalid_edge';
+    return;
 elseif strict_profile && ~predictor_usable % predictor never produced a usable finite value
     prof.status = 'node_failed'; % above -- report the honest verdict now that the grid's
     return;                      % own (convergence-independent) diagnostics are exported;
@@ -450,6 +560,24 @@ elseif filtered_visual
     end
     ia = retained(j);
     ib = retained(j+1);
+elseif missing_area_approx
+    valid = prof.missing_area_integral.selected_mask & ...
+        isfinite(mv) & isfinite(F);
+    pair = valid(1:end-1) & valid(2:end) & ...
+        F(1:end-1) < 0 & F(2:end) >= 0;
+    brackets = find(pair);
+    prof.root_bracket_count = numel(brackets);
+    prof.status = 'ok_missing_area_approx';
+    if isempty(brackets)
+        prof.status = 'missing_area_no_bracket';
+        return;
+    elseif numel(brackets) > 1
+        prof.status = 'missing_area_multiple_brackets';
+        return;
+    end
+    idx = brackets(1);
+    ia = idx;
+    ib = idx+1;
 else
     prof.status = 'ok';
     s = sign(F);
@@ -464,6 +592,13 @@ prof.root_bracket_bridged = ib > ia+1;
 % --- Root refinement by DIRECT evaluation (P1-4): bisection on F between the
 % bracketing nodes, fresh node solve per iterate, cumulative h0 via local trapezoid
 % panel from the bracket's left node.
+% A descending cross-field diagnostic finishes its sweep at the low component
+% edge. Restart refinement from the independently accepted neighbouring state,
+% which is the declared high-h seed; all direct-evaluation gates still apply.
+if profile_state_seeded && profile_sweep_direction == "descending"
+    Sigma = profile_state_seed.Sigma;
+    K0s = profile_state_seed.K0;
+end
 a = hgrid(ia);  b = hgrid(ib);  Fa = F(ia);  h0a = h0(ia);  ra = rv(ia);
 for it = 1:12
     c = 0.5*(a + b);
@@ -473,6 +608,8 @@ for it = 1:12
         prof.refinement_failure_status = stc;
         if filtered_visual
             prof.status = 'filtered_refinement_failed';
+        elseif missing_area_approx
+            prof.status = 'missing_area_refinement_failed';
         else
             prof.status = 'node_failed';
         end
@@ -501,6 +638,8 @@ prof.static_status_star = st_s;
 if ~ok_s
     if filtered_visual
         prof.status = 'filtered_final_failed';
+    elseif missing_area_approx
+        prof.status = 'missing_area_final_failed';
     else
         prof.status = 'node_failed';
     end
@@ -510,13 +649,18 @@ end
 prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star = Gs_s;
 
     function [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s, stv] = run_sweep(hgrid, Sigma, K0s)
-    % Evaluate every point in ascending order, warm-starting only from the
-    % last accepted node. A failed candidate is retained in the diagnostic
+    % Evaluate in the declared diagnostic direction, warm-starting only from
+    % the last accepted node. A failed candidate is retained in the diagnostic
     % arrays but is never committed as the next node's seed.
     n = numel(hgrid);
     [rv, mv, S0v, K0v, Dv, Gbv, Gsv] = deal(nan(1, n));  cnv = false(1, n);
     stv = strings(1,n);
-    for is = 1:n
+    if profile_sweep_direction == "ascending"
+        sweep_indices = 1:n;
+    else
+        sweep_indices = n:-1:1;
+    end
+    for is = sweep_indices
         [rv(is), mv(is), S0v(is), K0v(is), Dv(is), Gbv(is), Gsv(is), cnv(is), ...
             Sigma_candidate, K0_candidate, stv(is)] = eval_node(hgrid(is), Sigma, K0s);
         if cnv(is)
@@ -537,8 +681,21 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
     if abs(si.hz - hp) > 1e-12
         error('invz:hzFixed', 'hz_fixed not held: si.hz = %.6g vs %.6g', si.hz, hp);
     end
-    tl = invz_twolevel_ordered(ion, T, Bx, hp, struct('Jxx0', Jxx0));
     mk = si.Jexp(3);
+    % A near-degenerate electronic doublet is outside the retained vertex
+    % domain. Report that node as rejected without throwing or mutating the
+    % accepted continuation carrier. This is load-bearing for the opt-in
+    % missing-area mode, which may still possess a certified terminal high-h
+    % component; strict full_profile remains fail-closed because its predictor
+    % and complete-path gates still require every node.
+    tl = invz_twolevel_ordered(ion, T, Bx, hp, ...
+        struct('Jxx0', Jxx0, 'domain_policy', 'return'));
+    if ~tl.valid
+        [rk,S0k,K0k,Dk,Gbk,Gsk] = deal(NaN);
+        ok = false;
+        node_status = "twolevel_domain_invalid";
+        return;
+    end
     c0 = invz_chi0z(si, T, 1i*wn, struct('elastic', true));
     G0 = -real(squeeze(c0(3,3,:)));
     c0i = invz_chi0z(si, T, 1i*wn(1), struct('elastic', false));   % static inelastic only
@@ -551,7 +708,7 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
     G0el0   = G0bare0 - G0inel0;                                   % elastic + feedback (SS4a)
     g  = real(invz_g(tl, 1i*wn));
     if isempty(Sigma), Sigma = zeros(size(wn)); end
-    K = zeros(size(wn));  lam = [0; 0; 0];  ok = false;
+    K = zeros(size(wn));  lam = profile_lambda_seed;  ok = false;
     for outer = 1:maxo
         % (1) dynamic sector -- MIRROR invz_solve_point_ordered's emt call verbatim
         eopts.K0 = K;
@@ -591,4 +748,35 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
     % Gstat/r/D_uni were computed with (exported below as K0k = K0s).
     rk = so.r;  S0k = Sigma(1);  K0k = K0s;  Dk = so.D_uni;  Gbk = G0bare0;
     end
+end
+
+function [seed, seeded] = ordered_profile_state_seed(opts,nwn)
+raw = getf(opts,'hmf_profile_state_seed',[]);
+seed = struct('Sigma',zeros(nwn,1),'lambda',zeros(3,1),'K0',0);
+seeded = ~isempty(raw);
+if ~seeded
+    return;
+end
+if ~(isstruct(raw) && isscalar(raw) && ...
+        all(isfield(raw,{'Sigma','lambda'})))
+    error('invz:hmfProfileStateSeed', ...
+        'hmf_profile_state_seed must contain Sigma and lambda.');
+end
+sigma = raw.Sigma(:);
+lambda = raw.lambda(:);
+if ~(isnumeric(sigma) && isreal(sigma) && numel(sigma) == nwn && ...
+        all(isfinite(sigma)) && isnumeric(lambda) && isreal(lambda) && ...
+        numel(lambda) >= 3 && all(isfinite(lambda)))
+    error('invz:hmfProfileStateSeed', ...
+        'Seed Sigma/lambda must be finite real vectors matching the solve.');
+end
+K0 = 0;
+if isfield(raw,'K0')
+    K0 = raw.K0;
+    if ~(isnumeric(K0) && isreal(K0) && isscalar(K0) && isfinite(K0))
+        error('invz:hmfProfileStateSeed', ...
+            'Seed K0 must be a finite real scalar.');
+    end
+end
+seed = struct('Sigma',sigma,'lambda',lambda(1:3),'K0',K0);
 end

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Thermodynamic Check Theory</title>
+  <title>Thermodynamic check and final convergence diagnosis</title>
   <script>
     window.MathJax = {
       tex: {
@@ -31,23 +31,18 @@
       --accent-soft: #e8f4f7;
       --warning: #8a4b08;
       --warning-soft: #fff4df;
-      --danger: #8b2635;
-      --danger-soft: #fcecef;
       --verified: #216e39;
       --verified-soft: #eaf6ed;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
       background: var(--page);
       color: var(--ink);
-      font-family:
-        Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-        "Segoe UI", sans-serif;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
       line-height: 1.65;
     }
 
@@ -61,1894 +56,526 @@
       box-shadow: 0 10px 30px rgba(23, 33, 43, 0.07);
     }
 
-    h1, h2, h3 {
-      color: #102a36;
-      line-height: 1.25;
-    }
+    h1, h2, h3 { color: #102a36; line-height: 1.25; }
+    h1 { margin: 0 0 8px; font-size: clamp(2rem, 5vw, 3rem);
+         letter-spacing: -0.035em; }
+    h2 { margin-top: 2.2em; padding-bottom: 0.3em;
+         border-bottom: 1px solid var(--line); font-size: 1.45rem; }
+    h3 { margin-top: 1.7em; font-size: 1.08rem; }
+    p, li { max-width: 82ch; }
 
-    h1 {
-      margin: 0 0 8px;
-      font-size: clamp(2rem, 5vw, 3rem);
-      letter-spacing: -0.035em;
-    }
-
-    h2 {
-      margin-top: 2.2em;
-      padding-bottom: 0.3em;
-      border-bottom: 1px solid var(--line);
-      font-size: 1.45rem;
-    }
-
-    h3 {
-      margin-top: 1.7em;
-      font-size: 1.08rem;
-    }
-
-    p, li {
-      max-width: 82ch;
-    }
-
-    .subtitle {
-      margin: 0 0 26px;
-      color: var(--muted);
-      font-size: 1.08rem;
-    }
-
-    .summary,
-    .note,
-    .warning,
-    .verified {
+    .subtitle { margin: 0 0 26px; color: var(--muted); font-size: 1.08rem; }
+    .summary, .note, .warning, .verified {
       margin: 1.25rem 0;
       padding: 1rem 1.15rem;
       border-left: 4px solid var(--accent);
       border-radius: 7px;
       background: var(--accent-soft);
     }
-
-    .warning {
-      border-color: var(--warning);
-      background: var(--warning-soft);
-    }
-
-    .verified {
-      border-color: var(--verified);
-      background: var(--verified-soft);
-    }
-
-    .critical {
-      border-color: var(--danger);
-      background: var(--danger-soft);
-    }
-
+    .warning { border-color: var(--warning); background: var(--warning-soft); }
+    .verified { border-color: var(--verified); background: var(--verified-soft); }
     .label {
       display: inline-block;
       margin-right: 0.45rem;
       padding: 0.12rem 0.48rem;
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.8);
-      color: inherit;
       font-size: 0.76rem;
       font-weight: 750;
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }
-
-    table {
-      width: 100%;
-      margin: 1.2rem 0;
-      border-collapse: collapse;
-      font-variant-numeric: tabular-nums;
-    }
-
-    th, td {
-      padding: 0.65rem 0.75rem;
-      border: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-    }
-
-    th {
-      background: #f6f8fa;
-    }
-
-    code {
-      padding: 0.08rem 0.28rem;
-      border-radius: 4px;
-      background: #f1f3f5;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 0.92em;
-    }
-
-    a {
-      color: var(--accent);
-    }
-
-    .equation-note {
-      margin-top: -0.3rem;
-      color: var(--muted);
-      font-size: 0.93rem;
-    }
-
-    .toc {
-      columns: 2 280px;
-      padding-left: 1.25rem;
-    }
-
-    .toc li {
-      break-inside: avoid;
-      margin-bottom: 0.25rem;
-    }
-
-    .footer {
-      margin-top: 3rem;
-      padding-top: 1rem;
-      border-top: 1px solid var(--line);
-      color: var(--muted);
-      font-size: 0.9rem;
-    }
-
+    table { width: 100%; margin: 1.2rem 0; border-collapse: collapse;
+            font-variant-numeric: tabular-nums; }
+    th, td { padding: 0.65rem 0.75rem; border: 1px solid var(--line);
+             text-align: left; vertical-align: top; }
+    th { background: #f6f8fa; }
+    code { padding: 0.08rem 0.28rem; border-radius: 4px;
+           background: #f1f3f5;
+           font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+           font-size: 0.92em; }
+    a { color: var(--accent); }
+    .toc { columns: 2 280px; padding-left: 1.25rem; }
+    .toc li { break-inside: avoid; margin-bottom: 0.25rem; }
+    .footer { margin-top: 3rem; padding-top: 1rem;
+              border-top: 1px solid var(--line); color: var(--muted);
+              font-size: 0.9rem; }
     @media (max-width: 640px) {
-      main {
-        width: 100%;
-        margin: 0;
-        border: 0;
-        border-radius: 0;
-      }
-
-      .toc {
-        columns: 1;
-      }
-
-      table {
-        display: block;
-        overflow-x: auto;
-      }
+      main { width: 100%; margin: 0; border: 0; border-radius: 0; }
+      .toc { columns: 1; }
+      table { display: block; overflow-x: auto; }
     }
   </style>
 </head>
 <body>
 <main>
   <header>
-    <h1>Thermodynamic Check Theory</h1>
+    <h1>Thermodynamic check and final convergence diagnosis</h1>
     <p class="subtitle">
-      Definition, derivation, interpretation, and limitations of the
-      fold-anchored potential used in the inverse-\(z\) convergence analysis.
+      What the ordered-field equation requires, what actually caused the
+      numerical masks, how production now resolves them, and which exact
+      thermodynamic claims remain outside the approximation.
     </p>
-    <p class="equation-note">
-      Evidence snapshot through investigation checkpoint 27, with the
-      independent theory review incorporated (31 July 2026). Unless stated
-      otherwise, quoted numerical diagnostics are at \(T=0.1\) K.
+    <p>
+      Evidence through convergence checkpoint 31, including the confirmed
+      full 101-point production sweep, 31 July 2026. Quoted
+      numerical diagnostics are at \(T=0.1\) K unless stated otherwise.
     </p>
   </header>
 
-  <div class="summary">
-    <span class="label">Short answer</span>
-    The rigorous route did not fail because the remaining quadrature is merely
-    difficult. It failed because the present production closure does not
-    supply one globally selected, thermodynamically anchored function
-    \(r(h)\) to integrate. The known certified component folds before reaching
-    \(h=0\), \(r\) becomes branch-valued, neither the zero-field nor
-    saturation anchor is controlled, and the full-electronuclear-response /
-    electronic-two-level-vertex hybrid is not the same-ion construction for
-    which Jensen derived a free energy. Integrals over certified pieces remain
-    numerically meaningful diagnostics, but they are not a rigorous
-    equilibrium selector for the production model.
-    A separately labeled missing-area ensemble is now available for practical
-    spectra. It is an opt-in approximation with a strict default, not a
-    repair of the failed thermodynamic proof.
+  <div class="verified">
+    <span class="label">Final operational result</span>
+    The factor-one missing-area member now gives a smooth, finite susceptibility
+    across the full current field grid. The exact-zero endpoint and the 4.68 T
+    ordered-boundary sample both pass their explicit production contracts.
+    This resolves the practical spectra-convergence problem.
+  </div>
+
+  <div class="warning">
+    <span class="label">Interpretation boundary</span>
+    The successful spectrum is a controlled approximation on a declared
+    numerical branch. It does not convert the incomplete strict equation-(45)
+    path into an exact equilibrium free-energy construction. These are two
+    different standards and are documented separately below.
   </div>
 
   <nav aria-label="Contents">
     <h2>Contents</h2>
     <ol class="toc">
-      <li><a href="#conventions">Fields and sign conventions</a></li>
-      <li><a href="#legendre">The constrained Legendre potential</a></li>
-      <li><a href="#jensen">Jensen's modified mean field</a></li>
-      <li><a href="#field-equation">Derivation of the field equation</a></li>
-      <li><a href="#obligations">What the rigorous construction requires</a></li>
-      <li><a href="#absolute">Absolute fluctuation potential</a></li>
-      <li><a href="#anatomy">Numerical anatomy of the non-convergence</a></li>
-      <li><a href="#fold">Fold-anchored sheet comparison</a></li>
-      <li><a href="#meaning">What a negative result means</a></li>
-      <li><a href="#equilibrium">Constrained versus equilibrium ranking</a></li>
-      <li><a href="#hybrid">Why the hybrid blocks a rigorous interpretation</a></li>
-      <li><a href="#combined-failure">Why the rigorous route fails as a whole</a></li>
-      <li><a href="#survives">What remains established and useful</a></li>
-      <li><a href="#approximation">Controlled approximation and current masks</a></li>
-      <li><a href="#promotion">Requirements for promotion to thermodynamics</a></li>
-      <li><a href="#evidence">Local evidence and related notes</a></li>
+      <li><a href="#status">Final status and terminology</a></li>
+      <li><a href="#equation">The ordered-field equation</a></li>
+      <li><a href="#obligations">Strict thermodynamic obligations</a></li>
+      <li><a href="#causes">Verified numerical root causes</a></li>
+      <li><a href="#missing-area">Controlled missing-area solution</a></li>
+      <li><a href="#zero">Exact-zero solution</a></li>
+      <li><a href="#retries">Interior and boundary continuation</a></li>
+      <li><a href="#rejected">Rejected hypotheses</a></li>
+      <li><a href="#thermodynamics">What remains thermodynamic</a></li>
+      <li><a href="#evidence">Evidence and implementation</a></li>
     </ol>
   </nav>
 
-  <section id="conventions">
-    <h2>1. Fields, variables, and sign conventions</h2>
+  <section id="status">
+    <h2>1. Final status and terminology</h2>
+
+    <table>
+      <thead>
+        <tr><th>Statement</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Central production susceptibility on
+              <code>linspace(0,9,101)</code></td>
+          <td>Complete, finite, and visually smooth in the confirmed sweep.</td>
+        </tr>
+        <tr>
+          <td>Exact zero in the missing-area route</td>
+          <td>Finite and continuous to \(10^{-6}\) T.</td>
+        </tr>
+        <tr>
+          <td>Central 4.68 T ordered-side sample</td>
+          <td>Recovered by the independently gated boundary retry.</td>
+        </tr>
+        <tr>
+          <td>Missing-area sensitivity ensemble at 4.68 T</td>
+          <td>Separate diagnostic is incomplete: factor one is accepted;
+              noncentral members remain independently masked.</td>
+        </tr>
+        <tr>
+          <td>Option-free strict <code>full_profile</code></td>
+          <td>Unchanged and fail-closed where a complete path is unavailable.</td>
+        </tr>
+        <tr>
+          <td>Exact global thermodynamic branch selection</td>
+          <td>Not claimed by the production approximation.</td>
+        </tr>
+      </tbody>
+    </table>
 
     <p>
-      Let \(H\) denote the applied longitudinal magnetic field and let
-      \(\mu=g\mu_B\). It is convenient to work in the energy-field variable
+      “Converged production spectrum” therefore means an accepted solution of
+      the implemented factor-one missing-area and retry contracts. The current
+      driver sets <code>missingAreaFactors = 1.0</code>. It does not mean that
+      every tested sensitivity factor exists at every field, nor that the
+      strict integral has acquired a previously absent lower path.
     </p>
-
-    \[
-      h_{\mathrm{app}}=\mu H ,
-    \]
-
-    <p>
-      measured in meV. The magnetic moment variable used below is the
-      dimensionless angular-momentum expectation
-    </p>
-
-    \[
-      m=\langle J_z\rangle .
-    \]
-
-    <p>
-      The code uses the Green-function convention \(G=-\chi\). Consequently,
-      a positive static susceptibility corresponds to \(G_0(0)&lt;0\), and the
-      exact bare single-ion response is written
-    </p>
-
-    \[
-      \frac{dm}{dh_{\mathrm{MF}}}=-G_0(0;h_{\mathrm{MF}})>0 .
-      \tag{1}
-    \]
-
-    <div class="verified">
-      <span class="label">Numerical control</span>
-      For the 136-state electronuclear single-ion producer, a central
-      finite-difference check verifies equation (1) to a maximum relative
-      error of \(2.57\times10^{-7}\) over the sampled 0.5--2.9 T sections.
-      The sign and bare response are therefore not the source of the
-      thermodynamic ambiguity.
-    </div>
   </section>
 
-  <section id="legendre">
-    <h2>2. The constrained Legendre potential</h2>
+  <section id="equation">
+    <h2>2. The ordered-field equation</h2>
 
     <p>
-      At fixed temperature, define the field-dependent free energy per ion by
+      Write the longitudinal molecular field in energy units as
+      \(h=H_{\mathrm{MF}}\). Jensen's field transformation used by the code is
     </p>
 
     \[
-      f(H,T)=-\frac{1}{\beta N}\log Z(H,T).
-      \tag{2}
-    \]
-
-    <p>
-      With a Zeeman term \(-\mu H\sum_iJ_{iz}\), its field differential is
-    </p>
-
-    \[
-      df=-\mu m\,dH=-m\,dh_{\mathrm{app}}.
-      \tag{3}
-    \]
-
-    <p>
-      The Legendre transform from applied field to constrained moment is
-    </p>
-
-    \[
-      \phi(m,T)=f(H,T)+h_{\mathrm{app}}m .
-      \tag{4}
-    \]
-
-    <p>
-      Using equation (3),
-    </p>
-
-    \[
-      d\phi
-      =df+h_{\mathrm{app}}\,dm+m\,dh_{\mathrm{app}}
-      =h_{\mathrm{app}}\,dm .
-      \tag{5}
-    \]
-
-    <p>
-      Thus \(\phi(m,T)\) is the magnetic effective potential at fixed
-      magnetization. Depending on thermodynamic naming conventions it may be
-      called a constrained Helmholtz potential, magnetic Legendre potential,
-      or effective action for the uniform moment. The unambiguous definition
-      is equation (4).
-    </p>
-
-    <div class="note">
-      <span class="label">Important distinction</span>
-      The quantity analyzed here is a correction to \(\phi(m,T)\), not
-      directly to \(f(H,T)\). A fixed-moment comparison and a fixed-applied-
-      field equilibrium comparison are different operations.
-    </div>
-  </section>
-
-  <section id="jensen">
-    <h2>3. Jensen's modified mean field and the fluctuation shift</h2>
-
-    <p>
-      Jensen introduces three related longitudinal fields. In energy units,
-      write
-    </p>
-
-    \[
-      h_0=h_{\mathrm{app}}+J_0m ,
+      H_0(h)=\int_0^h r(s)\,ds,
       \qquad
-      h_{\mathrm{MF}}=h_0-\delta h ,
-      \qquad
-      \delta h=h_0-h_{\mathrm{MF}} .
-      \tag{6}
+      r(h)=\frac{G_0(0;h)}{\widetilde G_0(0;h)}.
     \]
 
     <p>
-      Here \(h_0\) is the usual molecular field, \(h_{\mathrm{MF}}\) is the
-      field used to define the reference single-ion Hamiltonian, and
-      \(\delta h\) is the fluctuation-induced field correction. Jensen chooses
-      \(h_{\mathrm{MF}}\) so that the moment of the reference ion equals the
-      interacting moment. In the original two-level construction,
+      With zero applied longitudinal field, the spontaneous ordered solution
+      satisfies
     </p>
 
     \[
-      \langle J_z\rangle
-      =\langle J_z\rangle_0
-      =m_{\mathrm{diag}}\,n_{01}.
-      \tag{7}
+      \boxed{F(h)=H_0(h)-J_{0,\mathrm{eff}}m(h)=0}.
     \]
 
     <p>
-      This equality cancels one-point cumulants, or tadpoles, in the
-      perturbation expansion.
+      Each evaluation of \(r(h)\) itself requires a coupled Matsubara
+      self-energy solve and the bounded static closure. The field equation is
+      consequently the outermost of three nonlinear problems rather than a
+      standalone scalar quadrature.
     </p>
 
-    <p>
-      Compare the corrected theory and mean-field theory at the same
-      single-ion state \(h_{\mathrm{MF}}\), and therefore at the same moment.
-      The applied fields needed to produce that state differ by \(\delta h\).
-      If
-    </p>
+    <p>On a differentiable accepted component, the exact derivative is</p>
 
     \[
-      \delta\phi(m)
-      =\phi_{1/z}(m)-\phi_{\mathrm{MF}}(m),
-      \tag{8}
+      F'(h)=r(h)
+      \left[1+J_{0,\mathrm{eff}}\widetilde G_0(h)\right]
+      =r(h)+J_{0,\mathrm{eff}}G_0^{\mathrm{bare}}(h).
     \]
 
     <p>
-      then equation (5) gives Jensen's fixed-moment relation
-    </p>
-
-    \[
-      d(\delta\phi)=\delta h\,dm .
-      \tag{9}
-    \]
-
-    <p>
-      Equation (9) is the thermodynamic identity underlying the potential
-      check. It is stronger than simply having a converged Green-function
-      fixed point: it assumes that the approximation supplies a consistent
-      free energy and response.
-    </p>
-  </section>
-
-  <section id="field-equation">
-    <h2>4. Derivation of the field equation</h2>
-
-    <p>
-      Let \(\widetilde G_0(0;h_{\mathrm{MF}})\) be the effective local static
-      propagator after the fluctuation self-energy has been incorporated but
-      before the final uniform lattice denominator. Jensen's response
-      argument yields
-    </p>
-
-    \[
-      \frac{dh_0}{dh_{\mathrm{MF}}}
-      =
-      \frac{G_0(0;h_{\mathrm{MF}})}
-           {\widetilde G_0(0;h_{\mathrm{MF}})}
-      \equiv r(h_{\mathrm{MF}}).
-      \tag{10}
-    \]
-
-    <p>
-      Integration gives the familiar field mapping
-    </p>
-
-    \[
-      h_0(h_{\mathrm{MF}})
-      =
-      \int_0^{h_{\mathrm{MF}}}r(u)\,du ,
-      \tag{11}
-    \]
-
-    <p class="equation-note">
-      provided the path from zero is defined and the chosen integration
-      constant is legitimate.
-    </p>
-
-    <p>
-      The spectra calculation applies a transverse field \(B_x\) but no
-      external longitudinal field. Then \(h_0=J_{0,\mathrm{eff}}m(h)\), so the
-      ordered longitudinal state must solve
-    </p>
-
-    \[
-      F(h)
-      \equiv
-      \int_0^h r(u)\,du-J_{0,\mathrm{eff}}m(h)=0 .
-    \]
-
-    <p>
-      This is why missing or branch-ambiguous values of \(r\) affect the
-      single-ion field used by the final susceptibility and spectra even when
-      the final real-frequency solver itself is healthy.
-    </p>
-
-    <p>
-      From the definition \(\delta h=h_0-h_{\mathrm{MF}}\), equation (10)
-      implies
-    </p>
-
-    \[
-      \frac{d\delta h}{dh_{\mathrm{MF}}}=r(h_{\mathrm{MF}})-1 .
-      \tag{12}
-    \]
-
-    <p>
-      Equations (9) and (12) are the two differential identities combined by
-      the fold-anchored calculation.
+      The former substitution of \(G_{\mathrm{stat}}\) for
+      \(\widetilde G_0\) was wrong and reversed the sign near the high-field
+      soft boundary. Direct finite differences, narrow secants, and both exact
+      forms now agree.
     </p>
   </section>
 
   <section id="obligations">
-    <h2>5. What the rigorous construction actually requires</h2>
+    <h2>3. What a strict thermodynamic construction requires</h2>
 
-    <p>
-      Equation (11) looks like an ordinary one-dimensional quadrature, but
-      its integrand is the output of a nonlinear many-body closure. At each
-      value of \(h\), production must first solve three logically distinct
-      problems:
-    </p>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Layer</th>
-          <th>Question</th>
-          <th>What “converged” means</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Static medium</td>
-          <td>Does the bounded static closure have an admissible root?</td>
-          <td>
-            Its residual closes and the supremum, uniform, and static-lattice
-            masses remain in the physical domain.
-          </td>
-        </tr>
-        <tr>
-          <td>Coupled node</td>
-          <td>
-            Do \(\Sigma\), \(K\), the moments \(\lambda_p\), and the static
-            response solve their simultaneous equations?
-          </td>
-          <td>
-            The original or exactly reduced coupled residual vanishes and the
-            dynamic masses are admissible. A Picard iteration merely reaching
-            or missing that root is a separate question.
-          </td>
-        </tr>
-        <tr>
-          <td>Field path</td>
-          <td>
-            Which coupled root is followed as \(h\) varies, and does that
-            component connect the integration endpoints?
-          </td>
-          <td>
-            A continuous, certified branch and its integration constant have
-            been specified.
-          </td>
-        </tr>
-        <tr>
-          <td>Thermodynamics</td>
-          <td>
-            Is the selected response the derivative of a state function, and
-            does the chosen branch minimize the correct fixed-field
-            potential?
-          </td>
-          <td>
-            A stationary functional or an equivalent integrability
-            derivation supplies path independence, an anchor, and a
-            stability/selection rule.
-          </td>
-        </tr>
-      </tbody>
-    </table>
-
-    <p>
-      Therefore a finite list of values of \(r\), or even a highly accurate
-      integral over those values, is not sufficient. For equation (11) to
-      define a thermodynamic field map, the following four objects must exist
-      together:
-    </p>
+    <p>A strict equation-(45) result requires all of the following:</p>
 
     <ol>
-      <li>a coupled solution at every required integration coordinate;</li>
-      <li>a rule selecting one branch when several roots coexist;</li>
-      <li>a justified integration constant; and</li>
-      <li>
-        a path on which \(r(h)\) is a sufficiently regular, single-valued
-        response of one consistent approximation.
-      </li>
+      <li>a physically admissible coupled node at every integration
+          coordinate from zero to the selected root;</li>
+      <li>one continuous branch or a derived rule for crossing components;</li>
+      <li>a justified lower integration constant;</li>
+      <li>finite positive static and dynamic masses on the required path;</li>
+      <li>a unique accepted ordered-field root or an independent thermodynamic
+          selector among multiple roots; and</li>
+      <li>one stationary functional whose derivatives reproduce the response,
+          vertex, moment, and field equation used in the calculation.</li>
     </ol>
 
-    <div class="note">
-      <span class="label">Terminology</span>
-      “The \(r(h)\) integral does not converge” has been used informally for
-      several different failures. The decisive production failure is better
-      stated as <strong>the required thermodynamic path is incomplete and
-      unselected</strong>. On every certified smooth piece tested so far,
-      ordinary numerical integration itself behaves normally.
-    </div>
-  </section>
-
-  <section id="absolute">
-    <h2>6. Absolute fluctuation potential and its anchor</h2>
-
     <p>
-      In Jensen's original closed two-level setting, fluctuations are assumed
-      to vanish at infinite-field saturation \(m=M_0\). The normalization is
-    </p>
-
-    \[
-      \delta\phi(M_0)=0 .
-      \tag{13}
-    \]
-
-    <p>
-      Integrating equation (9) from saturation to a finite moment gives
-    </p>
-
-    \[
-      \delta\phi(m)
-      =
-      \int_{M_0}^{m}\delta h(m')\,dm'
-      =
-      -\int_m^{M_0}\delta h(m')\,dm' .
-      \tag{14}
-    \]
-
-    <p>
-      At \(m=0\), equation (14) is Jensen's free-energy consistency test:
-      the field-integrated result should agree with the free-energy correction
-      obtained independently by temperature-integrating the interaction
-      energy.
-    </p>
-
-    <div class="warning">
-      <span class="label">Why the absolute route is unavailable here</span>
-      The production hybrid does not display a controlled integrable
-      high-field tail within the valid truncated manifold. Setting
-      \(\delta\phi=0\) at a finite cutoff would insert an arbitrary additive
-      constant. The absolute form (14) was therefore not used.
-    </div>
-
-    <h3>6.1 Why neither endpoint currently supplies the constant</h3>
-
-    <p>
-      The lower anchor in equation (11) is unavailable because the strict
-      \(h=0\) ordered predictor has no accepted coupled static closure over
-      the tested field range. At 1 T, independent reduced and unreduced
-      constructions agree on a smooth moment-closed branch at \(h=0\), but
-      its pole-cancelled static residual remains positive by
-      \(1158.79\)--\(2210.78\ \mathrm{meV}^{-1}\). A raw residual sign change
-      at a removable local pole is therefore not a missing physical root.
-      These completed branch and multistart checks are strong local/profile
-      evidence; they do not constitute an interval proof against every
-      disconnected root.
-    </p>
-
-    <div class="verified">
-      <span class="label">Structural endpoint obstruction</span>
-      This failure is stronger than an unsuccessful predictor. With no
-      longitudinal applied field, symmetry gives \(m(0)=0\), hence
-      \(F(0)=0\). If a differentiable certified path also reaches a nonzero
-      ordered root \(F(h_*)=0\), Rolle's theorem requires some
-      \(c\in(0,h_*)\) with \(F'(c)=0\). Provided \(r(c)\) is finite and
-      nonzero, the derivative identity in section 7.5 below then gives
-      \(1+J_{0,\mathrm{eff}}\widetilde G_0(c)=0\): the path must touch the
-      uniform stability boundary. If \(r(0)>0\) and its initial slope is
-      already negative, the zero-field endpoint itself lies on the unstable
-      side. Thus no smooth path from the symmetric root to a distinct ordered
-      root can remain strictly inside the positive-uniform-mass domain
-      throughout.
-      This conditional theorem does not enumerate disconnected roots, but it
-      explains why enforcing the production stability gate cannot merely
-      reveal a missing stable bridge to \(h=0\).
-    </div>
-
-    <p>
-      The upper anchor is a valid idea in a closed saturating model, but the
-      present hybrid does not reach it in a controlled regime. On certified
-      nodes spanning 8 to 128 times the ordinary profile ceiling,
-    </p>
-
-    \[
-      |r(h)-1|\sim h^{-p},\qquad
-      p=0.593\ \text{at 1 T},\quad p=0.811\ \text{at 4 T}.
-    \]
-
-    <p>
-      Both fitted exponents are below the \(p>1\) condition needed for
-      \(\int^\infty|r-1|\,dh\) to converge. The matched closed two-level
-      control gives \(p=1.733\) and \(1.568\), showing that saturation
-      anchoring is coherent in that closed theory. The finite 136-state
-      electronuclear calculation eventually saturates only at longitudinal
-      fields large enough to probe omitted higher multiplets, outside the
-      controlled validity of the retained crystal-field model. Extending to
-      that numerical saturation would therefore manufacture, rather than
-      derive, the integration constant.
-    </p>
-  </section>
-
-  <section id="anatomy">
-    <h2>7. Numerical anatomy of the non-convergence</h2>
-
-    <h3>7.1 The original mask and what it did—and did not—prove</h3>
-
-    <p>
-      The strict production profile requires a certified \(h=0\) predictor
-      and a contiguous set of positive-\(h\) nodes. Instead, the controlled
-      0.5--2.2 T census found rejected low-\(h\) nodes followed by a certified
-      high-\(h\) block. This makes the integral in equation (11) undefined
-      under the strict contract. It does not imply that the susceptibility is
-      zero, that every failed node has no exact root, or that equation (10) is
-      algebraically false.
-    </p>
-
-    <p>
-      Several genuine numerical issues were eliminated without filling the
-      gap. Transactional rollback stopped failed iterates from contaminating
-      later warm starts, and exact reciprocal arithmetic removed a spurious
-      nonfinite evaluation at a removable local pole. Nested 33/65/129-node
-      grids then gave deterministic shared-node verdicts, but the independent
-      \(h=0\) failure and the missing lower component remained. This is why
-      grid density, arithmetic rearrangement, or more iterations cannot be the
-      underlying resolution.
-    </p>
-
-    <h3>7.2 Exact reduction separates root existence from solver attraction</h3>
-
-    <p>
-      The dynamic equations were reduced exactly to four unknowns,
-      \((\lambda_1,\lambda_2,\lambda_3,x)\), with every nonzero Matsubara
-      \(K_n\) eliminated by a bounded scalar equation. The reduced residual
-      reproduces a certified 1 T node to \(7.11\times10^{-15}\), and an
-      independent evaluation of all 740 original self-energy components
-      confirms the same solution geometry. The conclusions below are
-      therefore not artifacts of the reduced coordinates.
-    </p>
-
-    <p>
-      At \(B_x=1\) T, pseudo-arclength continuation finds a regular
-      saddle-node at
-    </p>
-
-    \[
-      (h_f,s_f)
-      =(0.0054789314231\ \mathrm{meV},\,0.6565777265),
-      \qquad s=-J_{\mathrm{sup}}x .
-    \]
-
-    <p>
-      All measured physical margins remain positive at the turn. The branch
-      then returns toward larger \(h\) and reaches the explicit \(s=1\)
-      static-stability boundary near \(h=0.0097188640\) meV. Thus the known
-      component has a genuine minimum in \(h\); decreasing the fixed field in
-      smaller steps cannot carry it to zero.
-    </p>
-
-    <p>
-      Mathematically, if the coupled equations are
-      \(\mathcal R(\mathbf y,h)=0\), the implicit-function theorem supplies a
-      local graph \(\mathbf y(h)\) only while
-      \(\partial_{\mathbf y}\mathcal R\) is invertible. At the observed fold,
-    </p>
-
-    \[
-      \det\!\left(\partial_{\mathbf y}\mathcal R\right)=0,
-      \qquad \frac{dh}{ds}=0,
-      \qquad \frac{d^2h}{ds^2}>0 ,
-    \]
-
-    <p>
-      while the augmented pseudo-arclength Jacobian remains full rank. The
-      solution curve is smooth in its arclength \(s\), but it is no longer a
-      single-valued graph over \(h\). This is precisely why a fixed-\(h\)
-      iterator can stop even though pseudo-arclength continuation proceeds.
-      Because all propagator masses remain positive at this turn, calling it a
-      thermodynamic spinodal would require a derived functional; what is
-      established is a saddle-node of the self-consistency equations.
-      A separate disconnected low-\(h\) component has not been excluded.
-    </p>
-
-    <p>
-      At the same \(h=0.006\) meV, the original equations have two admissible
-      roots,
-    </p>
-
-    \[
-      s_L=0.412077554837,\qquad
-      s_H=0.809166172289.
-    \]
-
-    <p>
-      Their outer-map eigenvalues are approximately \(0.4173\) and \(2.6434\),
-      while the fold has eigenvalue \(1\). Picard iteration can attract the
-      low-\(s\) root, loses contraction at the fold, and repels from the
-      high-\(s\) root. No <em>positive</em> scalar damping can make a real
-      mode \(\lambda>1\) contractive because its damped eigenvalue is
-    </p>
-
-    \[
-      \lambda_{\mathrm{damped}}=1-a+a\lambda>1
-      \qquad (a>0,\ \lambda>1).
-    \]
-
-    <p>
-      Negative \(a\) can act as a numerical branch selector when all relevant
-      multipliers of the target root lie on the same side of one. For example,
-      \(a=-0.6\) maps \(\lambda=2.6434\) to approximately \(0.014\), while it
-      makes the low-sheet multiplier approximately \(1.35\). This does not
-      regularize the fold: \(\lambda=1\) is fixed by the entire affine family
-      \(\lambda\mapsto1+a(\lambda-1)\). A scalar choice also fails whenever
-      the target spectrum straddles one. Negative damping may therefore find
-      a known repelling root, but it cannot repair the saddle-node or supply a
-      thermodynamic branch rule.
-    </p>
-
-    <div class="verified">
-      <span class="label">Key distinction</span>
-      Picard non-convergence is an iteration-stability statement, not a
-      root-existence or thermodynamic-stability statement. Exact continuation
-      later found Picard-repelling high roots at 0.8, 0.9, and 1.1 T with
-      residuals below \(3.25\times10^{-10}\).
-    </div>
-
-    <h3>7.3 The field dependence is not described by one universal failure</h3>
-
-    <p>
-      Exact cross-field continuation finds two roots on diagnostic sections
-      from 0.5 through 1.2 T. Both persist to 0.355 T on an explicitly
-      extrapolated diagnostic path, but correctors fail at 0.350 T; that
-      brackets a merger or termination without yet certifying its local type.
-      The high branch reaches the uniform boundary near 1.2167 T.
-    </p>
-
-    <p>
-      In contrast, at 2.5, 2.7, and 2.9 T the known branch was extended to
-      \(s=0.999999\), and fifteen constrained full-residual starts found no
-      second root. This is strong finite evidence for a one-root region near
-      the sampled branch, not a theorem excluding every disconnected
-      component. The low-field two-sheet topology is therefore important but
-      not universal across the entire magnetic-field axis.
-    </p>
-
-    <h3>7.4 Why filtering failed as a rigorous construction</h3>
-
-    <p>
-      Discarding failed or nonfinite nodes can leave a smooth-looking retained
-      integral and can even produce plausible final spectra. It cannot infer
-      the omitted contribution, select between \(L\) and \(H\), or determine
-      the additive field constant. A two-endpoint trapezoid similarly bridged
-      negative- and positive-mass states across an unresolved component
-      boundary. Those experiments demonstrate that final observables may be
-      insensitive to some integral detail; they do not turn the omitted area
-      into a thermodynamic zero.
-    </p>
-
-    <h3>7.5 A second obstruction: the physical uniform boundary</h3>
-
-    <p>
-      On any differentiable certified component, the ordered field residual
-    </p>
-
-    \[
-      F(h)=\int_0^h r(u)\,du-J_{0,\mathrm{eff}}m(h)
-    \]
-
-    <p>
-      has the exact derivative
-    </p>
-
-    \[
-      F'(h)
-      =r(h)\left[1+J_{0,\mathrm{eff}}\widetilde G_0(h)\right].
-    \]
-
-    <p>
-      A zero of the uniform mass
-      \(1+J_{0,\mathrm{eff}}\widetilde G_0\) is therefore a stationary point of
-      \(F\) on that component. At 4 T, adaptive continuation reaches such a
-      uniform/supremum boundary near \(h=0.0080428632\) meV while the outer map
-      remains locally contractive and the other dynamic margins remain
-      positive. This differs from the 1 T regular fold, where all masses are
-      positive but the fixed-\(h\) coupled Jacobian loses rank. The failure set
-      contains at least these two mechanisms; no universal damping or
-      step-size change can repair both.
-    </p>
-
-    <p>
-      The distinction is also visible in the augmented equations
-      \(\mathcal G=(\mathcal R,F)\). Wherever
-      \(\partial_{\mathbf y}\mathcal R\) is invertible, their block
-      determinant has the Schur-complement form
-    </p>
-
-    \[
-      \det \partial_{(\mathbf y,h)}\mathcal G
-      =\det(\partial_{\mathbf y}\mathcal R)
-      \left[
-        \partial_hF-\partial_{\mathbf y}F
-        (\partial_{\mathbf y}\mathcal R)^{-1}
-        \partial_h\mathcal R
-      \right].
-    \]
-
-    <p>
-      The first factor loses rank at the regular 1 T fluctuation-sector fold;
-      the bracket is the derivative of \(F\) along a regular coupled branch
-      and vanishes at the uniform boundary. Joint pseudo-arclength
-      continuation of \((\mathbf y,h)\) can expose both geometries without
-      confusing them with nested-iterator failure. It still cannot decide
-      which sheet is physical or manufacture a free-energy functional.
-    </p>
-  </section>
-
-  <section id="fold">
-    <h2>8. Fold-anchored relative potential of two sheets</h2>
-
-    <p>
-      At \(B_x=1\) T, the exact reduced equations have a low-\(s\) sheet and a
-      high-\(s\) return sheet. They merge at the certified regular fold
-    </p>
-
-    \[
-      h_f=0.0054789314231\ \mathrm{meV},
-      \qquad
-      s_f=0.6565777265 .
-      \tag{15}
-    \]
-
-    <p>
-      Denote the sheets by \(L\) and \(H\), and define
-    </p>
-
-    \[
-      \Delta r(h)=r_H(h)-r_L(h).
-      \tag{16}
-    \]
-
-    <h3>8.1 Cancellation of the unknown field constant</h3>
-
-    <p>
-      If both sheets are branches of one continuous constrained functional,
-      then at the common fold they have the same state and the same
-      \(\delta h_f\). Integrating equation (12) separately along each sheet
-      therefore gives
-    </p>
-
-    \[
-      \delta h_H(t)-\delta h_L(t)
-      =
-      \int_{h_f}^{t}\Delta r(u)\,du .
-      \tag{17}
-    \]
-
-    <p>
-      The unknown absolute value \(\delta h_f\) cancels. This is the central
-      advantage of the fold-anchored comparison: it does not fill the missing
-      interval between \(h=0\) and the fold.
+      The strict solver intentionally masks a field when the exact endpoint or
+      any required profile node fails. Finite values above a gap do not, by
+      themselves, define the missing constant or authorize a component jump.
     </p>
 
     <div class="note">
-      <span class="label">General fold gauge</span>
-      Conditional on two sheets belonging to one continuous stationary
-      construction, their common regular fold is a canonical relative
-      normalization: the sheets are the same state at the branch point, so an
-      unknown additive constant cancels in their difference. This is a local
-      relative statement. It neither supplies an absolute anchor nor proves
-      that the assumed stationary construction exists.
-    </div>
-
-    <h3>8.2 Potential difference at the same constrained moment</h3>
-
-    <p>
-      Both sheets at a given \(h_{\mathrm{MF}}\) use the same bare single-ion
-      state, so they share the same moment \(m(h_{\mathrm{MF}})\). Applying
-      equation (9) to their difference gives
-    </p>
-
-    \[
-      \Delta\phi(h)
-      \equiv \phi_H(h)-\phi_L(h)
-      =
-      \int_{m_f}^{m(h)}
-      \big[\delta h_H(m')-\delta h_L(m')\big]\,dm' .
-      \tag{18}
-    \]
-
-    <p>
-      Parameterizing the moment by \(t=h_{\mathrm{MF}}\) and using equation
-      (17),
-    </p>
-
-    \[
-      \Delta\phi(h)
-      =
-      \int_{h_f}^{h}
-      m'(t)
-      \left[
-        \int_{h_f}^{t}\Delta r(u)\,du
-      \right]dt .
-      \tag{19}
-    \]
-
-    <p>
-      Reversing the order of integration produces the numerically more direct
-      single-integral form
-    </p>
-
-    \[
-      \boxed{
-      \Delta\phi(h)
-      =
-      \int_{h_f}^{h}
-      \Delta r(u)\,[m(h)-m(u)]\,du
-      } .
-      \tag{20}
-    \]
-
-    <p>
-      Since \(h\) has units of meV and \(m\) is dimensionless,
-      \(\Delta\phi\) is in meV per ion.
-    </p>
-
-    <div class="verified">
-      <span class="label">Independent algebra review</span>
-      Equations (2)--(12) and the Fubini transformation from (19) to (20)
-      were independently re-derived with the same sign and orientation. The
-      \(1.72\times10^{-9}\) meV/ion difference between the two numerical
-      evaluations is \(1.2\times10^{-3}\) relative and is smaller than the
-      alternate-node coarsening change; it is consistent with quadrature, not
-      an error in equation (20). This validates the conditional calculation,
-      not its unproved thermodynamic premise.
-    </div>
-
-    <h3>8.3 Numerical result at 1 T</h3>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Quantity</th>
-          <th>Value</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Final constrained field</td>
-          <td>\(h=0.006\ \mathrm{meV}\)</td>
-        </tr>
-        <tr>
-          <td>Single-integral result, equation (20)</td>
-          <td>\(-1.38308999787\times10^{-6}\ \mathrm{meV/ion}\)</td>
-        </tr>
-        <tr>
-          <td>Nested result, equation (19)</td>
-          <td>\(-1.38481433295\times10^{-6}\ \mathrm{meV/ion}\)</td>
-        </tr>
-        <tr>
-          <td>Difference between the two evaluations</td>
-          <td>\(1.72\times10^{-9}\ \mathrm{meV/ion}\)</td>
-        </tr>
-        <tr>
-          <td>Alternate-node coarsening change</td>
-          <td>\(6.93\times10^{-9}\ \mathrm{meV/ion}\)</td>
-        </tr>
-        <tr>
-          <td>Value at the return-sheet \(s=1\) boundary</td>
-          <td>\(-1.02210120637\times10^{-4}\ \mathrm{meV/ion}\)</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <p>
-      No sign crossing was found before the return sheet reached its uniform
-      stability boundary.
-    </p>
-  </section>
-
-  <section id="meaning">
-    <h2>9. What the negative result means</h2>
-
-    <p>
-      Under the assumptions behind equations (9), (12), and (17),
-    </p>
-
-    \[
-      \Delta\phi(h)&lt;0
-      \quad\Longrightarrow\quad
-      \phi_H(m(h))&lt;\phi_L(m(h)).
-      \tag{21}
-    \]
-
-    <p>
-      In words: at the same constrained single-ion moment, the high-\(s\)
-      sheet has the lower inferred fluctuation Legendre potential.
-    </p>
-
-    <p>
-      This result is not contradicted by the coupling-constant audit. The low
-      sheet connects continuously to zero interaction, while the high sheet
-      terminates at a uniform boundary at finite coupling. That makes the high
-      sheet interaction-born, but it does not by itself make the sheet
-      unphysical: a legitimate broken-symmetry branch can also terminate at a
-      finite critical coupling while the zero-coupling branch is unstable.
-      Conversely, connectivity to zero coupling does not prove equilibrium.
-      The coupling path and the fold integral therefore remain two
-      non-selecting diagnostics until a branch-specific physical signature or
-      a derived stationary functional breaks the tie.
-    </p>
-  </section>
-
-  <section id="equilibrium">
-    <h2>10. Why this is not yet an equilibrium comparison</h2>
-
-    <p>
-      A physical calculation at a specified applied energy field
-      \(h_{\mathrm{app}}\) requires the fixed-field potential
-    </p>
-
-    \[
-      f_j(h_{\mathrm{app}})
-      =
-      \phi_j(m)-h_{\mathrm{app}}m .
-      \tag{22}
-    \]
-
-    <p>
-      Each candidate state must first satisfy the stationarity condition
-    </p>
-
-    \[
-      \frac{\partial\phi_j}{\partial m}=h_{\mathrm{app}} .
-      \tag{23}
-    \]
-
-    <p>
-      The equilibrium state is then the stationary candidate with the lowest
-      value of equation (22). Two states compared at the same
-      \(h_{\mathrm{MF}}\) share the same bare moment, but their inferred
-      \(\delta h\) values—and hence their applied fields—can differ.
-      Therefore equation (20) alone does not rank equilibrium phases at one
-      common applied field.
-    </p>
-
-    <div class="warning">
-      <span class="label">Interpretation boundary</span>
-      The calculation supplies a same-moment constrained ranking. It does not
-      by itself supply the complete fixed-applied-field phase selection.
+      <span class="label">Important distinction</span>
+      The strict failure is a limitation of the exact path proof. It is no
+      longer an unresolved question about why the production plot contained
+      holes; those numerical root causes are now known and repaired through a
+      separately labeled approximation.
     </div>
   </section>
 
-  <section id="hybrid">
-    <h2>11. Why the production hybrid blocks a rigorous free-energy label</h2>
+  <section id="causes">
+    <h2>4. Verified numerical root causes</h2>
 
-    <h3>11.1 The same-ion premise in Jensen's derivation</h3>
-
+    <h3>4.1 Missing accepted low-field profile</h3>
     <p>
-      In the published two-level construction, all of the following are
-      generated by the same reference single-ion Hamiltonian:
+      In the problematic ordered regime, low-\(h\) nodes fail the accepted
+      coupled/static contract while a contiguous high-\(h\) suffix converges.
+      Strict quadrature therefore has neither a complete path nor a justified
+      lower constant. Increasing the node count can locate the component edge
+      more accurately, but cannot create the absent component.
     </p>
 
-    <ul>
-      <li>the moment \(m_{\mathrm{diag}}n_{01}\);</li>
-      <li>the bare propagator \(G_0\);</li>
-      <li>the elastic and inelastic static weights;</li>
-      <li>the connected four-point cumulant producing \(\Sigma\); and</li>
-      <li>the resummed elastic factor \(\xi\).</li>
-    </ul>
-
+    <h3>4.2 Rejected-state contamination</h3>
     <p>
-      This correspondence is what connects the diagrammatic response,
-      tadpole cancellation, and the thermodynamic differential (9).
+      Failed nodes formerly returned partially updated state and contaminated
+      subsequent warm starts. The solver now commits \(\Sigma\), \(K_0\), and
+      related continuation data only after every node gate passes. This makes
+      shared-node results deterministic across nested grids.
     </p>
 
-    <h3>11.2 What production currently combines</h3>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Object</th>
-          <th>Production source</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Moment \(m(h)\)</td>
-          <td>136-state electronuclear single-ion Hamiltonian</td>
-        </tr>
-        <tr>
-          <td>Bare response \(G_0\)</td>
-          <td>136-state electronuclear susceptibility</td>
-        </tr>
-        <tr>
-          <td>\(m,M,\Delta,n_{01}\) entering the vertex</td>
-          <td>Separate 17-state electronic ion, reduced to two levels</td>
-        </tr>
-        <tr>
-          <td>Self-energy \(\Sigma\) and elastic factor \(\xi\)</td>
-          <td>Jensen electronic two-level formulas</td>
-        </tr>
-      </tbody>
-    </table>
-
+    <h3>4.3 Multiple components and finite continuation reach</h3>
     <p>
-      Consequently, the vertex used to dress the 136-state propagator is not
-      the connected four-point cumulant of the same reference system.
+      The coupled equations possess folds and more than one numerical sheet.
+      Cold ascending and ordered descending sweeps can reach different
+      contiguous components. A failed warm transfer does not prove that the
+      root is absent; conversely, one successful warm start is not an
+      equilibrium selector.
     </p>
 
-    <h3>11.3 What Hilbert-space truncation does—and does not—explain</h3>
-
+    <h3>4.4 Exact-zero degeneracy</h3>
     <p>
-      A finite basis is not, by itself, incompatible with thermodynamics.
-      Any finite-dimensional Hamiltonian has a well-defined partition
-      function, free energy, moment, and response. A truncated approximation
-      can therefore be internally thermodynamic if its moment, two-point
-      propagator, self-energy/vertex, and free-energy correction are all
-      derived within the same retained space and the observables of interest
-      are converged as that space is enlarged.
+      At \(B_x=0\), the electronic doublet basis is arbitrary. The old code
+      formed a zero transition weight and its reciprocal separately, producing
+      a numerical <code>0*Inf</code> although the combined invariant limit is
+      finite. This is an endpoint representation singularity, not a vanishing
+      physical susceptibility.
     </p>
 
+    <h3>4.5 Near-critical long-jump failure</h3>
     <p>
-      Three different representation issues must not be conflated:
-    </p>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Representation</th>
-          <th>Role in this investigation</th>
-          <th>Conclusion</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>136-state electronuclear ion</td>
-          <td>Production moment and bare \(G_0\)</td>
-          <td>
-            Internally satisfies \(dm/dh=-G_0\) on the tested fields. It is
-            not the source of the sign or derivative problem.
-          </td>
-        </tr>
-        <tr>
-          <td>Electronic two-level sector from a separate 17-state ion</td>
-          <td>Production \(\Sigma\), \(\xi\), and vertex parameters</td>
-          <td>
-            Not the same statistical producer as the 136-state response;
-            Jensen's same-ion thermodynamic proof no longer closes.
-          </td>
-        </tr>
-        <tr>
-          <td>Field-adapted lowest 16 of the 136 electronuclear states</td>
-          <td>Tested as a possible internally closed reduced vertex</td>
-          <td>
-            Spectrally smooth and thermally complete, but not converged for
-            connected four-point fluctuation content.
-          </td>
-        </tr>
-      </tbody>
-    </table>
-
-    <p>
-      The lowest-16 test is particularly instructive. Its 16/17 energy gap is
-      0.618--1.235 meV, its retained thermal population is essentially one,
-      and adjacent subspace overlaps exceed 0.999996. Those facts would make
-      it look excellent to an energy- or population-based truncation test.
-      Nevertheless, at 0.5 T it contains only 9.86% of the connected variance
-      at the first accepted node and 0.521% at the high-\(h\) endpoint. On the
-      tested rank ladder \(16,24,32,48,64,96,136\), all 136 states are needed
-      to exceed 90% connected-variance coverage at every non-predictor sample.
-      Connected-variance coverage is an appropriate warning for a four-point
-      construction, but it is not itself a norm or rigorous error bound on the
-      complete connected vertex. A constructive convergence test should be
-      stated in moment/Krylov terms appropriate to the correlation order: a
-      four-point vertex probes multiparticle states generated from operator-
-      acted vectors, not only the one-particle energy subspace. The present
-      coverage census has not yet established that stronger rank criterion.
-    </p>
-
-    <div class="note">
-      <span class="label">Physical lesson</span>
-      Thermally unoccupied states can contribute virtually to a susceptibility
-      and even more strongly to a connected four-point vertex. Energy
-      convergence, retained Boltzmann weight, and two-point static-weight
-      convergence do not certify a fluctuation vertex. The relevant
-      truncation criterion is tied to the correlation order entering the
-      approximation.
-    </div>
-
-    <p>
-      Conversely, replacing production by a closed electronic two-level model
-      does restore same-ion consistency but still does not create the missing
-      low-\(h\) component under the tested bounded solver. It fails every
-      tested \(h=0\) predictor and, at 1 T, encounters a dynamic-domain/moment
-      mismatch before static closure. Representation inconsistency is
-      therefore the decisive reason that the <em>thermodynamic proof</em>
-      fails, but it is not by itself a complete explanation of the
-      <em>root topology</em>; disconnected roots in that control remain an
-      open completeness question.
-    </p>
-
-    <h3>11.4 Quantitative same-ion audit</h3>
-
-    <p>
-      Across the sampled 0.5--2.9 T sections,
-    </p>
-
-    \[
-      \frac{G_{0,\mathrm{full}}}{G_{0,\mathrm{twolevel}}}
-      =0.146938\text{--}0.889455,
-      \tag{24}
-    \]
-
-    \[
-      m_{\mathrm{full}}-m_{\mathrm{twolevel}}
-      =0.0953704\text{--}1.32617.
-      \tag{25}
-    \]
-
-    <p>
-      At exact hybrid roots, retaining the converged
-      \((K,\lambda,\Sigma)\) but replacing the hybrid static weights with the
-      Jensen-consistent two-level weights shifts the signed local inelastic
-      denominator
-    </p>
-
-    \[
-      D_{\mathrm{loc}}
-      =1+\Sigma(0)+K(0)G_{0,\mathrm{inel}}(0),
-    \]
-
-    <p>
-      in absolute amount by \(0.004228\)--\(0.432507\) across the retained
-      exact roots. At the
-      point that previously produced the headline factor-178 change in
-      \(G_{\mathrm{stat}}\), the underlying replacement is
-      \(D_{\mathrm{loc}}:0.285577\to0.00905581\). At the 1.2 T high root it
-      changes sign, \(0.408513\to-0.0239942\). The response ratio is strongly
-      amplified when this denominator approaches zero, so factor 178 is a
-      poor measure of representation error and is not used as one here. The
-      unamplified bare-response and moment differences in equations (24)--(25),
-      together with these signed denominator shifts, are the relevant
-      same-producer audit.
-    </p>
-
-    <div class="warning critical">
-      <span class="label">Disposition</span>
-      The numerical ratio \(r=G_0/\widetilde G_0\) is well defined for the
-      hybrid equations, and equation (20) is a reproducible integral of that
-      ratio. What is not established is the stronger statement that this
-      integral is the variation of a thermodynamic free-energy functional.
-      Jensen's same-ion proof cannot be transferred unchanged.
-    </div>
-
-    <p>
-      This does not prove that no alternative functional can exist. It proves
-      that such a functional is not the published closed two-level functional
-      and must be separately derived.
-    </p>
-
-    <h3>11.5 The mathematical issue: integrability and stationarity</h3>
-
-    <p>
-      The deeper mathematical requirement is that the closure be
-      \(\Phi\)-derivable, or otherwise be shown to arise from a stationary
-      state function. Schematically, let \(y_i\) denote internal variables
-      such as self-energy, medium, or moment parameters. A candidate
-      constrained functional would have a differential of the form
-    </p>
-
-    \[
-      d\mathcal P
-      =\delta h\,dm+\sum_i R_i(m,\mathbf y)\,dy_i ,
-      \tag{26}
-    \]
-
-    <p>
-      where its stationary equations are \(R_i=0\). On a stationary branch,
-      equation (26) reduces to \(d\mathcal P=\delta h\,dm\), which is the
-      structure used in equation (9). In canonical conjugate coordinates, a
-      twice-differentiable \(\mathcal P\) also imposes the reciprocity
-      conditions
-    </p>
-
-    \[
-      \frac{\partial R_i}{\partial y_j}
-      =\frac{\partial R_j}{\partial y_i},
-      \qquad
-      \frac{\partial\delta h}{\partial y_i}
-      =\frac{\partial R_i}{\partial m}.
-      \tag{27}
-    \]
-
-    <p>
-      Jensen's common cumulant construction is what supplies this stationary
-      correspondence in the closed two-level theory. Production instead
-      combines derivatives and vertices generated by different reference
-      systems. The ratio \(r\) can still be evaluated algebraically, but there
-      is no derivation showing that the resulting one-form is exact or that
-      its integral is path independent.
-    </p>
-
-    <p>
-      A tested attempt to rescue the existing residual with a fitted diagonal
-      metric failed because the residual Jacobian contains a one-way cross
-      derivative: one member of a proposed reciprocal pair is structurally
-      zero while the other is nonzero. On shell, a nonsingular diagonal
-      multiplier would require \(d_iJ_{ij}=d_jJ_{ji}\); the one-way pair
-      therefore rules out the whole nonsingular diagonal family, not only the
-      fitted coefficients. It does <em>not</em> rule out a full matrix
-      multiplier, nonlinear coordinates, or a more general mixed functional.
-      Pointwise symmetrization with an indefinite full matrix is not the hard
-      part; the unresolved requirement is a smooth, coherent multiplier field
-      whose differential is integrable over the solution manifold. For the
-      fixed residual, a symmetric positive-definite multiplier additionally
-      requires a real, diagonalizable Jacobian. These are scoped necessary
-      conditions, not a proof that no stationary functional exists.
-    </p>
-
-    <p>
-      The same distinction applies to stability. Positivity of the propagator
-      masses is a necessary physical-domain gate for the implemented closure,
-      but it is not automatically the Hessian test for a thermodynamic
-      minimum. The latter would require the Hessian of
-      \(\mathcal P\), including relaxation of the internal variables through
-      the appropriate Schur complement. This is why neither the outer Picard
-      eigenvalue nor an endpoint mass alone can select equilibrium.
+      The former 4.68 T mask came from a cold short component whose
+      missing-area support stopped below factor one. A descending solve from
+      accepted ordered fields reaches the longer component. The initial
+      4.70/4.71 failures came from asking a distant seed to jump too far: two
+      independent histories advanced in smaller field steps agree at 129 and
+      257 nodes through 4.7188 T.
     </p>
   </section>
 
-  <section id="combined-failure">
-    <h2>12. Why the rigorous route fails as a whole</h2>
-
-    <p>
-      The investigation did not uncover one isolated numerical defect. It
-      found several independent proof obligations that the current production
-      construction cannot satisfy simultaneously:
-    </p>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Required ingredient</th>
-          <th>Decisive evidence</th>
-          <th>Consequence</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Complete solution path from the lower anchor</td>
-          <td>
-            The certified 1 T component turns at a regular fold above zero;
-            the independent \(h=0\) moment branch does not satisfy static
-            closure. More generally, for finite nonzero \(r\), Rolle's theorem
-            forces a uniform-mass zero on any smooth path from \(F(0)=0\) to
-            a distinct ordered root.
-          </td>
-          <td>
-            The strict \(0\to h\) path is not merely numerically incomplete;
-            it cannot remain strictly inside the positive-uniform-mass domain.
-          </td>
-        </tr>
-        <tr>
-          <td>Single-valued integrand</td>
-          <td>
-            Two exact admissible roots coexist above the fold and across
-            several 0.5--1.2 T sections.
-          </td>
-          <td>
-            \(r(h)\) is branch-valued until a physical selector is supplied.
-          </td>
-        </tr>
-        <tr>
-          <td>Absolute normalization</td>
-          <td>
-            The zero-field state is uncertified; the production high-field
-            tail is not integrable within the model's controlled range.
-          </td>
-          <td>
-            Neither lower nor upper anchoring fixes the missing area without
-            an added assumption.
-          </td>
-        </tr>
-        <tr>
-          <td>Common branch reference</td>
-          <td>
-            Under \(J^{cc}\mapsto\rho J^{cc}\), the low sheet reaches zero
-            coupling, while the high sheet terminates at \(s=1\) at
-            \(\rho_*=0.7721813\).
-          </td>
-          <td>
-            A direct two-sheet coupling-energy comparison has no shared
-            integration constant.
-          </td>
-        </tr>
-        <tr>
-          <td>Stationary thermodynamic functional</td>
-          <td>
-            Production splices a 136-state response to a different two-level
-            vertex. The same-ion substitution shifts the signed local
-            denominator by an absolute 0.004228--0.432507 and can even reverse
-            its sign;
-            the formerly quoted factor-178 response is near-pole
-            amplification.
-          </td>
-          <td>
-            Jensen's equation-(46) free-energy interpretation cannot be
-            transferred as an exact identity.
-          </td>
-        </tr>
-        <tr>
-          <td>Fixed-applied-field equilibrium ranking</td>
-          <td>
-            The fold integral compares sheets at the same constrained moment,
-            generally requiring different applied fields.
-          </td>
-          <td>
-            Even its conditional sign is not yet a production phase selector.
-          </td>
-        </tr>
-      </tbody>
-    </table>
-
-    <h3>12.1 Why the two branch diagnostics are not contradictory</h3>
-
-    <p>
-      The coupling path gives the low sheet adiabatic connectivity to the
-      zero-interaction hybrid state. The fold-anchored field integral
-      conditionally gives the high sheet the lower same-moment proxy. These
-      statements answer different questions and use different anchors.
-      Neither is a selector: an interaction-born branch can be the legitimate
-      ordered branch, while a non-\(\Phi\)-derivable closure need not give
-      path-independent potential differences. Their disagreement is evidence
-      of missing thermodynamic structure, not a statistically valid error bar
-      and not a license to average the two branches.
-    </p>
-
-    <h3>12.2 Why completing the root search would still not finish the proof</h3>
-
-    <p>
-      A mathematically complete enumeration of all coupled roots would settle
-      the topology, but it would not by itself choose the equilibrium root,
-      supply the field-integration constant, or prove that \(r\,dh\) is the
-      differential of a state function. Conversely, deriving a stationary
-      functional would clarify selection and admissibility, but its stationary
-      manifold might still contain folds, spinodals, and multiple phases that
-      require continuation and free-energy comparison. The numerical and
-      thermodynamic tasks are coupled, but neither substitutes for the other.
-    </p>
-
-    <div class="warning critical">
-      <span class="label">Present conclusion</span>
-      The rigorous route is not proven impossible in principle. It is
-      incomplete for the current production hybrid and would require a
-      substantial new many-body derivation—not another damping choice,
-      quadrature grid, root-polishing method, or silent interpolation across
-      rejected nodes.
-    </div>
-  </section>
-
-  <section id="survives">
-    <h2>13. What remains established and useful</h2>
-
-    <ul>
-      <li>
-        The full 136-state bare producer is internally differentiated
-        correctly: \(dm/dh=-G_0\) is verified numerically.
-      </li>
-      <li>
-        The exact reduced and original equations agree on certified roots,
-        the regular 1 T fold, and the two-sheet geometry.
-      </li>
-      <li>
-        The ratio \(r=G_0/\widetilde G_0\) is a well-defined hybrid observable
-        at each certified root. Integrals over a declared sheet are
-        reproducible numerical diagnostics.
-      </li>
-      <li>
-        The fold-anchored integral legitimately cancels a common unknown
-        constant <em>conditional on</em> both sheets belonging to one
-        stationary constrained functional. Its sign can guide, but cannot
-        certify, a later approximation.
-      </li>
-      <li>
-        The strict mask correctly reports that the required ordered field
-        profile is incomplete under the current acceptance contract; it
-        should not be reinterpreted as zero susceptibility.
-      </li>
-      <li>
-        The initial throw-away-NaN experiment has been replaced by an explicit
-        positive missing-area ensemble propagated through the final real-axis
-        susceptibility. Its spread measures sensitivity to three declared
-        completions on one numerical branch; it is not evidence that the
-        omitted area is zero, a probability distribution, or an equilibrium
-        uncertainty interval.
-      </li>
-      <li>
-        A frozen two-sided adjacent-field retry reproducibly recovers the
-        interior 0.36 and 0.45 T masks at 129 nodes for all three area members.
-        It does not authorize a one-sided retry at the high-field boundary or
-        a copied value at exact zero field.
-      </li>
-    </ul>
-
-    <p>
-      These surviving results provide a clean boundary for future work:
-      retain certified component integrals and exact-root data; represent the
-      unknown area, branch choice, and anchor as explicit assumptions; and
-      propagate their spread into fields, susceptibility, and spectra. That
-      is an approximation program informed by the rigorous investigation,
-      rather than an unlabelled continuation of the failed proof.
-    </p>
-  </section>
-
-  <section id="approximation">
-    <h2>14. Controlled approximation route and current masks</h2>
-
-    <div class="warning">
-      <span class="label">Scope boundary</span>
-      The rigorous-route conclusion above is unchanged. The construction in
-      this section is a labeled practical approximation for spectra. It does
-      not select a thermodynamic branch, recover an absolute integration
-      constant, or reinterpret a rejected node as converged.
-    </div>
-
-    <h3>14.1 Missing-area ensemble</h3>
+  <section id="missing-area">
+    <h2>5. Controlled missing-area solution</h2>
 
     <p>
       Let \(h_e\) be the lower edge of the terminal contiguous certified
-      high-\(h\) component. The controlled approximation integrates only that
-      component and replaces the unresolved interval \([0,h_e]\) by an
-      explicit nonnegative area
+      component. Production never integrates a rejected node or bridges an
+      interior gap. It writes
     </p>
 
     \[
-      A_f=f\,h_e r(h_e),
+      A_f=f h_e r(h_e),
       \qquad
-      F_f(h)=A_f+\int_{h_e}^{h}r(u)\,du
-             -J_{0,\mathrm{eff}}m(h).
+      H_0(h)=A_f+\int_{h_e}^{h}r(s)\,ds.
     \]
 
-    <p>
-      The current ensemble uses continuous linear completions whose endpoint
-      ratios and areas are
-    </p>
+    <p>For the declared linear completion,</p>
+
+    \[
+      \frac{r(0)}{r(h_e)}=2f-1.
+    \]
 
     <table>
       <thead>
-        <tr>
-          <th>Area factor \(f\)</th>
-          <th>\(r(0)/r(h_e)\)</th>
-          <th>Role</th>
-        </tr>
+        <tr><th>Area factor</th><th>Linear endpoint ratio</th><th>Meaning</th></tr>
       </thead>
       <tbody>
-        <tr><td>0.75</td><td>0.5</td><td>Lower-area member</td></tr>
-        <tr><td>1</td><td>1</td><td>Labeled central member</td></tr>
-        <tr><td>1.5</td><td>2</td><td>Upper-area member</td></tr>
+        <tr><td>0.75</td><td>0.5</td><td>lower sensitivity member</td></tr>
+        <tr><td>1.00</td><td>1.0</td><td>current production member</td></tr>
+        <tr><td>1.50</td><td>2.0</td><td>upper sensitivity member</td></tr>
       </tbody>
     </table>
 
     <p>
-      All members use the explicitly named
-      <code>picard_attracting_contiguous_high_h_component</code>. The factors
-      are sensitivity prescriptions, not fitted probabilities or confidence
-      limits. Rejected nodes are never bridged, and profile-resolution error
-      is kept separate from the area band.
-    </p>
-
-    <h3>14.2 Census, production policy, and validation</h3>
-
-    <p>
-      The approximation census covered 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0,
-      1.2, 2.5, 2.7, 2.9, and 3.0 T. At the 129-node production resolution,
-      all three members produced accepted finite outputs at eleven fields and
-      were propagated through the real-axis susceptibility. The 0.2 T
-      component, missed by the initial 33-node census, is reproduced at 129
-      and 257 nodes. Conversely, 0.5 T has no terminal component on either
-      dense grid in the cold census. At 1.0 and 2.7 T the central-root
-      129-to-257 changes are \(1.28\times10^{-5}\) and
-      \(1.38\times10^{-5}\) meV. At 0.4 T the certified edge changes and moves
-      the central root by \(5.08\times10^{-4}\) meV, which is retained as a
-      distinct resolution systematic rather than absorbed into the area
-      ensemble.
-    </p>
-
-    <p>
-      A second-pass field retry is permitted only for a cold-pass mask that
-      has independently accepted ordered cold states on both sides. The cold
-      labels are frozen, both descending-profile seeds must converge and
-      agree, and a recovered point may not seed another retry. At 129 nodes,
-      seeds from 0.27 and 0.54 T recover all three ensemble members at 0.36
-      and 0.45 T; the two directions give identical retained \(h_{\rm MF}\)
-      and component edges and differ in self-energy by at most
-      \(1.38\times10^{-8}\).
-    </p>
-
-    <div class="verified">
-      <span class="label">Production contract</span>
-      The library default remains strict <code>full_profile</code>. The driver
-      must explicitly request <code>missing_area_ensemble</code>; it exposes
-      the factors, profile-node count, retry switch, and maximum seed span as
-      user knobs. The retained retry validation used 129 nodes and a 0.30 T
-      maximum span. Changing those knobs is allowed, but it is a new numerical
-      setting rather than evidence already covered by that validation. At this
-      snapshot the editable driver has the opt-in mode enabled and is set to
-      101 fields over 0--9 T and a 0.35 T span; that exact full-map setting was
-      not rerun for this documentation revision.
-    </div>
-
-    <h3>14.3 The two remaining failure classes</h3>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Location</th>
-          <th>Established diagnosis</th>
-          <th>Current disposition</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Exact 0 T</td>
-          <td>
-            The retained audit reaches a two-level splitting of approximately
-            \(1.78\times10^{-14}\) meV, where the present ordered two-level
-            representation becomes singular. There is no lower-field neighbor
-            for a two-sided retry.
-          </td>
-          <td>
-            Keep masked pending a basis-invariant \(B\to0^+\) limit. Do not
-            copy the first positive-field spectrum or insert an arbitrary
-            numerical field and label it 0 T.
-          </td>
-        </tr>
-        <tr>
-          <td>Ordered boundary near 4.68 T</td>
-          <td>
-            The refined paramagnetic mass zero is
-            \(B_c=4.71897990927\) T. On the retained 111-point audit grid, the
-            sampled mask is 4.663636 T. Its cold factor-one support ends at
-            0.991798 at 129 nodes and 0.99289 at 257 nodes, so factor one has
-            no cold bracket; damping and iteration escalation do not change
-            that result.
-          </td>
-          <td>
-            Independent lower-field ordered seeds reach the same factor-one
-            solution at 4.663636 and 4.68 T, but those roots are diagnostic
-            only. The analytic \(F'\) values are negative while sampled bracket
-            secants are positive, and the result becomes seed-dependent at
-            4.70 T. Keep the production mask until that branch/derivative
-            contradiction is resolved.
-          </td>
-        </tr>
-      </tbody>
-    </table>
-
-    <p>
-      The precise plotted high-field sample moves when the field grid changes;
-      4.663636 T and 4.68 T are representatives of the same ordered-side
-      boundary sliver, not evidence that the critical field itself moved. The
-      validated one-sided roots have positive uniform margins
-      (0.033717 and 0.023913), so neither sampled point is the exact zero-energy
-      mode.
+      The factors quantify sensitivity to the unresolved lower area. They are
+      not probabilities, confidence intervals, or parameters tuned to remove
+      a mask. The map can evaluate each member independently and reports an
+      interval only when all requested members are finite. The successful
+      101-point run requested only factor one; the three-factor diagnostic
+      remains incomplete at 4.68 T. The numerical branch is explicitly named
+      <code>picard_attracting_contiguous_high_h_component</code>.
     </p>
   </section>
 
-  <section id="promotion">
-    <h2>15. What would be required to promote the diagnostic</h2>
+  <section id="zero">
+    <h2>6. Exact-zero solution</h2>
 
     <p>
-      Calling \(\Delta\phi\) a rigorous thermodynamic potential difference
-      would require at least one of the following internally consistent
-      constructions:
-    </p>
-
-    <ol>
-      <li>
-        Derive the connected multilevel electronuclear four-point vertex and
-        use it with the same electronuclear moment and \(G_0\). Its
-        convergence must be tested by a four-point criterion, not only by
-        energy levels or static spectral weight.
-      </li>
-      <li>
-        Derive an explicit mixed functional whose stationary variations
-        reproduce the current full-\(G_0\)/two-level-vertex closure, including
-        the elastic resummation and effective-medium equations.
-      </li>
-      <li>
-        Replace the hybrid by a closed response/vertex representation and
-        demonstrate convergence of its relevant observables and of the
-        required field path. The tested closed electronic two-level control
-        does not yet meet this condition.
-      </li>
-    </ol>
-
-    <p>
-      Each route carries a different burden. A full multilevel construction
-      is closest to the physical single-ion problem but requires a feasible
-      connected four-point vertex and, for an infinite-field anchor, a
-      controlled completion of omitted higher multiplets. A mixed-functional
-      construction could preserve the current economical hybrid, but it must
-      derive rather than assume its conjugate variables, stationary
-      equations, response, and additive constant. A smaller closed model may
-      be computationally attractive, but it must demonstrate rank convergence
-      of the susceptibility and vertex and reproduce the observables for
-      which it will be used.
+      The two-level constructor now returns
+      <code>twolevel_domain_invalid</code> at an unresolved degenerate node
+      instead of throwing or mutating accepted continuation state. Strict mode
+      still fails because it requires that endpoint. The missing-area route
+      selects only the certified positive-\(h\) suffix.
     </p>
 
     <p>
-      Any candidate should then pass independent thermodynamic checks:
-    </p>
-
-    <ul>
-      <li>field-path and coupling-path independence where both exist;</li>
-      <li>
-        agreement between the field integral and temperature-integrated
-        interaction energy;
-      </li>
-      <li>equality of mixed derivatives or closed-loop work;</li>
-      <li>consistent fixed-applied-field stationary points; and</li>
-      <li>a controlled absolute integration constant or a legitimate relative
-        matching condition.</li>
-    </ul>
-
-    <p>
-      A useful certification sequence would be: verify the single-ion
-      derivative identity and response/Jacobian correspondence; test local
-      mixed-derivative consistency on the solved manifold; only if it passes,
-      choose a legitimate gauge and close loops in \((h,\rho,T)\); compare the
-      field and coupling routes where both share an anchor; then continue all
-      stationary branches and compare the fixed-applied-field potential. A
-      failure at any earlier stage prevents a later free-energy label even if
-      the final quadrature is numerically stable.
-    </p>
-
-    <h3>15.1 An anchor-free Maxwell test proposed by the review</h3>
-
-    <p>
-      One review suggestion gives a sharper first test that does not require
-      the missing field interval. Let \(\rho\) uniformly scale the physical
-      interaction, let
-      \(\delta\langle\partial_\rho\mathcal H\rangle\) be the interaction-
-      energy difference from the consistently referenced mean-field theory,
-      and let \(\chi_0=dm/dh\). At fixed \((h,T)\), the bare single-ion moment
-      is independent of \(\rho\). A common differentiable constrained
-      potential would then require
+      When the transition weight is exactly zero, Matsubara and real-axis code
+      evaluate the cancelled expression
     </p>
 
     \[
-      \boxed{
-      \partial_h\!\left[
-        \frac{1}{\chi_0(h)}
-        \partial_h\,
-        \delta\!\left\langle\partial_\rho\mathcal H\right\rangle
-      \right]
-      =\partial_\rho r
-      }.
+      Q_0=\frac{2m^2}{n_{01}^2}
+      \left[\lambda_1-(1-n_{01}^2)K_0\right]
     \]
 
     <p>
-      The extra \(h\) derivative removes the unknown slice anchor because
-      \(\partial_h\partial_\rho\delta h=\partial_\rho r\). Every stencil
-      derivative must be a total derivative along the solved manifold: the
-      closure must be re-solved at every \((h,\rho)\) point, and all routes
-      must use the same mean-field subtraction. A resolved violation at one
-      certified stencil would disprove this common-potential condition without
-      any missing-area quadrature. Agreement on finitely many stencils would
-      be supporting evidence, not proof, and the differentiated test is blind
-      to a discrepancy constant in \(h\) at fixed \(\rho\); a fold-gauged
-      undifferentiated check would still be required for that case.
+      rather than separately evaluating a divergent intermediate. Positive
+      transition weights retain their historical arithmetic. Basis-invariant
+      projector diagnostics, an exact-zero/\(10^{-6}\) T ladder, all three
+      diagnostic area members, and a 129/257-node comparison verify the
+      endpoint.
+    </p>
+  </section>
+
+  <section id="retries">
+    <h2>7. Interior and boundary continuation</h2>
+
+    <h3>7.1 Immutable cold pass</h3>
+    <p>
+      All retry eligibility and source states are frozen before any recovery.
+      A recovered point never seeds another recovery. This makes the result
+      independent of retry traversal order and prevents a chain of speculative
+      states from crossing the phase boundary.
+    </p>
+
+    <h3>7.2 Two-sided interior retry</h3>
+    <p>
+      A cold mask between accepted ordered fields is solved independently from
+      the nearest source on each side. Both results must pass the original
+      physical and residual gates and agree in molecular field, self-energy,
+      and component edge. This recovers the audited 0.36 and 0.45 T holes for
+      every missing-area member.
+    </p>
+
+    <h3>7.3 Ordered-boundary retry</h3>
+    <p>
+      The last masked ordered-side point has no ordered source above it, so it
+      uses a stricter, distinct contract. It must be a frozen
+      <code>phase==0</code> point above all accepted ordered cold states and
+      below an accepted PM cold state. Two untouched lower ordered sources
+      must directly recover the same unbridged component. A separately damped
+      PM solve must converge with negative mass, and both ordered results must
+      retain \(D_{\mathrm{uni}},F'\ge10^{-3}\), all original physical masses,
+      and the final residual gate. A cold <code>phase==2</code> point is never
+      retried.
+    </p>
+
+    <p>At 4.68 T the accepted central state has</p>
+
+    \[
+      h_{\mathrm{MF}}=0.0036183\ \mathrm{meV},\qquad
+      D_{\mathrm{uni}}=0.023913,\qquad
+      F'=0.020014,
+    \]
+
+    <p>
+      and the independently converged PM mass is \(-0.0178456\). The 129/257
+      peak displacement is 0.00110 GHz and the integrated spectral-weight
+      change is 0.21%. Only factor one satisfies the complete source and
+      support contract; noncentral members remain incomplete in the separate
+      sensitivity diagnostic and are not enabled in the current full sweep.
+    </p>
+  </section>
+
+  <section id="rejected">
+    <h2>8. Rejected and superseded hypotheses</h2>
+
+    <table>
+      <thead><tr><th>Earlier hypothesis</th><th>Final conclusion</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>The zero columns come from plotting or real-axis evaluation.</td>
+          <td>False. The state was masked upstream; accepted states give finite
+              real-axis responses.</td>
+        </tr>
+        <tr>
+          <td>More H<sub>MF</sub> nodes, damping, or iterations are the fix.</td>
+          <td>False as a general remedy. They do not create a missing component
+              or change algebraic area support.</td>
+        </tr>
+        <tr>
+          <td>A failed static solve at one trial proves no coupled root exists.</td>
+          <td>False. Continuation and the exact reduced residual find roots
+              outside the local Picard basin.</td>
+        </tr>
+        <tr>
+          <td>Filtering finite nodes is a rigorous equation-(45) construction.</td>
+          <td>False. It discards the lower constant and can bridge components.
+              Production instead labels the missing area explicitly.</td>
+        </tr>
+        <tr>
+          <td>Small \(n_{01}\) or \(M^2\) causes the masks at ordinary fields.</td>
+          <td>False. \(n_{01}\) is near one at the audited failed nodes. Exact
+              \(M^2=0\) is a separate removable symmetry-endpoint case.</td>
+        </tr>
+        <tr>
+          <td>The electronic/electronuclear representation mismatch is the
+              numerical mask mechanism.</td>
+          <td>Not supported. It limits strict thermodynamic interpretation but
+              does not reproduce the continuation topology.</td>
+        </tr>
+        <tr>
+          <td>The ordered branch terminates at 4.70–4.71 T.</td>
+          <td>Superseded. Fine-step independent continuation reaches 4.7188 T.</td>
+        </tr>
+        <tr>
+          <td>The derivative uses \(G_{\mathrm{stat}}\).</td>
+          <td>False. It uses \(\widetilde G_0\), equivalently
+              \(G_0^{\mathrm{bare}}\).</td>
+        </tr>
+        <tr>
+          <td>The missing-area factor should be tuned until every member plots.</td>
+          <td>Rejected. Unsupported members remain incomplete by design.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="thermodynamics">
+    <h2>9. What remains of the thermodynamic check</h2>
+
+    <h3>9.1 Valid local identities</h3>
+    <p>
+      On a differentiable accepted sheet, the field identities and the
+      corrected \(F'\) relation remain valid numerical checks. Fold-anchored
+      differences can cancel an unknown additive field constant between two
+      sheets that meet at the same fold. These diagnostics helped establish
+      branch topology and reject the idea that Picard failure equals root
+      termination.
+    </p>
+
+    <h3>9.2 Why they are not a production equilibrium selector</h3>
+    <p>
+      Jensen's free-energy derivation assumes that the moment, bare response,
+      elastic weights, and cumulant vertex arise from one single-ion model. The
+      production hybrid uses the full 136-state electronuclear moment and bare
+      response together with an electronic two-level vertex. No stationary
+      same-ion or explicitly mixed functional has been derived whose
+      derivatives reproduce all of those production equations.
     </p>
 
     <p>
-      This test, the analogous temperature-route test, loop holonomies, split
-      coupling homotopies, and the predicted fold Puiseux exponents have not
-      been run. They are research proposals, not part of the verified
-      checkpoint-27 conclusion. Closed-loop periods become topological
-      invariants only after local curvature has first been shown to vanish.
+      Consequently, a negative fold-anchored potential difference remains a
+      conditional branch-ranking diagnostic, not a rigorous global equilibrium
+      label. Likewise, an uncontrolled saturation extrapolation cannot supply
+      the absent lower integration constant.
     </p>
 
     <div class="summary">
-      <span class="label">Recommended terminology</span>
-      Until those obligations are met, use
-      <strong>fold-anchored relative constrained-potential diagnostic</strong>
-      or <strong>effective potential proxy</strong>. Avoid calling it the
-      Gibbs free energy, Helmholtz free energy, or a certified equilibrium
-      free-energy difference without the stated qualification.
+      <span class="label">Faithful conclusion</span>
+      The thermodynamic-functional limitation is real, but it was not the
+      direct cause of the plotted convergence holes. Those holes came from
+      incomplete low-\(h\) profiles, state-commit semantics, component-dependent
+      continuation, the exact-zero removable singularity, and a near-critical
+      long-jump failure. Production now addresses those mechanisms explicitly
+      without claiming a stronger free-energy theorem.
     </div>
   </section>
 
   <section id="evidence">
-    <h2>16. Local evidence and related notes</h2>
+    <h2>10. Evidence and implementation</h2>
+
     <ul>
-      <li>
-        <a href="jensen_1z_framework.html#s9">
-          Jensen framework, ordered phase and finite field
-        </a>
-      </li>
-      <li>
-        <a href="converg_diagnosis.md">
-          Current convergence diagnosis
-        </a>
-      </li>
-      <li>
-        <a href="invzp_convergence_next_steps.md">
-          Current next-step plan
-        </a>
-      </li>
-      <li>
-        <a href="invzp_convergence_dead_ends.md">
-          Rejected-proposal ledger and reconsideration conditions
-        </a>
-      </li>
-      <li>
-        <a href="docs/execution/invzp_convergence_journal.md">
-          Execution journal, especially checkpoints 19, 21--27
-        </a>
-      </li>
-      <li>
-        <a href="docs/diagnostics/invzp_approximation_wp6/README.md">
-          Missing-area, adjacent-retry, and high-field boundary evidence index
-        </a>
-      </li>
-      <li>
-        <code>docs/diagnostics/invzp_outer_wp2/wp2_reduced_fold_refinement.mat</code>
-      </li>
-      <li>
-        <code>docs/diagnostics/invzp_outer_wp2/wp2_original_equations_audit.mat</code>
-      </li>
-      <li>
-        <code>docs/diagnostics/invzp_outer_wp2/wp2_multifield_crossfield_continuation.mat</code>
-      </li>
-      <li>
-        <code>docs/diagnostics/invzp_outer_wp2/wp2_local_field_potential_audit.mat</code>
-      </li>
-      <li>
-        <code>docs/diagnostics/invzp_outer_wp2/wp2_local_field_potential_extension.mat</code>
-      </li>
-      <li>
-        <code>docs/diagnostics/invzp_outer_wp2/wp2_hybrid_functional_consistency_audit.mat</code>
-      </li>
-      <li>
-        <code>docs/diagnostics/invzp_representation_wp3/wp3_dominant_manifold_census.mat</code>
-      </li>
-      <li>
-        <code>docs/diagnostics/invzp_integral_wp5/wp5_saturation_tail_census.mat</code>
-      </li>
-      <li>
-        <code>docs/diagnostics/invzp_approximation_wp6/wp6_highfield_sliver_convergence_audit.mat</code>
-      </li>
-      <li>
-        <code>docs/diagnostics/invzp_approximation_wp6/wp6_highfield_one_sided_seed_audit.mat</code>
-      </li>
+      <li><a href="converg_diagnosis.md">Final convergence diagnosis</a></li>
+      <li><a href="invz_projected/README.html">Projected-code production README</a></li>
+      <li><a href="invzp_convergence_next_steps.md">Executed convergence plan</a></li>
+      <li><a href="invzp_convergence_dead_ends.md">Rejected-hypothesis ledger</a></li>
+      <li><a href="docs/execution/invzp_convergence_journal.md">Execution journal, checkpoints 26–31</a></li>
+      <li><a href="docs/diagnostics/invzp_approximation_wp6/README.md">Approximation, zero-field, resolution, and retry evidence index</a></li>
+      <li><code>invz_projected/invz_solve_point_ordered.m</code> — transactional profile and ordered root</li>
+      <li><code>invz_common/invz_missing_area_integral.m</code> — certified-suffix quadrature</li>
+      <li><code>invz_projected/invz_spectra_map.m</code> — ensemble and frozen retries</li>
+      <li><code>invz_common/invz_sigma_ordered.m</code> and
+          <code>invz_projected/invz_chi_realaxis.m</code> — exact-zero arithmetic</li>
     </ul>
+
+    <p>
+      Retained checks include the ordered-boundary, adjacent-retry, high-field
+      default-off, exact-zero, derivative-identity, missing-area-integral,
+      reduced-residual, static-domain, and production-oracle validations. The
+      strict pre-wiring profile oracle remains unchanged.
+    </p>
   </section>
 
   <p class="footer">
-    Prepared as a transparent derivation note for the inverse-\(z\)
-    non-convergence investigation. This document records the boundary between
-    certified mathematics, conditional thermodynamic interpretation, and the
-    controlled approximation route. No missing-area prescription is invoked
-    in sections 1--13; section 14 documents the separate opt-in production
-    approximation.
+    This document replaces the earlier investigation-era conclusion. It keeps
+    the valid strict thermodynamic limitations, removes superseded mask and
+    branch hypotheses, and records the implemented approximation with its
+    exact provenance and fail-closed boundaries.
   </p>
 </main>
 </body>

@@ -1531,3 +1531,684 @@ only together with all consumers and their validation.
 documentation link requires the old path; this checkpoint mentions it only as
 rename history. `git diff --check` passes. No solver, production option, or
 numerical artifact changed.
+
+## 2026-07-30 — Checkpoint 21: the known 1 T component has a regular fold
+
+**Continuation.** The verified four-variable reduced root at
+\((h,s)=(0.00624162310965,0.362731098554)\) was embedded in fixed normalized
+coordinates \((\lambda_1,\lambda_2,\lambda_3,s,h)\) and continued with a
+bordered pseudo-arclength corrector. A one-step down-and-back gate returns to
+the start within \(6.24\times10^{-9}\) in normalized max norm. Thirty-three
+points certify with reduced residual at most \(1.85\times10^{-9}\), positive
+physical margins, no multiple dynamic scalar root, and no unresolved dynamic
+frequency.
+
+The \(h\)-tangent reverses sign between adjacent points while the full
+\(4\times5\) residual Jacobian remains full rank. A separate fixed-\(s\)
+solve, local quadratic stencil, and one derivative/curvature correction refine
+the turning point to
+
+\[
+(h_{\rm fold},s_{\rm fold})
+=(0.0054789314231\ {\rm meV},0.6565777265).
+\]
+
+The final stencil gives \(dh/ds=-8.0\times10^{-10}\) and
+\(d^2h/ds^2=0.0220\); two central-difference scales give a smallest
+fixed-\(h\) Jacobian singular value of
+\(3.97\)--\(4.05\times10^{-8}\). The supremum, uniform, static-mesh,
+dynamic-lattice, and dynamic-medium masses at the fold are approximately
+0.343, 0.369, 0.375, 0.358, and 0.658. This classifies the obstruction as a
+regular saddle-node, not a physical-mass or dynamic-root singularity.
+
+**Return sheet.** Past the fold, \(h\) increases and the same component
+approaches \(s=1\). The last accepted point is
+\((h,s)=(0.0097188640,0.999998661)\), with supremum/uniform masses
+\(1.34\times10^{-6}/1.78\times10^{-6}\). Dynamic lattice/medium masses remain
+0.0747/0.4568. The corrector then fails near the explicit static-sector mass
+boundary; it does not fail near an unbordered singularity.
+
+**Independent original-equation check.** At fixed \(h=0.006\) meV, an
+unreduced solver iterating all 740 \(\Sigma\) components constructs two roots
+in disjoint \(s\) brackets:
+
+| \(s\) | pole-cancelled static residual | legacy outer residual | dynamic lattice/medium mass |
+|---:|---:|---:|---:|
+| 0.412077554837 | \(2.58\times10^{-11}\) | \(9.25\times10^{-14}\) | 0.5380 / 0.7583 |
+| 0.809166172289 | \(4.97\times10^{-11}\) | \(4.61\times10^{-13}\) | 0.2117 / 0.5612 |
+
+Direct dynamic closures are below \(2.85\times10^{-14}\). At the refined
+fold, zero and reduced-state full-\(\Sigma\) seeds agree to
+\(6.71\times10^{-14}\); the legacy outer residual is
+\(1.27\times10^{-11}\). The two-sheet geometry is therefore independent of
+the scalar dynamic eliminator, reduced moment coordinates, and bordered
+corrector.
+
+**Outer-map stability exchange.** Matrix-free central-difference
+Jacobian-vector products applied to the original 740-component outer map give:
+
+| location | dominant eigenvalue, \(10^{-6}\) step | dominant eigenvalue, \(3\times10^{-6}\) step |
+|---|---:|---:|
+| \(h=0.006,\ s=0.412077554837\) | 0.417303881 | 0.417303576 |
+| \(h=0.006,\ s=0.809166172289\) | 2.643406633 | 2.643406854 |
+| refined fold | 0.999999806 | 0.999999795 |
+
+All six power iterations converge in seven or eight steps with eigen-residual
+below \(1.3\times10^{-8}\). The historical low-\(s\) sheet is locally
+contractive, contraction is lost at \(+1\) at the saddle-node, and the return
+sheet is locally repelling for undamped Picard. This explains solver behavior
+but does not rank the sheets thermodynamically.
+
+**Decision.** The node-22 field, \(h=0.004053\) meV, lies below the minimum
+field of the known component. More damping or smaller fixed-\(h\) steps cannot
+continue that component to \(h=0\). The remaining claims are deliberately
+weaker: disconnected roots below the fold have not been excluded, and the
+equilibrium/constrained selector between the two roots above the fold is
+unknown. The missing-area approximation remains paused.
+
+**Evidence.**
+`docs/diagnostics/invzp_outer_wp2/invzp_reduced_pseudoarclength_1t.m`,
+`wp2_reduced_pseudoarclength_1t.mat`,
+`invzp_reduced_fold_refinement.m`, `wp2_reduced_fold_refinement.mat`,
+`invzp_pseudoarclength_original_equations_audit.m`, and
+`wp2_pseudoarclength_original_equations_audit.mat`, plus
+`invzp_fold_sheet_stability_audit.m` and
+`wp2_fold_sheet_stability_audit.mat`. All four analyzers report zero issues;
+production dispatch and acceptance code are unchanged.
+
+## 2026-07-31 — Checkpoint 22: fixed-state coupling path separates the sheets
+
+**Construction.** At the independently verified \(B_x=1\) T,
+\(h=0.006\) meV roots, only the longitudinal fluctuation interaction was
+scaled, \(J^{cc}\mapsto\rho J^{cc}\). The single-ion state and transverse
+mean-field coupling were held fixed. For a fixed-moment constrained potential,
+the tested normalization was
+\[
+\partial_\rho(\Phi/N)
+=\frac{1}{2\beta\rho}\sum_n w_nK_n(\rho)G_n(\rho).
+\]
+Because the production hybrid is not yet proven \(\Phi\)-derivable, the
+integral is retained as a candidate thermodynamic diagnostic.
+
+**Low sheet.** The \(s=0.412077554837\) root continues admissibly from
+\(\rho=1\) to 0.001. The exact reduced residual remains below
+\(2.71\times10^{-10}\), all dynamic scalar equations remain uniquely
+resolved, and the coupling integrand has fitted tail power 1.00002468. At the
+last node the state differs from the hybrid zero-coupling limit by
+\(8.66\times10^{-6}\). Tail-completed trapezoidal integration gives
+\(\delta\Phi/N=-1.02656481901\times10^{-4}\) meV; alternate-node coarsening
+changes it by \(3.56\times10^{-7}\) meV.
+
+**Return sheet and independent endpoint method.** The
+\(s=0.809166172289\) root does not approach zero coupling. Fixed-\(\rho\)
+continuation drives \(s\) to one and reaches
+\(\rho=0.77265625\) with supremum/uniform masses
+\(7.24\times10^{-5}/9.61\times10^{-5}\). An independent formulation then
+prescribed \(s=1-\epsilon\) and solved the four exact reduced equations for
+the three moments and \(\rho\). For
+\(\epsilon=7.24\times10^{-5}\) down to \(10^{-6}\), every solution is
+admissible and has residual at most \(6.24\times10^{-10}\). Linear and
+quadratic extrapolations give
+\(\rho_*=0.772181290931\) and 0.772181262246, differing by
+\(2.87\times10^{-8}\). The uniform mass approaches
+\(1.3274\epsilon\), while the other mesh/dynamic masses remain at least
+0.0103237 and the endpoint Jacobian singular value remains 0.2985. This
+classifies the termination as the uniform stability boundary, not an interior
+fold or dynamic-root failure.
+
+**Decision.** A common-anchor coupling free-energy difference between the two
+sheets is undefined. The low sheet alone passes the adiabatic-connectivity
+test. That is strong branch-selection evidence but not a complete
+thermodynamic theorem: an interaction-born constrained phase and path
+dependence of the non-\(\Phi\)-derivable hybrid remain logical risks. The next
+work is an independent field/local-\(S_3\) derivation and a derivative
+comparison with equation (45). Missing-area work remains paused.
+
+**Implementation note and checks.** During the diagnostic, MATLAB nested
+workspace sharing allowed a finite-difference perturbation to overwrite a
+parent record. Variable workspaces were separated and both artifacts were
+regenerated; the endpoint result was then reproduced from the corrected path
+artifact. Code Analyzer reports no issues for both generators. No production
+dispatcher, solver, or acceptance gate changed.
+
+**Evidence.**
+`docs/diagnostics/invzp_outer_wp2/invzp_coupling_constant_path_audit.m`,
+`wp2_coupling_constant_path_audit.mat`,
+`invzp_coupling_endpoint_refinement.m`, and
+`wp2_coupling_endpoint_refinement.mat`.
+
+## 2026-07-31 — Checkpoint 23: conditional field selector and cross-field topology
+
+**Fold-anchored field potential.** Combining Jensen's local identities
+\(d(\delta h)/dh=r-1\) and
+\(d(\delta\Phi/N)=\delta h\,dm\) eliminates the unknown integration constant
+between two sheets that meet at the same fold:
+\[
+\Phi_H(h)-\Phi_L(h)=
+\int_{h_f}^{h}[r_H(u)-r_L(u)][m(h)-m(u)]\,du .
+\]
+At 1 T and \(h=0.006\) meV the single-integral evaluation gives
+\(-1.38308999787\times10^{-6}\) meV per ion. A separately nested calculation
+gives \(-1.38481433295\times10^{-6}\) meV, a
+\(1.72\times10^{-9}\) meV difference; alternate-node coarsening changes the
+single integral by \(6.93\times10^{-9}\) meV. Extension along the independently
+continued sheets to \(h=0.0097188640\) gives
+\(-1.02210120637\times10^{-4}\) meV with no crossing.
+
+This conditionally ranks the high-\(s\) sheet below the low sheet, while the
+coupling path shows only the low sheet reaches zero coupling. These findings
+are compatible because the high sheet is interaction-born. Neither is yet a
+production selector: the full-\(G_0\)/two-level-vertex hybrid has not been
+proved stationary or \(\Phi\)-derivable, and equality of the field-potential
+constant at the fold assumes both sheets belong to one continuous constrained
+functional.
+
+**Independent cross-field continuation.** The certified 1.2 T high root was
+continued in \(B_x\) by exact four-variable correction on piecewise-linear
+diagnostic \(h(B_x)\) sections. This bypasses both the full-\(\Sigma\) Picard
+map and fixed-\(s\) moment-branch gaps. It certifies:
+
+| \(B_x\) (T) | \(s_L\) | \(s_H\) | \(r_H-r_L\) |
+|---:|---:|---:|---:|
+| 0.5 | 0.128065818 | 0.571160864 | -0.591623544 |
+| 0.8 | 0.123066133 | 0.786705254 | -0.716002679 |
+| 0.9 | 0.187440865 | 0.818288188 | -0.625156115 |
+| 1.1 | 0.496295817 | 0.927870087 | -0.351761916 |
+| 1.2 | 0.784831016 | 0.994930173 | -0.177429090 |
+
+The largest high-root reduced and legacy-outer residuals are
+\(1.51\times10^{-10}\) and \(3.25\times10^{-10}\). The roots at 0.8, 0.9,
+and 1.1 T lie just beyond the last Picard-converged fixed-\(s\) states,
+falsifying Picard nonconvergence as a root-absence test.
+
+The high branch reaches \(s=0.99995527\) with uniform mass
+\(5.94\times10^{-5}\) at \(B_x=1.21671875\) T, where continuation was stopped
+at the explicit uniform-boundary criterion. Below 0.5 T, the diagnostic
+\(h(B_x)\) was explicitly linearly extrapolated only to choose test sections.
+Both roots persist to 0.355 T with
+\(s_L/s_H=0.321876863/0.395733686\), but graph correction fails at 0.350 T
+from both sides. This brackets a merger or termination; a regular
+transverse-field fold is not yet certified.
+
+**2.5--2.9 T control.** At 2.5, 2.7, and 2.9 T, the converged full-\(\Sigma\)
+profiles satisfy the exact moment equations with maximum residual
+\(8.67\times10^{-14}\). Fixed-\(s\) moment correction extends them to
+\(s=0.999999\), where the static residuals remain
+\(-33.0092,-29.3860,-27.6377\). Five constrained full-residual starts above
+the known root at each field find no additional root; the best unscaled
+residuals remain 1.45, 1.50, and 1.55. This is strong finite evidence for one
+root on and near the sampled branch, not a disconnected-component exclusion
+proof.
+
+**Decision.** The two-sheet topology is field-local rather than universal,
+and the earlier one-root counts at 0.8--1.1 T were incomplete because of
+Picard repulsion. The next blocking work is a stationary/\(\Phi\)-derivable
+audit of the hybrid and field-specific fold/potential repeats, initially at
+0.8 and 1.1 T. Refining the 0.350--0.355 T endpoint requires
+pseudo-arclength or an augmented fold condition. The missing-area
+approximation remains paused, and production dispatch is unchanged.
+
+**Evidence.**
+`docs/diagnostics/invzp_outer_wp2/invzp_local_field_potential_audit.m`,
+`wp2_local_field_potential_audit.mat`,
+`invzp_local_field_potential_extension.m`,
+`wp2_local_field_potential_extension.mat`,
+`invzp_multifield_sheet_section_audit.m`,
+`wp2_multifield_sheet_section_audit.mat`,
+`invzp_multifield_crossfield_continuation.m`,
+`wp2_multifield_crossfield_continuation.mat`,
+`invzp_lowfield_02_branch_extension.m`,
+`wp2_lowfield_02_branch_extension.mat`,
+`invzp_highfield_exact_section_audit.m`, and
+`wp2_highfield_exact_section_audit.mat`.
+
+**Checks.** MATLAB Code Analyzer reports zero issues for the eight coupling,
+field-potential, and cross-field generators. The focused reduced-residual
+function passes directly: the 4 T fixture residual is
+\(5.58\times10^{-7}\), the 1 T exact-root residual is
+\(7.11\times10^{-15}\), and its legacy outer residual is
+\(2.02\times10^{-11}\). This file is a self-asserting diagnostic function,
+not a `matlab.unittest` suite, so it is invoked directly rather than through
+`runtests`. `git diff --check` passes.
+
+## 2026-07-31 — Checkpoint 24: Jensen's same-ion premise fails for the hybrid
+
+**Proof obligation.** The conditional fold selector uses Jensen 2.33--2.34.
+The published derivation first enforces
+\(\langle J\rangle=\langle J\rangle_0=m n_{01}\) to cancel tadpoles, then
+uses the \(G_0\), elastic weights, and connected cumulants of that same
+two-level ion. The audit checked whether the production
+full-\(G_0\)/two-level-vertex hybrid preserves this producer correspondence.
+
+**Bare-response control.** At 0.5, 0.8, 0.9, 1.1, 1.2, 2.5, and 2.9 T,
+central differences of the 136-state electronuclear moment agree with its
+full static \(-G_0\), including transverse mean-field feedback, to relative
+error at most \(2.57\times10^{-7}\). The analogous 17-state electronic
+check is within \(1.15\times10^{-7}\). The discrepancy below is therefore
+not a derivative or sign error.
+
+**Producer mismatch.** Over those sections,
+\[
+G_{0,\rm full}/G_{0,\rm twolevel}=0.146938\text{--}0.889455,
+\qquad
+m_{\rm full}-m_{\rm twolevel}=0.0953704\text{--}1.32617 .
+\]
+At each exact low root and every available high root, the audit retained the
+converged \((K,\lambda,\Sigma)\) but replaced the full electronuclear static
+weights by the two-level weights required by Jensen's equations (41)--(42).
+The resulting \(G_{\rm stat}\) differs from the hybrid value by 18.9% at the
+mildest point and by a factor 178 at the worst. Because the hybrid root obeys
+\(\Phi=G_{\rm stat}^{\rm hybrid}\), it misses the corresponding closed
+two-level static equation by the same relative scale.
+
+**Decision.** Jensen's field ratio remains a numerically defined observable
+of the hybrid, but the equation-(46) free-energy interpretation does not
+transfer as an exact identity. The checkpoint does not prove that no
+alternative functional can exist. It proves that such a functional is not
+the published same-ion two-level construction and must be separately derived.
+The negative fold integral is retained as a branch-ranking heuristic and
+future approximation guide, not a rigorous production selector.
+
+**Next action.** A rigorous thermodynamic route requires either the actual
+multilevel connected four-point vertex or an explicitly derived mixed
+functional reproducing the production stationary equations. Root-topology
+work may continue independently. Missing-area work remains paused and no
+production code changed.
+
+**Evidence and checks.**
+`docs/diagnostics/invzp_outer_wp2/invzp_hybrid_functional_consistency_audit.m`
+and `wp2_hybrid_functional_consistency_audit.mat`. MATLAB Code Analyzer
+reports zero issues for the generator.
+
+## 2026-07-31 — Checkpoint 25: controlled missing-area ensemble resumed
+
+**Scope boundary.** The rigorous-route documentation and its negative result
+remain unchanged: the production hybrid still lacks a derived thermodynamic
+selector and integration constant. The approximation route was explicitly
+resumed as a separate practical-output path. The strict `full_profile` mode
+remains the absent-option default.
+
+**Approximation census.** For each field, the unchanged strict node evaluator
+was used only to locate the terminal contiguous certified high-\(h\) component.
+With \(h_e\) its lower edge, the census evaluated
+
+\[
+A_{\rm req}(h)=J_{0,\rm eff}m(h)-\int_{h_e}^h r(s)\,ds.
+\]
+
+The declared sensitivity ensemble contains three continuous positive linear
+completions on the missing interval:
+
+| \(r(0)/r(h_e)\) | \(A/[h_er(h_e)]\) |
+|---:|---:|
+| 0.5 | 0.75 |
+| 1 | 1 |
+| 2 | 1.5 |
+
+These members are neither probabilities nor confidence intervals. The census
+covered 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.2, 2.5, 2.7, 2.9, and 3.0 T.
+At 0.2 T the sampled 33-node census profile has no terminal certified component.
+At every other field, all three factors lie inside the sampled root-support
+range and bracket a root without using a rejected or nonfinite node.
+
+**Branch ensemble.** Independent exact-root evidence labels two roots at 0.4,
+0.5, 0.8, and 1.2 T and one root found within finite high-field searches at
+2.5, 2.7, and 2.9 T. At 1 T, the exact fold-to-boundary sheets were integrated
+for every area member. The return-sheet residual remains negative through its
+uniform-boundary endpoint for all three members; it never reaches an
+equation-(45) root. The production approximation therefore supports only the
+explicitly named numerical branch
+`picard_attracting_contiguous_high_h_component`. This is not an equilibrium
+selection claim.
+
+**Implementation.** `invz_missing_area_integral` selects only the terminal
+contiguous certified block, represents everything below it by explicit
+\(A\ge0\), and records zero interior bridges and zero uncertified-node use.
+`invz_solve_point_ordered` exposes the scalar opt-in
+`hmf_integral_mode='missing_area_approx'` with a required factor at least 0.5
+so the corresponding linear completion remains nonnegative.
+`invz_spectra_map` exposes
+`hmf_integral_mode='missing_area_ensemble'`, evaluates all members, selects
+factor one as the labeled central output, and exports member arrays plus
+finite-member ranges for \(h_{\rm MF}\), \(\Sigma_0\), moment, \(D_{\rm ord}\),
+peak energy, and every real-axis susceptibility sample. `invz_run_spectra.m`
+has a top-level `useMissingAreaApproximation` knob; false preserves the strict
+library behavior, while the current visual driver explicitly selects true.
+When enabled, the driver uses 129 profile nodes.
+
+**End-to-end validation.** The 129-node production validation reused the 12
+census fields and three real-frequency probes. All three members are accepted
+and finite at 11 fields. The coarse census missed a 0.2 T component that is
+stable at 129 and 257 nodes; conversely, every member remains component-masked
+at 0.5 T on both denser grids. Where both the 33-node census and 129-node map
+have output, the central roots differ by at most
+\(9.41\times10^{-4}\) meV. The member \(h_{\rm MF}\) values are strictly
+ordered with area factor at every covered field. A post-implementation strict
+1 T solve remains `node_failed`, `full_profile`, non-approximate, and bitwise
+equal in its profile arrays to the retained pre-wiring census.
+
+**Checks and evidence.** The new no-bridge unit test passes. The existing
+filtered-profile, 13-case static-domain, 2049/4097/8193 resolution, outer-map,
+and exact-reduced-residual checks pass. MATLAB Code Analyzer reports zero
+messages on all ten touched/new executable files, and `git diff --check`
+passes. Evidence and reproducers are in
+`docs/diagnostics/invzp_approximation_wp6/`.
+
+**Resolution qualification.** Central-factor ladders at 1.0 and 2.7 T give
+129-to-257 changes of \(1.28\times10^{-5}\) and
+\(1.38\times10^{-5}\) meV. At 0.4 T the terminal accepted edge changes at
+257 nodes, moving the central root by \(5.08\times10^{-4}\) meV relative to
+129 nodes. This is smaller than the 0.4 T area-ensemble width
+(\(2.38\times10^{-3}\) meV) but is retained as a distinct resolution
+systematic; it is not included in the area sensitivity band.
+At 0.2 T the 129-to-257 member-root changes are at most
+\(1.26\times10^{-5}\) meV. At 0.5 T both grids report
+`missing_area_no_certified_component`. These opposite low-field coverage
+changes relative to the 33-node census are retained explicitly.
+
+## 2026-07-31 — Checkpoint 26: two-sided field seeding retains 129 nodes
+
+**Observed masks.** The visual sweep left slivers at 0, 0.36, 0.45, and
+4.68 T. The 4.68 T point is below, but close to, the independently refined PM
+mass zero at 4.71897990927 T; it is not itself the exact soft point. Direct
+area-factor probes also show that its root-support interval lies between the
+original ensemble factors, so increasing the node count alone is not the
+missing control there.
+
+**Continuation diagnostic.** A new optional ordered-state seed initializes
+both the final solve and a descending fixed-field profile sweep. At 129 nodes,
+independent seeds from accepted 0.27 and 0.54 T states recover all factors
+0.75, 1, and 1.5 at both 0.36 and 0.45 T. The retained roots are, respectively,
+
+| field (T) | factor 0.75 | factor 1 | factor 1.5 |
+|---:|---:|---:|---:|
+| 0.36 | 0.0385491 | 0.0377669 | 0.0361842 |
+| 0.45 | 0.0386030 | 0.0377890 | 0.0362360 |
+
+The two seed directions give zero retained \(h_{\rm MF}\) and component-edge
+difference and at most \(1.38\times10^{-8}\) self-energy difference.
+
+**Production policy.** The missing-area scalar map may now retry only a
+cold-pass masked point with accepted ordered cold-pass states on both sides,
+separated by no more than 0.30 T. Both independently seeded retries must pass
+every original solve and susceptibility gate and agree to explicit tolerances.
+Cold labels are frozen, so recovered points never seed another recovery and
+the result is traversal-order independent. Consequently, 0 T has no lower
+source and remains masked; 4.68 T has no ordered upper source and also remains
+masked. A three-field high-field smoke test preserves the exact member phase
+matrix: only factor one is ordered at 4.59 T, all members are masked at
+4.68 T, and all are paramagnetic at 4.77 T.
+
+**Driver and checks.** `missingAreaNodes = 129` is now a user-tunable knob at
+the beginning of `invz_run_spectra.m`; `useAdjacentFieldRetry` and
+`adjacentRetryMaxSpan` sit beside it. The strict library default remains
+`full_profile` with retry disabled. The four-field production-map smoke test
+recovers all ensemble members at 0.36 and 0.45 T and produces complete
+susceptibility samples. The strict 1 T arrays remain bitwise equal to their
+pre-wiring oracle; the missing-area helper, exact-reduced-residual, and 13-case
+static-domain checks pass. Reproducers and retained outputs are
+`invzp_adjacent_field_seed_audit.m`, `invzp_adjacent_retry_map_smoke.m`, and
+`invzp_adjacent_retry_highfield_smoke.m` under
+`docs/diagnostics/invzp_approximation_wp6/`.
+
+## 2026-07-31 — Checkpoint 27: moving high-field sliver classified
+
+**Reproduction.** The user changed the visual field grid to
+`linspace(0,9,111)`. The only remaining visible sliver moved from the old
+4.68 T sample to the nearest new sample, 4.66363636364 T. A direct scalar
+reproducer uses the same 129-node missing-area settings and returns
+`missing_area_no_bracket`, not an outer-iteration or final-residual failure.
+The PM solve converges with mass \(-0.0189679\); the point is 0.0553435 T below
+the independently refined PM mass zero at 4.71897990927 T.
+
+**Cold-path classification.** The 129-node cold profile contains a 16-node
+terminal certified component with area-factor support
+\([0.80681798,0.99179751]\). None of the production factors 0.75, 1, and 1.5
+lies inside. At 257 nodes the component has 32 nodes but support remains
+\([0.80139,0.99289]\), and factor one still has no bracket. Stronger damping
+(`mix_outer=0.15`) and 3000 iterations reproduce the original support. Cold
+factors 0.85, 0.90, and 0.95 all converge. Factor 0.90 gives
+\(h_{\rm MF}=0.010400\) meV at 129 nodes and 0.010305 meV at 257 nodes, with
+\(D_{\rm uni}=0.2020\) and 0.1992. These are sensitivity points, not a new area
+calibration.
+
+**Ordered-side continuation.** Independently accepted factor-one states at
+4.5 and 4.581818 T were used only as descending-profile seeds. Both recover a
+31-node component at 4.663636 T with support \([0.56249,1.0089]\), converge to
+\(h_{\rm MF}=0.0043136\) meV, and differ in self-energy by only
+\(2.04\times10^{-10}\). At 4.68 T both converge to 0.0036183 meV with maximum
+self-energy difference \(6.95\times10^{-10}\). The corresponding uniform
+margins are 0.033717 and 0.023913: the continued solution approaches a soft
+boundary but is not zero-energy at either sampled field.
+
+**Blocking adversarial checks.** The continued roots are not yet eligible for
+production. At 4.663636 and 4.68 T the documented analytic \(F'\) diagnostic
+is \(-0.23491\) and \(-0.25941\), while the sampled root-bracket secants are
++0.027941 and +0.018703. This sign disagreement must be traced to branch
+topology, derivative representation, or profile path dependence. At 4.70 T,
+the 4.5 T seed fails during root refinement while the 4.581818 T seed converges
+to 0.0025306 meV with \(D_{\rm uni}=0.011782\). Thus numerical reach becomes
+seed-sensitive before the PM mass zero.
+
+**Revised next action.** Keep the current production two-sided retry unchanged.
+First build a narrow fixed-\(h\) section around the continued roots, verify
+\(dm/dh\), \(G_{\rm stat}\), the bracket derivative, and the analytic identity,
+then run nested 129/257 field continuation toward 4.71897990927 T. A future
+one-sided boundary retry may be considered only for frozen cold masks with
+negative PM mass, two independent accepted lower-field sources, no recovered
+seeds, and explicit agreement/stability gates. A cold `phase==2` point must
+never be retried. Evidence is
+`invzp_highfield_sliver_convergence_audit.m`,
+`wp6_highfield_sliver_convergence_audit.mat`,
+`invzp_highfield_one_sided_seed_audit.m`, and
+`wp6_highfield_one_sided_seed_audit.mat` under
+`docs/diagnostics/invzp_approximation_wp6/`.
+
+## 2026-07-31 — Checkpoint 28: high-field derivative corrected; retry stopped
+
+**Derivative proof obligation.** For the missing-area residual
+\(F=A+\int r\,dh-J_{0,\rm eff}m\), direct fixed-field response gives
+\(dm/dh=-G_0^{\rm bare}\) and the static closure gives
+\(r=G_0^{\rm bare}/\widetilde G_0\). Hence
+
+\[
+F'=r+J_{0,\rm eff}G_0^{\rm bare}
+  =r(1+J_{0,\rm eff}\widetilde G_0).
+\]
+
+The checkpoint-27 diagnostic instead inserted \(G_{\rm stat}\). Since
+\(\widetilde G_0=G_{\rm stat}/(1-K_0G_{\rm stat})\), that substitution is not
+valid and reverses the sign near this soft boundary.
+
+**Fixed-\(h\) audit.** At 4.663636 and 4.68 T, narrow five-point sections around
+the continued factor-one roots give exact derivatives 0.028518 and 0.020014.
+The local secants agree within \(8.45\times10^{-6}\) and
+\(1.24\times10^{-5}\) relative; the retained coarse bracket secants differ by
+2.02% and 6.55% but have the same sign. Direct finite differences verify
+\(dm/dh=-G_0^{\rm bare}\) within \(2.45\times10^{-8}\) relative, and the two
+exact forms of \(F'\) agree within \(1.15\times10^{-16}\) absolute. All ten
+fixed states pass the coupled residual and positive-mass gates.
+
+**Nested direct-seed ladder.** The factor-one branch was evaluated at 4.64,
+4.663636, 4.68, 4.69, 4.70, and 4.71 T with 129 and 257 profile nodes. Every
+target was seeded directly from independently accepted 4.5 and 4.581818 T
+states; no recovered target was reused. Both seeds and both resolutions agree
+through 4.69 T. At 4.70 T the 4.5 T seed fails root refinement while the
+4.581818 T seed converges to 0.0025306 meV with
+\(D_{\rm uni}=0.011782\) and \(F'=0.009696\). At 4.71 T both seeds fail
+refinement. Factor one remains inside the sampled algebraic support interval,
+so area support is not the cause of this loss of numerical reach. Every
+accepted ladder point has positive uniform, supremum, mesh-\(x\), and
+medium-mesh masses and final residual below \(7.1\times10^{-9}\).
+
+**Disposition.** The derivative/representation concern is closed, but the
+documented seed-independence stopping rule fails at 4.70 T on both nested
+grids. No `ordered_boundary_retry` is implemented. The existing production
+two-sided retry and the 4.663636 T mask remain unchanged. The other remaining
+mask, exact zero field, is a separate symmetry-limit task.
+
+Evidence is `invzp_highfield_derivative_section_audit.m`,
+`wp6_highfield_derivative_section_audit.mat`,
+`invzp_highfield_boundary_continuation_ladder.m`, and
+`wp6_highfield_boundary_continuation_ladder.mat` under
+`docs/diagnostics/invzp_approximation_wp6/`. The corrected checkpoint-27
+machine-readable output is `wp6_highfield_one_sided_seed_audit.mat`.
+
+## 2026-07-31 — Checkpoint 29: exact-zero approximation endpoint completed
+
+**Failure classification.** At fixed \(h=0\), the electronic splitting follows
+approximately \(\Delta=0.05218B_x^2\) meV and crosses the existing
+\(10^{-4}\) meV two-level domain floor near 0.044 T. The former exact-zero map
+therefore threw `invz:degenerateDoublet` before evaluating any positive-\(h\)
+component. This exception did not establish a non-unique ordered limit.
+
+**Basis-invariant ladder.** A logarithmic/linear 19-point ladder from exact
+zero to 0.12 T shows that the electronic lowest-doublet projector remains
+isolated by at least 0.93446 meV. Its basis-dependent weights rotate from
+\((m,M^2)=(5.5096,0.0161)\) at the numerically degenerate endpoint to
+approximately \((0,30.372)\) in the split basis, while
+\(\tfrac12\operatorname{Tr}(PJ_zPJ_z)=30.372\) and the combined static weight
+remain constant. The full electronuclear variance changes by less than 0.02%
+and its path susceptibility is likewise smooth. The full lowest-doublet
+projector overlap with exact zero remains 0.99784 at 0.12 T.
+
+**Fail-closed implementation.** The fixed-\(h\) profile evaluator now requests
+`domain_policy='return'`. An invalid two-level node returns
+`twolevel_domain_invalid`, does not mutate the continuation carrier, and never
+enters a quadrature. Strict `full_profile` still returns `node_failed` because
+its \(h=0\) predictor is invalid. The opt-in missing-area mode does not require
+that predictor and selects only its certified positive-\(h\) suffix. At exact
+zero the 129-node central state has \(h_{\rm MF}=0.038101\) meV,
+\(\Delta_{\rm final}=0.41995\) meV, \(D_{\rm uni}=0.99845\), and residual
+\(5.48\times10^{-9}\).
+
+**Exact \(M^2=0\) arithmetic.** The removable ordered subtraction is evaluated
+as
+\[
+Q_0=\frac{2m^2}{n_{01}^2}
+ [\lambda_1-(1-n_{01}^2)K_0]
+\]
+only when `M2 == 0`, in both Matsubara and real-axis code. Positive-\(M^2\)
+states retain their historical operation order. Forced exact-zero tests are
+finite and agree with the tiny-positive-\(M^2\) state to machine zero; the
+retained 1 T strict profile remains bitwise identical to its pre-wiring oracle.
+
+**End-to-end ensemble and resolution.** At 129 nodes the factors 0.75, 1, and
+1.5 give \(h_{\rm MF}=0.038787,0.038101,0.036749\) meV. Every exact-zero
+spectrum is finite and agrees with its \(10^{-6}\) T counterpart within
+\(1.27\times10^{-12}\) absolute; no adjacent retry is attempted. The mode has
+vanishing weight and no interior maximum in the retained 0--6 GHz window, so
+all three peak energies are censored rather than fabricated. Increasing to
+257 nodes changes \(h_{\rm MF}\) by at most \(1.86\times10^{-5}\) meV,
+\(D_{\rm uni}\) by \(3.73\times10^{-8}\), and the full spectrum by
+\(2.10\times10^{-11}\).
+
+**Disposition.** The exact-zero column is restored only in the explicitly
+labeled missing-area approximation. The strict physical-path conclusion is
+unchanged, and the separate 4.663636 T high-field mask remains. Evidence is
+`wp6_zero_field_limit_ladder.mat`,
+`wp6_zero_field_ensemble_validation.mat`, and
+`wp6_zero_field_resolution_audit.mat` under
+`docs/diagnostics/invzp_approximation_wp6/`, plus the focused
+`test_invzp_zero_field_failclosed`.
+
+**Validation.** MATLAB Code Analyzer is clean on every changed production,
+test, and diagnostic file. `test_invzp_zero_field_failclosed`,
+`test_invzp_hmf_derivative_identity`, `test_invzp_missing_area_integral`, all
+13 bounded-static gates, and the reduced-residual controls pass. The retained
+approximation production validation reports `strict profile match 1`; the
+high-field adjacent-retry smoke still masks every member at 4.68 T.
+
+## 2026-07-31 — Checkpoint 30: ordered-boundary retry recovers central 4.68 T
+
+**Production observation and revised proof obligation.** The user's current
+101-point sweep confirmed that 4.68 T remained masked after the exact-zero
+repair. This was expected because only the two-sided adjacent retry was wired.
+The remaining question was whether the former 4.70/4.71 direct-seed failures
+marked a branch endpoint or only the reach limit of a distant warm start.
+
+**Fine-step continuation.** Two independently accepted factor-one states at
+4.50 and 4.59 T were advanced through
+4.68, 4.69, 4.695, 4.700, 4.705, 4.710, 4.7125, 4.715, 4.717, 4.718, 4.7185,
+and 4.7188 T. The two histories were isolated from each other and repeated at
+129 and 257 profile nodes. Every target converged on both paths and both grids;
+after the first target, source-history differences were zero to stored
+precision. At 4.7188 T the 257-node state has
+\(h_{\rm MF}=2.4801\times10^{-4}\) meV,
+\(D_{\rm uni}=1.1206\times10^{-4}\), \(F'=8.9708\times10^{-5}\), and final
+residual \(4.45\times10^{-9}\). The earlier long-jump failures therefore did
+not observe branch termination.
+
+**4.68 T contract audit.** Untouched 4.50 and 4.59 T cold states directly
+recover the same 4.68 T factor-one root at both resolutions. At 129 nodes,
+\(h_{\rm MF}=0.0036183\) meV, \(D_{\rm uni}=0.023913\),
+\(F'=0.020014\), and the final residual is below
+\(5.3\times10^{-9}\). Seeded spectra agree within
+\(6.5\times10^{-8}\) relative. The 129-to-257 changes are 0.17% in
+\(h_{\rm MF}\), 0.49% in \(D_{\rm uni}\), 0.00110 GHz in peak position, and
+0.21% in integrated weight. The larger 8.8% pointwise difference comes from
+shifting a very narrow line. The driver-configured PM iteration itself does
+not converge, so it is not used as a gate; an independent
+`mix_outer=0.25`, `max_outer=1000` PM solve converges with mass
+\(-0.0178456\). The descending component supports factors 0.75 and 1 but not
+1.5; only factor one has the required pair of accepted lower cold sources.
+
+**Fail-closed production policy.** `invz_spectra_map` now has a distinct
+default-off `hmf_ordered_boundary_retry`. The opt-in spectra driver enables it
+with a 0.20 T oldest-source span and minimum
+\(D_{\rm uni}=F'=10^{-3}\). Eligibility requires a frozen cold `phase==0`
+target above every accepted ordered cold point, an accepted PM cold point
+above it, two untouched lower ordered sources, a separately converged negative
+PM mass, one unbridged root bracket on the same component, unchanged physical
+mass/residual gates, and agreement in \(h_{\rm MF}\), self-energy, and component
+edge. Recovered states never seed any retry, and cold `phase==2` points are
+ineligible. Every ensemble member is evaluated independently.
+
+**End-to-end disposition.** On the focused 4.50/4.59/4.68/4.77 T ensemble
+map, factor one has phase `[1 1 1 2]` and boundary status `used` only at
+4.68 T. Factors 0.75 and 1.5 retain `[0 0 0 2]`; their missing spectra keep
+the sensitivity interval honestly incomplete. With the new option absent, the
+old high-field smoke retains its original 4.68 T masks. The existing 0.36 and
+0.45 T two-sided retry remains unchanged for all factors.
+
+Evidence is `invzp_highfield_progressive_field_continuation.m` and its MAT,
+`invzp_highfield_boundary_retry_contract_audit.m` and its MAT, and
+`invzp_ordered_boundary_retry_smoke.m` and its MAT under
+`docs/diagnostics/invzp_approximation_wp6/`.
+
+**Validation.** MATLAB Code Analyzer is clean on all changed production and
+diagnostic files. `test_invzp_missing_area_integral`,
+`test_invzp_hmf_derivative_identity`, `test_invzp_zero_field_failclosed`, the
+reduced-residual controls, and all 13 bounded-static gates pass. The new
+ordered-boundary smoke, the default-off high-field smoke, and the existing
+low-field adjacent-retry smoke pass. The retained approximation production
+validation reports `strict profile match 1`.
+
+## 2026-07-31 — Checkpoint 31: full sweep confirmed; final documentation aligned
+
+**End-to-end observation.** The user reran the current 101-point production
+driver after checkpoint 30 and reported that the susceptibility converged
+smoothly across the complete field range, including exact zero and 4.68 T.
+This is the first full-grid visual confirmation of the combined missing-area,
+exact-zero, interior-retry, and ordered-boundary implementation. It is an
+observed production result, not a replacement for the retained focused tests
+or an assertion that every noncentral area member is complete. The run used
+the driver's current singleton `missingAreaFactors = 1.0`; the separate
+three-factor diagnostic remains incomplete at 4.68 T.
+
+**Documentation consolidation.** `converg_diagnosis.md` is rewritten as the
+final numerical diagnosis and production-resolution record.
+`invz_projected/README.html` now documents the strict and missing-area modes,
+factor semantics, immutable retry policies, exact-zero arithmetic, output
+provenance, and current operational status. `thermodynamic_check_theory.html`
+retains the governing field identities and the valid functional limitation,
+but removes the investigation-era remaining-mask narrative, obsolete
+4.70/4.71 endpoint conclusion, incorrect `Gstat` derivative substitution, and
+other rejected hypotheses as current explanations. Those hypotheses now
+appear only in an explicit rejected-conclusion table.
+
+**Final interpretation.** The practical central-grid convergence problem is
+resolved. The result remains the explicitly labeled missing-area
+approximation on one declared component; strict `full_profile` and the absence
+of a derived same-ion stationary functional for the production hybrid remain
+separate thermodynamic limitations.

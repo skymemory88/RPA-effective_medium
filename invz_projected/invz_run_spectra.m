@@ -30,8 +30,18 @@ ion = invz_ion();
 %       response) but still see demag through info.Jaa0.
 T = 0.1;                             % K
 useParallel = true;
-outerMix = 0.15;                      % smaller than 0.7: stronger damping;
-outerMax = 3000;                     % exploratory budget; acceptance tolerances are unchanged
+outerMix = 0.3;                     % smaller than 0.7: stronger damping;
+outerMax = 2000;                     % exploratory budget; acceptance tolerances are unchanged
+useMissingAreaApproximation = true; % OPT-IN production approximation; false preserves strict default
+% missingAreaFactors = [0.75 1.0 1.5];   % continuous positive lower completions; factor 1 is central
+missingAreaFactors = 1.0;            % factor 1: approximating constant r(x) ( =f(h_e) )
+missingAreaNodes = 129;              % user-tunable profile resolution; 257 remains the refinement comparator
+useAdjacentFieldRetry = true;        % retry cold-pass masks only when both ordered neighbours agree
+adjacentRetryMaxSpan = 0.35;         % T; maximum separation of the two accepted seed fields
+useOrderedBoundaryRetry = true;      % retry the final ordered-side mask from two untouched lower sources
+orderedBoundaryRetryMaxSpan = 0.20;  % T; oldest of the two lower sources must lie within this span
+orderedBoundaryMinDuni = 1e-3;       % explicit distance from the uniform static boundary
+orderedBoundaryMinFprime = 1e-3;     % explicit H_MF-root slope margin
 eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency INPUTS (w, wq) AND
                                      % the plotted axes. Computation always runs in meV; the driver
                                      % converts in/out (with 'meV' it is a no-op). eta is ALWAYS in
@@ -41,15 +51,15 @@ eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency 
 % finite-16^3 regression is the narrower linspace(4.60,4.90,61) subset; this
 % 3--6 T view is expected to contain masked ordered columns and is not all-column certified.
 fields = linspace(0, 9, 101);
-% fields = linspace(0, 9.0, 101);        % OPTIONAL full-range survey (low-field failures are secondary)
-% fields = [3.6 4.2 4.8 5.4 6.0];       % few -> line slices instead of a colormap
-w = (0:0.01:6).';                    % eUnit -- field-sweep frequency grid
+% fields = 0.2:0.2:3.0;                % test points
+% fields = [3.6 4.2 4.8 5.4 6.0];    % few -> line slices instead of a colormap
+w = (0:0.005:6).';                    % eUnit -- field-sweep frequency grid
 eta = 5e-5;                          % real-axis Lorentzian HWHM, ALWAYS in meV (1e-3 meV ~ 0.24 GHz),
                                      % independent of eUnit. Lower -> sharper peaks (resolves the
                                      % sub-6-GHz hyperfine lines); keep eta above the w/wq step
                                      % (converted to meV: step/eScale) or the peaks alias.
 sliceMax = 6;                         % field count at/below which the line-slice view is used
-showPeaks = false;                     % true -> ALSO line-plot chi''_cc peak energy vs field
+showPeaks = true;                     % true -> ALSO line-plot chi''_cc peak energy vs field
                                      % (S.Epeak/S.Epeak_rpa, cf. the q-path E_peak(q) stream)
 
 % ---- q-path view (R 2007 Fig 3 trends): set qpath non-empty to switch views -------------
@@ -83,13 +93,30 @@ switch eUnit
     otherwise, error('invz_run_spectra:eUnit', 'eUnit must be ''meV'' or ''GHz''.');
 end
 
-% TEMPORARY STRICT-COMPARISON MODE (2026-07-30): the visual filtered-profile
-% experiment remains implemented but is not selected here. Production uses the
-% solver's strict full_profile default and its default 33-node H_MF profile.
-% Every profile node must certify; no PM anchor, Inf/NaN filtering, or bridged
-% panel enters equation (45). The stronger exploratory outer damping/budget
-% above remain active.
+% Strict full_profile is the default.  The opt-in ensemble replaces only the
+% unresolved lower area A=int_0^h_e r dh by declared positive completions and
+% integrates the contiguous certified component above h_e.  It does not use a
+% PM anchor, bridge rejected nodes, or claim thermodynamic branch selection.
 solve_opts = struct('mix_outer', outerMix, 'max_outer', outerMax);
+if useMissingAreaApproximation
+    solve_opts.hmf_integral_mode = 'missing_area_ensemble';
+    solve_opts.hmf_missing_area_factors = missingAreaFactors;
+    solve_opts.nH = missingAreaNodes;
+    solve_opts.hmf_approx_branch = ...
+        'picard_attracting_contiguous_high_h_component';
+    solve_opts.hmf_adjacent_retry = useAdjacentFieldRetry;
+    solve_opts.hmf_adjacent_retry_max_span = adjacentRetryMaxSpan;
+    solve_opts.hmf_ordered_boundary_retry = useOrderedBoundaryRetry;
+    solve_opts.hmf_ordered_boundary_retry_max_span = ...
+        orderedBoundaryRetryMaxSpan;
+    solve_opts.hmf_ordered_boundary_retry_min_D_uni = ...
+        orderedBoundaryMinDuni;
+    solve_opts.hmf_ordered_boundary_retry_min_Fprime = ...
+        orderedBoundaryMinFprime;
+    warning('invz:missingAreaApproximation', ...
+        ['Using the opt-in missing-area ensemble. Outputs are approximation ' ...
+         'sensitivity bands, not certified thermodynamic branch selection.']);
+end
 
 % The quadrature convention is fixed; backend and resolution remain explicit.
 coupling_opts = struct('grid', [gridN gridN gridN], 'dpRng', dpRng, ...
@@ -108,8 +135,13 @@ wMeV   = w   / eScale;
 wqMeV  = wq  / eScale;
 
 if ~isempty(qpath)
+    if useMissingAreaApproximation
+        error('invz:missingAreaQPath', ...
+            ['The ensemble production mode is implemented for the field map. ' ...
+             'Set useMissingAreaApproximation=false for q-path calculations.']);
+    end
     % ---------------- FM-mode q-path view at fixed field(s) ----------------
-    if isscalar(Bq)
+    if isscalar(Bq) %#ok<UNRCH>
         S = invz_spectra_qpath(ion, T, Bq, qpath, wqMeV, qpOpts);
         Splot = S;   % display-only copy; the solve above always ran in meV
         Splot.w = S.w*eScale;  Splot.Epeak = S.Epeak*eScale;  Splot.Epeak_rpa = S.Epeak_rpa*eScale;
@@ -155,8 +187,14 @@ else
         xlabel(eLabel);  ylabel('\chi''''_{cc}');  title(sprintf('T = %.2f K', T));  legend show;
     else
         Splot = S;  Splot.w = S.w * eScale;    % display-only copy; solve above always ran in meV
+        if useMissingAreaApproximation
+            onezTitle = sprintf(['1/z MISSING-AREA ENSEMBLE central member ' ...
+                '(bands in S.approximation_ensemble), T = %.2f K'],T);
+        else
+            onezTitle = sprintf('1/z STRICT 33-node Eq.-45 profile, T = %.2f K',T); %#ok<UNRCH>
+        end
         figure('Position', [100 100 1150 460]);
-        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz,   sprintf('1/z STRICT 33-node Eq.-45 profile, T = %.2f K', T), eUnit);
+        ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz, onezTitle, eUnit);
         ax2 = subplot(1, 2, 2);  invz_plot_spectra_map(ax2, Splot, Splot.chirpa, sprintf('RPA, T = %.2f K', T), eUnit);
     end
 

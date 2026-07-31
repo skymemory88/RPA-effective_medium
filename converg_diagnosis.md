@@ -1,367 +1,277 @@
-# Ordered \(1/z\) convergence diagnosis
+# Ordered \(1/z\) convergence: final diagnosis and production resolution
 
-## Scope
+## Status
 
-This is the current technical diagnosis of the projected-spin ordered-state
-failure. Read it with `jensen_1z_framework.html`, especially Sections
-9.2--9.4. The objective is a certified susceptibility over
+The convergence investigation is complete for the current production
+objective. At \(T=0.1\) K, the factor-one missing-area member now produces a
+smooth, finite susceptibility across the full 101-point
+`linspace(0,9,101)` field grid. This was confirmed by the full production
+sweep after the exact-zero and ordered-boundary repairs.
 
-\[
-0<B_x\leq 9\ {\rm T},
-\]
+The result is deliberately labeled. It is the opt-in controlled missing-area
+approximation, not a proof that the strict equation-(45) path exists at every
+integration coordinate. Option-free `full_profile` remains fail-closed. The
+current driver deliberately sets `missingAreaFactors = 1.0`; factors 0.75 and
+1.5 remain separately tested sensitivity choices and can be incomplete where
+factor one is accepted.
 
-with strict zero field treated separately if necessary. Numerical values below
-are for \(T=0.1\) K unless stated otherwise.
+## Governing equation and the source of the difficulty
 
-The present blanket mask is a solver/path failure upstream of the real-axis
-susceptibility. It is not evidence that the physical susceptibility vanishes,
-nor is it currently evidence that Jensen's equation (45) is algebraically
-wrong.
-
-## Governing problem
-
-After relabelling the ordered axis from \(x\) in the framework to \(z\) in the
-code, equation (45) gives
+The ordered-field equation is
 
 \[
-H_0(h)=\int_0^h r(s)\,ds,\qquad
-r(h)=\frac{G_0(0;h)}{\widetilde G_0(0;h)} ,
-\]
-
-where \(h\equiv H_{\rm MF}\) is stored in energy units. At zero applied
-longitudinal field, the ordered root is
-
-\[
-\boxed{F(h)=\int_0^h r(s)\,ds-J_{0,\rm eff}m(h)=0.}
-\]
-
-The quadrature is therefore the outermost of three different nonlinear
-problems:
-
-| Level | Unknown | Required condition |
-|---|---|---|
-| Static closure | \(x=\widetilde G_0(0)\) | an admissible root of \(\widehat R(x;\Sigma,h)=0\) |
-| Coupled node | \(\Sigma\), with dependent \(K,\lambda,x\) | \(\mathcal F_h(\Sigma)-\Sigma=0\) |
-| Ordered field | \(h\) | \(F(h)=0\) on one selected node-solution component |
-
-`no_admissible_static_root` is a statement about the first problem at one
-trial \(\Sigma\). It is not a proof that the complete coupled node has no
-other root, and neither node failure nor node success selects the equilibrium
-ordered-field root.
-
-### Physical static domain
-
-The bounded static solver uses
-
-\[
-x=\frac{G_{\rm stat}}{1-K_0G_{\rm stat}},\qquad
--\frac{1}{J_{\rm sup}}<x<0,
-\]
-
-\[
-\Phi(x)=\left\langle\frac{x}{1+J_qx}\right\rangle_q,\qquad
-K_0(x)=\frac{1}{\Phi(x)}-\frac{1}{x},
-\]
-
-and enumerates the configured interval for roots of
-
-\[
-\widehat R(x)=\Phi(x)-G_{\rm stat}
-  (K_0(x),\Sigma_0,\lambda_1,\lambda_2,\ldots).
-\]
-
-For the production-equivalent \(16^3\) lattice,
-
-\[
-J_{\rm sup}=J_{0,\rm eff}=0.00642166180942\ {\rm meV},
+H_0(h)=\int_0^h r(s)\,ds,
 \qquad
-\max_{q,\nu}J_{q\nu}=0.00637172573616\ {\rm meV}.
-\]
-
-An exported root must have positive supremum, uniform, lattice, and dynamic
-masses; finite physical \(\xi\); negative finite \(G_{\rm stat}\); and
-equivalent closure residuals below \(10^{-10}\). The static solver is
-seed-independent at fixed inputs because it enumerates bounded roots rather
-than iterating from `K0_seed`.
-
-At a fixed \(h\), production still solves the coupled node with damped Picard
-iteration. A candidate continuation state \((\Sigma,K_0)\) is now committed
-only after all node gates pass. The strict `full_profile` default uses an
-independent \(h=0\) predictor and 33 positive geometric nodes, and rejects the
-ordered point if the predictor, any profile node, or final refinement fails.
-The two visual integration modes remain implemented but are not selected by
-the production driver.
-
-## Current diagnosis
-
-### 1. The immediate strict-mask trigger is the missing lower path
-
-Across the controlled 0.5--2.2 T census, every independent \(h=0\) ordered
-predictor returns `no_admissible_static_root`. Each 33-node positive profile
-has one transition: 22--26 rejected low-\(h\) nodes followed by 7--11 accepted
-high-\(h\) nodes. The same predictor failure occurs in the strict 1, 4, and
-4.68 T probes.
-
-Consequently, strict production has neither a valid \(r(0)\) nor a complete
-set of certified nodes joining \(h=0\) to the high-\(h\) component. The
-equation-(45) integral is undefined under the current acceptance contract and
-the ordered point is masked. The PM calculation is unaffected because it
-does not use this ordered \(h\)-profile.
-
-Increasing `nH` cannot repair the separately evaluated \(h=0\) node. It can
-only localize, or alter transfers near, the boundary between the rejected
-low-\(h\) region and the certified high-\(h\) component.
-
-### 2. Rejected-state history was a real defect, but is now removed
-
-Before transactional rollback, failed nodes returned partially updated
-\(\Sigma\) and contaminated the next warm start. On nested 1 T grids, the
-same \(h\) could therefore pass on a coarse path and fail after extra rejected
-nodes on a denser path.
-
-After accepted-state-only commit:
-
-- all shared-node verdicts agree on the 33/65/129 grids;
-- \(h=0.0062416231096\) meV is accepted at all resolutions with
-  \(\Sigma_0=-0.29267261\) to \(-0.29267263\);
-- \(h=0.0077454658051\) meV is accepted at all resolutions with
-  \(\Sigma_0=-0.176825909\); and
-- the maximum jointly accepted differences are
-  \(2.28\times10^{-8}\) in \(\Sigma_0\) and
-  \(1.00\times10^{-11}\) meV in \(K_0\).
-
-The strict profiles nevertheless remain `node_failed`: only 10/33, 20/65,
-and 39/129 positive nodes certify, and the \(h=0\) predictor still fails.
-Rollback restores determinism but does not create the missing component.
-
-### 3. More than one nonlinear obstruction is present
-
-At 4 T, adaptive high-to-low continuation crosses a coarse transfer failure
-and reaches the next grid node, proving that one failed transfer is not a
-root-nonexistence result. Continuing further reaches
-
-\[
-h_c\simeq0.0080428632\ {\rm meV},
-\]
-
-where
-
-\[
-1+J_{\rm sup}x\rightarrow0,\qquad
-1+(J_{0,\rm eff}-K_0)G_{\rm stat}\rightarrow0.
-\]
-
-The endpoint is stable over the 2049/4097/8193 static scan ladder and three
-endpoint margins. A below-edge frozen proposal has no mathematical or
-admissible static root over that ladder. The coupled outer map remains locally
-contractive, with dominant eigenvalue about \(-0.20\), and nonuniform/dynamic
-margins remain positive. The followed high-\(h\) component therefore meets a
-physical static pole at finite \(h\); smaller continuation steps do not join
-it to zero.
-
-At a previously examined 1 T node, by contrast, the last admissible outer-map
-state has
-
-\[
-\lambda_{\rm dom}\simeq1.35957.
-\]
-
-No positive scalar damping can make that local Picard mode contractive.
-Another coupled root or component has not been excluded. These distinct
-contractive-endpoint and noncontractive-iteration cases rule out a universal
-mixing or iteration-budget repair.
-
-On any differentiable certified component,
-
-\[
-F'(h)=r(h)\,[1+J_{0,\rm eff}\widetilde G_0(h)].
-\]
-
-Thus a uniform-mass zero is a stationary point of \(F\) on that component.
-This supports a spinodal-like interpretation of the 4 T edge, but it must not
-be extended through uncertified intervals or applied to every low-\(h\)
-failure.
-
-### 4. The small low-field susceptibility is related, but is not the mask cause
-
-Phase acceptance occurs before `invz_chi_realaxis`; a tiny final response
-cannot directly trigger the current phase mask. The measured electronic
-two-level matrix element also has the opposite node ordering from the proposed
-failure mechanism:
-
-- failed \(h=0\) predictors have \(M^2=27.55\)--30.04;
-- failed positive nodes extend up to \(M^2=27.55\)--30.00; and
-- certified high-\(h\) nodes include the smallest measured values, from
-  \(M^2=0.0220\) at 0.5 T to \(4.235\) at 2.2 T.
-
-The apparently dangerous ordered self-energy factors have the exact
-reassociation
-
-\[
-A=\lambda_2-\tfrac12[g_0+\beta(1-n_{01}^2)]\lambda_1,\qquad
-B(z)=\lambda_1-(1-n_{01}^2)K(z),
+r(h)=\frac{G_0(0;h)}{\widetilde G_0(0;h)},
 \]
 
 \[
-\Sigma(z)=-\alpha_m
--\frac{2m^2}{n_{01}^2}B(0)g(z)
-+\frac{M^2}{n_{01}^2}\{A+B(z)g(z)\}.
+\boxed{F(h)=H_0(h)-J_{0,\mathrm{eff}}m(h)=0},
+\qquad h\equiv H_{\mathrm{MF}}.
 \]
 
-If the other quantities remain finite and \(n_{01}\ne0\), the \(M^2\to0\)
-limit is finite. The largest sampled \(m^2/M^2\) is
-\(1.37\times10^3\), yet the cancelling product agrees with its stable form to
-\(2.23\times10^{-16}\), and the complete self-energy agrees to
-\(4.45\times10^{-15}\) while finite. Direct-ratio overflow appears only near
-\(M^2=4.89\times10^{-308}\) in the frozen test, far below the measured
-minimum.
+This is not one scalar root problem. It has three nested levels:
 
-The low-field near-zero susceptibility and the solver problem can therefore
-share a physical origin—strong polarization and redistributed multilevel
-spectral weight—without the small number causing numerical breakdown.
-Accepted high-\(h\) states can have tiny response; the mask instead arises
-because the required anchor/path includes rejected states.
+| Level | Numerical object | Acceptance requirement |
+|---|---|---|
+| Static closure | \(\widetilde G_0(0)\), \(K_0\) | bounded admissible root with positive physical masses |
+| Coupled node | \(\Sigma,K,\lambda\) at fixed \(h\) | converged self-energy and static closure with no failed-state commit |
+| Ordered field | the profile integral and \(F(h)=0\) | one declared component, justified lower area, one refined root |
 
-### 5. The representation mismatch is quantitative, not yet the topological cause
+The original implementation treated failures at these levels too much like a
+single Picard-convergence problem. The investigation showed that they have
+different causes and require different remedies.
 
-Production combines a full 136-state electronuclear bare response with an
-electronic two-level ordered self-energy/vertex. This is not internally closed.
-The projected two-level static weight divided by the full electronuclear
-inelastic weight is 7.03--9.19 at the first accepted 0.5--1 T nodes and reaches
-88.2 at one failed node, so it cannot be interpreted as a bounded sector
-share.
+## Verified root causes
 
-A field-adapted lowest-16 electronuclear subspace is spectrally smooth: its
-16/17 gap is 0.618--1.235 meV, retained thermal mass is one, and the minimum
-overlap across a failed/accepted boundary is 0.999996. It is nevertheless not
-a controlled vertex reduction. At 0.5 T its first-accepted static share is
-98.0%, but its connected-variance share is only 9.86%; at the high endpoint
-the shares are 16.1% and 0.521%. On the tested
-16/24/32/48/64/96/136 rank ladder, every non-predictor sample needs all 136
-states to exceed 90% connected-variance coverage.
+### 1. Strict profiles do not provide a complete accepted path from \(h=0\)
 
-An internally closed electronic two-level control also fails every \(h=0\)
-predictor and has a shorter certified high-\(h\) component than the hybrid:
+The strict construction needs a valid endpoint and every positive-\(h\) node
+joining it to the final root. In the problematic ordered regime, the low-\(h\)
+nodes are outside the accepted coupled/static component while a contiguous
+high-\(h\) suffix is well behaved. Consequently, `full_profile` cannot define
+the complete integral and correctly returns `node_failed`.
 
-| \(B_x\) (T) | closed-model certified nodes, including \(h=0\) | lowest certified \(h\) (meV) |
-|---:|---:|---:|
-| 0.5 | 9/34 | 0.00785085 |
-| 1.0 | 7/34 | 0.01192745 |
-| 1.8 | 5/34 | 0.01740279 |
-| 2.2 | 5/34 | 0.01659925 |
+This is the principal reason that increasing `nH`, changing damping, or
+raising `max_outer` did not repair the blanket mask: those changes do not
+create the missing lower component or its integration constant.
 
-The hybrid remains an important susceptibility systematic, but neither cheap
-representation replacement restores the lower integration path.
+### 2. Failed profile nodes formerly contaminated later warm starts
 
-### 6. A good quadrature estimator is sufficient only after anchoring and branch selection
+The old profile sweep could return partially updated \(\Sigma\) and \(K_0\)
+from a rejected node and use them to seed the next one. That made verdicts
+depend on grid history. The solver now commits state transactionally: only a
+fully accepted node becomes the next continuation carrier.
 
-The visual experiments show that equation (45) need not be integrated to
-machine precision for the final root to look physically sensible. Dense
-finite-node filtering produced plausible morphology over much of the ordered
-range. This supports using an error-controlled estimator once \(r(h)\) is a
-certified selected function.
+After this repair, shared nodes on nested grids agree. The change removed a
+real numerical defect, but it did not by itself create the missing low-\(h\)
+path.
 
-It does not solve the present problem:
+### 3. The usable solution is component- and direction-dependent
 
-- the two-endpoint rule gives finite coarse roots at 3.5--4.5 T only by
-  joining a PM lower endpoint with negative uniform mass to a positive-mass
-  ordered component across an unresolved pole;
-- the filtered 256-node low-field roots use unconverged PM anchors and bridge
-  the missing lower interval;
-- at 4.68 T, 31 certified retained nodes still give
-  `filtered_no_bracket`; and
-- discarding `NaN`/`Inf` nodes removes evidence of the missing path but cannot
-  determine the integration constant or justify a component switch.
+The coupled equations contain folds and multiple admissible sheets. A cold
+ascending sweep can reach a short terminal component, while a descending
+sweep seeded from an accepted ordered field reaches a longer component. A
+failed transfer therefore does not prove that the coupled root is absent, and
+one successful warm start does not by itself select equilibrium.
 
-An upper/saturation anchor also fails for the current hybrid. Writing
-\(\delta h=H_0-h\) gives
+This distinction caused both visible classes of interior holes:
+
+- the 0.36 and 0.45 T masks were ordinary continuation-path misses between
+  accepted ordered fields;
+- the 4.68 T mask was the last ordered-side sample below the PM boundary, so
+  it had no ordered source above and could not use the two-sided retry.
+
+### 4. Exact zero field exposed a removable representation singularity
+
+At \(B_x=0\), the lowest electronic doublet is degenerate and its numerical
+basis is arbitrary. A basis-dependent transition weight can therefore be
+exactly zero even though the invariant doublet response is finite. The old
+arithmetic evaluated a structure equivalent to
 
 \[
-\delta h'(h)=r(h)-1,\qquad
-\delta h(h)=-\int_h^\infty[r(s)-1]\,ds
+M^2\left(\frac{\text{finite}}{M^2}\right),
 \]
 
-only if \(\delta h(\infty)=0\), \(r-1\) is integrable, and the certified model
-reaches that asymptotic regime. On accepted hybrid nodes from 8 to 128 times
-the ordinary profile ceiling, fitted \(|r-1|\) exponents are 0.593 at 1 T and
-0.811 at 4 T, both below the integrability threshold. Full electronuclear
-connected-variance exponents are about 0.17 and the variance is still
-\(O(1)\). The matched closed two-level control gives integrable exponents
-1.733 and 1.568. Driving the finite 136-state hybrid to numerical saturation
-requires fields where omitted higher multiplets invalidate the retained-space
-model. A finite upper cutoff would therefore impose an arbitrary additive
-constant.
+which became `0*Inf = NaN`. This was not a non-unique final ordered state.
 
-## Crux of the unresolved problem
+The exact \(M^2=0\) branch now evaluates the already-cancelled expression
 
-Equation (45) requires more than finite endpoint values or a good estimator.
-It requires:
+\[
+Q_0=\frac{2m^2}{n_{01}^2}
+\left[\lambda_1-(1-n_{01}^2)K_0\right].
+\]
 
-1. a coupled node solution at each integration coordinate;
-2. a branch/component selection rule;
-3. a justified integration constant; and
-4. a path on which \(r(h)\) is well defined and sufficiently regular.
+Positive-\(M^2\) states preserve their historical arithmetic. The unresolved
+exact endpoint is rejected without committing state, while the certified
+positive-\(h\) component supplies the missing-area solution. The resulting
+exact-zero spectrum is continuous to \(B_x=10^{-6}\) T.
 
-The present certified positive-\(h\) solution is separated from \(h=0\) by a
-region where nested Picard/static evaluation is undefined or leaves the
-positive-mass domain. It is unresolved whether:
+### 5. The high-field sliver was a continuation-distance failure
 
-- a disconnected admissible coupled component exists below the observed edge;
-- a simultaneous solver can find roots missed by nested Picard;
-- the constrained states used in deriving equation (45) must themselves obey
-  the current positive-mass stability gates; or
-- the formal construction requires an analytic continuation or a different
-  thermodynamic reference through that interval.
+The cold factor-one profile at 4.68 T follows a component whose algebraic
+support does not reach factor one. Descending profiles seeded from untouched
+4.50 and 4.59 T ordered states recover the same factor-one root:
 
-Principal-value poles, unstable roots, and discontinuous component switches
-must not be admitted without a derivation that supplies the corresponding
-thermodynamic branch and integration constant.
+\[
+h_{\mathrm{MF}}=0.0036183\ \mathrm{meV},\quad
+D_{\mathrm{uni}}=0.023913,\quad
+F'=0.020014.
+\]
 
-## Next discriminating work
+The initial audit used large direct field jumps. One distant seed failed at
+4.70 T and both failed at 4.71 T, which was initially treated as a stopping
+condition. A fine-step continuation subsequently advanced two independent
+histories at 129 and 257 profile nodes through 4.7188 T. Both histories reached
+the same branch with positive margins and residuals below
+\(6.3\times10^{-9}\). Thus the old 4.70/4.71 failures measured the reach of a
+distant warm start, not termination of the ordered branch.
 
-The next step is not another node-count or damping trial.
+The derivative check was also corrected. The exact identity is
 
-1. Derive an exactly equivalent reduced simultaneous residual, preferably
-   eliminating uniquely solvable nonzero-frequency \(K_n\) variables and
-   retaining all static, uniform, lattice, and dynamic gates.
-2. Reproduce healthy 4 T fixtures and existing component points before using
-   globalized Newton, multistart, deflation, or bordered pseudo-arclength
-   continuation to search for disconnected roots.
-3. In parallel at the mathematical level, re-derive whether the equation-(45)
-   integration path is an equilibrium/stable path or a constrained path that
-   may cross the present positive-mass boundary. This decision controls
-   whether the current domain is a physical obstruction or an over-restrictive
-   numerical gate.
-4. Build error-controlled quadrature only after the component, branch
-   selector, and anchor are defined.
+\[
+F'(h)=r(h)\left[1+J_{0,\mathrm{eff}}\widetilde G_0(h)\right]
+     =r(h)+J_{0,\mathrm{eff}}G_0^{\mathrm{bare}}(h),
+\]
 
-## Evidence index
+not \(r(1+J_{0,\mathrm{eff}}G_{\mathrm{stat}})\). Substituting
+\(G_{\mathrm{stat}}\) produced the former false negative sign.
 
-- Framework: `jensen_1z_framework.html`, Sections 9.2--9.4.
-- Production profile: `invz_projected/invz_solve_point_ordered.m`.
-- Bounded static closure: `invz_projected/invz_emt_static_ordered.m`.
-- Deterministic outer map: `invz_projected/invz_ordered_outer_map.m`.
-- Detailed execution record:
-  `docs/execution/invzp_convergence_journal.md`, checkpoints 16--19.
-- Transactional control:
-  `docs/diagnostics/invzp_outer_wp2/wp2_hmf_node_transaction_census.mat`.
-- Low-field \(M^2\) controls:
-  `docs/diagnostics/invzp_outer_wp2/wp2_low_field_m2_census.mat` and
-  `docs/diagnostics/invzp_outer_wp2/wp2_m2_asymptotic_check.mat`.
-- Representation controls:
-  `docs/diagnostics/invzp_representation_wp3/wp3_dominant_manifold_census.mat`
-  and
-  `docs/diagnostics/invzp_representation_wp3/wp3_closed_twolevel_landmarks.mat`.
-- Saturation-tail control:
-  `docs/diagnostics/invzp_integral_wp5/wp5_saturation_tail_census.mat`.
-- 4 T continuation and endpoint:
-  `docs/diagnostics/invzp_outer_wp2/wp2_4t_adaptive_node28_to27.mat` and
-  `docs/diagnostics/invzp_outer_wp2/wp2_4t_adaptive_component_edge_audit.mat`.
-- Rejected explanations and reopening conditions:
-  `invzp_convergence_dead_ends.md`.
+## Implemented production solution
 
-`diag_rev3_check.mat` is retained as a legacy frozen-state fixture, not as the
-current solver result. Two maintained static-domain regression tests and four
-reproducibility diagnostics still load its 1 T/3 T node payload. It may be
-moved to a scoped fixture directory in a separate migration, but deleting it
-alone would break those checks.
+### Controlled missing-area completion
+
+Let \(h_e\) be the lower edge of the terminal contiguous certified component.
+Only nodes at and above \(h_e\) enter quadrature. The unresolved contribution
+is represented explicitly as
+
+\[
+A_f=f\,h_e r(h_e),
+\qquad
+H_0(h)=A_f+\int_{h_e}^{h}r(s)\,ds.
+\]
+
+For the linear completion used to interpret the ensemble,
+
+\[
+\frac{r(0)}{r(h_e)}=2f-1.
+\]
+
+The tested sensitivity factors are:
+
+| Factor \(f\) | Implied linear endpoint ratio | Role |
+|---:|---:|---|
+| 0.75 | 0.5 | lower-area sensitivity member |
+| 1.00 | 1.0 | current production member |
+| 1.50 | 2.0 | upper-area sensitivity member |
+
+These factors are not probabilities, fitted exchange constants, or confidence
+limits. They vary only the missing lower integral. The full three-factor
+ensemble is a diagnostic option; the successful 101-point run used only the
+factor-one member because the noncentral high-field members do not satisfy the
+boundary-retry contract. The declared numerical branch is
+`picard_attracting_contiguous_high_h_component`.
+
+### Frozen two-sided retry for interior holes
+
+The map freezes the original cold-pass labels and states. A masked point
+between two accepted ordered fields can be retried from each side. Admission
+requires both direct results to pass all original gates and agree in
+\(h_{\mathrm{MF}}\), self-energy, and component edge. Recovered points never
+seed another recovery, so the output is traversal-order independent.
+
+This policy recovers the 0.36 and 0.45 T masks for every area member at the
+production 129-node resolution.
+
+### Frozen ordered-boundary retry
+
+The last ordered-side hole uses a distinct policy. A target is eligible only
+when all of the following hold:
+
+1. its frozen cold label is `phase==0`, never `phase==2`;
+2. it lies above every accepted ordered cold point and below an accepted PM
+   cold point;
+3. two untouched lower ordered sources lie within the declared 0.20 T span;
+4. an independent PM solve converges at the target with negative PM mass;
+5. both descending target solves find one unbridged root on the same component;
+6. the solutions agree and retain \(D_{\mathrm{uni}},F'\ge10^{-3}\), positive
+   physical masses, and the original final-residual gate; and
+7. the real-axis response is finite.
+
+On the current grid, only factor one satisfies the complete contract at
+4.68 T. Factor 1.5 lies outside the component's support, and the noncentral
+members do not have the required source pair. The central spectrum is therefore
+produced while the sensitivity interval remains honestly incomplete.
+
+## Hypotheses that were ruled out
+
+| Hypothesis | Verdict |
+|---|---|
+| “The plotted zeros are a real-axis or plotting problem.” | False. Masking occurred before `invz_chi_realaxis`; accepted states produce finite spectra. |
+| “More profile nodes will repair the solver.” | False as a general fix. Nested grids diagnose edges but do not create a missing component. |
+| “More damping or iterations is sufficient.” | False. Some states are noncontractive and some cold profiles lack algebraic root support. |
+| “Every `no_admissible_static_root` proves no coupled root exists.” | False. It describes one trial state; continuation and the reduced residual find other coupled roots. |
+| “Discarding failed/NaN nodes makes equation (45) valid.” | False. Filtering alone loses the lower area and can bridge components without a selector. |
+| “Small \(n_{01}\) or small \(M^2\) explains the general field-range masks.” | False. \(n_{01}\) is near one at the measured failed nodes. Exact \(M^2=0\) matters only at the symmetry endpoint and has a removable algebraic limit. |
+| “The electronic/electronuclear representation mismatch caused the masks.” | Not established. It limits exact thermodynamic interpretation but does not explain the observed continuation topology. |
+| “The branch ends at 4.70–4.71 T.” | False on current evidence. Fine-step two-history continuation reaches 4.7188 T. |
+| “Use \(G_{\mathrm{stat}}\) in the \(F'\) identity.” | False. The identity requires \(\widetilde G_0\) or equivalently \(G_0^{\mathrm{bare}}\). |
+| “Tune the area factor until the plot is smooth.” | Rejected. Factors are a declared sensitivity ensemble; unsupported members remain incomplete. |
+
+## Strict result versus production approximation
+
+| Property | Strict `full_profile` | Opt-in production missing-area route |
+|---|---|---|
+| Lower path | requires every node from exact \(h=0\) | represents unresolved lower area explicitly |
+| Failed nodes | any required failure masks the point | never integrated; only the certified terminal component is used |
+| Branch selection | complete-path requirement | declared Picard-attracting high-\(h\) component |
+| Field retries | none | frozen, independently seeded, fail-closed policies |
+| Exact zero | remains `node_failed` | finite symmetry-limit solution |
+| Current 101-grid central spectrum | not generally available | smooth and finite across the full field range |
+| Thermodynamic claim | rigorous target, presently incomplete | controlled numerical approximation, not an equilibrium proof |
+
+## Thermodynamic limitation that remains
+
+The successful susceptibility does not retroactively prove a global Jensen
+free-energy construction. The production hybrid combines the moment and bare
+response of the full 136-state electronuclear ion with an electronic
+two-level vertex. The fold-anchored sheet integrals and exact reduced residual
+remain valuable branch diagnostics, but the same-ion stationary functional
+required for an exact equilibrium ranking has not been derived for this hybrid.
+
+This limitation is separate from numerical convergence. It does not invalidate
+the labeled missing-area spectrum, and it must not be cited as the root cause
+of the former masks.
+
+## Production locations
+
+- Driver configuration: `invz_projected/invz_run_spectra.m`.
+- Map-level ensemble and retry policies: `invz_projected/invz_spectra_map.m`.
+- Ordered profile and transactional node solver:
+  `invz_projected/invz_solve_point_ordered.m`.
+- Exact-zero Matsubara arithmetic: `invz_common/invz_sigma_ordered.m`.
+- Exact-zero real-axis arithmetic: `invz_projected/invz_chi_realaxis.m`.
+- Missing-area quadrature: `invz_common/invz_missing_area_integral.m`.
+
+## Verification and evidence
+
+The final checks include:
+
+- the user-confirmed full 101-point production sweep;
+- `invzp_ordered_boundary_retry_smoke`;
+- `invzp_adjacent_retry_map_smoke` and
+  `invzp_adjacent_retry_highfield_smoke`;
+- `invzp_approximation_production_validation`, including
+  `strict profile match 1`;
+- `test_invzp_zero_field_failclosed`;
+- `test_invzp_hmf_derivative_identity`;
+- `test_invzp_missing_area_integral`;
+- `test_invzp_reduced_residual`;
+- all 13 `test_invzp_static_domain` gates; and
+- MATLAB Code Analyzer and `git diff --check`.
+
+The compact evidence index is
+`docs/diagnostics/invzp_approximation_wp6/README.md`. The chronological record
+is `docs/execution/invzp_convergence_journal.md`, especially checkpoints
+26–31. Rejected explanations and their reconsideration conditions are retained
+in `invzp_convergence_dead_ends.md`.
