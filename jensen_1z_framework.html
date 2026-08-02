@@ -97,6 +97,17 @@ window.MathJax = {
   </div>
 </header>
 
+<div class="caution">
+  <span class="tag">Reference status &mdash; 2 August 2026</span>
+  This is the two-level analytical reference, not the active full-tensor
+  implementation plan. Its Jensen derivations and reduction limits remain
+  authoritative reference material; historical implementation-status prose is
+  not a work authorization. Current multilevel work is governed by
+  <a href="invzt_multilevel_1z_next_steps.md"><code>invzt_multilevel_1z_next_steps.md</code></a>
+  and recorded in
+  <a href="docs/execution/invzt_multilevel_1z_journal.md"><code>docs/execution/invzt_multilevel_1z_journal.md</code></a>.
+</div>
+
 <nav class="toc">
   <span class="tag">Contents</span>
   <ol>
@@ -636,12 +647,12 @@ The two frameworks moreover differ in both directions, and neither subsumes the 
 
 <h3>11.8 &nbsp;Rigorous completion, and the emergent boundary</h3>
 <p>
-The Gaussian (adiabatic) elimination of the transverse channel is the controlled approximation of this section. Its rigorous completion is a full-tensor 1/z route &mdash; the expansion of Secs. 2&ndash;6 rebuilt for the coupled \( (c;a,b) \) problem instead of the projected scalar channel &mdash; which exists as a worked plan (Appendix A of <code>odd_implementation_plan.html</code>; implementation plan <code>docs/superpowers/plans/2026-07-17-invz-tensor-full.md</code>, superseding the 2026-07-16 bridge-only draft). Its Gaussian truncation must reproduce (47)&ndash;(51); that designed cross-validation, not further adjustment of the present treatment, is the intended next step. Until it exists, the Gaussian-channel systematic is unquantified, and the precision quoted below is a grid-convergence bar only.
+The Gaussian (adiabatic) elimination of the transverse channel is the controlled approximation of this section. Its rigorous completion requires the expansion of Secs. 2&ndash;6 to be rebuilt for the coupled \( (c;a,b) \) problem instead of the projected scalar channel. The current staged specification is <code>invzt_multilevel_1z_next_steps.md</code>; the earlier A-tier and full-tensor plans are retired. Its Gaussian truncation must reproduce (47)&ndash;(51); that designed cross-validation, not further adjustment of the present treatment, is the intended next step. Until it exists, the Gaussian-channel systematic is unquantified, and the precision quoted below is a grid-convergence bar only.
 </p>
 <p>
 Two bookkeeping relations of that route are fixed at framework level (2026-07-17), both immediate corollaries of Secs. 5&ndash;6. (i) <em>Bridge medium.</em> In the dominant-sector bridge &mdash; the multilevel rule of Sec. 10, \( \tilde{\boldsymbol\chi}_0 = \boldsymbol\chi_{\rm dom}/(1+\Sigma) + \boldsymbol\chi_{\rm rest} \), propagated through the full tensor RPA &mdash; the effective medium is defined against the <em>renormalized</em> propagator, exactly as in (18)/(32): with \( \tilde G_0 = -[\tilde\chi_0]_{cc} \) site-local and \( G_{\rm loc} \) the site-diagonal \( cc \) lattice propagator, \( G_{\rm loc} = \tilde G_0/(1+K\tilde G_0) \), i.e. \( K = 1/G_{\rm loc} - 1/\tilde G_0 \). Defining \( K \) against the bare \( G_0 \) instead (as the superseded draft did) is wrong at \( O(\chi_{\rm rest}\,\Sigma) \) and breaks the exact reduction to the scalar closed form when the weak transitions are dropped. (ii) <em>Matrix resummation.</em> Beyond two levels the first-order correction must be carried additively &mdash; a multi-pole \( G_0 \) has real zeros between its poles, where the ratio \( \Sigma = \mathcal V/G_0 \) acquires artificial poles &mdash; and the Dyson-resummed renormalized propagator is the manifestly Hermitian
 $$ \tilde G_0 \;=\; G_0\,\big(G_0+\mathcal V\big)^{-1}G_0 , $$
-with \( \mathcal V_{\mu\nu}(i\omega_n) \) the component-labelled generalization of the \( S_4 \) term of Sec. 6 (the connected single-site four-point cumulant contracted with the medium; exact multi-level machinery in <code>three_level_1z_extension.html</code>). In the scalar two-level limit \( \mathcal V = G_0\Sigma \) and this collapses to (32), \( \tilde G_0 = G_0/(1+\Sigma) \); no step requires \( G_0^{-1} \) alone.
+with \( \mathcal V_{\mu\nu}(i\omega_n) \) the component-labelled generalization of the \( S_4 \) term of Sec. 6 (the connected single-site four-point cumulant contracted with the medium; the reviewed historical derivation and recovery commits are indexed in <code>docs/reference/invzt_multilevel_theory_sources.md</code>). In the scalar two-level limit \( \mathcal V = G_0\Sigma \) and this collapses to (32), \( \tilde G_0 = G_0/(1+\Sigma) \); no step requires \( G_0^{-1} \) alone.
 </p>
 <p>
 The outcome of the emergence test, with zero imported fitting factors: the mechanism moves the zero-field transition by \( \Delta T_c(0)=0.2341\pm0.001 \) K against the &asymp;0.21 K high-temperature discrepancy it was invoked to explain &mdash; \( T_c(0) \): 1.743 &rarr; 1.509 K vs the experimental 1.53 K, a 21 mK overshoot (\( \Sigma_c(0) \) rises by +0.091) &mdash; while the \( B_c(T) \) suppression attenuates toward high field as \( \chi_\perp \) stiffens with the splitting of the doublet, consistent with the crossover near 3.5 T reported by DS2023. The claim this supports is calibrated accordingly: the ODD mechanism, carried over as a principle and evaluated entirely within the 1/z framework&rsquo;s own objects, <em>naturally closes the high-temperature gap within the expected fidelity of the Gaussian elimination</em> &mdash; which is what the principle-not-algorithm test was designed to decide. Implementation, flag surface and the complete measurement record: <code>invz_projected/README.html</code> &sect;1.9 and <code>docs/ODD-LOG.md</code>.

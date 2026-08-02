@@ -20,6 +20,14 @@ th, td { padding: .45rem .6rem; border: 1px solid #ccd0d5; text-align: left;
 <body>
 <h1>Projected-spin 1/z calculation for LiHoF<sub>4</sub></h1>
 
+<div class="note"><strong>Reference-only copy on the full-tensor branch.</strong>
+The user has certified the projected-spin branch as fully working, and it is
+outside the <code>invzt-multilevel-1z</code> implementation scope. This README is
+retained as module documentation; projected convergence plans, journals, and
+diagnostic reports are deliberately not duplicated into the clean tensor
+documentation set. Their source-of-record is projected commit
+<code>29d4117</code>.</div>
+
 <p>This directory contains the scalar projected-spin calculation for phase
 boundaries, uniform spectra, and q-path spectra. The ordered state uses the
 Jensen-consistent static closure and H<sub>MF</sub>&harr;H relation. ODD
@@ -253,13 +261,12 @@ masking problem and should not be described as its numerical root cause.</p>
 
 <h2>Evidence and scope</h2>
 
-<p>The final diagnosis is in
-<a href="../converg_diagnosis.md"><code>converg_diagnosis.md</code></a>.
-The mathematical interpretation is in
-<a href="../thermodynamic_check_theory.html"><code>thermodynamic_check_theory.html</code></a>.
-Reproducible missing-area, zero-field, retry, resolution, and high-field
-artifacts are indexed by
-<a href="../docs/diagnostics/invzp_approximation_wp6/README.md"><code>docs/diagnostics/invzp_approximation_wp6/README.md</code></a>.</p>
+<p>The projected implementation and its complete diagnosis, executed plan,
+journal, and diagnostic index are preserved on branch
+<code>invzp-exec-convg-plan</code> at commit <code>29d4117</code>. They are not
+active instructions on this full-tensor branch. Tensor documentation is
+indexed by
+<a href="../docs/invzt_documentation_index.md"><code>docs/invzt_documentation_index.md</code></a>.</p>
 
 <p>In scope: scalar cc-channel projected 1/z phase boundaries and spectra,
 Jensen ferromagnetic closure, hyperfine structure, uniform and q-path
