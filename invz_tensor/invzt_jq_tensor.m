@@ -16,18 +16,26 @@ function lat = invzt_jq_tensor(ion, g, opts)
 %     - a raw [nq,3] qvec array, for single-point/test use: then
 %       lat.conv = 'explicit' and lat.w is uniform (1/nq each).
 %
-%   opts.dpRng (default 30)  : MF_dipole/exchange lattice-sum range (unit cells).
-%   opts.cache  (default true): read/write invz_tensor/cache/jqt1_*.mat. Self-
-%       verifying (isequal-checks stored pkey + qvec before trusting a hit).
+%   opts.dpRng (default 30)  : brute-force MF_dipole lattice-sum range (unit cells).
+%   opts.dipole (default 'ewald'): 'ewald' | 'bruteforce'.
+%   opts.ewald                : with the Ewald backend, an optional exact scalar
+%       struct {alpha,r_cut,g_cut,boundary}; absent selects the certified
+%       lattice-derived INVZT_EWALD_DEFAULTS controls. boundary must be
+%       'conducting_k0_omitted'.
+%       Supplying opts.dpRng with Ewald is an error, not a silent no-op.
+%   opts.cache  (default true): read/write invz_tensor/cache/jqt2_*.mat. Hits
+%       require exact structured-metadata equality, not only a weak filename hash.
 %   opts.parts  (default 'full') : 'full' | 'dipole'. 'dipole' omits the
-%       exchange term AND the Lorentz cavity term entirely (full - dipole =
-%       exchange + Lorentz exactly); 'dipole' results are NEVER cached.
+%       exchange term. For brute force it also omits the wrapper Lorentz cavity
+%       (full-dipole = exchange+Lorentz); Ewald has no wrapper cavity term
+%       (full-dipole = exchange). 'dipole' results are NEVER cached.
 %
 %   ASSEMBLY (Global Constraints, LOCKED; mirrors invz_jq_modes/invz_odd_blocks
 %   block-for-block so cc/ca/cb parity is bit-exact, not approximate):
 %     J^{mu nu}_{s s'}(q) = -C.gfac*dip(mu,nu,s,s') + sign(ion.J12)*ex(mu,nu,s,s')
-%     (parts == 'dipole' drops the second term entirely). At Gamma-equivalent q
-%     (invz_is_gamma_equiv), the Lorentz cavity lorz = 4*pi/(3*ion.Vc)*C.gfac is
+%     (parts == 'dipole' drops the second term entirely). On the brute backend,
+%     at Gamma-equivalent q (invz_is_gamma_equiv), the Lorentz cavity
+%     lorz = 4*pi/(3*ion.Vc)*C.gfac is
 %     ADDED to the Cartesian-DIAGONAL (mu == nu) entries of ALL 16 sublattice
 %     pairs (aa, bb, and cc blocks alike) -- a straight generalisation of the
 %     projected cc-only `Jcc = Jcc + lorz` step. Exchange is Cartesian-diagonal
@@ -41,25 +49,25 @@ function lat = invzt_jq_tensor(ion, g, opts)
 %     conj(T(nu,mu,s',s)) internally (their own `d(:,:,mt,nt) = conj(...)`
 %     assignments), so the FULL 12x12 page comes out Hermitian to machine
 %     precision without needing a global symmetrization step that would risk
-%     perturbing the raw ca/cb values away from bit-exact parity.
+%     perturbing the raw ca/cb values away from bit-exact parity. On the Ewald
+%     backend invz_dipole_ewald supplies the regularized Gamma tensor under its
+%     declared conducting/k=0-omitted convention, so NO additional +lorz is made.
 %
 %   DEMAG GUARD: this layer is intrinsic-only. Errors 'invzt:demag' if
 %   ion.demag ~= 0 (checked FIRST, before any lattice work).
 %
-%   CACHE CONTRACT (Global Constraints; own namespace, never touches
-%   invz_projected/cache or odd1_/jq4_ keys):
-%     key   : invz_cache_key('jqt1', dpRng, [qvec(:); convcode], pkey)
-%     pkey  : [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; 1]
-%     Stores lat, pkey, qvec in ONE file; the loader isequal-verifies BOTH
-%     pkey AND qvec before trusting a hit (stale/legacy entries fall through,
-%     recompute, and overwrite). 'dipole' parts never read or write this cache.
+%   CACHE CONTRACT: schema invzt_jq_tensor/v2 in the jqt2_<backend> namespace.
+%   The stored cacheMeta exactly records qvec/weights/convention, lattice/basis,
+%   couplings, backend, exact Ewald controls (or a canonical empty value), and
+%   brute dpRng/Ewald NaN sentinel. Legacy jqt1 files are never consumed.
 %
-%   See also INVZT_QGRID, INVZ_ODD_BLOCKS, INVZ_JQ_MODES, MF_DIPOLE, EXCHANGE,
-%   INVZ_IS_GAMMA_EQUIV, INVZ_CACHE_KEY.
+%   See also INVZT_QGRID, INVZ_ODD_BLOCKS, INVZ_JQ_MODES, INVZ_DIPOLE_EWALD,
+%   MF_DIPOLE, EXCHANGE, INVZ_IS_GAMMA_EQUIV, INVZ_CACHE_KEY.
 if nargin < 3, opts = struct(); end
 dpRng = 30;  if isfield(opts,'dpRng') && ~isempty(opts.dpRng), dpRng = opts.dpRng; end
 useCache = ~isfield(opts,'cache') || opts.cache;
 parts = 'full';  if isfield(opts,'parts') && ~isempty(opts.parts), parts = opts.parts; end
+[backend, eopts] = resolve_dipole_backend(opts, ion);
 
 % --- demag guard FIRST (tensor layer is intrinsic-only; checked before the
 %     parts-string validation below and before any lattice work) -----------
@@ -90,16 +98,25 @@ end
 nq = size(qvec, 1);
 
 C = invz_const();
-pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; 1];
+cacheMeta = build_cache_meta(backend, eopts, dpRng, qvec, w, convstr, ion, C, parts);
+if strcmp(backend, 'ewald')
+    cacheDp = 0;
+    pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; 2; ...
+            eopts.alpha; eopts.r_cut; eopts.g_cut];
+else
+    cacheDp = dpRng;
+    pkey = [ion.a(:); ion.tau(:); ion.Vc; ion.J12; C.gfac; 2; dpRng];
+end
 useCacheEff = useCache && isFull;      % dipole-only never cached
 cacheDir  = fullfile(fileparts(mfilename('fullpath')), 'cache');
 cacheFile = '';
 if useCacheEff
-    key = invz_cache_key('jqt1', dpRng, [qvec(:); conv_code(convstr)], pkey);
+    key = invz_cache_key(['jqt2_' backend], cacheDp, ...
+        [qvec(:); w(:); conv_code(convstr)], pkey);
     cacheFile = fullfile(cacheDir, key);
     if exist(cacheFile, 'file')
         S = load(cacheFile);
-        if isfield(S,'pkey') && isfield(S,'qvec') && isequal(S.pkey, pkey) && isequal(S.qvec, qvec)
+        if cache_hit_valid(S, cacheMeta)
             lat = S.lat;
             return;
         end
@@ -108,7 +125,13 @@ if useCacheEff
 end
 
 % --- geometry priming (once), mirrors invz_jq_modes/invz_odd_blocks ---------
-[dip0, ~, geomD] = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
+geomD = [];
+geomE = [];
+if strcmp(backend, 'ewald')
+    [dip0, ~, geomE] = invz_dipole_ewald([0 0 0], ion.a, ion.tau, eopts);
+else
+    [dip0, ~, geomD] = MF_dipole([0 0 0], dpRng, ion.a, ion.tau);
+end
 if isFull
     [ex0, geomX] = exchange([0 0 0], abs(ion.J12), ion.a, ion.tau);
 else
@@ -119,32 +142,48 @@ lorz = 4*pi/(3*ion.Vc)*C.gfac;
 Jt = zeros(12, 12, nq);
 for iq = 1:nq
     q = qvec(iq,:);
-    dip = MF_dipole(q, dpRng, ion.a, ion.tau, geomD);       % [3,3,4,4], Å^-3
+    if strcmp(backend, 'ewald')
+        dip = invz_dipole_ewald(q, ion.a, ion.tau, eopts, geomE);
+    else
+        dip = MF_dipole(q, dpRng, ion.a, ion.tau, geomD);   % [3,3,4,4], Ang^-3
+    end
     if isFull
         ex = exchange(q, abs(ion.J12), ion.a, ion.tau, geomX); % [3,3,4,4], carries |J12|
     else
         ex = [];
     end
     isGamma = invz_is_gamma_equiv(q, ion.tau);
-    Jt(:,:,iq) = assemble_page(dip, ex, isGamma, isFull, C, ion, lorz);
+    Jt(:,:,iq) = assemble_page(dip, ex, isGamma, isFull, C, ion, lorz, backend);
 end
-JtGamma = assemble_page(dip0, ex0, true, isFull, C, ion, lorz);
+JtGamma = assemble_page(dip0, ex0, true, isFull, C, ion, lorz, backend);
 
 % --- Gamma-point info block (bit-identical to invz_odd_blocks/invz_jq_modes
 %     at demag = 0; parts-INDEPENDENT -- always the canonical reference
 %     values, using the closed-form 4*ion.J12 uniform-exchange shortcut, not
 %     an actual q=0 exchange sum) -----------------------------------------
 v = ones(4,1)/2;
-Jcc0d = -squeeze(C.gfac*dip0(3,3,:,:)) + lorz;
-Jaa0d = -squeeze(C.gfac*dip0(1,1,:,:)) + lorz;
+gammaLorz = 0;
+if strcmp(backend, 'bruteforce'), gammaLorz = lorz; end
+Jcc0d = -squeeze(C.gfac*dip0(3,3,:,:)) + gammaLorz;
+Jaa0d = -squeeze(C.gfac*dip0(1,1,:,:)) + gammaLorz;
 Jcc0d = (Jcc0d + Jcc0d')/2;
 Jaa0d = (Jaa0d + Jaa0d')/2;
-info.dpRng       = dpRng;
+if strcmp(backend, 'ewald'), info.dpRng = NaN; else, info.dpRng = dpRng; end
 info.Jcc0_dipole = real(v.'*Jcc0d*v);
 info.Jaa0_dipole = real(v.'*Jaa0d*v);
 info.Jcc0        = info.Jcc0_dipole + 4*ion.J12;
 info.Jaa0        = info.Jaa0_dipole + 4*ion.J12;
 info.lorz        = lorz;
+if strcmp(backend, 'ewald')
+    qReduction = geomE.fingerprint.qconv;
+    primitiveSchema = geomE.fingerprint.schema;
+else
+    qReduction = ['bruteforce: q used directly as MF_dipole/exchange Miller ' ...
+        'indices; no canonical q-domain reduction'];
+    primitiveSchema = 'MF_dipole+exchange (legacy, unversioned)';
+end
+info.dipole = struct('backend', backend, 'ewald', eopts, ...
+    'q_reduction', qReduction, 'primitive_schema', primitiveSchema);
 
 lat.Jt      = Jt;
 lat.qvec    = qvec;
@@ -155,13 +194,127 @@ lat.info    = info;
 
 if useCacheEff
     if ~exist(cacheDir, 'dir'), mkdir(cacheDir); end
-    save(cacheFile, 'lat', 'pkey', 'qvec');
+    save(cacheFile, 'lat', 'cacheMeta');
 end
 end
 
 % ------------------------------- local helpers ------------------------------
 
-function Jb = assemble_page(dip, ex, isGamma, isFull, C, ion, lorz)
+function [backend, eopts] = resolve_dipole_backend(opts, ion)
+% Resolve the certified tensor default while retaining an explicit legacy
+% brute-force path. The projected implementation has its own independent
+% dispatcher and is intentionally unaffected by this tensor-only decision.
+if ~isfield(opts, 'dipole') || isempty(opts.dipole)
+    backend = 'ewald';
+else
+    raw = opts.dipole;
+    if isstring(raw) && isscalar(raw), raw = char(raw); end
+    if ~(ischar(raw) && isrow(raw))
+        error('invzt:jqTensorBackend', ...
+            'opts.dipole must be a scalar string/char (''bruteforce''|''ewald'').');
+    end
+    if ~ismember(raw, {'bruteforce','ewald'})
+        error('invzt:jqTensorBackend', ...
+            'Unknown opts.dipole backend ''%s''.', raw);
+    end
+    backend = raw;
+end
+
+hasEwald = isfield(opts, 'ewald') && ~isempty(opts.ewald);
+hasDpRng = isfield(opts, 'dpRng') && ~isempty(opts.dpRng);
+if hasEwald && ~strcmp(backend, 'ewald')
+    error('invzt:jqTensorEwaldOptsUnexpected', ...
+        'opts.ewald is accepted only with opts.dipole = ''ewald''.');
+end
+if hasDpRng && strcmp(backend, 'ewald')
+    error('invzt:jqTensorDpRngUnexpected', ...
+        'opts.dpRng is accepted only with opts.dipole = ''bruteforce''.');
+end
+
+if strcmp(backend, 'ewald')
+    if ~hasEwald
+        eopts = invzt_ewald_defaults(ion);
+        return;
+    end
+    if ~isstruct(opts.ewald) || ~isscalar(opts.ewald)
+        error('invzt:jqTensorEwaldOptsFields', ...
+            'opts.ewald must be a scalar struct with EXACTLY {alpha, r_cut, g_cut, boundary}.');
+    end
+    want = sort({'alpha','r_cut','g_cut','boundary'});
+    have = sort(reshape(fieldnames(opts.ewald), 1, []));
+    if ~isequal(have, want)
+        error('invzt:jqTensorEwaldOptsFields', ...
+            'opts.ewald must have EXACTLY {alpha, r_cut, g_cut, boundary}.');
+    end
+    b = opts.ewald.boundary;
+    if isstring(b) && isscalar(b), b = char(b); end
+    if ~(ischar(b) && isrow(b) && strcmp(b, 'conducting_k0_omitted'))
+        error('invzt:jqTensorEwaldBoundary', ...
+            'opts.ewald.boundary must be ''conducting_k0_omitted''.');
+    end
+    eopts = opts.ewald;
+    eopts.boundary = b;       % canonicalize string scalar to character row
+else
+    eopts = empty_ewald();
+end
+end
+
+function eopts = empty_ewald()
+eopts = struct('alpha', [], 'r_cut', [], 'g_cut', [], 'boundary', '');
+end
+
+function meta = build_cache_meta(backend, eopts, dpRng, qvec, w, convstr, ion, C, parts)
+% Full structured identity is the safety check; the filename digest is only a
+% lookup convenience and may collide without compromising correctness.
+meta = struct();
+meta.schema = 'invzt_jq_tensor/v2';
+meta.backend = backend;
+meta.ewald = eopts;
+if strcmp(backend, 'ewald'), meta.dpRng = NaN; else, meta.dpRng = dpRng; end
+meta.qvec = qvec;
+meta.w = w;
+meta.conv = convstr;
+meta.lattice = ion.a;
+meta.basis = ion.tau;
+meta.Vc = ion.Vc;
+meta.J12 = ion.J12;
+meta.gfac = C.gfac;
+meta.parts = parts;
+meta.output_shape = [12 12 size(qvec,1)];
+end
+
+function ok = cache_hit_valid(S, meta)
+% Treat legacy, incomplete, or corrupted payloads as misses.  Exact metadata
+% equality protects identity; these checks protect the promised output shape
+% and the backend provenance consumed by real-axis reconstruction.
+ok = false;
+if ~isfield(S, 'cacheMeta') || ~isfield(S, 'lat') || ~isequaln(S.cacheMeta, meta)
+    return;
+end
+lat = S.lat;
+want = {'Jt','qvec','w','conv','JtGamma','info'};
+if ~(isstruct(lat) && isscalar(lat) && all(isfield(lat, want)))
+    return;
+end
+if size(lat.Jt,1) ~= 12 || size(lat.Jt,2) ~= 12 ...
+        || size(lat.Jt,3) ~= meta.output_shape(3) ...
+        || ~isequal(size(lat.JtGamma), [12 12]) ...
+        || ~isequaln(lat.qvec, meta.qvec) || ~isequaln(lat.w, meta.w) ...
+        || ~isequaln(lat.conv, meta.conv)
+    return;
+end
+if ~(isstruct(lat.info) && isscalar(lat.info) && isfield(lat.info, 'dipole'))
+    return;
+end
+d = lat.info.dipole;
+if ~(isstruct(d) && isscalar(d) && isfield(d, 'backend') && isfield(d, 'ewald') ...
+        && isequaln(d.backend, meta.backend) && isequaln(d.ewald, meta.ewald))
+    return;
+end
+ok = true;
+end
+
+function Jb = assemble_page(dip, ex, isGamma, isFull, C, ion, lorz, backend)
 % Build one [12,12] page from the [3,3,4,4] dip (and, if isFull, ex) arrays
 % for a single q. See the file header for the exact per-block rule.
 Jb = zeros(12, 12);
@@ -171,7 +324,7 @@ for mu = 1:3
         if isFull
             Blk = Blk + sign(ion.J12)*squeeze(ex(mu,nu,:,:));
         end
-        if mu == nu && isFull && isGamma
+        if mu == nu && isFull && isGamma && strcmp(backend, 'bruteforce')
             Blk = Blk + lorz;                              % uniform-mode Lorentz cavity
         end
         if mu == nu

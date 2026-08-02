@@ -61,8 +61,8 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 %       "optical" branches, if any) RPA-mix into the S4-uniform channel --
 %       'gamma_uniform' isolates that channel exactly (Jd's only nonzero
 %       sublattice eigenvalue is the S4-uniform one), 'gamma' does not.
-%     explicit [nq,3] qvec -- rebuilds lat via INVZT_JQ_TENSOR at opts.dpRng
-%       (own cache namespace; see INVZT_JQ_TENSOR) and ALSO returns the
+%     explicit [nq,3] qvec -- rebuilds lat via INVZT_JQ_TENSOR with the exact
+%       dipolar backend/provenance stored in pt.lat.info and ALSO returns the
 %       per-q, sublattice-averaged site-diagonal cc response out.chi_cc_q
 %       [nq,nw], COMPLEX -- imag() is chi'' (positive up to the frozen-Kw
 %       caveat below) (contract parity with the projected INVZ_CHI_REALAXIS's
@@ -87,6 +87,10 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 %                                populated ONLY for an explicit qvec (empty []
 %                                for 'gamma_uniform'/'gamma').
 %     out.Sigma_w     [nw,1]   : the A1 scalar self-energy continuation.
+%     out.dipole                 : copied lattice-backend provenance when the
+%                                  converged point supplies it.
+%     out.explicit_q_dipole      : provenance of the rebuilt explicit-q pages;
+%                                  empty for the two Gamma selectors.
 %
 %   B : scalar (transverse-along-a, historical) or [Bx By Bz] (T); validated
 %       (INVZ_FIELD_VEC) for interface parity with INVZT_SOLVE_POINT/
@@ -98,7 +102,10 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 %   OPTIONS (getf defaults):
 %     eta          5e-3            : Im(z) = w + 1i*eta.
 %     qsel         'gamma_uniform' : 'gamma_uniform' | 'gamma' | [nq,3] qvec.
-%     dpRng        30              : explicit-qvec branch only (INVZT_JQ_TENSOR).
+%     dpRng        point value     : optional brute-force consistency assertion
+%                                    in the explicit-qvec branch; a mismatch
+%                                    errors. Legacy points without provenance
+%                                    retain the historical default 30.
 %     cache        true            : explicit-qvec branch only (INVZT_JQ_TENSOR).
 %     chi_rest     pt.chi_rest     : PM branch only -- false zeroes crest
 %                                    (matches the solve by default; override
@@ -146,7 +153,6 @@ function out = invzt_chi_realaxis(ion, T, B, pt, w, opts)
 if nargin < 6, opts = struct(); end
 eta      = getf(opts, 'eta', 5e-3);
 qsel     = getf(opts, 'qsel', 'gamma_uniform');
-dpRng    = getf(opts, 'dpRng', 30);
 cacheq   = getf(opts, 'cache', true);
 chi_rest = getf(opts, 'chi_rest', pt.chi_rest);
 odd_req  = getf(opts, 'odd', pt.odd);
@@ -222,6 +228,7 @@ Jd = kron(ones(4)/4, diag([Jaa0, Jaa0, Jcc0]));          % Task-4 uniform page
 
 out.chi_uniform = zeros(3, 3, nw);
 out.chi_cc_q = [];
+out.explicit_q_dipole = [];
 % Resolve the S4-uniform-mode page ONCE: Jd for 'gamma_uniform' AND the explicit-qvec
 % branch (the uniform mode is a q-grid-independent quantity), JtGamma only for 'gamma'.
 % The chi_uniform loop then runs ONCE; the explicit-qvec branch adds the extra chi_cc_q.
@@ -254,7 +261,32 @@ else
     explicitq = true;
     qvec = qsel;
     nq   = size(qvec, 1);
-    latq = invzt_jq_tensor(ion, qvec, struct('dpRng', dpRng, 'cache', cacheq));
+    % Rebuild finite-q pages with the exact lattice backend that produced the
+    % converged Matsubara point.  Mixing a brute-force medium with Ewald spectra
+    % (or vice versa) would violate the frozen-medium continuation contract.
+    jqopts = struct('cache', cacheq);
+    if isfield(pt.lat.info, 'dipole')
+        provenance = pt.lat.info.dipole;
+        jqopts.dipole = provenance.backend;
+        if strcmp(provenance.backend, 'ewald')
+            jqopts.ewald = provenance.ewald;
+        else
+            pointDp = pt.lat.info.dpRng;
+            if isfield(opts, 'dpRng') && ~isempty(opts.dpRng) && opts.dpRng ~= pointDp
+                error('invzt:realaxisDipoleMismatch', ...
+                    ['opts.dpRng=%g does not match the converged point''s brute-force ' ...
+                     'dpRng=%g. Explicit-q continuation must use the same lattice.'], ...
+                    opts.dpRng, pointDp);
+            end
+            jqopts.dpRng = pointDp;
+        end
+    else
+        % Compatibility for externally constructed legacy point structs.
+        jqopts.dipole = 'bruteforce';
+        jqopts.dpRng = getf(opts, 'dpRng', 30);
+    end
+    latq = invzt_jq_tensor(ion, qvec, jqopts);
+    out.explicit_q_dipole = latq.info.dipole;
     if ~pt.odd
         % R1 fix (2026-07-18 second Codex review): the pre-fix code consumed
         % latq.Jt UNMASKED here, so an odd=false point got ODD-on couplings at
@@ -280,4 +312,5 @@ for k = 1:nw
     end
 end
 out.Sigma_w = Sw;
+if isfield(pt.lat.info, 'dipole'), out.dipole = pt.lat.info.dipole; end
 end

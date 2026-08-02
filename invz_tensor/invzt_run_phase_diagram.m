@@ -52,7 +52,9 @@ Ttol   = 0.005;                        % T-cut refinement tolerance (KELVIN) ->
 Twidth = 1.0;                          % T-cut adaptive-window width (K)
 Tgridstep = 1/30;                      % T-cut coarse-grid step (K)
 gridN  = 16;  gridConv = 'halfopen';   % invzt_qgrid(gridN, gridConv)
-dpRng  = 50;                           % invzt_jq_tensor coupling-sum range
+dipoleBackend = 'ewald';                % certified default; 'bruteforce' is diagnostic
+ewaldOpts = invzt_ewald_defaults(ion);
+dpRng  = 50;                           % explicit brute-force diagnostic only
 useParallel = true;                    % false -> force serial
 solve_opts  = struct('mode', 'a1', 'odd', true, 'nlevels', 'std', 'dress', 'full');
                                        % sigma_floor may be added here too; defaults to
@@ -117,14 +119,15 @@ assert(posk(Tgridstep), 'invzt_run_phase_diagram:Tgridstep', ...
     'Tgridstep must be a finite positive real scalar (KELVIN); got %s.', invzt_str(Tgridstep));
 
 if show_projected_anchor
-    addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'invz_projected'));
+    addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'invz_projected')); %#ok<UNRCH>
     assert(ion.demag == 0, 'invzt:anchorDemag', ...
         ['show_projected_anchor requires ion.demag == 0 (invz_odd_blocks is ' ...
          'intrinsic-only). Set ion.demag = 0 or disable the anchor.']);
 end
 
 g   = invzt_qgrid(gridN, gridConv);
-lat = invzt_jq_tensor(ion, g, struct('dpRng', dpRng, 'cache', true));
+latOpts = phase_lattice_opts(dipoleBackend, ewaldOpts, dpRng);
+lat = invzt_jq_tensor(ion, g, latOpts);
 
 % ---- small-Bx proxy Tc(0): plot marker AND the adaptive T-cut window anchor --
 Tc0_proxy = NaN;
@@ -196,7 +199,7 @@ Tc0_closed = NaN;
 if show_projected_anchor
     % Track this driver's own odd setting -- comparing a tensor ODD-on curve
     % against a projected ODD-off anchor (or vice versa) would be misleading.
-    anchor_mode = 'off';
+    anchor_mode = 'off'; %#ok<UNRCH>
     if ~isfield(solve_opts, 'odd') || ~isequal(solve_opts.odd, false), anchor_mode = 'full'; end
     % Same nominal N and dipole cutoff as this driver's lattice, but on a
     % different model with a different ODD treatment: a cross-model
@@ -227,3 +230,15 @@ legend('Location', 'southwest');
 % strictly single-valued in T there (same note as the projected driver).
 phase_boundary = sortrows([Ts(:) Bc(:); TcB(:) Bs(:)], 1);
 phase_boundary = phase_boundary(all(isfinite(phase_boundary), 2), :);
+
+function opts = phase_lattice_opts(backend, ewaldOpts, dpRng)
+opts = struct('dipole', backend, 'cache', true);
+if strcmp(backend, 'ewald')
+    opts.ewald = ewaldOpts;
+elseif strcmp(backend, 'bruteforce')
+    opts.dpRng = dpRng;
+else
+    error('invzt_run_phase_diagram:dipoleBackend', ...
+        'dipoleBackend must be ''ewald'' or ''bruteforce'' (got ''%s'').', backend);
+end
+end

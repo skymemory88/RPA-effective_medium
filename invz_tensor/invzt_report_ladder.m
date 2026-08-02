@@ -29,8 +29,14 @@ L = {};
 p = @(varargin) local_push(varargin{:});
 
 L = p(L, '=== A4 basis-defined state-space ladder (invzt_run_ladder) ===');
-L = p(L, 'point: T = %.3f K, B = [%.3g %.3g %.3g] T | grid %d^3 %s, dpRng %d, Ecut %d meV | production=%d', ...
-    m.T, m.B(1), m.B(2), m.B(3), m.ngrid, m.conv, m.dpRng, m.Ecut, m.production);
+if isfield(m, 'dipole') && strcmp(m.dipole.backend, 'ewald')
+    latticeText = sprintf('Ewald alpha=%.6g r=%.6g g=%.6g', ...
+        m.dipole.ewald.alpha, m.dipole.ewald.r_cut, m.dipole.ewald.g_cut);
+else
+    latticeText = sprintf('bruteforce dpRng=%d', m.dpRng);
+end
+L = p(L, 'point: T = %.3f K, B = [%.3g %.3g %.3g] T | grid %d^3 %s, %s, Ecut %d meV | production=%d', ...
+    m.T, m.B(1), m.B(2), m.B(3), m.ngrid, m.conv, latticeText, m.Ecut, m.production);
 L = p(L, 'lattice: Jcc0 = %.6g meV, Jaa0 = %.6g meV, qhash %s | git %s | %s', ...
     m.Jcc0, m.Jaa0, m.qhash, m.git, m.date);
 L = p(L, 'full-136 chi0(T,B): cc = %.4f, perp = %.4f meV^-1 (virtual-deficit reference)', ...

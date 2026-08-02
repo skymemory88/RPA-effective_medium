@@ -55,7 +55,10 @@ theta_c = 0.0;  phi_ab = 0.0;       % tilt knobs (deg). theta_c ~= 0 gives Bz ~=
                                     % invzt:orderedLongitudinal (no tensor forced-moment
                                     % route; 2026-07-19 scope).
 transverse_mf = 'legacy_x';         % 'legacy_x' | 'none' | 'vector_ab'
-gridN = 16; gridConv = 'halfopen'; dpRng = 30;
+gridN = 16; gridConv = 'halfopen';
+dipoleBackend = 'ewald';            % certified production default; 'bruteforce' remains diagnostic
+ewaldOpts = invzt_ewald_defaults(ion);
+dpRng = 30;                         % used only by explicit 'bruteforce'
 useParallel = true;
 solve_opts = struct('mode', 'a1', 'odd', true, 'nlevels', 'std', ...
                     'transverse_mf', transverse_mf);
@@ -120,7 +123,8 @@ dhat   = [cosd(theta_c)*cosd(phi_ab), cosd(theta_c)*sind(phi_ab), sind(theta_c)]
 sfloor = getf(solve_opts, 'sigma_floor', -0.5);   % single-sourced with invzt_critical
 
 g   = invzt_qgrid(gridN, gridConv);
-lat = invzt_jq_tensor(ion, g, struct('dpRng', dpRng, 'cache', true));
+latOpts = spectra_lattice_opts(dipoleBackend, ewaldOpts, dpRng);
+lat = invzt_jq_tensor(ion, g, latOpts);
 
 if ~isempty(qpath)
     % ---------------- q-path dispersion at one fixed field --------------------
@@ -134,7 +138,7 @@ if ~isempty(qpath)
             diq.ordered.err);
     end
     out = invzt_chi_realaxis(ion, T, Bq*dhat, pt, wq, ...
-            struct('qsel', qpath, 'dpRng', dpRng, 'eta', eta));
+            struct('qsel', qpath, 'eta', eta));
     chipp_q = imag(out.chi_cc_q);                 % [nq, nw] positive chi'' (Component 0)
     finiteMask = isfinite(chipp_q);
     Z = log10(max(chipp_q, realmin));
@@ -236,4 +240,16 @@ else
     if any(phasev == 1) && any(phasev == 2), xline(fields(find(phasev == 2, 1)), '--', 'B_c'); end
     % Gaps are CENSORED peaks (boundary max / non-positive column) or masked
     % ordered points -- do not interpolate over them.
+end
+
+function opts = spectra_lattice_opts(backend, ewaldOpts, dpRng)
+opts = struct('dipole', backend, 'cache', true);
+if strcmp(backend, 'ewald')
+    opts.ewald = ewaldOpts;
+elseif strcmp(backend, 'bruteforce')
+    opts.dpRng = dpRng;
+else
+    error('invzt_run_spectra:dipoleBackend', ...
+        'dipoleBackend must be ''ewald'' or ''bruteforce'' (got ''%s'').', backend);
+end
 end

@@ -45,8 +45,10 @@ function out = invzt_run_ladder(ion, opts)
 %     B            [0.1 0 0]       validation field (T); transverse component must be > 1e-6.
 %     ngrid        6 (prod 8)      q-grid points per axis (halfopen).
 %     conv         'halfopen'      q-grid convention.
-%     dpRng        10 (prod 20)    dipole lattice-sum range.
-%     production   false           true bumps ngrid/dpRng to the production defaults.
+%     dipole       'ewald'         'ewald' | 'bruteforce'.
+%     ewald        certified       exact Ewald controls (Ewald backend only).
+%     dpRng        10 (prod 20)    brute-force lattice-sum range (diagnostic only).
+%     production   false           true bumps ngrid/brute dpRng to production sizes.
 %     Ecut         40              Matsubara cutoff (meV).
 %     budget_hours 12              refusal threshold (projected one-solve hours).
 %     tc           false           add the small-Bx-proxy Tc per rung (SLOW; production).
@@ -67,6 +69,8 @@ B       = invz_field_vec(getf(opts, 'B', [0.1 0 0]));
 ngrid   = getf(opts, 'ngrid', tern(production, 8, 6));
 conv    = getf(opts, 'conv',  'halfopen');
 dpRng   = getf(opts, 'dpRng', tern(production, 20, 10));
+dipole  = getf(opts, 'dipole', 'ewald');
+eopts   = getf(opts, 'ewald', invzt_ewald_defaults(ion));
 Ecut    = getf(opts, 'Ecut', 40);
 budget  = getf(opts, 'budget_hours', 12);
 do_tc   = getf(opts, 'tc', false);
@@ -78,7 +82,8 @@ verbose = getf(opts, 'verbose', true);
 
 % --- lattice (built once; shared by every rung) ----------------------------------------
 g   = invzt_qgrid(ngrid, conv);
-lat = invzt_jq_tensor(ion, g, struct('dpRng', dpRng, 'cache', cache));
+latopts = lattice_opts(dipole, eopts, dpRng, cache);
+lat = invzt_jq_tensor(ion, g, latopts);
 
 % --- full-136 static chi0 at (T,B): the virtual-completeness diagnostic reference -------
 si_full = invz_single_ion(ion, T, B, struct('hyp', true, 'transverse_mf', 'legacy_x', ...
@@ -174,13 +179,27 @@ else
 end
 out.skipped_rungs = skipped;
 % provenance (no file writes): the report serializer + controller consume this.
-out.meta = struct('T', T, 'B', B(:).', 'ngrid', ngrid, 'conv', conv, 'dpRng', dpRng, ...
+out.meta = struct('T', T, 'B', B(:).', 'ngrid', ngrid, 'conv', conv, ...
+    'dipole', lat.info.dipole, 'dpRng', lat.info.dpRng, ...
     'Ecut', Ecut, 'production', production, 'budget_hours', budget, 'tc', do_tc, ...
     'tc_bx', tc_bx, 'Esplit', Esplit, 'qhash', g.hash, ...
     'Jcc0', lat.info.Jcc0, 'Jaa0', lat.info.Jaa0, ...
     'chi0_full136_ccdiag', real(c0_full(3,3)), 'chi0_full136_perpdiag', real(c0_full(1,1)), ...
-    'nrm_chi0_full136', nrm_full, 'date', datestr(now, 'yyyy-mm-dd HH:MM:SS'), ...
+    'nrm_chi0_full136', nrm_full, 'date', ...
+    char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss')), ...
     'git', local_git_hash(), 'nrun', nr, 'nskip', numel(skipped));
+end
+
+function opts = lattice_opts(backend, eopts, dpRng, cache)
+opts = struct('dipole', backend, 'cache', cache);
+if strcmp(backend, 'ewald')
+    opts.ewald = eopts;
+elseif strcmp(backend, 'bruteforce')
+    opts.dpRng = dpRng;
+else
+    error('invzt:ladderDipoleBackend', ...
+        'opts.dipole must be ''ewald'' or ''bruteforce'' (got ''%s'').', backend);
+end
 end
 
 % ======================================================================================= %
