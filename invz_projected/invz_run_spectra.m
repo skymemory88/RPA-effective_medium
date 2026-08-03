@@ -29,10 +29,12 @@ ion = invz_ion();
 %       instead of diverging); q-path spectra omit that transform (finite-q = intrinsic
 %       response) but still see demag through info.Jaa0.
 T = 0.1;                             % K
+includeHyperfine = true;             % false: electronic-only Fig.-2 comparison branch
+                                      % true: established electro-nuclear route (e.g. 0--6 GHz, 0--9 T)
 useParallel = true;
 outerMix = 0.3;                     % smaller than 0.7: stronger damping;
 outerMax = 2000;                     % exploratory budget; acceptance tolerances are unchanged
-useMissingAreaApproximation = true; % OPT-IN production approximation; false preserves strict default
+useMissingAreaApproximation = true; % OPT-IN field-map approximation; ignored when qpath is nonempty
 % missingAreaFactors = [0.75 1.0 1.5];   % continuous positive lower completions; factor 1 is central
 missingAreaFactors = 1.0;            % factor 1: approximating constant r(x) ( =f(h_e) )
 missingAreaNodes = 129;              % user-tunable profile resolution; 257 remains the refinement comparator
@@ -46,18 +48,18 @@ eUnit = 'GHz';                       % 'meV' or 'GHz' -- unit for the frequency 
                                      % the plotted axes. Computation always runs in meV; the driver
                                      % converts in/out (with 'meV' it is a no-op). eta is ALWAYS in
                                      % meV (below), independent of eUnit.
+eta = 5e-5;                          % [meV] spectra linewidth
 
 % Exploratory broad view containing the projected 1/z transition.  The retained
 % finite-16^3 regression is the narrower linspace(4.60,4.90,61) subset; this
 % 3--6 T view is expected to contain masked ordered columns and is not all-column certified.
-fields = linspace(0, 9, 101);
+fields = linspace(0, 9, 151);
 % fields = 0.2:0.2:3.0;                % test points
 % fields = [3.6 4.2 4.8 5.4 6.0];    % few -> line slices instead of a colormap
-w = (0:0.005:6).';                    % eUnit -- field-sweep frequency grid
-eta = 5e-5;                          % real-axis Lorentzian HWHM, ALWAYS in meV (1e-3 meV ~ 0.24 GHz),
-                                     % independent of eUnit. Lower -> sharper peaks (resolves the
-                                     % sub-6-GHz hyperfine lines); keep eta above the w/wq step
-                                     % (converted to meV: step/eScale) or the peaks alias.
+% Resolve each eta-wide line with five bins.  The former 0.005-meV step was
+% five times wider than eta and made the last ordered/first PM columns look
+% discontinuous even though their one-sided poles agree at the 1e-5-meV level.
+w = (0:0.03:6).';                % eUnit -- field-sweep frequency grid
 sliceMax = 6;                         % field count at/below which the line-slice view is used
 showPeaks = true;                     % true -> ALSO line-plot chi''_cc peak energy vs field
                                      % (S.Epeak/S.Epeak_rpa, cf. the q-path E_peak(q) stream)
@@ -65,7 +67,7 @@ showPeaks = true;                     % true -> ALSO line-plot chi''_cc peak ene
 % ---- q-path view (R 2007 Fig 3 trends): set qpath non-empty to switch views -------------
 qpath = [];                          % [] = field-sweep views; [nq x 3] r.l.u. = q-path view
 
-% qh = linspace(0, 1, 101).';  
+% qh = linspace(1, 2, 101).';
 % qpath = [qh zeros(numel(qh), 2)];  % (h0,0,0)->(h1,0,0)
 % qpath = [zeros(numel(qh), 1) qh zeros(numel(qh), 1)];  % (0,h0,0)->(0,h1,0)
 % qpath = [zeros(numel(qh), 2) qh];  % (0,0,h0)->(0,0,h1) problematic
@@ -73,7 +75,8 @@ qpath = [];                          % [] = field-sweep views; [nq x 3] r.l.u. =
 Bq = 4.95;                           % field(s), T, for the q-path view. One value -> colormaps;
 % Bq = [4.75 4.85 4.95 5.05];
 % Bq = [3.6 4.24 6.0];           % several -> E_peak(q) overlay (R 2007 Fig 3: [3.6 4.24 6.0])
-wq = (0:0.02:6).';                 % eUnit -- q-path frequency grid (0-6 GHz ~ 0-0.025 meV). The
+wq = linspace(0, 0.75, 301)';
+% wq = (0:0.02:6).';                 % eUnit -- q-path frequency grid (0-6 GHz ~ 0-0.025 meV). The
                                      % Fig-3 mode reaches ~0.75 meV (~180 GHz) at 60 kOe; keep the
                                      % top above the mode or the censoring peak picker NaNs it.
 dispScale = 1;                       % dispersion display scale factor; R 2007 scales the
@@ -82,7 +85,7 @@ dispScale = 1;                       % dispersion display scale factor; R 2007 s
 % ---- coupling ---------------------------------------------------------------
 gridN = 16;                           % debug resolution; use a grid ladder for reported boundaries
 dipoleBackend = 'ewald';             % 'ewald' (production) | 'bruteforce' (debug reference)
-dpRng = 30;                          % brute-force cutoff; ignored by Ewald
+dpRng = 50;                          % brute-force cutoff; ignored by Ewald
 ewaldOpts = struct('alpha', 0.3, 'r_cut', 16, 'g_cut', 3, ...
     'boundary', 'conducting_k0_omitted');
 
@@ -97,13 +100,26 @@ end
 % unresolved lower area A=int_0^h_e r dh by declared positive completions and
 % integrates the contiguous certified component above h_e.  It does not use a
 % PM anchor, bridge rejected nodes, or claim thermodynamic branch selection.
+% A q-path always uses the strict route; the field-map-only toggle is ignored.
+useMissingAreaForRoute = useMissingAreaApproximation && isempty(qpath) && includeHyperfine;
 solve_opts = struct('mix_outer', outerMix, 'max_outer', outerMax);
-if useMissingAreaApproximation
+if ~includeHyperfine
+    if ~isempty(qpath)
+        error('invz_run_spectra:noHypQpath', ...
+            'The electronic-only boundary-linearized route is implemented for field maps, not q paths.');
+    end
+    solve_opts.ordered_state_mode = 'linearized_pm_handoff';
+end
+if useMissingAreaForRoute
     solve_opts.hmf_integral_mode = 'missing_area_ensemble';
     solve_opts.hmf_missing_area_factors = missingAreaFactors;
     solve_opts.nH = missingAreaNodes;
     solve_opts.hmf_approx_branch = ...
         'picard_attracting_contiguous_high_h_component';
+    % Follow the certified high-h component downward at every target field.
+    % This prevents a cold-ascending/seeded-descending edge switch from
+    % producing the artificial 3.95667 -> 3.98 T spectral jump.
+    solve_opts.hmf_profile_sweep_direction = 'descending_local';
     solve_opts.hmf_adjacent_retry = useAdjacentFieldRetry;
     solve_opts.hmf_adjacent_retry_max_span = adjacentRetryMaxSpan;
     solve_opts.hmf_ordered_boundary_retry = useOrderedBoundaryRetry;
@@ -128,6 +144,16 @@ qpOpts  = coupling_opts;  qpOpts.eta = eta;  qpOpts.solve_opts = solve_opts;
 mapOpts = coupling_opts;  mapOpts.parallel = useParallel;  mapOpts.eta = eta;
 mapOpts.solve_opts = solve_opts;
 
+mapOpts.hyp = includeHyperfine;
+mapOpts.peak_wmin = 0;
+
+if includeHyperfine
+    mapOpts.peak_mode = 'strongest';   % unchanged historical peak definition
+else
+    mapOpts.peak_mode = 'lowest_local'; % electronic soft branch, not the tallest high-energy ridge
+end
+
+
 % w and wq are given in eUnit; solves run in meV, so convert on the way in (eScale is the
 % meV->eUnit factor) and scale returned grids (S.w, Epeak) back up by eScale for plotting.
 % eta is ALWAYS in meV, independent of eUnit, and passes through unconverted.
@@ -135,23 +161,18 @@ wMeV   = w   / eScale;
 wqMeV  = wq  / eScale;
 
 if ~isempty(qpath)
-    if useMissingAreaApproximation
-        error('invz:missingAreaQPath', ...
-            ['The ensemble production mode is implemented for the field map. ' ...
-             'Set useMissingAreaApproximation=false for q-path calculations.']);
-    end
     % ---------------- FM-mode q-path view at fixed field(s) ----------------
-    if isscalar(Bq) %#ok<UNRCH>
+    if isscalar(Bq)
         S = invz_spectra_qpath(ion, T, Bq, qpath, wqMeV, qpOpts);
         Splot = S;   % display-only copy; the solve above always ran in meV
         Splot.w = S.w*eScale;  Splot.Epeak = S.Epeak*eScale;  Splot.Epeak_rpa = S.Epeak_rpa*eScale;
         figure('Position', [100 100 1150 460]);
         ax1 = subplot(1, 2, 1);
         invz_plot_spectra_qpath(ax1, Splot, Splot.chiz, Splot.Epeak, ...
-            sprintf('1/z FM-mode \\chi''''_{cc}, T = %.2f K, B = %.2f T', T, Bq), eUnit);
+            sprintf('1/z expansion, T = %.2f K, B = %.2f T', T, Bq), eUnit);
         ax2 = subplot(1, 2, 2);
         invz_plot_spectra_qpath(ax2, Splot, Splot.chirpa, Splot.Epeak_rpa, ...
-            sprintf('RPA FM-mode \\chi''''_{cc}, T = %.2f K, B = %.2f T', T, Bq), eUnit);
+            sprintf('RPA, T = %.2f K, B = %.2f T', T, Bq), eUnit);
     else
         figure; hold on;  co = lines(numel(Bq));
         for k = 1:numel(Bq)
@@ -163,7 +184,13 @@ if ~isempty(qpath)
         end
         xlabel(Sk.xlab);
         ylabel(strrep(eLabel, '\omega', 'E_{peak}'));
-        title(sprintf('FM-mode dispersion, T = %.2f K, dispScale = %.2f', T, dispScale));
+        if dispScale == 1
+            dispersionTitle = sprintf('Mode dispersion, T = %.2f K', T);
+        else
+            dispersionTitle = sprintf('Mode dispersion (\\times%.2g), T = %.2f K', ...
+                dispScale,T);
+        end
+        title(dispersionTitle);
         legend show;
         % cf. R 2007 Fig 3 TRENDS: the x-axis shows the actual varying Miller component
         % (h = 1..2 for the (1,0,0)->(2,0,0) path); their theory lines are the calculated
@@ -184,15 +211,11 @@ else
             plot(w, S.chiz(:, k),   '-',  'Color', co(k, :), 'DisplayName', sprintf('1/z, %.2f T', fields(k)));
             plot(w, S.chirpa(:, k), '--', 'Color', co(k, :), 'DisplayName', sprintf('RPA, %.2f T', fields(k)));
         end
-        xlabel(eLabel);  ylabel('\chi''''_{cc}');  title(sprintf('T = %.2f K', T));  legend show;
+        xlabel(eLabel);  ylabel('\chi''''_{cc}');
+        title(sprintf('Spectra, T = %.2f K', T));  legend show;
     else
         Splot = S;  Splot.w = S.w * eScale;    % display-only copy; solve above always ran in meV
-        if useMissingAreaApproximation
-            onezTitle = sprintf(['1/z MISSING-AREA ENSEMBLE central member ' ...
-                '(bands in S.approximation_ensemble), T = %.2f K'],T);
-        else
-            onezTitle = sprintf('1/z STRICT 33-node Eq.-45 profile, T = %.2f K',T); %#ok<UNRCH>
-        end
+        onezTitle = sprintf('1/z expansion, T = %.2f K',T);
         figure('Position', [100 100 1150 460]);
         ax1 = subplot(1, 2, 1);  invz_plot_spectra_map(ax1, Splot, Splot.chiz, onezTitle, eUnit);
         ax2 = subplot(1, 2, 2);  invz_plot_spectra_map(ax2, Splot, Splot.chirpa, sprintf('RPA, T = %.2f K', T), eUnit);
@@ -200,12 +223,12 @@ else
 
     if showPeaks
         % ---- susceptibility peak energy vs field (toggle) --------------------------------
-        figure; hold on; %#ok<UNRCH>
+        figure; hold on;
         plot(S.fields, S.Epeak*eScale,     '-',  'DisplayName', '1/z');
         plot(S.fields, S.Epeak_rpa*eScale, '--', 'DisplayName', 'RPA');
         xlabel('|B| (T)');
         ylabel(strrep(eLabel, '\omega', 'E_{peak}'));
-        title(sprintf('\\chi''''_{cc} peak energy vs field, T = %.2f K', T));
+        title(sprintf('Peak energy, T = %.2f K', T));
         legend show;
         if isfinite(S.Bc_1z), xline(S.Bc_1z, ':', 'B_c^{1/z}', 'HandleVisibility', 'off'); end
         if isfinite(S.Bc_rpa), xline(S.Bc_rpa, '--', 'B_c^{RPA}', 'HandleVisibility', 'off'); end

@@ -22,9 +22,12 @@ function [pt, phase, di] = invzt_solve_auto(ion, T, B, lat, opts)
 %
 %   di (review P2-1): STRUCTURED per-leg diagnostics -- di.para / di.ordered,
 %   each with attempted, accepted, converged, m0 (NaN for PM), crit, Sigma0,
-%   err (exception identifier, '' if returned normally). A leg that returned
-%   but was rejected is fully described -- rejection reasons are read off the
-%   numbers (e.g. converged = true, crit < 0 = the spurious below-Bc PM point).
+%   outer_residual, reason (stable machine-readable verdict), and err
+%   (exception identifier, '' if returned normally). A leg that returned but
+%   was rejected therefore reports both its terminal numbers and the gate that
+%   rejected them. opts.capture_attempts=true additionally retains each returned
+%   point in di.<leg>.point for diagnostic artifacts; the default leaves these
+%   fields empty so production sweeps do not duplicate point payloads.
 %
 %   INPUT POLICY (validated AT ENTRY, before either leg -- round-2 P1-5):
 %     - B is normalized (invz_field_vec); |Bz| > bz_tol raises
@@ -44,6 +47,8 @@ if nargin < 5, opts = struct(); end
 sfloor = getf(opts, 'sigma_floor', -0.5);            % single-sourced validity floor
 ctolo  = getf(opts, 'crit_tol_ordered', -1e-3);      % ordered stability tolerance
 bztol  = getf(opts, 'bz_tol', 1e-9);
+capture_attempts = isfield(opts, 'capture_attempts') ...
+    && ~isempty(opts.capture_attempts) && ~isequal(opts.capture_attempts, false);
 
 % --- entry validation (round-2 P1-5): field and mode, BEFORE any solve ----------
 B = invz_field_vec(B);
@@ -59,9 +64,20 @@ if ~strcmp(char(getf(opts, 'mode', 'a1')), 'a1')
         'accepted ordered points, never the phase criterion.'], ...
         char(getf(opts, 'mode', 'a1')));
 end
+if ~strcmp(char(getf(opts, 'nlevels', 'std')), 'std')
+    error('invzt:autoNlevels', ...
+        'invzt_solve_auto requires opts.nlevels = ''std'' because its ordered A1 leg is std-only.');
+end
+if isfield(opts, 'Esplit') || isfield(opts, 'chi_rest')
+    error('invzt:autoSplitKnobs', ...
+        ['invzt_solve_auto cannot dispatch PM-only Esplit/chi_rest options into the ' ...
+         'whole-cc ordered A1 leg. Solve a declared single phase directly instead.']);
+end
 RECOVERABLE = {'invz:degenerateDoublet', 'invzt:a1ZeroField', 'invz:orderedPhase'};
 leg0 = struct('attempted', false, 'accepted', false, 'converged', false, ...
-              'm0', NaN, 'crit', NaN, 'Sigma0', NaN, 'err', '');
+              'm0', NaN, 'crit', NaN, 'Sigma0', NaN, ...
+              'outer_residual', NaN, 'reason', 'not_attempted', 'err', '', ...
+              'handoff_ratio', NaN, 'hmf_J0z', NaN, 'point', []);
 di = struct('para', leg0, 'ordered', leg0);
 pt = [];  ptp = [];  phase = 0;
 
@@ -69,16 +85,27 @@ pt = [];  ptp = [];  phase = 0;
 di.para.attempted = true;
 try
     ptp = invzt_solve_point(ion, T, B, lat, opts);
+    if capture_attempts, di.para.point = ptp; end
     di.para.converged = ptp.converged;
     di.para.crit = ptp.crit;  di.para.Sigma0 = ptp.Sigma0;
-    if ptp.converged && isfinite(ptp.crit) && ptp.crit > 0 && ptp.Sigma0 >= sfloor
+    di.para.outer_residual = getf(ptp, 'outer_residual', NaN);
+    if ptp.converged && isfinite(ptp.crit) && ptp.crit > 0 ...
+            && isfinite(ptp.Sigma0) && (1 + ptp.Sigma0) > 0 ...
+            && ptp.Sigma0 >= sfloor
         di.para.accepted = true;
+        di.para.reason = 'accepted';
         pt = ptp;  phase = 2;  return;
     end
+    di.para.reason = pm_rejection_reason(ptp, sfloor);
     pt = ptp;                                        % keep for diagnostics
 catch err
     if ~ismember(err.identifier, RECOVERABLE), rethrow(err); end
     di.para.err = err.identifier;
+    di.para.reason = err.identifier;
+    if strcmp(err.identifier, 'invzt:a1ZeroField')
+        di.ordered.reason = 'zero_field_unsupported';
+        return;                                           % A1 has no tensor zero-field ordered closure
+    end
 end
 
 % --- ordered leg: only when the PM sample is invalid ----------------------------
@@ -93,37 +120,100 @@ end
 % This removes the old mismatch in which the PM instability occurred near 4.65 T
 % while the ordered eigenstates still carried the large bare-MF moment associated
 % with the ~5 T MF boundary.
+% The boundary-linearized ordered closure requires a valid converged PM
+% fixed point from the same A1 representation.  If that producer is absent or
+% violates the PM Sigma domain, falling back to a bare-MF ordered state would
+% silently change theories, so fail closed.
+if isempty(ptp) || ~ptp.converged || ~isfinite(ptp.Sigma0) ...
+        || ptp.Sigma0 < sfloor || (1 + ptp.Sigma0) <= 0
+    di.ordered.reason = 'invalid_pm_handoff';
+    return;
+end
 di.ordered.attempted = true;
+di.ordered.reason = 'pending';
 try
     oo = opts;
-    if ~isempty(ptp) && ptp.converged && isfinite(ptp.Sigma0) && (1 + ptp.Sigma0) > 0
-        oo.hmf_sigma0 = ptp.Sigma0;
-        split0 = struct('elastic', true);
-        if isfield(ptp, 'mspec') && strcmp(getf(ptp.mspec, 'selection', ''), 'fixed_rank')
-            split0.dominant_count = ptp.mspec.ndom;
-        elseif isfield(ptp, 'mspec') && strcmp(getf(ptp.mspec, 'selection', ''), 'energy')
-            split0.Esplit = ptp.mspec.Esplit;
-        end
-        [cdom0, crest0] = invzt_chi0_split(ptp.si, T, 0, split0);
-        if ~ptp.chi_rest, crest0 = zeros(size(crest0)); end
-        cfull0 = invz_chi0z(ptp.si, T, 0, struct('elastic', true));
-        ctilde0 = cdom0/(1 + ptp.Sigma0) + crest0;
-        oo.hmf_J0z = lat.info.Jcc0 * real(ctilde0(3,3,1)) / real(cfull0(3,3,1));
-        if isfield(ptp, 'Sigma') && all(isfinite(ptp.Sigma))
-            oo.Sigma_seed = ptp.Sigma;
-        end
+    oo.hmf_sigma0 = ptp.Sigma0;
+    split0 = struct('elastic', true);
+    if isfield(ptp, 'mspec') && strcmp(getf(ptp.mspec, 'selection', ''), 'fixed_rank')
+        split0.dominant_count = ptp.mspec.ndom;
+    elseif isfield(ptp, 'mspec') && strcmp(getf(ptp.mspec, 'selection', ''), 'energy')
+        split0.Esplit = ptp.mspec.Esplit;
+    end
+    [cdom0, crest0] = invzt_chi0_split(ptp.si, T, 0, split0);
+    if ~ptp.chi_rest, crest0 = zeros(size(crest0)); end
+    cfull0 = invz_chi0z(ptp.si, T, 0, struct('elastic', true));
+    ctilde0 = cdom0/(1 + ptp.Sigma0) + crest0;
+    fullcc0 = real(cfull0(3,3,1));
+    ratio = real(ctilde0(3,3,1)) / fullcc0;
+    if ~(isfinite(fullcc0) && fullcc0 > 0 && isfinite(ratio) && ratio > 0)
+        error('invzt:hmfRatio', ...
+            'The PM-to-ordered modified-field ratio must be finite and positive.');
+    end
+    oo.hmf_J0z = lat.info.Jcc0 * ratio;
+    di.ordered.handoff_ratio = ratio;
+    di.ordered.hmf_J0z = oo.hmf_J0z;
+    if isfield(ptp, 'Sigma') && all(isfinite(ptp.Sigma))
+        oo.Sigma_seed = ptp.Sigma;
     end
     pto = invzt_solve_point_ordered(ion, T, B, lat, oo);
+    if capture_attempts, di.ordered.point = pto; end
     di.ordered.converged = pto.converged;
     di.ordered.m0 = pto.m0;  di.ordered.crit = pto.crit;  di.ordered.Sigma0 = pto.Sigma0;
+    di.ordered.outer_residual = getf(pto, 'outer_residual', NaN);
     if pto.is_ordered && pto.converged && isfinite(pto.Sigma0) ...
-            && pto.si.mf_converged && pto.crit > ctolo
+            && (1 + pto.Sigma0) > 0 && pto.si.mf_converged ...
+            && isfinite(pto.hmf_residual) && abs(pto.hmf_residual) < 1e-10 ...
+            && pto.crit > ctolo
         di.ordered.accepted = true;
+        di.ordered.reason = 'accepted';
         pt = pto;  phase = 1;  return;
     end
+    di.ordered.reason = ordered_rejection_reason(pto, ctolo);
     if ~isempty(pto.si), pt = pto; end               % last usable attempt wins the pt slot
 catch err
     if ~ismember(err.identifier, RECOVERABLE), rethrow(err); end
     di.ordered.err = err.identifier;
+    di.ordered.reason = err.identifier;
+end
+end
+
+function reason = pm_rejection_reason(pt, sfloor)
+if ~pt.converged
+    reason = 'not_converged';
+elseif ~isfinite(pt.Sigma0)
+    reason = 'sigma_nonfinite';
+elseif (1 + pt.Sigma0) <= 0
+    reason = 'sigma_domain';
+elseif pt.Sigma0 < sfloor
+    reason = 'sigma_below_floor';
+elseif ~isfinite(pt.crit)
+    reason = 'crit_nonfinite';
+elseif pt.crit <= 0
+    reason = 'unstable';
+else
+    reason = 'rejected_unknown';
+end
+end
+
+function reason = ordered_rejection_reason(pt, ctolo)
+if ~pt.is_ordered
+    reason = 'not_ordered';
+elseif ~pt.converged
+    reason = 'not_converged';
+elseif ~isfinite(pt.Sigma0)
+    reason = 'sigma_nonfinite';
+elseif (1 + pt.Sigma0) <= 0
+    reason = 'sigma_domain';
+elseif ~pt.si.mf_converged
+    reason = 'mf_not_converged';
+elseif ~isfinite(pt.hmf_residual) || abs(pt.hmf_residual) >= 1e-10
+    reason = 'hmf_residual';
+elseif ~isfinite(pt.crit)
+    reason = 'crit_nonfinite';
+elseif pt.crit <= ctolo
+    reason = 'unstable';
+else
+    reason = 'rejected_unknown';
 end
 end

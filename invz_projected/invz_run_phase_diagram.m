@@ -91,7 +91,7 @@ plot(TcB, Bs, 's-', 'DisplayName', 'T_c(B)');
 plot(Tc0, 0, 'ks', 'DisplayName', 'T_c(0)');
 xlabel('T (K)');
 ylabel('B_c (T)');
-title(sprintf('LiHoF_4 projected 1/z phase boundary (ODD %s)', onoff(useODD)));
+title('1/z phase boundary');
 legend('Location', 'southwest');
 
 function s = onoff(tf)

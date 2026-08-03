@@ -1,4 +1,23 @@
 .DS_Store
+.claude/settings.local.json
 *.asv
+
+# Generated figures and numerical data.
+*.fig
+*.mat
+*.dat
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tif
+*.tiff
+*.webp
+*.eps
+*.svg
+output/
+outputs/
+
 cache 2/
 docs/execution/out/

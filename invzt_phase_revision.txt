@@ -1,3 +1,0 @@
-1. why Brange is needed if Bs is empty?
-2. why can't Bs = 0 in a1 mode?
-3. is there an ODD toggle switch?

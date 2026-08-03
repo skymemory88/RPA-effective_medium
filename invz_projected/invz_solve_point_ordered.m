@@ -24,6 +24,17 @@ function pt = invz_solve_point_ordered(ion, T, Bx, Jnu_flat, opts)
 % initializes the ordered iteration from a previously accepted state and
 % evaluates the profile from high to low h. Every acceptance gate remains
 % binding; a seed is never accepted as a result.
+%   opts.hmf_profile_sweep_direction = 'descending_local'
+% instead follows the same high-h component from high to low using only
+% target-field states. It needs no cross-field seed and is the consistent
+% field-map route when cold ascending profiles change their certified edge.
+%
+% Hyperfine-off boundary-linearized state (opt-in):
+%   opts.hmf_J0z = finite positive scalar
+% replaces only the nonlocal Jensen H_MF integral by the bracketed solution
+% hmf = hmf_J0z*<Jz>.  invz_solve_auto supplies hmf_J0z from the rejected
+% paramagnetic 1/z fixed point.  This approximation is deliberately rejected
+% for hyp=true; the established electro-nuclear Jensen route is unchanged.
 if nargin < 5, opts = struct(); end
 if any(isfield(opts, {'odd_tier2','tier2','tol_tier2','max_tier2'}))
     error('invz:removedOption', 'The incomplete ODD Tier-2 route has been removed.');
@@ -67,15 +78,45 @@ hopts.J0eff = J0eff;
 for f = {'ordered_mode', 'forced_moment', 'transverse_mf', 'bz_tol'}
     if isfield(hopts, f{1}), hopts = rmfield(hopts, f{1}); end
 end
-[hstar, hprof] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, hopts);
-if ~isfinite(hstar)
-    si = invz_single_ion(ion, T, Bvec, struct('hyp', hyp, 'hz_fixed', 0, 'Jxx0', Jxx0));
-    pt = early_return(si, hprof);
-    return;
-end
+linearized_hmf = isfield(opts, 'hmf_J0z');
+if linearized_hmf
+    if hyp
+        error('invz:hmfLinearizedHyperfine', ...
+            ['hmf_J0z is restricted to the explicit hyperfine-off route; ' ...
+             'the electro-nuclear Jensen route must not be changed.']);
+    end
+    J0z_mf = opts.hmf_J0z;
+    if ~(isnumeric(J0z_mf) && isreal(J0z_mf) && isscalar(J0z_mf) && ...
+            isfinite(J0z_mf) && J0z_mf > 0)
+        error('invz:hmfLinearizedCoupling', ...
+            'hmf_J0z must be a finite positive real scalar.');
+    end
+    hmf_sigma0 = getf(opts, 'hmf_sigma0', NaN);
+    if ~(isnumeric(hmf_sigma0) && isreal(hmf_sigma0) && ...
+            isscalar(hmf_sigma0) && isfinite(hmf_sigma0) && ...
+            (1 + hmf_sigma0) > 0)
+        error('invz:hmfLinearizedSigma', ...
+            'hmf_sigma0 must be finite with 1+hmf_sigma0 > 0.');
+    end
+    [si, mfphase, ~, mfout] = invz_bare_mf_state( ...
+        ion, T, Bx, J0z_mf, Jxx0, false);
+    hprof = linearized_hmf_profile(J0z_mf, hmf_sigma0, mfphase, mfout);
+    if mfphase ~= 1
+        pt = early_return(si, hprof);
+        return;
+    end
+    hstar = si.hz;
+else
+    [hstar, hprof] = invz_hmf_ordered(ion, T, Bx, Jnu_flat, hopts);
+    if ~isfinite(hstar)
+        si = invz_single_ion(ion, T, Bvec, struct('hyp', hyp, 'hz_fixed', 0, 'Jxx0', Jxx0));
+        pt = early_return(si, hprof);
+        return;
+    end
 
-si = invz_single_ion(ion, T, Bvec, ...
-    struct('hyp', hyp, 'hz_fixed', hstar, 'Jxx0', Jxx0));
+    si = invz_single_ion(ion, T, Bvec, ...
+        struct('hyp', hyp, 'hz_fixed', hstar, 'Jxx0', Jxx0));
+end
 m0 = si.Jexp(3);
 
 c0 = invz_chi0z(si, T, 1i*wn, struct('elastic', true));
@@ -101,6 +142,32 @@ if state_seeded
     Sigma = state_seed.Sigma;
     K0s = state_seed.K0;
     lam = state_seed.lambda;
+    if isfield(hprof, 'target_carrier_fallback_used') && ...
+            hprof.target_carrier_fallback_used && ...
+            isfield(hprof, 'Sigma_star') && ...
+            numel(hprof.Sigma_star) == numel(wn) && ...
+            all(isfinite(hprof.Sigma_star(:))) && ...
+            isfield(hprof, 'K0_star') && isfinite(hprof.K0_star)
+        % The legacy source carrier failed and H_MF refinement converged only
+        % through the certified target-field fallback. Keep that carrier for
+        % the final ordered closure; legacy-success retries remain unchanged.
+        Sigma = hprof.Sigma_star(:);
+        K0s = hprof.K0_star;
+    end
+elseif isfield(hprof, 'profile_sweep_direction') && ...
+        strcmp(hprof.profile_sweep_direction, 'descending_local') && ...
+        isfield(hprof, 'Sigma_star') && ...
+        numel(hprof.Sigma_star) == numel(wn) && ...
+        all(isfinite(hprof.Sigma_star(:))) && ...
+        isfield(hprof, 'K0_star') && isfinite(hprof.K0_star)
+    % The local descending profile has already converged the target-field
+    % root without any cross-field state. Preserve that certified carrier in
+    % the final ordered closure so the profile and exported state use one path.
+    Sigma = hprof.Sigma_star(:);
+    K0s = hprof.K0_star;
+elseif linearized_hmf && isfield(opts, 'Sigma_seed') && ...
+        numel(opts.Sigma_seed) == numel(wn) && all(isfinite(opts.Sigma_seed(:)))
+    Sigma = opts.Sigma_seed(:);
 end
 converged = false;
 med = struct('G', nan(size(wn)), 'converged', false);
@@ -164,12 +231,36 @@ pt.production_approximation = hprof.production_approximation;
 pt.approximation_only = hprof.approximation_only;
 pt.D_uni = 1 + (J0eff - K(1))*med.G(1);
 pt.static_status = so.status;
+if linearized_hmf
+    pt.hmf_J0z = J0z_mf;
+    pt.hmf_sigma0 = hmf_sigma0;
+    pt.hmf_residual = hstar - J0z_mf*m0;
+    if ~(isfinite(pt.hmf_residual) && abs(pt.hmf_residual) < 1e-10)
+        error('invz:hmfLinearizedResidual', ...
+            'Boundary-linearized H_MF residual %.6g meV failed.', pt.hmf_residual);
+    end
+end
 if oddOn
     pt.odd = struct('d', d, 'Xp', Xp);
 end
 if abs(pt.si.hz - hstar) > 1e-12
     error('invz:hzFixed', 'Jensen final state did not hold hmf: %.6g vs %.6g.', pt.si.hz, hstar);
 end
+end
+
+function prof = linearized_hmf_profile(J0z_mf, sigma0, mfphase, mfout)
+% Minimal profile-shaped diagnostics for the explicitly approximate route.
+if mfphase == 1
+    status = 'ok_linearized_pm_handoff';
+else
+    status = 'no_linearized_order';
+end
+prof = struct('status', status, 'integral_mode', 'linearized_pm_handoff', ...
+    'approximation_only', true, 'production_approximation', true, ...
+    'missing_area', NaN, 'hmf_J0z', J0z_mf, 'hmf_sigma0', sigma0, ...
+    'bare_mf_phase', mfphase, 'bare_mf_mass_pm', mfout.mass_pm, ...
+    'bare_mf_method', mfout.method, ...
+    'bare_mf_root_residual', mfout.root_residual);
 end
 
 function pt = early_return(si, hprof)
@@ -216,17 +307,13 @@ maxo  = getf(opts, 'max_outer', 200);                % ALIGNED with both solvers
 eso   = getf(opts, 'emt_static', struct());          % static-closure opts, threaded (P1-F)
 eso.warn = false;   % node loop gates on so.converged; suppress the per-node console flood
 integral_mode = string(getf(opts, 'hmf_integral_mode', 'full_profile'));
-endpoint_visual = integral_mode == "endpoint_trapezoid_visual";
-filtered_visual = integral_mode == "filtered_profile_visual";
 missing_area_approx = integral_mode == "missing_area_approx";
 strict_profile = integral_mode == "full_profile";
-visual_only = endpoint_visual || filtered_visual;
-approximation_only = visual_only || missing_area_approx;
-if ~(strict_profile || endpoint_visual || filtered_visual || missing_area_approx)
+approximation_only = missing_area_approx;
+if ~(strict_profile || missing_area_approx)
     error('invz:hmfIntegralMode', ...
-        ['hmf_integral_mode must be ''full_profile'', ' ...
-         '''missing_area_approx'', ''endpoint_trapezoid_visual'', or ' ...
-         '''filtered_profile_visual''.']);
+        ['hmf_integral_mode must be ''full_profile'' or ' ...
+         '''missing_area_approx''.']);
 end
 missing_area_factor = getf(opts,'hmf_missing_area_factor',NaN);
 approximation_branch = string(getf(opts,'hmf_approx_branch', ...
@@ -250,21 +337,6 @@ else
     missing_area_factor = NaN;
     approximation_branch = "not_applicable";
 end
-filtered_anchor_label = "not_applicable";
-if filtered_visual, filtered_anchor_label = "pm_endpoint"; end
-allow_unconverged_pm = getf(opts, 'hmf_endpoint_allow_unconverged_pm', false);
-needs_pm_endpoint = endpoint_visual || filtered_visual;
-filtered_include_unconverged = getf(opts, ...
-    'hmf_filtered_include_unconverged',false);
-if ~(isscalar(filtered_include_unconverged) && ...
-        (islogical(filtered_include_unconverged) || ...
-         (isnumeric(filtered_include_unconverged) && ...
-          isfinite(filtered_include_unconverged) && ...
-          any(filtered_include_unconverged == [0 1]))))
-    error('invz:hmfFilteredOption', ...
-        'hmf_filtered_include_unconverged must be a finite logical/scalar.');
-end
-filtered_include_unconverged = logical(filtered_include_unconverged);
 
 % Fixed-field nodes do not re-apply the ordering update.
 sibase = struct('hyp', hyp, 'Jxx0', Jxx0);
@@ -275,12 +347,17 @@ prof = struct('hgrid', [], 'r', [], 'h0', [], 'm', [], 'Sigma0', [], 'K0', [], .
               'static_status', strings(1,0), 'predictor_static_status', "not_evaluated", ...
               'static_status_star', "not_evaluated", ...
               'refinement_failure_status', "not_evaluated", ...
+              'refinement_primary_failure_status', "not_evaluated", ...
+              'target_carrier_fallback_used', false, ...
+              'refinement_fallback_used', false, ...
+              'refinement_fallback_kind', "not_used", ...
               'slope0', NaN, 'Sigma0_pm0', NaN, 'K0_pm0', NaN, 'J0eff', J0eff, ...
               'n_extend', 0, 'hmin_initial', NaN, 'status', 'no_bare_order', ...
               'redensified', false, ...
               'predictor_converged', false, 'converged_node_count', 0, ...
               'm_star', NaN, 'D_uni_star', NaN, 'r_star', NaN, 'Gstat_star', NaN, ...
-              'integral_mode', char(integral_mode), 'visual_only', visual_only, ...
+              'Sigma_star', [], 'K0_star', NaN, ...
+              'integral_mode', char(integral_mode), ...
               'approximation_only',approximation_only, ...
               'production_approximation',missing_area_approx, ...
               'missing_area_factor',missing_area_factor, ...
@@ -288,22 +365,24 @@ prof = struct('hgrid', [], 'r', [], 'h0', [], 'm', [], 'Sigma0', [], 'K0', [], .
               'missing_area_integral',struct(), ...
               'approximation_branch',char(approximation_branch), ...
               'branch_selection_status',"not_thermodynamically_selected", ...
-              'endpoint_r0', NaN, 'endpoint_r0_source', "not_evaluated", ...
-              'endpoint_pm_converged', false, 'endpoint_pm_iters', NaN, ...
-              'endpoint_pm_crit', NaN, 'filtered_integral', struct(), ...
-              'filtered_anchor', char(filtered_anchor_label), ...
-              'filtered_include_unconverged', filtered_include_unconverged, ...
-              'filtered_unconverged_used_count', 0, ...
+              'bare_mf_phase', 0, 'bare_mf_mass_pm', NaN, ...
+              'bare_mf_method', "not_evaluated", ...
+              'bare_mf_root_residual', NaN, ...
               'root_bracket_indices', [NaN NaN], ...
               'root_bracket_count',0, ...
               'root_bracket_bridged', false);
 hmf_star = NaN;
 
-% Bracket ceiling from the BARE ordered fixed point: SAME MF option base plus
-% order=true and J0z (P1-F -- the bracket runs under the caller's MF knobs too).
-sibo = sibase;  sibo.order = true;  sibo.J0z = J0eff;
-sib = invz_single_ion(ion, T, Bvec, sibo);
-if ~(sib.mf_converged && abs(sib.Jexp(3)) > 1e-6), return; end     % bare does not order
+% Bracket ceiling from the selected BARE MF state. The PM mass decides the
+% phase; on its ordered side a bracketed fixed-hz solve avoids the critical
+% slowing of direct ordered Picard iteration near the bare-MF boundary.
+[sib, bare_mf_phase, bare_mf_mass, bare_mf] = invz_bare_mf_state( ...
+    ion, T, Bx, J0eff, Jxx0, hyp);
+prof.bare_mf_phase = bare_mf_phase;
+prof.bare_mf_mass_pm = bare_mf_mass;
+prof.bare_mf_method = bare_mf.method;
+prof.bare_mf_root_residual = bare_mf.root_residual;
+if bare_mf_phase ~= 1, return; end                    % bare state is paramagnetic
 hmax = hfac * abs(sib.hz);
 if isnan(hmin_abs), hmin_abs = 1e-10*hmax; end
 
@@ -317,13 +396,20 @@ eopts = getf(opts, 'emt', struct());
 profile_sweep_direction = string(getf(opts, ...
     'hmf_profile_sweep_direction','ascending'));
 if ~isscalar(profile_sweep_direction) || ...
-        ~ismember(profile_sweep_direction,["ascending" "descending"])
+        ~ismember(profile_sweep_direction, ...
+        ["ascending" "descending" "descending_local"])
     error('invz:hmfProfileSweepDirection', ...
-        'hmf_profile_sweep_direction must be ''ascending'' or ''descending''.');
+        ['hmf_profile_sweep_direction must be ''ascending'', ''descending'', ' ...
+         'or ''descending_local''.']);
 end
 if profile_sweep_direction == "descending" && ~profile_state_seeded
     error('invz:hmfProfileStateSeed', ...
         'A descending profile sweep requires hmf_profile_state_seed.');
+end
+if profile_sweep_direction == "descending_local" && profile_state_seeded
+    error('invz:hmfProfileStateSeed', ...
+        ['A descending_local profile is target-local and does not accept ' ...
+         'hmf_profile_state_seed; use descending for a cross-field retry.']);
 end
 profile_lambda_seed = zeros(3,1);
 if profile_state_seeded
@@ -364,74 +450,14 @@ else
     slope_pred = NaN;
 end
 
-% VISUAL-ONLY PM endpoint used by the two-endpoint approximation and,
-% optionally, by the filtered positive-h profile:
-%   h0(h) = h*[r_PM(0)+r(h)]/2              (two endpoints)
-%   h0(h_k) = trapz([0,h_valid<=h_k],r)     (filtered profile)
-% At m=0, r_PM(0)=1+Sigma0 exactly. The PM fixed point is evaluated
-% independently so failure of the strict ordered h=0 static closure does not
-% contaminate this endpoint. An unconverged but finite PM last iterate is
-% permitted only behind the explicit visual-only option; it is exported as
-% such and never changes the default full-profile contract.
-endpoint_usable = false;
-endpoint_r0 = NaN;
-if needs_pm_endpoint
-    pmopts = opts;
-    remove = {'odd','odd_blocks','odd_retarded','odd_retarded_exact', ...
-        'odd_rn_override','nH','hmax_fac','hmin_frac','hmin_abs','tol_root', ...
-        'emt_static','hmf_integral_mode','hmf_endpoint_allow_unconverged_pm', ...
-        'hmf_endpoint_pm_max_outer','hmf_filtered_include_unconverged', ...
-        'hmf_missing_area_factor','hmf_approx_branch'};
-    for k = 1:numel(remove)
-        if isfield(pmopts,remove{k}), pmopts = rmfield(pmopts,remove{k}); end
-    end
-    pmopts.J0eff = J0eff;
-    pmopts.Jxx0 = Jxx0;
-    pmopts.max_outer = getf(opts,'hmf_endpoint_pm_max_outer',maxo);
-    pm = invz_solve_point(ion,T,Bx,Jnu_flat,pmopts);
-    endpoint_r0 = 1+pm.Sigma0;
-    endpoint_usable = isfinite(endpoint_r0) && ...
-        (pm.converged || allow_unconverged_pm);
-    prof.endpoint_r0 = endpoint_r0;
-    prof.endpoint_pm_converged = pm.converged;
-    prof.endpoint_pm_iters = pm.outer_iters;
-    prof.endpoint_pm_crit = pm.crit;
-    if pm.converged
-        prof.endpoint_r0_source = "converged_pm_limit";
-    elseif endpoint_usable
-        prof.endpoint_r0_source = "unconverged_pm_last_iterate_visual";
-    else
-        prof.endpoint_r0_source = "pm_endpoint_unusable";
-    end
-end
-
 ratio = hfrac^(1/(nH-1));
 hgrid = hmax * ratio.^((nH-1):-1:0);                 % geometric, clustered at 0 (P1-4)
 prof.hmin_initial = hgrid(1);
 
-[rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s, stv] = run_sweep(hgrid, Sigma, K0s);
+[rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s, stv, ...
+    target_high_Sigma, target_high_K0] = run_sweep(hgrid, Sigma, K0s);
 
-if endpoint_visual && endpoint_usable
-    h0 = 0.5*hgrid.*(endpoint_r0+rv);
-elseif filtered_visual
-    if filtered_include_unconverged
-        integral_eligible = isfinite(mv);
-    else
-        integral_eligible = cnv & isfinite(mv);
-    end
-    if endpoint_usable
-        [h0, filtered_meta] = invz_filtered_profile_integral( ...
-            hgrid,rv,integral_eligible,endpoint_r0);
-    else
-        [h0, filtered_meta] = invz_filtered_profile_integral( ...
-            hgrid,rv,integral_eligible,0);
-        h0(:) = NaN;
-        filtered_meta.anchor = "pm_endpoint_unusable";
-    end
-    prof.filtered_integral = filtered_meta;
-    prof.filtered_unconverged_used_count = ...
-        nnz(filtered_meta.used_mask & ~cnv);
-elseif missing_area_approx
+if missing_area_approx
     integral_eligible = cnv & isfinite(rv) & isfinite(mv);
     [~, component_meta] = invz_missing_area_integral( ...
         hgrid,rv,integral_eligible,1);
@@ -494,7 +520,8 @@ if strict_profile && n_extend > 0 && any(F < 0)
     hfrac_eff = max(hmin_abs/hmax, 0.25*hgrid(idx0)/hmax);
     ratio2 = hfrac_eff^(1/(nH-1));
     hgrid = hmax * ratio2.^((nH-1):-1:0);
-    [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s, stv] = run_sweep(hgrid, Sigma, K0s);
+    [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s, stv, ...
+        target_high_Sigma, target_high_K0] = run_sweep(hgrid, Sigma, K0s);
     h0 = cumtrapz([0 hgrid], [r0n rv]);  h0 = h0(2:end);
     F  = h0 - J0eff*mv;
     prof.redensified = true;
@@ -506,16 +533,7 @@ prof.Sigma0 = S0v;   prof.K0 = K0v;  prof.D_uni = Dv;  prof.node_conv = cnv;  pr
 prof.G0bare = Gbv;   prof.Gstat = Gsv;  prof.static_status = stv;
 prof.converged_node_count = nnz(cnv);
 
-if endpoint_visual && ~endpoint_usable
-    prof.status = 'endpoint_lower_failed';
-    return;
-elseif filtered_visual && ~endpoint_usable
-    prof.status = 'filtered_anchor_failed';
-    return;
-elseif filtered_visual && prof.filtered_integral.node_count < 2
-    prof.status = 'filtered_too_few_nodes';
-    return;
-elseif missing_area_approx && prof.missing_area_integral.node_count < 2
+if missing_area_approx && prof.missing_area_integral.node_count < 2
     prof.status = 'missing_area_no_certified_component';
     return;
 elseif missing_area_approx && ~isfinite(prof.missing_area)
@@ -536,31 +554,7 @@ if strict_profile && (any(~cnv) || any(~isfinite([rv, mv, F])))
     prof.status = 'node_failed';                      % on node failure -- never 'ok'
     return;
 end
-if endpoint_visual
-    valid = cnv & isfinite(rv) & isfinite(mv) & isfinite(F);
-    pair = valid(1:end-1) & valid(2:end) & ...
-        F(1:end-1) < 0 & F(2:end) >= 0;
-    idx = find(pair,1,'last');
-    prof.status = 'ok_endpoint_visual';
-    if isempty(idx)
-        prof.status = 'endpoint_no_bracket';
-        return;
-    end
-    ia = idx;
-    ib = idx+1;
-elseif filtered_visual
-    valid = prof.filtered_integral.used_mask & isfinite(mv) & isfinite(F);
-    retained = find(valid);
-    pair = F(retained(1:end-1)) < 0 & F(retained(2:end)) >= 0;
-    j = find(pair,1,'last');
-    prof.status = 'ok_filtered_profile_visual';
-    if isempty(j)
-        prof.status = 'filtered_no_bracket';
-        return;
-    end
-    ia = retained(j);
-    ib = retained(j+1);
-elseif missing_area_approx
+if missing_area_approx
     valid = prof.missing_area_integral.selected_mask & ...
         isfinite(mv) & isfinite(F);
     pair = valid(1:end-1) & valid(2:end) & ...
@@ -592,69 +586,120 @@ prof.root_bracket_bridged = ib > ia+1;
 % --- Root refinement by DIRECT evaluation (P1-4): bisection on F between the
 % bracketing nodes, fresh node solve per iterate, cumulative h0 via local trapezoid
 % panel from the bracket's left node.
-% A descending cross-field diagnostic finishes its sweep at the low component
-% edge. Restart refinement from the independently accepted neighbouring state,
-% which is the declared high-h seed; all direct-evaluation gates still apply.
+% Preserve the established source-seed refinement as the primary path. A
+% descending retry also owns a certified target-field carrier at the low edge
+% of its accepted component (Sigma/K0s returned by run_sweep). Use that carrier
+% only if the legacy source seed loses the static root during direct refinement.
+% A target-local descending sweep uses its component-edge carrier first. At the
+% exact zero-field degeneracy that carrier can lose the static root even though
+% the independently certified high-h endpoint remains valid; retain that
+% endpoint as a same-field fallback. Prior successful paths remain untouched.
+target_edge_Sigma = Sigma;
+target_edge_K0 = K0s;
+ncarrier = 1;
 if profile_state_seeded && profile_sweep_direction == "descending"
-    Sigma = profile_state_seed.Sigma;
-    K0s = profile_state_seed.K0;
+    ncarrier = 2;
+elseif profile_sweep_direction == "descending_local" && ...
+        ~isempty(target_high_Sigma) && all(isfinite(target_high_Sigma)) && ...
+        isfinite(target_high_K0)
+    ncarrier = 2;
 end
-a = hgrid(ia);  b = hgrid(ib);  Fa = F(ia);  h0a = h0(ia);  ra = rv(ia);
-for it = 1:12
-    c = 0.5*(a + b);
-    [rc, mc, ~, ~, ~, ~, ~, okc, Sigma_candidate, K0_candidate, stc] = ...
-        eval_node(c, Sigma, K0s);
-    if ~okc
-        prof.refinement_failure_status = stc;
-        if filtered_visual
-            prof.status = 'filtered_refinement_failed';
-        elseif missing_area_approx
+refined = false;
+for carrier_attempt = 1:ncarrier
+    seeded_descending = profile_state_seeded && ...
+        profile_sweep_direction == "descending";
+    local_descending = profile_sweep_direction == "descending_local";
+    if carrier_attempt == 1 && seeded_descending
+        Sigma = profile_state_seed.Sigma;
+        K0s = profile_state_seed.K0;
+    elseif carrier_attempt == 2 && local_descending
+        Sigma = target_high_Sigma;
+        K0s = target_high_K0;
+    else
+        Sigma = target_edge_Sigma;
+        K0s = target_edge_K0;
+    end
+    a = hgrid(ia);  b = hgrid(ib);  Fa = F(ia);  h0a = h0(ia);  ra = rv(ia);
+    failure_stage = "none";
+    failure_status = "not_evaluated";
+    for it = 1:12
+        c = 0.5*(a + b);
+        [rc, mc, ~, ~, ~, ~, ~, okc, Sigma_candidate, K0_candidate, stc] = ...
+            eval_node(c, Sigma, K0s);
+        if ~okc
+            failure_stage = "refinement";
+            failure_status = stc;
+            break;
+        end
+        Sigma = Sigma_candidate;
+        K0s = K0_candidate;
+        h0c = h0a + 0.5*(ra + rc)*(c - a);
+        Fc  = h0c - J0eff*mc;
+        if sign(Fc) == sign(Fa), a = c; Fa = Fc; h0a = h0c; ra = rc; else, b = c; end
+        if (b - a) < trt*b, break; end
+    end
+    if failure_stage == "none" && (b - a) >= trt*b
+        prof.status = 'unresolved';  hmf_star = NaN;
+        warning('invz:hmfUnresolved', ...
+            'root bracket not refined to tol_root: (b-a)/b = %.3g', (b-a)/b);
+        return;
+    end
+    if failure_stage == "none"
+        hmf_candidate = 0.5*(a + b);
+        [r_s, m_s, ~, ~, D_s, ~, Gs_s, ok_s, Sigma_star, K0_star, st_s] = ...
+            eval_node(hmf_candidate, Sigma, K0s);
+        if ~ok_s
+            failure_stage = "final";
+            failure_status = st_s;
+        end
+    end
+    if failure_stage ~= "none"
+        if carrier_attempt == 1 && ncarrier == 2
+            prof.refinement_primary_failure_status = failure_status;
+            continue;
+        end
+        prof.refinement_failure_status = failure_status;
+        if missing_area_approx && failure_stage == "refinement"
             prof.status = 'missing_area_refinement_failed';
+        elseif missing_area_approx
+            prof.status = 'missing_area_final_failed';
         else
             prof.status = 'node_failed';
         end
-        hmf_star = NaN;                              % TERMINATES the solve -- never a root
-        return;                                       % from a partial bracket
+        hmf_star = NaN;
+        return;
     end
-    Sigma = Sigma_candidate;
-    K0s = K0_candidate;
-    if endpoint_visual
-        h0c = 0.5*c*(endpoint_r0+rc);
-    else
-        h0c = h0a + 0.5*(ra + rc)*(c - a);
+    hmf_star = hmf_candidate;
+    prof.static_status_star = st_s;
+    prof.target_carrier_fallback_used = ...
+        seeded_descending && carrier_attempt == 2;
+    prof.refinement_fallback_used = carrier_attempt == 2;
+    if prof.refinement_fallback_used && local_descending
+        prof.refinement_fallback_kind = "target_high_node";
+    elseif prof.refinement_fallback_used
+        prof.refinement_fallback_kind = "target_component_edge";
     end
-    Fc  = h0c - J0eff*mc;
-    if sign(Fc) == sign(Fa), a = c; Fa = Fc; h0a = h0c; ra = rc; else, b = c; end
-    if (b - a) < trt*b, break; end
+    refined = true;
+    break;
 end
-if (b - a) >= trt*b                                   % round-5 P1-A: tol_root not reached --
-    prof.status = 'unresolved';  hmf_star = NaN;      % a distinct refinement failure
-    warning('invz:hmfUnresolved', 'root bracket not refined to tol_root: (b-a)/b = %.3g', (b-a)/b);
-    return;
-end
-hmf_star = 0.5*(a + b);
-[r_s, m_s, ~, ~, D_s, ~, Gs_s, ok_s, ~, ~, st_s] = eval_node(hmf_star, Sigma, K0s);
-prof.static_status_star = st_s;
-if ~ok_s
-    if filtered_visual
-        prof.status = 'filtered_final_failed';
-    elseif missing_area_approx
-        prof.status = 'missing_area_final_failed';
-    else
-        prof.status = 'node_failed';
-    end
-    hmf_star = NaN;
-    return;
+if ~refined
+    error('invz:hmfRefinementInvariant', ...
+        'H_MF refinement exited without a success or classified failure.');
 end
 prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star = Gs_s;
+prof.Sigma_star = Sigma_star;
+prof.K0_star = K0_star;
 
-    function [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s, stv] = run_sweep(hgrid, Sigma, K0s)
+    function [rv, mv, S0v, K0v, Dv, Gbv, Gsv, cnv, Sigma, K0s, stv, ...
+            Sigma_high, K0_high] = run_sweep(hgrid, Sigma, K0s)
     % Evaluate in the declared diagnostic direction, warm-starting only from
     % the last accepted node. A failed candidate is retained in the diagnostic
     % arrays but is never committed as the next node's seed.
     n = numel(hgrid);
     [rv, mv, S0v, K0v, Dv, Gbv, Gsv] = deal(nan(1, n));  cnv = false(1, n);
     stv = strings(1,n);
+    Sigma_high = [];
+    K0_high = NaN;
     if profile_sweep_direction == "ascending"
         sweep_indices = 1:n;
     else
@@ -666,6 +711,10 @@ prof.m_star = m_s;  prof.D_uni_star = D_s;  prof.r_star = r_s;  prof.Gstat_star 
         if cnv(is)
             Sigma = Sigma_candidate;
             K0s = K0_candidate;
+            if is == n
+                Sigma_high = Sigma_candidate;
+                K0_high = K0_candidate;
+            end
         end
     end
     end

@@ -206,20 +206,20 @@ if show_projected_anchor
 end
 
 figure; hold on;
-plot(Bc, Ts, 'o-', 'DisplayName', 'tensor A1: field-cut B_c(T)');
+plot(Bc, Ts, 'o-', 'DisplayName', 'Field cut B_c(T)');
 if nB > 0
-    plot(Bs, TcB, 's-', 'DisplayName', 'tensor A1: T-cut T_c(B)');
+    plot(Bs, TcB, 's-', 'DisplayName', 'T cut T_c(B)');
 end
 if show_proxy_anchor && isfinite(Tc0_proxy)
     plot(0, Tc0_proxy, 'k^', 'MarkerFaceColor', 'y', ...
-         'DisplayName', sprintf('tensor small-B_x proxy T_c(0), %.2f T', Bproxy));
+         'DisplayName', sprintf('Small-B proxy, %.2f T', Bproxy));
 end
 if isfinite(Tc0_closed)
     plot(0, Tc0_closed, 'ks', 'MarkerFaceColor', 'c', ...
-         'DisplayName', 'projected closed-form T_c(0) (comparator; legacy-inclusive mesh)');
+         'DisplayName', 'Projected T_c(0)');
 end
 xlabel('B_c (T)'); ylabel('T (K)');
-title('LiHoF_4 full-tensor 1/z phase boundary (PM side: field cuts + T cuts)');
+title('Tensor 1/z phase boundary');
 legend('Location', 'southwest');
 
 % Merged boundary, T-sorted, finite points only. Columns [T(K) B(T)]. Near the

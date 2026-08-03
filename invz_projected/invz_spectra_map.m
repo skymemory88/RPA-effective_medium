@@ -15,12 +15,22 @@ function S = invz_spectra_map(ion, T, fields, w, opts)
 %   eta       5e-3 meV
 %   parallel  false
 %   peak_wmin 0 meV
+%   peak_mode 'strongest' (or 'lowest_local' for a soft-mode branch)
 %   verbose   true
 %   solve_opts struct passed to the point solvers
+%     ordered_state_mode='linearized_pm_handoff' is restricted to hyp=false.
+%     It locates the projected 1/z PM instability once, constructs the
+%     boundary-exact modified molecular-field coupling, and reuses a converged
+%     PM Sigma seed on the ordered side.  The electro-nuclear default remains
+%     the Jensen integral route.
 %     hmf_integral_mode='missing_area_ensemble' is an opt-in production
 %     approximation.  hmf_missing_area_factors must contain shape factors
 %     >= 0.5, including 1; the map evaluates every member and exports
 %     uncertainty ranges.  The default solve remains strict full_profile.
+%     hmf_profile_sweep_direction='descending_local' follows the certified
+%     target-field high-h component downwards without a cross-field seed.
+%     The production hyperfine-on driver selects this mode explicitly; the
+%     option-free solver default remains ascending.
 %     hmf_adjacent_retry=false optionally retries a cold-pass approximation
 %     mask from independently accepted ordered states on both sides;
 %     hmf_adjacent_retry_max_span=0.30 limits their total field separation.
@@ -40,8 +50,20 @@ parallel = getf(opts, 'parallel', false);
 wmin     = getf(opts, 'peak_wmin', 0);
 verbose  = getf(opts, 'verbose', true);
 sxtra    = getf(opts, 'solve_opts', struct());
+orderedStateMode = char(getf(sxtra, 'ordered_state_mode', 'jensen_integral'));
+linearizedMode = strcmp(orderedStateMode, 'linearized_pm_handoff');
+if linearizedMode && hyp
+    error('invz:hmfLinearizedHyperfine', ...
+        ['linearized_pm_handoff is restricted to hyp=false; use the default ' ...
+         'Jensen route for electro-nuclear spectra.']);
+end
 if strcmp(getf(sxtra,'hmf_integral_mode','full_profile'), ...
         'missing_area_ensemble')
+    if linearizedMode
+        error('invz:hmfLinearizedModeConflict', ...
+            ['linearized_pm_handoff and missing_area_ensemble are distinct ' ...
+             'ordered-state approximations and cannot be combined.']);
+    end
     S = missing_area_ensemble_map(ion,T,fields,w,opts,sxtra);
     return;
 end
@@ -54,6 +76,18 @@ fields = fields(:).';
 w = w(:);
 nB = numel(fields);
 nw = numel(w);
+maxDw = 0;
+if nw > 1 && all(isfinite(diff(w)))
+    maxDw = max(diff(w));
+end
+stepTol = 64*eps(max([abs(maxDw),abs(eta),1]));
+if isfinite(maxDw) && maxDw > eta + stepTol
+    warning('invz:spectralUndersampling', ...
+        ['The largest frequency step (%.6g meV) exceeds eta (%.6g meV). ' ...
+         'Narrow poles can alias between bins and mimic a discontinuity; ' ...
+         'use dw <= eta (preferably eta/5 near a critical mode).'], ...
+        maxDw,eta);
+end
 
 hasJnu = isfield(opts, 'Jnu');
 hasInfo = isfield(opts, 'info');
@@ -76,6 +110,11 @@ sopts = sxtra;
 sopts.hyp = hyp;
 sopts.J0eff = Jcc0;
 sopts.Jxx0 = Jaa0;
+linearizedHandoff = struct();
+if linearizedMode
+    [sopts, linearizedHandoff] = prepare_linearized_handoff( ...
+        ion, T, Jnu, Jcc0, Jaa0, sopts);
+end
 retryEnabled = getf(sopts,'hmf_adjacent_retry',false);
 if ~(isscalar(retryEnabled) && (islogical(retryEnabled) || ...
         (isnumeric(retryEnabled) && isfinite(retryEnabled) && ...
@@ -423,11 +462,13 @@ S = struct('fields', fields, 'w', w, 'T', T, 'info', info, ...
     'moment', moment, 'D_ord', Dord,'hmf',hmf, ...
     'missing_area',missingArea,'component_edge',componentEdge);
 S.hmf_integral_mode = getf(sxtra,'hmf_integral_mode','full_profile');
-S.visual_only = ismember(S.hmf_integral_mode, ...
-    {'endpoint_trapezoid_visual','filtered_profile_visual'});
-S.production_approximation = strcmp(S.hmf_integral_mode, ...
+if linearizedMode
+    S.hmf_integral_mode = 'linearized_pm_handoff';
+    S.linearized_pm_handoff = linearizedHandoff;
+end
+S.production_approximation = linearizedMode || strcmp(S.hmf_integral_mode, ...
     'missing_area_approx');
-S.approximation_only = S.visual_only || S.production_approximation;
+S.approximation_only = S.production_approximation;
 S.missing_area_factor = getf(sxtra,'hmf_missing_area_factor',NaN);
 S.approximation_branch = getf(sxtra,'hmf_approx_branch', ...
     'not_applicable');
@@ -458,8 +499,10 @@ S.ordered_boundary_retry = struct('enabled',boundaryRetryEnabled, ...
 S.Bc = invz_boundary_field(fields, phase == 1, phase == 2);
 S.Bc_1z = S.Bc;
 S.Bc_rpa = invz_boundary_field(fields, phaseRpa == 1, phaseRpa == 2);
-S.Epeak = invz_peak_energy(chiz, w, wmin);
-S.Epeak_rpa = invz_peak_energy(chirpa, w, wmin);
+peakMode = getf(opts, 'peak_mode', 'strongest');
+S.peak_mode = peakMode;
+S.Epeak = invz_peak_energy(chiz, w, wmin, peakMode);
+S.Epeak_rpa = invz_peak_energy(chirpa, w, wmin, peakMode);
 end
 
 function [chiz, chirpa, Sigma0, phase, phaseRpa, rpaMass, moment, Dord, ...
@@ -683,7 +726,6 @@ ensemble = struct('factors',factors, ...
     'completions on one declared numerical branch. They are approximation ' ...
     'sensitivity bands, not confidence intervals or equilibrium selection.']);
 S.hmf_integral_mode = 'missing_area_ensemble';
-S.visual_only = false;
 S.production_approximation = true;
 S.approximation_only = true;
 S.missing_area_factor = factors(central);
@@ -729,6 +771,114 @@ function s = remove_fields(s,names)
 for k = 1:numel(names)
     if isfield(s,names{k}), s = rmfield(s,names{k}); end
 end
+end
+
+function [sopts, out] = prepare_linearized_handoff( ...
+    ion, T, Jnu, Jcc0, Jaa0, sopts)
+% Boundary-exact scalar version of the tensor modified-field handoff.
+critOpts = sopts;
+critOpts.window = getf(sopts, 'hmf_linearized_window', [2 7]);
+critOpts.tol = getf(sopts, 'hmf_linearized_critical_tol', 1e-5);
+critOpts.fieldstep = getf(sopts, 'hmf_linearized_fieldstep', 0.10);
+BcCoarse = invz_critical(ion, T, Jnu, critOpts);
+
+% A stable PM point supplies the full Matsubara Sigma seed required by the
+% ordered static closure.  Increase the offset until that producer is
+% independently converged and stable.
+seedOffset0 = getf(sopts, 'hmf_linearized_seed_offset', ...
+    max(1e-4, 10*critOpts.tol));
+if ~(isnumeric(seedOffset0) && isreal(seedOffset0) && isscalar(seedOffset0) && ...
+        isfinite(seedOffset0) && seedOffset0 > 0)
+    error('invz:hmfLinearizedSeed', ...
+        'hmf_linearized_seed_offset must be finite and positive.');
+end
+seedOpts = remove_fields(sopts, ...
+    {'hmf_J0z','hmf_sigma0','hmf_boundary_field','Sigma_seed'});
+seed = [];
+seedField = NaN;
+for k = 1:12
+    trialField = BcCoarse + seedOffset0*2^(k-1);
+    try
+        trial = invz_solve_point(ion, T, trialField, Jnu, seedOpts);
+    catch err
+        if ~strncmp(err.identifier, 'invz:', 5), rethrow(err); end
+        trial = [];
+    end
+    if ~isempty(trial) && trial.converged && isfinite(trial.crit) && ...
+            trial.crit > 0 && isfield(trial, 'Sigma') && ...
+            all(isfinite(trial.Sigma))
+        seed = trial;
+        seedField = trialField;
+        break;
+    end
+end
+if isempty(seed)
+    error('invz:hmfLinearizedSeed', ...
+        ['No converged stable PM Sigma seed was found above the projected ' ...
+         '1/z critical field.']);
+end
+
+% invz_critical can interpolate across a cold-start non-convergence patch.
+% Re-bracket its estimate with the certified stable seed and refine using the
+% same full Sigma seed at every trial.  This distinguishes a true zero of the
+% PM mass from the lower edge of a cold-start convergence basin.
+refineOpts = seedOpts;
+refineOpts.Sigma_seed = seed.Sigma;
+low = invz_solve_point(ion, T, BcCoarse, Jnu, refineOpts);
+if ~(low.converged && isfinite(low.crit) && low.crit <= 0 && seed.crit > 0)
+    error('invz:hmfLinearizedBoundary', ...
+        ['The warm-started PM mass did not bracket zero between the coarse ' ...
+         'critical estimate and the stable PM seed.']);
+end
+Blo = BcCoarse;
+clo = low.crit;
+Bhi = seedField;
+chi = seed.crit;
+for k = 1:60
+    if Bhi-Blo <= critOpts.tol, break; end
+    Btrial = Blo - clo*(Bhi-Blo)/(chi-clo);
+    Btrial = min(max(Btrial, Blo + 0.1*(Bhi-Blo)), ...
+        Bhi - 0.1*(Bhi-Blo));
+    trial = invz_solve_point(ion, T, Btrial, Jnu, refineOpts);
+    if ~(trial.converged && isfinite(trial.crit))
+        error('invz:hmfLinearizedBoundary', ...
+            'Warm-started PM critical refinement failed at B = %.12g T.', Btrial);
+    end
+    if trial.crit <= 0
+        Blo = Btrial;
+        clo = trial.crit;
+    else
+        Bhi = Btrial;
+        chi = trial.crit;
+    end
+end
+Bc = Blo - clo*(Bhi-Blo)/(chi-clo);
+
+siBc = invz_single_ion(ion, T, [Bc 0 0], ...
+    struct('hyp', false, 'Jxx0', Jaa0));
+c0 = invz_chi0z(siBc, T, 0, struct('elastic', true));
+chi0cc = real(c0(3,3,1));
+sigma0 = Jcc0*chi0cc - 1;
+J0z_mf = 1/chi0cc;
+if ~(siBc.mf_converged && isfinite(chi0cc) && chi0cc > 0 && ...
+        isfinite(sigma0) && (1 + sigma0) > 0 && ...
+        isfinite(J0z_mf) && J0z_mf > 0)
+    error('invz:hmfLinearizedBoundary', ...
+        'Could not construct a finite positive boundary-linearized handoff.');
+end
+
+sopts.hmf_J0z = J0z_mf;
+sopts.hmf_sigma0 = sigma0;
+sopts.hmf_boundary_field = Bc;
+sopts.Sigma_seed = seed.Sigma;
+out = struct('boundary_field', Bc, 'J0z_mf', J0z_mf, ...
+    'sigma0_boundary', sigma0, 'chi0cc_boundary', chi0cc, ...
+    'handoff_ratio', J0z_mf/Jcc0, 'seed_field', seedField, ...
+    'seed_crit', seed.crit, 'seed_sigma0', seed.Sigma0, ...
+    'coarse_boundary_field', BcCoarse, ...
+    'critical_tolerance_T', critOpts.tol, ...
+    'interpretation', ['The ordered molecular field is the linearized ' ...
+     'Jensen relation made exact at the projected PM instability.']);
 end
 
 function [lo,hi,complete] = finite_range(values,dim)

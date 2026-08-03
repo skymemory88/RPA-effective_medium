@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Full-tensor 1/z tiers: A1, A2, and A3</title>
+<style>
+  :root {
+    --ink: #20201d;
+    --paper: #fcfbf7;
+    --muted: #645f55;
+    --rule: #d8d2c5;
+    --accent: #234e70;
+    --good: #276445;
+    --warn: #8a5414;
+    --stop: #8a2828;
+    --code: #f1eee7;
+  }
+  html { font-size: 17px; }
+  body {
+    margin: 0; color: var(--ink); background: var(--paper);
+    font-family: Charter, "Palatino Linotype", Palatino, Georgia, serif;
+    line-height: 1.55;
+  }
+  .main { max-width: 900px; margin: 0 auto; padding: 2.4rem 1.35rem 4rem; }
+  .header { border-bottom: 3px double var(--rule); padding-bottom: 1rem; }
+  h1 { margin: 0 0 .45rem; font-size: 1.8rem; line-height: 1.2; }
+  h2 {
+    color: var(--accent); border-bottom: 1px solid var(--rule);
+    margin: 2.4rem 0 .8rem; padding-bottom: .2rem; font-size: 1.3rem;
+  }
+  h3 { margin: 1.4rem 0 .4rem; font-size: 1.08rem; }
+  p { margin: .65rem 0; }
+  a { color: var(--accent); }
+  code {
+    background: var(--code); border: 1px solid var(--rule); border-radius: 3px;
+    padding: .05rem .28rem; font-size: .84em;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .93rem; }
+  th, td { border: 1px solid var(--rule); padding: .5rem .6rem; vertical-align: top; }
+  th { background: #f1eee6; text-align: left; }
+  ul, ol { padding-left: 1.35rem; }
+  li { margin: .35rem 0; }
+  .sub { color: var(--muted); font-style: italic; }
+  .box { border-left: 4px solid; padding: .7rem .95rem; margin: 1rem 0; background: #f5f3ed; }
+  .box strong:first-child { display: block; margin-bottom: .2rem; }
+  .fact { border-color: var(--good); }
+  .caution { border-color: var(--warn); background: #fbf5e9; }
+  .stop { border-color: var(--stop); background: #faeeee; }
+  .eq {
+    margin: .9rem 0; padding: .75rem 1rem; overflow-x: auto;
+    background: #f4f6f7; border: 1px solid #d8dfe3;
+    font-family: "SF Mono", Consolas, monospace; font-size: .88rem;
+  }
+  .flow { text-align: center; font-weight: 600; letter-spacing: .01em; }
+  .footer { border-top: 1px solid var(--rule); margin-top: 3rem; padding-top: .8rem;
+    color: var(--muted); font-size: .86rem; }
+  @media (max-width: 680px) {
+    html { font-size: 16px; }
+    table { display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="main">
+<div class="header">
+  <h1>Full-tensor 1/z tiers: A1, A2, and A3</h1>
+  <div class="sub">What each approximation keeps, what problem it is meant to solve,
+  and the gated route from the present A1 bridge to an A3 production theory.</div>
+</div>
+
+<div class="box caution">
+  <strong>Historical reference retained at the user&rsquo;s request</strong>
+  This guide explains the retired A1/A2/A3 tier vocabulary and records why the
+  dense A3 route was stopped. It is not the active implementation plan on the
+  <code>invzt-multilevel-1z</code> branch. The active specification is
+  <a href="invzt_multilevel_1z_next_steps.md"><code>invzt_multilevel_1z_next_steps.md</code></a>;
+  the execution record is
+  <a href="docs/execution/invzt_multilevel_1z_journal.md"><code>docs/execution/invzt_multilevel_1z_journal.md</code></a>.
+</div>
+
+<div class="box caution">
+  <strong>Terminology</strong>
+  A1, A2, and A3 are repository approximation tiers. They are neither
+  paramagnetic/ordered phases nor first-, second-, and third-order powers of
+  <em>1/z</em>. The physical phase is a separate verdict made from a converged,
+  admissible state and its stability.
+</div>
+
+<h2>1. The hierarchy in one picture</h2>
+
+<div class="flow">
+  A1: scalar vertex + scalar feedback<br>
+  &darr;<br>
+  A2: scalar vertex + matrix feedback<br>
+  &darr;<br>
+  A3: matrix vertex + matrix feedback
+</div>
+
+<table>
+  <thead>
+    <tr><th>Tier</th><th>Local fluctuation correction</th><th>Effective medium</th><th>Natural state</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>A1</td><td>Two-level scalar self-energy</td><td>Longitudinal scalar channel</td><td>&Sigma;<sub>n</sub> and moment sums &lambda;<sub>p</sub></td></tr>
+    <tr><td>A2</td><td>The same scalar A1 self-energy</td><td>Full 3&times;3 Cartesian matrix</td><td>&Sigma;<sub>n</sub>, &lambda;<sub>p</sub>, and K<sub>&mu;&nu;</sub></td></tr>
+    <tr><td>A3</td><td>Connected component-labelled four-point vertex</td><td>Full 3&times;3 Cartesian matrix</td><td>V<sub>&mu;&nu;</sub>(i&omega;<sub>n</sub>) and K<sub>&mu;&nu;</sub>(i&omega;<sub>n</sub>)</td></tr>
+  </tbody>
+</table>
+
+<h2>2. A1: the economical two-level bridge</h2>
+
+<h3>Purpose</h3>
+<p>
+  A1 retains the dominant low-energy transition as a two-level fluctuation
+  problem. Its many-body correction is compressed into one scalar self-energy
+  for each Matsubara frequency. Weak transitions can remain bare:
+</p>
+
+<div class="eq">
+&chi;&#771;<sub>0</sub> = &chi;<sub>dom</sub>/(1 + &Sigma;) + &chi;<sub>rest</sub>.
+</div>
+
+<p>
+  A longitudinal medium K generates the moment sums &lambda;, which update
+  &Sigma;. This is cheap, reduces to Jensen's scalar equations, and supports the
+  existing scalar real-axis continuation.
+</p>
+
+<h3>What A1 is good for</h3>
+<ul>
+  <li>Paramagnetic and near-continuous-boundary calculations dominated by one doublet.</li>
+  <li>Fast scans, transparent scalar limits, and comparison with the projected-spin implementation.</li>
+  <li>The boundary-exact linearized ordered handoff as the moment tends to zero.</li>
+</ul>
+
+<h3>Why tensor A1 stops deep in the ordered phase</h3>
+<ul>
+  <li>A scalar &Sigma; is forced through a multilevel tensor response.</li>
+  <li>The ordered two-level elastic factor has no unique dominant/rest assignment.</li>
+  <li>A multipole bare propagator has real zeros, so the ratio V/G<sub>0</sub> can acquire artificial poles.</li>
+  <li>Multiple converged roots are not ranked by the fixed-point algorithm.</li>
+</ul>
+
+<div class="box stop">
+  <strong>Current A1 boundary</strong>
+  The full-tensor production driver is correctly fail-closed where no certified
+  deep-ordered A1 state exists. Warm retries, Ewald summation, and projected
+  missing-area logic cannot supply the missing tensor static theory or a physical
+  root selector.
+</div>
+
+<h2>3. A2: isolate matrix-medium physics</h2>
+
+<h3>Purpose</h3>
+<p>
+  A2 asks a narrower question: what changes when the medium retains all Cartesian
+  components, while the local fluctuation vertex remains the scalar A1 vertex?
+  Given a local renormalized tensor &chi;&#771;<sub>0</sub>, it computes the full tensor
+  lattice response and then the matrix medium
+</p>
+
+<div class="eq">
+&chi;&#772; = &lang;(&chi;&#771;<sub>0</sub><sup>&minus;1</sup> &minus; J(q))<sup>&minus;1</sup>&rang;<sub>q</sub>,<br>
+K = &chi;&#771;<sub>0</sub><sup>&minus;1</sup> &minus; &chi;&#772;<sup>&minus;1</sup>.
+</div>
+
+<p>
+  The implementation uses active-subspace linear solves, not literal inverses.
+  It preserves the physical off-frequency gyrotropic matrix structure. The code
+  then feeds K<sub>cc</sub> back into the same scalar A1 self-energy equation.
+</p>
+
+<div class="box fact">
+  <strong>A2 is not a phase</strong>
+  The current repository has a paramagnetic/symmetry-state point mode
+  <code>mode='a2'</code>. It has no ordered A2 solver, phase dispatcher, or
+  real-axis production route. A negative A2 mass means that the evaluated
+  symmetry state is unstable; it does not define an “A2 ordered phase.”
+</div>
+
+<h2>4. A3: carry the multilevel vertex explicitly</h2>
+
+<h3>Purpose</h3>
+<p>
+  A3 removes the scalar compression. It evaluates the connected single-ion
+  four-point vertex &Gamma;<sup>(4)</sup>, contracts it with the full matrix medium,
+  and retains a component-labelled correction:
+</p>
+
+<div class="eq">
+V<sub>&mu;&nu;</sub>(n) = (1/2&beta;) &sum;<sub>l,&rho;&sigma;</sub>
+K<sub>&rho;&sigma;</sub>(l)
+&Gamma;<sup>(4)</sup><sub>&mu;&nu; &rho;&sigma;</sub>(n,l).
+</div>
+
+<p>
+  The local response is resummed on a common active subspace in matrix form,
+  avoiding division by a multipole G<sub>0</sub>:
+</p>
+
+<div class="eq">
+G&#771;<sub>0</sub> = G<sub>0</sub>(G<sub>0</sub> + V)<sup>&minus;1</sup>G<sub>0</sub>.
+</div>
+
+<p>
+  The matrix medium is recomputed from this response and the cycle V &harr; K is
+  iterated to a fixed point. Centered operators put the connected elastic/Curie
+  sector into the multilevel vertex itself. Consequently A3 does not need an
+  arbitrary scalar assignment of Jensen's two-level elastic factor.
+</p>
+
+<h3>What A3 dictates</h3>
+<ul>
+  <li>The correction is additive and component-labelled, not a scalar ratio.</li>
+  <li>The medium and vertex retain Cartesian indices and one representation.</li>
+  <li><code>Sigma_cc_equiv = Vcc/G0cc</code> is diagnostic only.</li>
+  <li>A1 moment-form objects such as &Sigma;, &lambda;, &alpha;, and &alpha;<sub>m</sub> need not exist.</li>
+  <li>An ordered A3 theory must derive its own field and thermodynamic relations; it cannot inherit the A1 endpoint rescaling.</li>
+</ul>
+
+<h3>Full A3 versus the present ordered A3d hybrid</h3>
+<p>
+  Full A3 dresses all retained vertex components. For the 136-state
+  electronuclear space, the present dense four-point contraction is not
+  computationally practical. The current ordered <code>a3d</code> route instead
+  dresses a field-adapted rank-16 dominant <em>cc</em> vertex and leaves the rest
+  response bare, while including that rest response inside the same matrix-medium
+  fixed point. This is a coherent hybrid, but it is presently a Matsubara
+  diagnostic around a bare-mean-field ordered state—not a completed A3 ordered
+  thermodynamics.
+</p>
+<p>
+  There is also no matched PM A3d producer yet. The current PM
+  <code>mode='a3'</code> full/legacy-dominant routes do not use the ordered
+  A3d branch's identical fixed-rank basis and rest-offset contract. A continuous
+  A3d phase boundary therefore requires a new PM map with the same vertex rank,
+  dominant projector, rest response, and resummation on both sides.
+</p>
+
+<h2>5. What A3 resolves—and what it does not</h2>
+
+<table>
+  <thead><tr><th>Question</th><th>Existing A3/A3d status</th></tr></thead>
+  <tbody>
+    <tr><td>Multilevel local correction</td><td>Implemented as a connected tensor vertex.</td></tr>
+    <tr><td>Matrix effective medium</td><td>Implemented on a frequency-consistent active subspace.</td></tr>
+    <tr><td>Ambiguous A1 elastic split</td><td>Avoided in principle by the explicit connected vertex; ordered reduction still needs proof.</td></tr>
+    <tr><td>Deep-ordered molecular field</td><td>Missing. A3d currently evaluates a bare-MF ordered state.</td></tr>
+    <tr><td>Physical branch selector/free energy</td><td>Missing.</td></tr>
+    <tr><td>Exact zero field</td><td>Not operational: the common point solver currently applies the A1 guard before mode dispatch.</td></tr>
+    <tr><td>Real-axis A3 spectrum</td><td>Missing; the current continuation rejects non-A1 points.</td></tr>
+    <tr><td>Matched PM/ordered A3d producer</td><td>Missing; present PM A3 and ordered A3d conventions are not one boundary pair.</td></tr>
+    <tr><td>Residual/co-state contract</td><td>Implemented and tested: evaluated V, generated V<sub>next</sub>, tensor/scaled residuals, status class, and rank provenance are explicit. Diagnostic one-step tuples cannot be accepted as solves.</td></tr>
+    <tr><td>Production phase dispatch</td><td>A1-only by design.</td></tr>
+    <tr><td>Vertex-rank convergence</td><td>Unproved for deep-ordered production states.</td></tr>
+  </tbody>
+</table>
+
+<div class="box caution">
+  <strong>Computational warning</strong>
+  At T = 0.1 K and the current Matsubara cutoff, the rank-16 compact vertex is
+  already approximately 4.3&times;10<sup>11</sup> kernel operations <em>per distinct
+  single-ion state</em>. A 101-state sweep therefore starts near
+  4.3&times;10<sup>13</sup>, before field-derivative or path states are counted, and
+  rank 24 exceeds the default work guard. The current cache evicts after six
+  entries, but this is not a safe full-dress policy: six compact entries use
+  about 100 MiB, whereas six full entries use about 7.93 GiB per worker. Full
+  dress stores a roughly 1.32 GiB Cartesian and frequency pad at this grid even
+  for a small-state toy, and currently has no byte preflight. The replacement
+  contract caps retained Gamma4 data at 1.5 GiB per worker, evicts before a new
+  allocation crosses that cap, and independently caps worker RSS at 4 GiB.
+  The other pre-registered ceilings are 24 hours per 101-point sweep after a
+  factor-two forecast margin and 512 MiB of persisted sweep payload. Static
+  susceptibility coverage alone is not a vertex convergence test;
+  connected-variance coverage can be much poorer.
+</div>
+
+<div class="box caution">
+  <strong>Cost gate result: stopped</strong>
+  The clean compact-kernel record measured 1687 s for an uncached,
+  JIT-warmed, untiled rank-16 build at T = 0.1 K, B = 3 T, and Ecut = 10 meV,
+  projecting 7.43 h at the Ecut = 40 production grid. A 101-state sweep is
+  therefore not expected to pass the
+  present budget unchanged. On twelve workers, nine build waves and the
+  factor-two margin require at least a 5.58&times; rank-16 speedup; N<sup>4</sup>
+  projections raise this to floors of 28.22&times; at rank 24 and 89.17&times; at rank
+  32. The existing rank-24 measurement was about 2.6&times; slower than that fit,
+  making 73.35&times; the evidence-informed rank-24 prior until remeasurement. The
+  commonly quoted roughly-35&times; figure is the serial, no-margin comparison, not
+  the twelve-worker gate. A repeat of the unchanged executable kernel projected
+  a slower 9.917 h/build, but overlapped an unrelated MATLAB job and is retained
+  only as an upper bound. The formal optimistic 7.43 h basis still forecasts
+  133.74 hours for the margin-adjusted 101-state sweep, versus the frozen
+  24-hour ceiling. No exact contraction prototype has passed the identity,
+  10<sup>-11</sup> equivalence, complexity, and forecast sub-gate. The recorded
+  outcome is therefore <code>stop_cost</code>; A3-1/A3-2 and production dispatch
+  are not authorized.
+</div>
+
+<h2>6. How the A3 route will be achieved</h2>
+
+<div class="box caution">
+  <strong>Current boundary</strong>
+  Steps 1 and 2 below are complete. Step 2 stopped the present route on cost.
+  Steps 3&ndash;9 are retained as the specification a future exact algorithm must
+  satisfy, not as authorized work. Resuming requires new exact-compression
+  evidence or a separately designed and labelled approximation tier.
+</div>
+
+<ol>
+  <li><strong>Freeze the current map &mdash; complete.</strong> Small deterministic A3/A3d tests now expose the residual, consistent co-state, status, and requested/realized rank.</li>
+  <li><strong>Reconcile cost, then screen feasibility &mdash; stopped.</strong> Dense cost is confirmed; the 101-state forecast fails by 5.573&times; and no exact compression prototype passes its sub-gate.</li>
+  <li><strong>Lock the theory contract.</strong> Prove the two-level ordered reduction through the declared 1/z order and the continuous-boundary limit.</li>
+  <li><strong>Expose one immutable A3 map.</strong> If the feasibility gate passes, separate context construction, one V &rarr; V<sub>new</sub> evaluation, iteration, and physical-domain diagnostics.</li>
+  <li><strong>Establish physical rank convergence.</strong> Within the authorized budget, measure vertex-rank, Matsubara, lattice, and resummation-scheme convergence at frozen boundary and deep-ordered states.</li>
+  <li><strong>Match the two phase producers.</strong> Build PM and ordered A3d maps with the identical fixed-rank dominant/rest convention before interpreting a boundary.</li>
+  <li><strong>Derive the A3 field response and ordered thermodynamics.</strong> Determine whether the field differential uses the fixed-V response or the total derivative of the self-consistent V map, then derive a selector or retain unranked components.</li>
+  <li><strong>Build zero-field, continuation, and phase layers.</strong> Only after the owning gates, add an invariant zero-field limit, matrix real-axis continuation, and A3 dispatcher. Without an ordered selector, production remains PM-only.</li>
+  <li><strong>Validate end to end.</strong> Require residual/co-state, rank/cutoff, build-budget, forward/reverse continuation, serial/parallel, causality, and clean-session reproduction gates at T = 0.1 K before any production declaration.</li>
+</ol>
+
+<div class="box fact">
+  <strong>Historical implementation record</strong>
+  The A3 execution plan and scalar-A1 convergence plan described here are
+  retired from this branch. Their surviving conclusions are summarized in the
+  active multilevel plan rather than copied as competing instructions. See the
+  <a href="docs/invzt_documentation_index.md">documentation index</a> for the
+  active/reference/retired classification.
+</div>
+
+<h2>7. Source-of-record locations</h2>
+<ul>
+  <li><a href="invz_tensor/invzt_solve_point.m"><code>invzt_solve_point.m</code></a>: PM A1/A2/A3 point modes.</li>
+  <li><a href="invz_tensor/invzt_emt_matrix.m"><code>invzt_emt_matrix.m</code></a>: matrix effective medium.</li>
+  <li><a href="invz_tensor/invzt_sigma_tensor.m"><code>invzt_sigma_tensor.m</code></a>: A3 vertex contraction and V fixed point.</li>
+  <li><a href="invz_tensor/invzt_solve_point_ordered.m"><code>invzt_solve_point_ordered.m</code></a>: current diagnostic ordered A3d route.</li>
+  <li><a href="invz_tensor/invzt_ordered_vertex_basis.m"><code>invzt_ordered_vertex_basis.m</code></a>: field-adapted dominant vertex basis and coverage warnings.</li>
+  <li><a href="jensen_1z_framework.html#s11"><code>jensen_1z_framework.html</code> &sect;11.8</a>: additive multilevel matrix-resummation requirement.</li>
+</ul>
+
+<div class="footer">
+  Prepared 1 August 2026; classified as a historical reference on 2 August
+  2026. It does not authorize A1, A2, or A3 production work.
+</div>
+</div>
+</body>
+</html>

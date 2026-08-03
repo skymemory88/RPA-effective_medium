@@ -231,20 +231,31 @@ end
 Vmat = [];  chi_til = [];  Sigma_cc_equiv = nan(nwn, 1);
 resum_spread_crit = NaN;  eps_el = NaN;  eps_cross = NaN;  a3_active_rank = NaN;
 c_d = NaN;  ctil0_add = [];  a3_dress = '';
+Vnext = [];  a3_residual = [];  a3_residual_scaled = NaN;
+a3_residual_component_max = [];  a3_residual_frequency_max = [];
+a3_evaluation_kind = '';  a3_vertex = struct();  map_converged = false;
 
 if strcmp(mode, 'a3')
     % ===== A3: genuine tensor 1/z self-energy from the exact four-point vertex =====
     % invzt_sigma_tensor runs its OWN Vmat fixed-point (Gamma4 precomputed once); it
     % consumes pt.Kmat's full non-Hermitian K AS-IS (constraint 9, never symmetrized).
     st_opts = struct('rank_tol', emt_rank_tol);
-    if isfield(opts, 'mix_outer'), st_opts.mix_outer = opts.mix_outer; end
-    if isfield(opts, 'tol_outer'), st_opts.tol_outer = opts.tol_outer; end
-    if isfield(opts, 'max_outer'), st_opts.max_outer = opts.max_outer; end
-    if isfield(opts, 'Vmat_seed'), st_opts.Vmat_seed = opts.Vmat_seed; end
-    if isfield(opts, 'dress'),     st_opts.dress     = opts.dress;     end  % 'full'|'dominant' (E1 match)
+    for f = {'mix_outer', 'tol_outer', 'max_outer', 'Vmat_seed', 'dress', ...
+             'anderson_depth', 'evaluation_kind', 'Lmax', 'tile_nl', ...
+             'max_vertex_states', 'max_vertex_work', 'max_vertex_bytes'}
+        if isfield(opts, f{1}), st_opts.(f{1}) = opts.(f{1}); end
+    end
     st = invzt_sigma_tensor(si, T, lat_eff, wn, beta, st_opts);
     Vmat = st.Vmat;  chi_til = st.chi_til;  Kmat = st.Kmat;  emtinfo = st.emtinfo;
-    Gloc = st.Gloc;  converged = st.converged;  outer = st.outer_iters;
+    Vnext = st.Vnext;  a3_residual = st.residual;
+    a3_residual_scaled = st.residual_scaled;
+    a3_residual_component_max = st.residual_component_max;
+    a3_residual_frequency_max = st.residual_frequency_max;
+    a3_evaluation_kind = st.evaluation_kind;  a3_vertex = st.vertex;
+    map_converged = st.converged;
+    converged = st.converged && ~strcmp(st.evaluation_kind, 'one_step_reevaluation');
+    outer = st.outer_iters;  dS = st.residual_inf;
+    Gloc = st.Gloc;
     a3_active_rank = st.active_rank;  a3_dress = st.dress;
     diag4 = emtinfo.diag4_cc;
     K = real(squeeze(Kmat(3,3,:)));                     % cc medium kernel (report)
@@ -288,8 +299,12 @@ mAA = getf(opts, 'anderson_depth', 5);
 wstate = warning('off', 'MATLAB:rankDeficientMatrix');   % benign in the LS extrapolation
 cleaner = onCleanup(@() warning(wstate));
 Sigma = zeros(nwn, 1);
-if isfield(opts, 'Sigma_seed') && numel(opts.Sigma_seed) == nwn
-    Sigma = opts.Sigma_seed(:);
+if isfield(opts, 'Sigma_seed') && ~isempty(opts.Sigma_seed)
+    if numel(opts.Sigma_seed) ~= nwn || any(~isfinite(opts.Sigma_seed(:)))
+        error('invzt:SigmaSeed', ...
+            'opts.Sigma_seed must contain %d finite entries.', nwn);
+    end
+    Sigma = real(opts.Sigma_seed(:));
 end
 denom = @(s) reshape(1 + s, 1, 1, nwn);
 converged = false;
@@ -297,6 +312,7 @@ Gloc = nan(nwn, 1);  K = nan(nwn, 1);  diag4 = nan(4, nwn);  lam = [NaN; NaN];
 Kmat = [];  emtinfo = struct();                          % A2: matrix medium (mode 'a2' only)
 sg = struct('alpha', NaN, 'gamma', nan(nwn,1), 'Sigma', nan(nwn,1));
 Fhist = cell(1, 0);  Xhist = cell(1, 0);
+dS = Inf;
 for outer = 1:maxo
     % --- medium step g(Sigma): renormalized chi0 -> lattice cc -> K -> Sigma' ---
     ctil = cdom ./ denom(Sigma) + crest;                % [3,3,nwn] renormalized chi0
@@ -320,8 +336,9 @@ for outer = 1:maxo
     f = sg.Sigma - Sigma;                               % fixed-point residual
     dS = max(abs(f));
     if dS < tolo, converged = true; break; end          % Gloc/K/lam/sg are at the fixed point
+    if outer == maxo, break; end                        % keep the last evaluated co-state consistent
     % --- Anderson-accelerated update (depth 1 == plain damped mix) -------------
-    Fhist{end+1} = f;  Xhist{end+1} = sg.Sigma;
+    Fhist{end+1} = f;  Xhist{end+1} = sg.Sigma; %#ok<AGROW>
     if numel(Fhist) > mAA, Fhist(1) = [];  Xhist(1) = []; end
     mk = numel(Fhist);
     if mk == 1
@@ -376,9 +393,12 @@ if strcmp(mode, 'a3')
         && all(isfinite(K)) && all(isfinite(Gloc));
 else
     phys_finite = all(isfinite(Sigma)) && all(isfinite(K)) && all(isfinite(Gloc));
+    map_converged = converged;
 end
 pt.converged = converged && phys_finite;
+pt.map_converged = map_converged && phys_finite;
 pt.outer_iters = outer;
+pt.outer_residual = dS;
 % REPORT: sublattice spread of the site-diagonal cc average (S4 symmetry breaking;
 % only meaningful on a full symmetric BZ grid, ~0 there; noisy for explicit-q lat).
 pt.diag4_spread = max(max(diag4, [], 1) - min(diag4, [], 1));
@@ -390,7 +410,14 @@ pt.Jxx0_used = Jxx0;
 pt.nlevels = char(nlevels);
 % --- A3-specific outputs (constraints 2/7/8) ------------------------------------
 pt.Sigma_cc_equiv    = Sigma_cc_equiv;      % +V_cc/G0_cc (v3 POSITIVE sign; DIAGNOSTIC ONLY)
-pt.Vmat              = Vmat;                 % [3,3,nwn] tensor self-energy correction (V=G0.Sigma)
+pt.Vmat              = Vmat;                 % [3,3,nwn] A3 state at which chi_til/Kmat were evaluated
+pt.Vnext             = Vnext;                % A3 full-map output generated from pt.Kmat
+pt.a3_residual       = a3_residual;           % Vnext - Vmat at the reported co-state
+pt.a3_residual_scaled = a3_residual_scaled;
+pt.a3_residual_component_max = a3_residual_component_max;
+pt.a3_residual_frequency_max = a3_residual_frequency_max;
+pt.evaluation_kind   = a3_evaluation_kind;
+pt.a3_vertex         = a3_vertex;
 pt.chi_til           = chi_til;             % [3,3,nwn] Dyson renormalized local chi
 pt.resum_spread_crit = resum_spread_crit;   % crit(dyson) - crit(additive) -- O(1/z^2) error bar
 pt.eps_el            = eps_el;              % beta*|K_cc(0)|*c_d elastic-sector control (constraint 7)
@@ -488,7 +515,7 @@ beta = 1/(C.kB*T);
 vecmf  = strcmp(tmf, 'vector_ab');
 nonemf = strcmp(tmf, 'none');
 hx = 0;  hy = 0;  hz = 0;                        % paramagnetic rung: no longitudinal MF
-converged = false;  it = 0;
+converged = false;
 for it = 1:200                                   % transverse mean-field fixed point (hx[,hy])
     H = H0 - hx*Jxr - hy*Jyr - hz*Jzr;  H = (H + H')/2;
     [Vr, Dr] = eig(H, 'vector');  [E, ixe] = sort(real(Dr));  Vr = Vr(:, ixe);

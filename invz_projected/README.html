@@ -85,6 +85,15 @@ with <code>run(...)</code>. Persistent coupling caches are off by default.</p>
 </tbody>
 </table>
 
+<p>The production field-map members set
+<code>hmf_profile_sweep_direction='descending_local'</code>. Every field builds
+its fixed-H<sub>MF</sub> profile independently from the certified high-H<sub>MF</sub>
+component downwards; no neighbouring-field state selects the cold-pass
+branch. This removes the numerical component switch formerly visible between
+3.95667 and 3.98 T. The option-free library default remains
+<code>ascending</code>, and cross-field retries retain their separately gated
+<code>descending</code> mode.</p>
+
 <h3>Meaning of the missing-area factor</h3>
 
 <p>If the certified component begins at <i>h</i><sub>e</sub>, the unresolved
@@ -109,7 +118,10 @@ the unresolved two-level endpoint without committing it, evaluates the
 certified positive-H<sub>MF</sub> suffix, and uses algebra in which the removable
 <code>M2</code> cancellation is performed before numerical evaluation. The
 exact-zero missing-area spectrum is finite and continuous to
-<code>1e-6 T</code>. Strict <code>full_profile</code> still masks that endpoint.</p>
+<code>1e-6 T</code>. If the descending-local low-edge carrier becomes singular
+there, root refinement retries from the independently converged high-H<sub>MF</sub>
+node at the same target field. Strict <code>full_profile</code> still masks that
+endpoint.</p>
 
 <h3>Frozen field retries</h3>
 
@@ -170,9 +182,12 @@ as local implementation stages in <code>invz_solve_point_ordered.m</code>.
 Failed candidates never overwrite the last accepted continuation state.</p>
 
 <div class="warn"><strong>q-path restriction.</strong> The missing-area
-ensemble is implemented for uniform field maps, not q paths. Set
-<code>useMissingAreaApproximation=false</code> before requesting a q-path.
-The driver fails explicitly if both are requested.</div>
+ensemble is implemented for uniform field maps, not q paths. When
+<code>qpath</code> is nonempty, the driver ignores
+<code>useMissingAreaApproximation</code> and builds strict solver options
+automatically. Direct library calls still reject an explicitly supplied
+<code>missing_area_ensemble</code> mode because q-path uncertainty propagation
+is not implemented.</div>
 
 <h2>State and phase selection</h2>
 
@@ -191,6 +206,17 @@ a paramagnet only when that solve is converged and locally stable
 <code>invz_chi_realaxis</code>. It exports <code>phase_rpa</code>,
 <code>rpa_mass_pm</code>, and <code>Bc_rpa</code> separately and does not reuse
 the 1/z-selected phase.</p>
+
+<p>The bare-MF selector is adaptive rather than tied to a field window. At
+each requested temperature and transverse field it recomputes
+<code>1-J0eff*chi0cc(0)</code>. A nonnegative mass selects the paramagnet; a
+negative mass triggers a bracketed nonzero solution of
+<code>hz=J0eff*&lt;Jz&gt;</code>. The same helper supplies the ordered-profile search
+ceiling, avoiding direct-Picard critical slowing without changing the
+convergence tolerance. The current projected driver remains restricted to a
+field along the crystallographic a axis; arbitrary-angle support requires a
+field-vector and ordering-channel generalization, not angle-specific
+thresholds.</p>
 
 <h2>Coupling and ODD contract</h2>
 

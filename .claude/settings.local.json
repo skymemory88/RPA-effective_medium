@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(git branch *)",
-      "Bash(git update-ref *)",
-      "Bash(/Applications/MATLAB_R2025a.app/bin/matlab *)"
-    ]
-  }
-}

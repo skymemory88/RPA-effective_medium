@@ -35,7 +35,7 @@ ion = invz_ion();
 
 % ---- knobs (mirroring invz_run_spectra's names where the concept carries over) --
 T = 0.1;                            % K
-fields = linspace(4.0, 6.0, 101);   % T -- SPANS the QPT (corrected QPT lies between 4.64 and 4.65 T at
+fields = linspace(0.0, 9.0, 101);   % T -- SPANS the QPT (corrected QPT lies between 4.64 and 4.65 T at
                                     % 0.1 K): stability-based auto solve assigns FM below,
                                     % PM above (invzt_solve_auto; NOT the bare-MF moment,
                                     % which persists to ~5.0 T -- review P0-1)
@@ -55,7 +55,11 @@ theta_c = 0.0;  phi_ab = 0.0;       % tilt knobs (deg). theta_c ~= 0 gives Bz ~=
                                     % invzt:orderedLongitudinal (no tensor forced-moment
                                     % route; 2026-07-19 scope).
 transverse_mf = 'legacy_x';         % 'legacy_x' | 'none' | 'vector_ab'
-gridN = 16; gridConv = 'halfopen'; dpRng = 30;
+gridN = 16; gridConv = 'halfopen';
+dipoleBackend = 'bruteforce';       % 'bruteforce' (historical) | 'ewald' (opt-in)
+dpRng = 30;                         % brute-force cutoff; ignored by Ewald
+ewaldOpts = struct('alpha', 0.3, 'r_cut', 16, 'g_cut', 3, ...
+    'boundary', 'conducting_k0_omitted');
 useParallel = true;
 solve_opts = struct('mode', 'a1', 'odd', true, 'nlevels', 'std', ...
                     'transverse_mf', transverse_mf);
@@ -120,18 +124,23 @@ dhat   = [cosd(theta_c)*cosd(phi_ab), cosd(theta_c)*sind(phi_ab), sind(theta_c)]
 sfloor = getf(solve_opts, 'sigma_floor', -0.5);   % single-sourced with invzt_critical
 
 g   = invzt_qgrid(gridN, gridConv);
-lat = invzt_jq_tensor(ion, g, struct('dpRng', dpRng, 'cache', true));
+latOpts = struct('dpRng', dpRng, 'cache', true, 'dipole', dipoleBackend);
+if strcmp(dipoleBackend, 'ewald'), latOpts.ewald = ewaldOpts; end %#ok<UNRCH>
+lat = invzt_jq_tensor(ion, g, latOpts);
 
 if ~isempty(qpath)
     % ---------------- q-path dispersion at one fixed field --------------------
     [pt, phaseq, diq] = invzt_solve_auto(ion, T, Bq*dhat, lat, solve_opts);
     if phaseq == 0
         error('invzt:qpathInvalid', ['q-path point B = %.2f T, T = %.2f K failed both ' ...
-            'legs [PM: conv=%d crit=%.4g err=%s | ORD: conv=%d m0=%.4g crit=%.4g err=%s]: ' ...
+            'legs [PM: conv=%d res=%.3g S0=%.4g crit=%.4g why=%s err=%s | ' ...
+            'ORD: conv=%d res=%.3g S0=%.4g m0=%.4g crit=%.4g why=%s err=%s]: ' ...
             'the whole q-path product hinges on this one point, so failing loudly beats ' ...
-            'drawing an empty map.'], Bq, T, diq.para.converged, diq.para.crit, ...
-            diq.para.err, diq.ordered.converged, diq.ordered.m0, diq.ordered.crit, ...
-            diq.ordered.err);
+            'drawing an empty map.'], Bq, T, diq.para.converged, ...
+            diq.para.outer_residual, diq.para.Sigma0, diq.para.crit, ...
+            diq.para.reason, diq.para.err, diq.ordered.converged, ...
+            diq.ordered.outer_residual, diq.ordered.Sigma0, diq.ordered.m0, ...
+            diq.ordered.crit, diq.ordered.reason, diq.ordered.err);
     end
     out = invzt_chi_realaxis(ion, T, Bq*dhat, pt, wq, ...
             struct('qsel', qpath, 'dpRng', dpRng, 'eta', eta));
@@ -151,12 +160,11 @@ if ~isempty(qpath)
     colormap(turbo);
     xlabel('\omega (meV)'); ylabel('q index along path');
     cb = colorbar;  cb.Label.String = 'log_{10} \chi''''_{cc}';
-    title(sprintf('tensor 1/z \\chi''''_{cc}(q,\\omega), T = %.2f K, B = %.2f T (phase %d)', ...
-        T, Bq, phaseq));
+    title(sprintf('Tensor 1/z, T = %.2f K, B = %.2f T', T, Bq));
     Epeak_q = invz_peak_energy(chipp_q.', wq, peak_wmin);   % columns must be per-q
     figure; plot(1:numel(Epeak_q), Epeak_q, 'o-');
     xlabel('q index along path'); ylabel('E_{peak} (meV)');
-    title(sprintf('q-path E_{peak}, T = %.2f K, B = %.2f T (phase %d)', T, Bq, phaseq));
+    title(sprintf('Peak dispersion, T = %.2f K, B = %.2f T', T, Bq));
 else
     % ---------------- field sweep at the uniform mode, ACROSS Bc ---------------
     nWorkers = 0;
@@ -177,11 +185,15 @@ else
             else
                 % Structured per-leg outcomes (P2-1): a leg that RETURNED but was
                 % rejected is described by its numbers, not a blank error string.
-                fprintf(['  B = %.2f T: masked -- PM(att=%d conv=%d crit=%.4g err=%s) ' ...
-                         'ORD(att=%d conv=%d m0=%.4g crit=%.4g err=%s)\n'], fields(k), ...
-                    di.para.attempted, di.para.converged, di.para.crit, di.para.err, ...
-                    di.ordered.attempted, di.ordered.converged, di.ordered.m0, ...
-                    di.ordered.crit, di.ordered.err);
+                fprintf(['  B = %.2f T: masked -- ' ...
+                         'PM(att=%d conv=%d res=%.3g S0=%.4g crit=%.4g why=%s err=%s) ' ...
+                         'ORD(att=%d conv=%d res=%.3g S0=%.4g m0=%.4g crit=%.4g why=%s err=%s)\n'], ...
+                    fields(k), ...
+                    di.para.attempted, di.para.converged, di.para.outer_residual, ...
+                    di.para.Sigma0, di.para.crit, di.para.reason, di.para.err, ...
+                    di.ordered.attempted, di.ordered.converged, ...
+                    di.ordered.outer_residual, di.ordered.Sigma0, di.ordered.m0, ...
+                    di.ordered.crit, di.ordered.reason, di.ordered.err);
             end
         catch err
             switch err.identifier
@@ -203,7 +215,7 @@ else
                  'DisplayName', sprintf('%.2f T', fields(k)));
         end
         xlabel('\omega (meV)'); ylabel('\chi''''_{cc}');
-        title(sprintf('tensor 1/z, T = %.2f K', T)); legend show;
+        title(sprintf('Tensor 1/z, T = %.2f K', T)); legend show;
     else
         % Match invz_projected's spectrum-map display: log10(chi'') over the
         % three decades below the robust 99.5th-percentile peak. The full
@@ -225,14 +237,14 @@ else
         end
         colormap(turbo);
         xlabel('B (T)'); ylabel('\omega (meV)');
-        title(sprintf('tensor 1/z \\chi''''_{cc}(B,\\omega), T = %.2f K, across B_c', T));
+        title(sprintf('Tensor 1/z, T = %.2f K', T));
         cb = colorbar;  cb.Label.String = 'log_{10} \chi''''_{cc}';
     end
 
     Epeak = invz_peak_energy(chipp, w, peak_wmin);
     figure; plot(fields, Epeak, 'o-');
     xlabel('B (T)'); ylabel('E_{peak} (meV)');
-    title(sprintf('\\chi''''_{cc} peak energy vs field, T = %.2f K', T));
+    title(sprintf('Peak energy, T = %.2f K', T));
     if any(phasev == 1) && any(phasev == 2), xline(fields(find(phasev == 2, 1)), '--', 'B_c'); end
     % Gaps are CENSORED peaks (boundary max / non-positive column) or masked
     % ordered points -- do not interpolate over them.

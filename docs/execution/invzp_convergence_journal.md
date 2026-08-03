@@ -2212,3 +2212,88 @@ resolved. The result remains the explicitly labeled missing-area
 approximation on one declared component; strict `full_profile` and the absence
 of a derived same-ion stationary functional for the production hybrid remain
 separate thermodynamic limitations.
+
+## 2026-07-31 — Checkpoint 32: adaptive bare-MF root removes critical-slowing warning
+
+**Trigger and reproduction.** The 101-point spectra run emitted
+`invz:mfNotConverged` with a residual of $6.7127\times10^{-7}$ meV after
+1200 iterations. A focused field audit located the warning at 4.95 T. Raising
+only that call to 5000 iterations reduced the residual to
+$7.4782\times10^{-8}$ meV but still missed the $10^{-12}$ meV gate. The
+independent PM-mass zero is $B_c^{\rm RPA}=4.95024456397$ T, only 0.2446 mT
+above the sampled field. A bracketed fixed-$h_z$ solve gives the nonzero root
+$h_z=0.000301094086364$ meV with residual
+$8.96\times10^{-16}$ meV. Its local Picard-map slope is positive and equal
+to 0.9998787, establishing monotone critical slowing rather than a
+frustration-driven flip-flop.
+
+**Implementation.** `invz_bare_mf_state` now recomputes the PM mass
+$1-J_{0,\rm eff}\chi_{0,cc}(0)$ at every requested $(T,B_x)$. A nonnegative
+mass returns the PM state; a negative mass triggers a bracketed nonzero root
+inside the physical bound $|h_z|\le |J_{0,\rm eff}|J$. Both the independent
+RPA response and the ordered-profile search ceiling use this shared selector.
+No field threshold or 4.95 T production special case was introduced; 4.95 T
+appears only in the regression fixture. Arbitrary field angle remains outside
+the scalar driver's declared input contract.
+
+**Validation.** `test_invzp_bare_mf_state` locks the near-critical ordered
+root and the 5.04 T PM selection. With `invz:mfNotConverged` promoted to an
+error, direct RPA and ordered-profile preflights at 4.95/5.04 T pass. The
+derivative-identity, missing-area-integral, reduced-residual, and exact-zero
+tests pass, and `invzp_ordered_boundary_retry_smoke` retains the exact phase
+matrix `[0 0 0 2; 1 1 1 2; 0 0 0 2]` with only the central 4.68 T retry used.
+
+## 2026-07-31 — Checkpoint 33: obsolete convergence routes removed
+
+**Trigger and classification.** User A/B tests confirmed that the current
+factor-one production sweep needs the missing-area construction, the frozen
+two-sided adjacent retry, and the frozen ordered-boundary retry for complete
+coverage. The convergence journal and rejected-proposal ledger were traced
+back into every live production symbol. This found one rejected method family
+still callable: the PM-anchored `endpoint_trapezoid_visual` and
+`filtered_profile_visual` modes. Both were temporary morphology experiments,
+were path-dependent where their PM endpoint did not converge, and were
+superseded by the explicit missing-area construction.
+
+**Removal.** The two visual branches, their
+`hmf_endpoint_allow_unconverged_pm`, `hmf_endpoint_pm_max_outer`, and
+`hmf_filtered_include_unconverged` options, their profile/status fields, the
+`visual_only` result flag, `invz_filtered_profile_integral`, and its focused
+test were removed. The accepted scalar integral modes are now exactly
+`full_profile` and `missing_area_approx`; the map alone expands
+`missing_area_ensemble` into scalar members. Two no-caller helpers from the
+already removed strict-medium dispatcher, `invz_pm_verdict` and
+`invz_boundary_interval`, were also removed. The orphaned throwaway
+`invzp_eval_rev3_sigma0` generator, which replicated the pre-bounded legacy
+static iteration, was removed from the production source directory after its
+conclusions had been synthesized into the rejected-proposal ledger.
+Historical MAT evidence and journal entries remain, and the old source
+remains recoverable from version history.
+
+**Retained safeguards.** Transactional node commits, bounded physical static
+roots, exact-zero invariant arithmetic, adaptive bare-MF mass selection,
+bracketed nonzero roots, and explicit residual/mass gates remain load-bearing
+correctness machinery. Reduced-residual, outer-map, and continuation tools
+remain diagnostic-only because they reproduce the branch-topology evidence
+cited by this journal and are absent from the production call path. No other
+rejected convergence proposal remains reachable from production.
+
+**Regression correction exposed by the audit.** The exact bare-MF ceiling
+introduced at checkpoint 32 makes factor-one 0.36 T converge on the cold pass.
+The factor-one 0.45 T point still uses the adjacent retry, now from the nearer
+immutable cold sources 0.36 and 0.54 T. The adjacent smoke was updated from
+its obsolete requirement that every member retry both historical targets. In
+the current smoke all factors are ordered and spectrally complete, and the
+only field using the retry is 0.45 T. The ordered-boundary smoke retains the
+phase matrix `[0 0 0 2; 1 1 1 2; 0 0 0 2]`, with only factor one using the
+4.68 T boundary retry.
+
+**Validation.** MATLAB Code Analyzer reports zero messages on the modified
+solver, map, driver, production validation, and retry smoke. The
+missing-area-integral, derivative-identity, adaptive-bare-MF, 13-case static
+domain, reduced-residual, and exact-zero tests pass. Both retired integral
+mode names now fail with `invz:hmfIntegralMode`. The updated adjacent and
+ordered-boundary smokes pass (`adjacent_used=3`, `boundary_used=1`), and
+`git diff --check` passes. A new full 101-point sweep was not run during this
+cleanup; the removed paths were not selected by the previously confirmed
+production configuration.
