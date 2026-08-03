@@ -19,5 +19,8 @@
 output/
 outputs/
 
+# Installed EasySpin distributions are external dependencies.
+**/[Ee]asy[Ss]pin*/
+
 cache 2/
 docs/execution/out/
